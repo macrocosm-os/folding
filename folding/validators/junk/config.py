@@ -138,11 +138,11 @@ def add_args(cls, parser):
         help="Dry run.",
         default=False,
     )
-    
+
     parser.add_argument(
         "--protein.pdb_id",
         type=str,
-        help="PDB ID for protein folding.", # defaults to None
+        help="PDB ID for protein folding.",  # defaults to None
         default=None,
     )
 
@@ -166,7 +166,6 @@ def add_args(cls, parser):
         help="Maximum number of steps for protein folding.",
         default=100,
     )
-
 
 
 def config(cls):

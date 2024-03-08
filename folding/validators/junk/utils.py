@@ -1,10 +1,7 @@
-
 import torch
 import random
 import bittensor as bt
 from typing import List
-
-
 
 
 def check_uid_availability(
@@ -27,6 +24,7 @@ def check_uid_availability(
             return False
     # Available otherwise.
     return True
+
 
 def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor:
     """Returns k available random uids from the metagraph.

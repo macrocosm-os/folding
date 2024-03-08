@@ -63,16 +63,16 @@ with codecs.open(
     version_string = version_match.group(1)
 
 setup(
-    name="folding",  
+    name="folding",
     version=version_string,
-    description="folding",  
+    description="folding",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/synapse-alpha/folding",  
-    author="Macrocosmos",  
+    url="https://github.com/synapse-alpha/folding",
+    author="Macrocosmos",
     packages=find_packages(),
     include_package_data=True,
-    author_email="steffen@macrocosmos.ai",  
+    author_email="steffen@macrocosmos.ai",
     license="MIT",
     python_requires=">=3.8",
     install_requires=requirements,

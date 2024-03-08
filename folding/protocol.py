@@ -23,6 +23,7 @@ import bittensor as bt
 
 from folding.validators.protein import Protein
 
+
 class FoldingSynapse(bt.Synapse):
     """
     A protocol representation which uses bt.Synapse as its base.
@@ -40,7 +41,7 @@ class FoldingSynapse(bt.Synapse):
     md_inputs: dict
 
     # Optional runtime args for gromacs
-    mdrun_args: str = ''
+    mdrun_args: str = ""
     # Optional request output, filled by recieving axon.
     md_output: typing.Optional[dict] = None
 
@@ -53,7 +54,7 @@ class FoldingSynapse(bt.Synapse):
         Returns:
         - dict: The serialized response, which in this case is the value of md_output.
         """
-        bt.logging.info(f'Deserializing response from miner, I am: {self.pdb_id}')
+        bt.logging.info(f"Deserializing response from miner, I am: {self.pdb_id}")
         # Right here we perform validation that the reponse has expected hash
         if type(self.md_output) != dict:
             self.md_output = {}

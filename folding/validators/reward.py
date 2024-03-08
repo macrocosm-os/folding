@@ -1,4 +1,3 @@
-
 import torch
 import bittensor as bt
 from typing import List
@@ -6,20 +5,19 @@ from typing import List
 from .protein import Protein
 from folding.protocol import FoldingSynapse
 
-def get_rewards(
-    protein: Protein, responses: List[FoldingSynapse]
-) -> torch.FloatTensor:
+
+def get_rewards(protein: Protein, responses: List[FoldingSynapse]) -> torch.FloatTensor:
     """Applies the reward model across each call. Unsuccessful responses are zeroed."""
     # Get indices of correctly responding calls.
 
     for idx, resp in enumerate(responses):
         md_output_summary = {k: len(v) for k, v in resp.md_output.items()}
-        bt.logging.info(f'Response {idx}:\nDendrite: {resp.dendrite}\nMD Output: {md_output_summary}\n')
+        bt.logging.info(
+            f"Response {idx}:\nDendrite: {resp.dendrite}\nMD Output: {md_output_summary}\n"
+        )
 
     successful_response_indices: List[int] = [
-        idx
-        for idx, resp in enumerate(responses)
-        if resp.dendrite.status_code == 200
+        idx for idx, resp in enumerate(responses) if resp.dendrite.status_code == 200
     ]
     bt.logging.success(f"successful_response_indices: {successful_response_indices}")
 
@@ -37,7 +35,9 @@ def get_rewards(
     bt.logging.success(f"successful_rewards: {successful_rewards}")
 
     # Softmax rewards across samples.
-    successful_rewards_normalized = torch.softmax(torch.tensor(successful_rewards), dim=0)
+    successful_rewards_normalized = torch.softmax(
+        torch.tensor(successful_rewards), dim=0
+    )
 
     # Init zero rewards for all calls.
     filled_rewards = torch.ones(len(responses), dtype=torch.float32) * torch.nan

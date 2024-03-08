@@ -1,4 +1,3 @@
-
 import time
 import torch
 import argparse
@@ -12,6 +11,7 @@ from folding.utils.uids import get_random_uids
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
 
+
 async def run_step(
     self,
     protein: Protein,
@@ -19,7 +19,7 @@ async def run_step(
     timeout: float,
     task: str = None,
     exclude: list = [],
-    ):
+):
     """
     The function takes a Protein and calculates the molecular dyanmics of it folding without further user input using the GROMACS molecular dynamics software.
     This is done in the following steps:
@@ -57,11 +57,10 @@ async def run_step(
     # Second validation checkpoint: After temperature and pressure runs
     # Third validation checkpoint: Post analysis on any metric such as RMSD, radius of gyration, etc.
 
-
     bt.logging.debug("run_step")
 
     # Record event start time.
-    event = {"pdb_id": protein.pdb_id, 'task': task}
+    event = {"pdb_id": protein.pdb_id, "task": task}
 
     start_time = time.time()
 
@@ -84,9 +83,9 @@ async def run_step(
 
     # Compute forward pass rewards, assumes followup_uids and answer_uids are mutually exclusive.
     # shape: [ metagraph.n ]
-    scattered_rewards: torch.FloatTensor = self.scores.scatter(
-        0, uids, rewards
-    ).to(self.device)
+    scattered_rewards: torch.FloatTensor = self.scores.scatter(0, uids, rewards).to(
+        self.device
+    )
 
     # Update moving_averaged_scores with rewards produced by this step.
     # shape: [ metagraph.n ]
@@ -101,9 +100,16 @@ async def run_step(
             "block": self.metagraph.block,
             "step_length": time.time() - start_time,
             "uids": uids.tolist(),
-            "response_times": [resp.dendrite.process_time if resp.dendrite.process_time != None else 0 for resp in responses],
-            "response_status_messages": [str(resp.dendrite.status_message) for resp in responses],
-            "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
+            "response_times": [
+                resp.dendrite.process_time if resp.dendrite.process_time != None else 0
+                for resp in responses
+            ],
+            "response_status_messages": [
+                str(resp.dendrite.status_message) for resp in responses
+            ],
+            "response_status_codes": [
+                str(resp.dendrite.status_code) for resp in responses
+            ],
             "rewards": rewards.tolist(),
             "best": best,
         }
@@ -113,15 +119,15 @@ async def run_step(
     if not self.config.neuron.dont_save_events:
         logger.log("EVENTS", "events", **event)
 
-async def forward(self):
 
+async def forward(self):
     # 1. Select the molecule from online protein database, the forcefield, and the box
     # NOTE: The number of possible inputs should be effectively infinite (or at least very large) so that miners cannot lookup results from earlier runs
     protein = Protein(
-                pdb_id=self.config.protein.pdb_id,
-                ff=self.config.protein.ff,
-                box=self.config.protein.box,
-                max_steps=self.config.protein.max_steps
+        pdb_id=self.config.protein.pdb_id,
+        ff=self.config.protein.ff,
+        box=self.config.protein.box,
+        max_steps=self.config.protein.max_steps,
     )
     bt.logging.info(f"Protein challenge: {protein}")
 

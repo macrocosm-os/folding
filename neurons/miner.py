@@ -47,9 +47,7 @@ class Miner(BaseMinerNeuron):
 
         # TODO(developer): Anything specific to your use case you can do here
 
-    async def forward(
-        self, synapse: FoldingSynapse
-    ) -> FoldingSynapse:
+    async def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
@@ -63,14 +61,12 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-        forward( synapse )
+        forward(synapse)
         self.step += 1
 
         return synapse
 
-    async def blacklist(
-        self, synapse: FoldingSynapse
-    ) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: FoldingSynapse) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -162,5 +158,7 @@ class Miner(BaseMinerNeuron):
 if __name__ == "__main__":
     with Miner() as m:
         while True:
-            bt.logging.info(f"Miner running:: network: {m.subtensor.network} | block: {m.block} | step: {m.step} | uid: {m.uid} | last updated: {m.block-m.metagraph.last_update[m.uid]} | trust: {m.metagraph.trust[m.uid]:.3f} | emission {m.metagraph.emission[m.uid]:.3f}")
+            bt.logging.info(
+                f"Miner running:: network: {m.subtensor.network} | block: {m.block} | step: {m.step} | uid: {m.uid} | last updated: {m.block-m.metagraph.last_update[m.uid]} | trust: {m.metagraph.trust[m.uid]:.3f} | emission {m.metagraph.emission[m.uid]:.3f}"
+            )
             time.sleep(5)
