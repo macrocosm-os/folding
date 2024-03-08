@@ -1,2 +1,14 @@
 bittensor
 torch
+loguru
+gromacs
+
+## Lots of instructions to install GROMACS correctly https://manual.gromacs.org/current/gmxapi/userguide/install.html#install-dependencies
+
+# GROMACS dependencies
+# cmake
+# pybind11
+# mpi4py
+
+# # GROMACS
+# gmxapi

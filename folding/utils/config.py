@@ -85,6 +85,41 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--neuron.mock",
+        action="store_true",
+        help="Dry run.",
+        default=False,
+    )
+    
+    parser.add_argument(
+        "--protein.pdb_id",
+        type=str,
+        help="PDB ID for protein folding.", # defaults to None
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.ff",
+        type=str,
+        help="Force field for protein folding.",
+        default="charmm27",
+    )
+
+    parser.add_argument(
+        "--protein.box",
+        type=str,
+        help="Box type for protein folding.",
+        default="dodecahedron",
+    )
+
+    parser.add_argument(
+        "--protein.max_steps",
+        type=int,
+        help="Maximum number of steps for protein folding.",
+        default=100,
+    )
+
+    parser.add_argument(
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",

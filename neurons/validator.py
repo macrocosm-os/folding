@@ -23,12 +23,11 @@ import time
 # Bittensor
 import bittensor as bt
 
-# Bittensor Validator Template:
-import template
-from template.validator import forward
+
+from folding.validators.forward import forward
 
 # import base validator class which takes care of most of the boilerplate
-from template.base.validator import BaseValidatorNeuron
+from folding.base.validator import BaseValidatorNeuron
 
 
 class Validator(BaseValidatorNeuron):
@@ -63,7 +62,7 @@ class Validator(BaseValidatorNeuron):
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
-    with Validator() as validator:
+    with Validator() as v:
         while True:
-            bt.logging.info("Validator running...", time.time())
+            bt.logging.info(f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}")
             time.sleep(5)
