@@ -5,6 +5,11 @@ import requests
 from tqdm import tqdm
 
 import bittensor as bt
+
+import itertools
+import pandas as pd
+
+from typing import List
 from bs4 import BeautifulSoup
 from collections import defaultdict
 
@@ -13,6 +18,18 @@ def save_data_to_pkl(data, folder_location, filename):
     with open(os.path.join(folder_location, filename), "wb") as f:
         pickle.dump(data, f)
         bt.logging.info(f"Saved data to {folder_location}/{filename}")
+
+
+def save_data_as_df(data: defaultdict[List]):
+    """Save the data as a dataframe with two columns: parent_folder and pdb."""
+    all_pdbs = list(itertools.chain.from_iterable(data.values()))
+
+    keys_list = [[key] * len(data[key]) for key in data.keys()]
+    keys_list = list(itertools.chain.from_iterable(keys_list))
+
+    # Create DataFrame with two columns
+    df = pd.DataFrame({"parent_folder": keys_list, "pdb": all_pdbs})
+    df.to_csv("./pdb_ids.csv", index=False)
 
 
 def extract_pdb_id(filename: str) -> str:
@@ -71,6 +88,9 @@ def main(
             save_data_to_pkl(
                 pdbs, folder_location=save_location, filename="pdb_ids.pkl"
             )
+
+    # save the final packet
+    save_data_to_pkl(pdbs, folder_location=save_location, filename="pdb_ids.pkl")
 
 
 if __name__ == "__main__":
