@@ -82,7 +82,9 @@ def main(
 
     count = 0
     for pdb_directory in tqdm(pdb_directories):
-        pdb_files = get_pdb_files()
+        pdb_files = get_pdb_files(
+            parent_directory=parent_directory, pdb_directory=pdb_directory
+        )
 
         for pdb_file in set(
             pdb_files
