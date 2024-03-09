@@ -51,7 +51,18 @@ def get_parent_pdb_directories(parent_directory: str) -> list:
     pdb_directories = [
         d.split("/")[0] for d in href_contents if len(d) == 3
     ]  # Filter out non-PDB IDs
-    return pdb_directories
+    return set(pdb_directories)  # remove duplicates from a.get("href")
+
+
+def get_pdb_files(parent_directory: str, pdb_directory: str):
+    """iterate over the possible pdb files in the file location."""
+    response = requests.get(parent_directory + pdb_directory)
+    soup = BeautifulSoup(response.content, "html.parser")
+    a_tags = soup.find_all("a")
+
+    href_contents = [a.get("href") for a in a_tags]
+    pdb_files = [f for f in href_contents if f.endswith(".ent.gz")]
+    return set(pdb_files)  # remove duplicates from a.get("href")
 
 
 def main(
@@ -71,11 +82,7 @@ def main(
 
     count = 0
     for pdb_directory in tqdm(pdb_directories):
-        response = requests.get(parent_directory + pdb_directory)
-        soup = BeautifulSoup(response.content, "html.parser")
-        a_tags = soup.find_all("a")
-        href_contents = [a.get("href") for a in a_tags]
-        pdb_files = [f for f in href_contents if f.endswith(".ent.gz")]
+        pdb_files = get_pdb_files()
 
         for pdb_file in set(
             pdb_files
