@@ -25,11 +25,13 @@ class Protein:
         if pdb_id is None:
             pdb_id = self.select_random_pdb_id()
 
-        self.pdb_id = pdb_id
+        self.pdb_id = (
+            pdb_id.lower()
+        )  # pdb_id is insensitive to capitalization so we convert to lowercase
         self.ff = ff
         self.box = box
 
-        pdb_file = f"{self.pdb_id}.pdb"
+        self.pdb_file = f"{self.pdb_id}.pdb"
 
         self.base_directory = os.path.join(ROOT_DIR, "data")
         self.output_directory = os.path.join(self.base_directory, self.pdb_id)
@@ -37,11 +39,11 @@ class Protein:
         if not os.path.exists(self.output_directory):
             os.makedirs(self.output_directory)
 
-        if not os.path.exists(os.path.join(self.output_directory, pdb_file)):
+        if not os.path.exists(os.path.join(self.output_directory, self.pdb_file)):
             self.download_pdb()
         else:
             bt.logging.success(
-                f"PDB file {self.pdb_id}.pdb already exists in path {self.output_directory!r}."
+                f"PDB file {self.pdb_file} already exists in path {self.output_directory!r}."
             )
 
         self.gro_path = os.path.join(self.output_directory, "em.gro")
@@ -89,20 +91,20 @@ class Protein:
 
     # Function to download PDB file
     def download_pdb(self):
-        url = f"https://files.rcsb.org/download/{self.pdb_id}.pdb"
-        path = os.path.join(self.output_directory, f"{self.pdb_id}.pdb")
+        url = f"https://files.rcsb.org/download/{self.pdb_file}"
+        path = os.path.join(self.output_directory, f"{self.pdb_file}")
         r = requests.get(url)
         if r.status_code == 200:
             with open(path, "w") as file:
                 file.write(r.text)
             bt.logging.info(
-                f"PDB file {self.pdb_id}.pdb downloaded successfully from {url} to path {path!r}."
+                f"PDB file {self.pdb_file} downloaded successfully from {url} to path {path!r}."
             )
         else:
             bt.logging.error(
-                f"Failed to download PDB file with ID {self.pdb_id} from {url}"
+                f"Failed to download PDB file with ID {self.pdb_file} from {url}"
             )
-            raise Exception(f"Failed to download PDB file with ID {self.pdb_id}.")
+            raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
 
     # Function to generate GROMACS input files
     def generate_input_files(self):
@@ -111,7 +113,7 @@ class Protein:
 
         # Commands to generate GROMACS input files
         commands = [
-            f"gmx pdb2gmx -f {self.pdb_id}.pdb -ff {self.ff} -o processed.gro -water spce",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
+            f"gmx pdb2gmx -f {self.pdb_file} -ff {self.ff} -o processed.gro -water spce",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
             f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
             "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
             "touch ions.mdp",  # Create a file to add ions to the system
