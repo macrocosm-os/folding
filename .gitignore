@@ -160,3 +160,9 @@ cython_debug/
 #.idea/
 
 testing/
+core
+app.config.js
+wandb
+.vscode
+.DS_Store 
+data/

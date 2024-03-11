@@ -24,8 +24,8 @@ import traceback
 
 import bittensor as bt
 
-from template.base.neuron import BaseNeuron
-from template.utils.config import add_miner_args
+from folding.base.neuron import BaseNeuron
+from folding.utils.config import add_miner_args
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -208,9 +208,7 @@ class BaseMinerNeuron(BaseNeuron):
             )
 
         except Exception as e:
-            bt.logging.error(
-                f"Failed to set weights on chain with exception: { e }"
-            )
+            bt.logging.error(f"Failed to set weights on chain with exception: { e }")
 
         bt.logging.info(f"Set weights: {chain_weights}")
 
