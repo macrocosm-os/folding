@@ -2,6 +2,8 @@ import os
 import sys
 import re
 import tqdm
+import pickle
+import random
 import hashlib
 import requests
 
@@ -13,6 +15,12 @@ from dataclasses import dataclass
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+PDB_PATH = os.path.join(ROOT_DIR, './pdb_ids.pkl')
+if not os.path.exists(PDB_PATH):
+    raise ValueError(f'Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first.')
+
+with open(PDB_PATH,'rb') as f:
+    PDB_IDS = pickle.load(f)
 
 @dataclass
 class Protein:
@@ -24,6 +32,7 @@ class Protein:
         # can either be local file path or a url to download
         if pdb_id is None:
             pdb_id = self.select_random_pdb_id()
+            bt.logging.success(f'Selected random pdb id: {pdb_id!r}')
 
         self.pdb_id = (
             pdb_id.lower()
@@ -87,7 +96,11 @@ class Protein:
 
     def select_random_pdb_id(self):
         """This function is really important as its where you select the protein you want to fold"""
-        return "1UBQ"
+        while True:
+            family = random.choice(list(PDB_IDS.keys()))
+            choices = PDB_IDS[family]
+            if len(choices):
+                return random.choice(choices)
 
     # Function to download PDB file
     def download_pdb(self):

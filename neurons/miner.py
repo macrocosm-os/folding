@@ -28,6 +28,7 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
+from folding.miners.forward import forward
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

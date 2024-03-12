@@ -76,10 +76,10 @@ async def run_step(
         timeout=timeout,
     )
     # Compute the rewards for the responses given the prompt.
-    rewards: torch.FloatTensor = get_rewards(protein, responses)
+    rewards: torch.FloatTensor = get_rewards(protein, responses)[0]
 
     # Find the best response given the rewards vector.
-    best: str = responses[rewards.argmax(dim=0)].strip()
+    best: str = responses[rewards.argmax(dim=0)]
 
     # Compute forward pass rewards, assumes followup_uids and answer_uids are mutually exclusive.
     # shape: [ metagraph.n ]
@@ -90,9 +90,9 @@ async def run_step(
     # Update moving_averaged_scores with rewards produced by this step.
     # shape: [ metagraph.n ]
     alpha: float = self.config.neuron.moving_average_alpha
-    self.moving_averaged_scores: torch.FloatTensor = alpha * scattered_rewards + (
+    self.scores: torch.FloatTensor = alpha * scattered_rewards + (
         1 - alpha
-    ) * self.moving_averaged_scores.to(self.device)
+    ) * self.scores.to(self.device)
 
     # Log the step event.
     event.update(

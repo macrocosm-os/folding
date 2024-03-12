@@ -166,3 +166,4 @@ wandb
 .vscode
 .DS_Store 
 data/
+!data/*.mdp
