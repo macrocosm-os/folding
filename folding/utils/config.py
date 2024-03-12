@@ -61,13 +61,13 @@ def add_args(cls, parser):
     Adds relevant arguments to the parser for operation.
     """
 
-    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=89)
 
     parser.add_argument(
         "--neuron.device",
         type=str,
         help="Device to run on.",
-        default="cuda" if torch.cuda.is_available() else "cpu",
+        default="cpu",
     )
 
     parser.add_argument(
@@ -116,7 +116,7 @@ def add_args(cls, parser):
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
-        default=100,
+        default=10000,
     )
 
     parser.add_argument(
@@ -208,7 +208,7 @@ def add_validator_args(cls, parser):
         "--neuron.timeout",
         type=float,
         help="The timeout for each forward call in seconds.",
-        default=10,
+        default=3600,
     )
 
     parser.add_argument(
@@ -222,7 +222,7 @@ def add_validator_args(cls, parser):
         "--neuron.sample_size",
         type=int,
         help="The number of miners to query in a single step.",
-        default=50,
+        default=10,
     )
 
     parser.add_argument(
