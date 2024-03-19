@@ -21,9 +21,6 @@ import typing
 import base64
 import bittensor as bt
 
-from folding.validators.protein import Protein
-
-
 class FoldingSynapse(bt.Synapse):
     """
     A protocol representation which uses bt.Synapse as its base.
