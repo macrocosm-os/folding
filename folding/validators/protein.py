@@ -78,12 +78,34 @@ class Protein:
                 os.path.join(self.output_directory, file), "r"
             ).read()
 
+        params_to_change = ['nstxout',      #Save coordinates every 0 steps (not saving standard trajectories)
+        'nstvout',        #Save velocities every 0 steps
+        'nstfout',         #Save forces every 0 steps
+        'nstxtcout',    #Save coordinates to trajectory every 50,000 steps
+        'nstenergy',   #Save energies every 50,000 steps
+        'nstlog',     #Update log file every 50,000 steps
+        ]
+
+        save_frequency = 0.10 #how often to save based on the max_steps
+
         for file in mdp_files:
-            content = open(os.path.join(self.output_directory, file), "r").read()
+            filepath = os.path.join(self.output_directory, file)
+            bt.logging.info(f"Processing file {filepath}")
+            content = open(filepath, "r").read()
             if max_steps is not None:
                 content = re.sub(
                     "nsteps\\s+=\\s+\\d+", f"nsteps = {max_steps}", content
                 )
+
+            bt.logging.info("Changing parameters based on max_steps")
+            for param in params_to_change: 
+                if param in content:
+                    content = re.sub(
+                        f"{param}\\s+=\\s+\\d+", f"{param} = {1}", content #int(max_steps * save_frequency)
+                    )    
+
+
+
             self.md_inputs[file] = content
 
         self.remaining_steps = []

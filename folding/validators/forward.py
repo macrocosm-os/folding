@@ -90,9 +90,7 @@ async def run_step(
     # Update moving_averaged_scores with rewards produced by this step.
     # shape: [ metagraph.n ]
     alpha: float = self.config.neuron.moving_average_alpha
-    self.scores: torch.FloatTensor = alpha * scattered_rewards + (
-        1 - alpha
-    ) * self.scores.to(self.device)
+    self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
 
     # Log the step event.
     event.update(

@@ -110,7 +110,6 @@ class BaseMinerNeuron(BaseNeuron):
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while not self.should_exit:
-                
                 time.sleep(10)
 
                 # Sync metagraph and potentially set weights.

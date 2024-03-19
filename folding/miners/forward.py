@@ -8,6 +8,7 @@ from folding.protocol import FoldingSynapse
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+TEST_HOTKEY = "DNBEASIJHDBSAKHJBDHJASK"
 
 # This is the core miner function, which decides the miner's response to a valid, high-priority request.
 def forward(synapse: FoldingSynapse) -> FoldingSynapse:
@@ -19,7 +20,9 @@ def forward(synapse: FoldingSynapse) -> FoldingSynapse:
     )
     synapse.md_output = {}
 
-    output_directory = os.path.join(ROOT_DIR, "data", "miners", synapse.pdb_id)
+    output_directory = os.path.join(
+        ROOT_DIR, "data", "miners", TEST_HOTKEY[:8], synapse.pdb_id
+    )
     # Make sure the output directory exists and if not, create it
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
