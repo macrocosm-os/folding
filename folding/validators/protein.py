@@ -44,12 +44,17 @@ class Protein:
 
         self.base_directory = os.path.join(ROOT_DIR, "data")
         self.output_directory = os.path.join(self.base_directory, self.pdb_id)
+
+        bt.logging.info(f"\nChanging output directory to {self.output_directory}")
+
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.output_directory):
             os.makedirs(self.output_directory)
 
         if not os.path.exists(os.path.join(self.output_directory, self.pdb_file)):
+            bt.logging.info(f"\n⏰ {self.pdb_file} does not exist in repository... Downloading")
             self.download_pdb()
+            bt.logging.info(f"\n💬 {self.pdb_file} Downloaded!")
         else:
             bt.logging.success(
                 f"PDB file {self.pdb_file} already exists in path {self.output_directory!r}."
@@ -88,6 +93,7 @@ class Protein:
 
         save_frequency = 0.10 #how often to save based on the max_steps
 
+        bt.logging.info("Extracting file content...")
         for file in mdp_files:
             filepath = os.path.join(self.output_directory, file)
             bt.logging.info(f"Processing file {filepath}")
@@ -96,10 +102,9 @@ class Protein:
                 content = re.sub(
                     "nsteps\\s+=\\s+\\d+", f"nsteps = {max_steps}", content
                 )
-
-            bt.logging.info("Changing parameters based on max_steps")
             for param in params_to_change: 
                 if param in content:
+                    bt.logging.info(f"Changing {param} in {file} to 1...")
                     content = re.sub(
                         f"{param}\\s+=\\s+\\d+", f"{param} = {1}", content #int(max_steps * save_frequency)
                     )    
@@ -204,7 +209,7 @@ class Protein:
         # TODO: Each miner files should be saved in a unique directory and possibly deleted after the reward is calculated
         """
 
-        resp_dir = os.path.join(self.output_directory, "dendrite", hotkey[:8])
+        resp_dir = os.path.join(self.output_directory, "dendrite", hotkey)
         if not os.path.exists(resp_dir):
             os.makedirs(resp_dir)
             bt.logging.debug(f"Created directory {resp_dir!r}")

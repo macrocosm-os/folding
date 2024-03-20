@@ -8,8 +8,6 @@ from folding.protocol import FoldingSynapse
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-TEST_HOTKEY = "DNBEASIJHDBSAKHJBDHJASK"
-
 # This is the core miner function, which decides the miner's response to a valid, high-priority request.
 def forward(synapse: FoldingSynapse) -> FoldingSynapse:
     # This function runs after the synapse has been deserialized (i.e. after synapse.data is available).
@@ -21,8 +19,9 @@ def forward(synapse: FoldingSynapse) -> FoldingSynapse:
     synapse.md_output = {}
 
     output_directory = os.path.join(
-        ROOT_DIR, "data", "miners", TEST_HOTKEY[:8], synapse.pdb_id
+        ROOT_DIR, "data", "miners", synapse.dendrite.hotkey[:8], synapse.pdb_id
     )
+    
     # Make sure the output directory exists and if not, create it
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -33,7 +32,9 @@ def forward(synapse: FoldingSynapse) -> FoldingSynapse:
     for filename, content in synapse.md_inputs.items():
         # Write the file to the output directory
         with open(filename, "w") as file:
+            bt.logging.info(f"\nWriting {filename} to {output_directory}")
             file.write(content)
+
     # TODO(developer): Replace with actual implementation logic.
     commands = [
         "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
