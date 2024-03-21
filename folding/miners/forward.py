@@ -8,8 +8,9 @@ from folding.protocol import FoldingSynapse
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 # This is the core miner function, which decides the miner's response to a valid, high-priority request.
-def forward(synapse: FoldingSynapse) -> FoldingSynapse:
+def forward(synapse) -> FoldingSynapse:
     # This function runs after the synapse has been deserialized (i.e. after synapse.data is available).
     # This function runs after the blacklist and priority functions have been called.
     # TODO: Determine how many steps to run based on timeout
@@ -19,9 +20,13 @@ def forward(synapse: FoldingSynapse) -> FoldingSynapse:
     synapse.md_output = {}
 
     output_directory = os.path.join(
-        ROOT_DIR, "data", "miners", synapse.dendrite.hotkey[:8], synapse.pdb_id
+        ROOT_DIR,
+        "data",
+        "miners",
+        synapse.dendrite.hotkey[:8],
+        synapse.pdb_id,  # synapse.dendrite.hotkey[:8] hotkey of the validator
     )
-    
+
     # Make sure the output directory exists and if not, create it
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)

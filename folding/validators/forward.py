@@ -66,7 +66,7 @@ async def run_step(
 
     # Get the list of uids to query for this step.
     # uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
-    uids = [4, 5]
+    uids = [9, 10, 11]
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = FoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
 
