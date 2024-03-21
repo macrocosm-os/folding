@@ -83,6 +83,7 @@ class Protein:
             self.generate_input_files()
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
+        self.check_if_directory_exists(self.validator_directory)
 
         self.md_inputs = {}
         for file in other_files:

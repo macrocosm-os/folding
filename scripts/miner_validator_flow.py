@@ -48,23 +48,6 @@ class MockFoldingSynapse:
         self.mdrun_args = mdrun_args
         self.md_output = md_output
 
-    def deserialize(self) -> int:
-        """
-        Deserialize the output. This method retrieves the response from
-        the miner in the form of a bytestream, deserializes it and returns it
-        as the output of the dendrite.query() call.
-
-        Returns:
-        - dict: The serialized response, which in this case is the value of md_output.
-        """
-        bt.logging.info(f"Deserializing response from miner, I am: {self.pdb_id}")
-        # Right here we perform validation that the reponse has expected hash
-        if type(self.md_output) != dict:
-            self.md_output = {}
-        else:
-            self.md_output = {k: base64.b64decode(v) for k, v in self.md_output.items()}
-        return self
-
 
 def validator_forward(pdb_id, ff="charmm27", box="dodecahedron", max_steps=10):
     protein = Protein(
@@ -111,7 +94,6 @@ def miner_forward(
             bt.logging.info(f"\nWriting {filename} to {output_directory}")
             file.write(content)
 
-    # TODO(developer): Replace with actual implementation logic.
     commands = [
         "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
         "gmx mdrun -deffnm nvt " + synapse.mdrun_args,
@@ -127,7 +109,6 @@ def miner_forward(
 
         if suppress_cmd_output:
             cmd += " > /dev/null 2>&1"
-
         os.system(cmd)
 
     # load the output files as bytes and add to synapse.md_output
@@ -167,21 +148,21 @@ def main_process(args):
     bt.logging.success(f"Validator forward complete!")
 
     # Here will will run parallel processes to run all the "miners" at the same time.
-    with ThreadPoolExecutor() as executor:
-        futures = [
-            executor.submit(
-                run_miner_forward, protein, synapse, args.suppress_cmd_output, miner_id
-            )
-            for miner_id in range(args.num_miners)
-        ]
+    # with ThreadPoolExecutor() as executor:
+    #     futures = [
+    #         executor.submit(
+    #             run_miner_forward, protein, synapse, args.suppress_cmd_output, miner_id
+    #         )
+    #         for miner_id in range(args.num_miners)
+    #     ]
 
-        for future in futures:
-            future.result()  # This blocks until the function is completed
+    #     for future in futures:
+    #         future.result()  # This blocks until the function is completed
+
+    for miner_id in range(args.num_miners):
+        run_miner_forward(protein, synapse, args.suppress_cmd_output, miner_id)
 
     bt.logging.success(f"Miner forward complete!")
-
-    # # apply save_md_outputs in the protein class so we can save the data.
-    # protein.save_md_outputs(md_output=synapse.md_output, hotkey=hotkey) # This line saves the data to the pdb_id/dendrite
 
 
 if __name__ == "__main__":
