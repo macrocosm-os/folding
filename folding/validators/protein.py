@@ -6,7 +6,9 @@ import pickle
 import random
 import hashlib
 import requests
+from typing import List, Dict
 
+import math
 import bittensor as bt
 
 from dataclasses import dataclass
@@ -42,6 +44,7 @@ class Protein:
         )  # pdb_id is insensitive to capitalization so we convert to lowercase
         self.ff = ff
         self.box = box
+        self.max_steps = max_steps
 
         self.pdb_file = f"{self.pdb_id}.pdb"
 
@@ -100,27 +103,13 @@ class Protein:
             "nstlog",  # Update log file every 50,000 steps
         ]
 
-        save_frequency = 0.10  # how often to save based on the max_steps
-
-        bt.logging.info("Extracting file content...")
-        for file in mdp_files:
-            filepath = os.path.join(self.validator_directory, file)
-            bt.logging.info(f"Processing file {filepath}")
-            content = open(filepath, "r").read()
-            if max_steps is not None:
-                content = re.sub(
-                    "nsteps\\s+=\\s+\\d+", f"nsteps = {max_steps}", content
-                )
-            for param in params_to_change:
-                if param in content:
-                    bt.logging.info(f"Changing {param} in {file} to 1...")
-                    content = re.sub(
-                        f"{param}\\s+=\\s+\\d+",
-                        f"{param} = {1}",
-                        content,  # int(max_steps * save_frequency)
-                    )
-
-            self.md_inputs[file] = content
+        # Check if the files need to be changed based on the config, and then save.
+        self.edit_files(mdp_files=mdp_files, params_to_change=params_to_change)
+        self.save_files(
+            files=self.md_inputs,
+            output_directory=self.validator_directory,
+            write_mode="w",
+        )
 
         self.remaining_steps = []
 
@@ -159,6 +148,15 @@ class Protein:
                 f"Failed to download PDB file with ID {self.pdb_file} from {url}"
             )
             raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
+
+    def calculate_params_save_interval(self, save_frequency: float = 0.10) -> float:
+        """determining the save_frequency to step
+
+        Args:
+            save_frequency (float, optional): how often to save based on the max_steps. Defaults to 0.10.
+        """
+
+        return math.ceil(save_frequency * self.max_steps)
 
     # Function to generate GROMACS input files
     def generate_input_files(self):
@@ -217,6 +215,62 @@ class Protein:
         # We want to catch any errors that occur in the above steps and then return the error to the user
         return True
 
+    def edit_files(self, mdp_files: List, params_to_change: List):
+        """Edit the files that are needed for simulation.
+
+        Args:
+            mdp_files (List): Files that contain parameters to change.
+            params_to_change (List): List of parameters to change in the desired file(s)
+        """
+        bt.logging.info("Editing file content...")
+
+        # TODO: save_frequency = 0.10 needs to be replaced with config.save_frequency
+        save_interval = self.calculate_params_save_interval(save_frequency=0.10)
+
+        for file in mdp_files:
+            filepath = os.path.join(self.validator_directory, file)
+            bt.logging.info(f"Processing file {filepath}")
+            content = open(filepath, "r").read()
+            if self.max_steps is not None:
+                content = re.sub(
+                    "nsteps\\s+=\\s+\\d+", f"nsteps = {self.max_steps}", content
+                )
+            for param in params_to_change:
+                if param in content:
+                    bt.logging.info(f"Changing {param} in {file} to 1...")
+                    content = re.sub(
+                        f"{param}\\s+=\\s+\\d+",
+                        f"{param} = {save_interval}",
+                        content,  # int(max_steps * save_frequency)
+                    )
+
+            self.md_inputs[file] = content
+
+    def save_files(
+        self, files: Dict, output_directory: str, write_mode: str = "wb"
+    ) -> Dict:
+        """Save the simulation files generated on the validator side to a desired output directory.
+
+        Args:
+            files (Dict): Dictionary mapping between filename and content
+            output_directory (str)
+            write_mode (str, optional): How the file should be written. Defaults to "wb".
+
+        Returns:
+            _type_: _description_
+        """
+        bt.logging.info(f"⏰ Saving files to {output_directory}...")
+        self.check_if_directory_exists(output_directory=output_directory)
+
+        filetypes = {}
+        for filename, content in files.items():
+            filetypes[filename.split(".")[-1]] = filename
+            # loop over all of the output files and save to local disk
+            with open(os.path.join(output_directory, filename), write_mode) as f:
+                f.write(content)
+
+        return filetypes
+
     def gro_hash(self, gro_path):
         bt.logging.info(f"Calculating hash for path {gro_path!r}")
         pattern = re.compile(r"\s*(\d+\w+)\s+(\w+\d*\s*\d+)\s+(\-?\d+\.\d+)+")
@@ -236,25 +290,13 @@ class Protein:
 
         return hashlib.md5(name + buf.encode()).hexdigest()
 
-    def save_md_outputs(self, md_output: dict, hotkey: str):
-        output_directory = os.path.join(self.pdb_directory, "dendrite", hotkey)
-        self.check_if_directory_exists(output_directory=output_directory)
-
-        filetypes = {}
-        for filename, content in md_output.items():
-            filetypes[filename.split(".")[-1]] = filename
-            # loop over all of the output files and save to local disk
-            with open(os.path.join(output_directory, filename), "wb") as f:
-                f.write(content)
-
-        return filetypes
-
-    def reward(self, md_output: dict, hotkey: str, mode: str = "13"):
+    def reward(self, md_output: Dict, hotkey: str, mode: str = "13"):
         """Calculates the free energy of the protein folding simulation
         # TODO: Each miner files should be saved in a unique directory and possibly deleted after the reward is calculated
         """
 
-        filetypes = self.save_md_outputs(md_output=md_output, hotkey=hotkey)
+        output_directory = os.path.join(self.pdb_directory, "dendrite", hotkey)
+        filetypes = self.save_files(files=md_output, output_directory=output_directory)
 
         bt.logging.info(
             f"Recieved the following files from hotkey {hotkey}: {list(filetypes.keys())}"

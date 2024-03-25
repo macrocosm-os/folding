@@ -144,7 +144,7 @@ def run_miner_forward(protein, synapse, suppress_cmd_output, miner_id: int):
 
 def main_process(args):
     bt.logging.info(f"About to run validator forward....")
-    synapse, protein = validator_forward(pdb_id=args.pdb_id)
+    synapse, protein = validator_forward(pdb_id=args.pdb_id, max_steps=args.max_steps)
     bt.logging.success(f"Validator forward complete!")
 
     # Here will will run parallel processes to run all the "miners" at the same time.
@@ -189,6 +189,13 @@ if __name__ == "__main__":
         action="store_false",
         default=True,
         help="suppress_cmd_output",
+    )
+
+    parser.add_argument(
+        "--max_steps",
+        help="Number of simulation steps.",
+        default=10,
+        type=int,
     )
 
     args = parser.parse_args()
