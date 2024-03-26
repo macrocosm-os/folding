@@ -226,7 +226,7 @@ class Protein:
         bt.logging.info("Editing file content...")
 
         # TODO: save_frequency = 0.10 needs to be replaced with config.save_frequency
-        save_interval = self.calculate_params_save_interval(save_frequency=0.10)
+        save_interval = self.calculate_params_save_interval(num_steps_to_save=100)
 
         for file in mdp_files:
             filepath = os.path.join(self.validator_directory, file)
