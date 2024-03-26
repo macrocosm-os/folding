@@ -17,14 +17,16 @@ def forward(synapse) -> FoldingSynapse:
     bt.logging.info(
         f"Running GROMACS simulation for protein: {synapse.pdb_id} with files {synapse.md_inputs.keys()} mdrun_args: {synapse.mdrun_args}"
     )
+
+    suppress_cmd_output = True
     synapse.md_output = {}
 
     output_directory = os.path.join(
         ROOT_DIR,
         "data",
         "miners",
-        synapse.dendrite.hotkey[:8],
-        synapse.pdb_id,  # synapse.dendrite.hotkey[:8] hotkey of the validator
+        synapse.axon.hotkey[:8],
+        synapse.pdb_id,
     )
 
     # Make sure the output directory exists and if not, create it
@@ -53,6 +55,10 @@ def forward(synapse) -> FoldingSynapse:
     for cmd in tqdm.tqdm(commands):
         # We want to catch any errors that occur in the above steps and then return the error to the user
         bt.logging.info(f"Running GROMACS command: {cmd}")
+
+        if suppress_cmd_output:
+            cmd += " > /dev/null 2>&1"
+
         os.system(cmd)
 
     # load the output files as bytes and add to synapse.md_output

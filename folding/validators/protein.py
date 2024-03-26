@@ -35,6 +35,10 @@ class Protein:
 
     def __init__(self, pdb_id=None, ff="charmm27", box="dodecahedron", max_steps=None):
         # can either be local file path or a url to download
+
+        self.suppression_command = " > /dev/null 2>&1"
+        self.suppress_cmd_output = True  # TODO: Replace with Config
+
         if pdb_id is None:
             pdb_id = self.select_random_pdb_id()
             bt.logging.success(f"Selected random pdb id: {pdb_id!r}")
@@ -149,41 +153,34 @@ class Protein:
             )
             raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
 
-    def calculate_params_save_interval(self, save_frequency: float = 0.10) -> float:
+    def calculate_params_save_interval(self, num_steps_to_save: int = 100) -> float:
         """determining the save_frequency to step
 
         Args:
-            save_frequency (float, optional): how often to save based on the max_steps. Defaults to 0.10.
+            num_steps_to_save (int, optional): How many steps to save during the simulation.
+                This is to reduce the amount of data that gets saved during simulation.
         """
 
-        return math.ceil(save_frequency * self.max_steps)
+        return self.max_steps // num_steps_to_save
 
     # Function to generate GROMACS input files
     def generate_input_files(self):
+        bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
         # Commands to generate GROMACS input files
-
-        suppression_command = " > /dev/null 2>&1"
-
         commands = [
-            f"gmx pdb2gmx -f {self.pdb_file} -ff {self.ff} -o processed.gro -water spce"
-            + suppression_command,  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
-            f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}"
-            + suppression_command,  # Build the "box" to run our simulation of one protein molecule
-            "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top"
-            + suppression_command,
+            f"gmx pdb2gmx -f {self.pdb_file} -ff {self.ff} -o processed.gro -water spce",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
+            f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
+            "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
             "touch ions.mdp",  # Create a file to add ions to the system
-            "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr"
-            + suppression_command,
-            'echo "13" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral'
-            + suppression_command,
+            "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
+            'echo "13" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
         # Run the first step of the simulation
         commands += [
-            f"gmx grompp -f {self.base_directory}/minim.mdp -c solv_ions.gro -p topol.top -o em.tpr"
-            + suppression_command,
-            "gmx mdrun -v -deffnm em" + suppression_command,  # Run energy minimization
+            f"gmx grompp -f {self.base_directory}/minim.mdp -c solv_ions.gro -p topol.top -o em.tpr",
+            "gmx mdrun -v -deffnm em",  # Run energy minimization
         ]
 
         # strip away trailing number in forcefield name e.g charmm27 -> charmm
@@ -197,6 +194,10 @@ class Protein:
         # run commands and raise exception if any of the commands fail
         for cmd in tqdm.tqdm(commands):
             bt.logging.info(f"Running GROMACS command: {cmd}")
+
+            if self.suppress_cmd_output:
+                cmd += " > /dev/null 2>&1"
+
             if os.system(cmd) != 0:
                 raise Exception(
                     f"generate_input_files failed to run GROMACS command: {cmd}"
@@ -290,10 +291,12 @@ class Protein:
 
         return hashlib.md5(name + buf.encode()).hexdigest()
 
-    def reward(self, md_output: Dict, hotkey: str, mode: str = "13"):
+    def reward(self, md_output: Dict, hotkey: str):
         """Calculates the free energy of the protein folding simulation
         # TODO: Each miner files should be saved in a unique directory and possibly deleted after the reward is calculated
         """
+
+        hotkey = hotkey[:8]
 
         output_directory = os.path.join(self.pdb_directory, "dendrite", hotkey)
         filetypes = self.save_files(files=md_output, output_directory=output_directory)
@@ -315,7 +318,7 @@ class Protein:
             )
             return 0
 
-        gro_path = os.path.join(resp_dir, gro)
+        gro_path = os.path.join(output_directory, gro)
         if self.gro_hash(self.gro_path) != self.gro_hash(gro_path):
             bt.logging.error(
                 f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
@@ -323,8 +326,8 @@ class Protein:
             return 0
         bt.logging.success(f"The hash for .gro file is correct!")
 
-        os.chdir(resp_dir)
-        edr_path = os.path.join(resp_dir, edr)
+        os.chdir(output_directory)
+        edr_path = os.path.join(output_directory, edr)
         commands = [f'echo "13"  | gmx energy -f {edr} -o free_energy.xvg']
 
         # TODO: we still need to check that the following commands are run successfully
@@ -333,7 +336,7 @@ class Protein:
             if os.system(cmd) != 0:
                 raise Exception(f"reward failed to run GROMACS command: {cmd}")
 
-        energy_path = os.path.join(resp_dir, "free_energy.xvg")
+        energy_path = os.path.join(output_directory, "free_energy.xvg")
         free_energy = self.get_average_free_energy(energy_path)
         bt.logging.success(
             f"Free energy of protein folding simulation is {free_energy}"
