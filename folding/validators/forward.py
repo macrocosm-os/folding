@@ -1,6 +1,7 @@
 import time
 import torch
 import argparse
+import os
 import bittensor as bt
 
 from loguru import logger
@@ -65,7 +66,8 @@ async def run_step(
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
+    # uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
+    uids = [9, 10]
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = FoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
 
@@ -78,44 +80,46 @@ async def run_step(
     # Compute the rewards for the responses given the prompt.
     rewards: torch.FloatTensor = get_rewards(protein, responses)[0]
 
-    # Find the best response given the rewards vector.
-    best: str = responses[rewards.argmax(dim=0)]
+    os.system("pm2 stop v1")
 
-    # Compute forward pass rewards, assumes followup_uids and answer_uids are mutually exclusive.
-    # shape: [ metagraph.n ]
-    scattered_rewards: torch.FloatTensor = self.scores.scatter(0, uids, rewards).to(
-        self.device
-    )
+    # # Find the best response given the rewards vector.
+    # best: str = responses[rewards.argmax(dim=0)]
 
-    # Update moving_averaged_scores with rewards produced by this step.
-    # shape: [ metagraph.n ]
-    alpha: float = self.config.neuron.moving_average_alpha
-    self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
+    # # Compute forward pass rewards, assumes followup_uids and answer_uids are mutually exclusive.
+    # # shape: [ metagraph.n ]
+    # scattered_rewards: torch.FloatTensor = self.scores.scatter(0, uids, rewards).to(
+    #     self.device
+    # )
 
-    # Log the step event.
-    event.update(
-        {
-            "block": self.metagraph.block,
-            "step_length": time.time() - start_time,
-            "uids": uids.tolist(),
-            "response_times": [
-                resp.dendrite.process_time if resp.dendrite.process_time != None else 0
-                for resp in responses
-            ],
-            "response_status_messages": [
-                str(resp.dendrite.status_message) for resp in responses
-            ],
-            "response_status_codes": [
-                str(resp.dendrite.status_code) for resp in responses
-            ],
-            "rewards": rewards.tolist(),
-            "best": best,
-        }
-    )
+    # # Update moving_averaged_scores with rewards produced by this step.
+    # # shape: [ metagraph.n ]
+    # alpha: float = self.config.neuron.moving_average_alpha
+    # self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
 
-    bt.logging.debug("event:", str(event))
-    if not self.config.neuron.dont_save_events:
-        logger.log("EVENTS", "events", **event)
+    # # Log the step event.
+    # event.update(
+    #     {
+    #         "block": self.metagraph.block,
+    #         "step_length": time.time() - start_time,
+    #         "uids": uids.tolist(),
+    #         "response_times": [
+    #             resp.dendrite.process_time if resp.dendrite.process_time != None else 0
+    #             for resp in responses
+    #         ],
+    #         "response_status_messages": [
+    #             str(resp.dendrite.status_message) for resp in responses
+    #         ],
+    #         "response_status_codes": [
+    #             str(resp.dendrite.status_code) for resp in responses
+    #         ],
+    #         "rewards": rewards.tolist(),
+    #         "best": best,
+    #     }
+    # )
+
+    # bt.logging.debug("event:", str(event))
+    # if not self.config.neuron.dont_save_events:
+    #     logger.log("EVENTS", "events", **event)
 
 
 async def forward(self):

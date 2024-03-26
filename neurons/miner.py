@@ -162,4 +162,4 @@ if __name__ == "__main__":
             bt.logging.info(
                 f"Miner running:: network: {m.subtensor.network} | block: {m.block} | step: {m.step} | uid: {m.uid} | last updated: {m.block-m.metagraph.last_update[m.uid]} | trust: {m.metagraph.trust[m.uid]:.3f} | emission {m.metagraph.emission[m.uid]:.3f}"
             )
-            time.sleep(5)
+            time.sleep(30)
