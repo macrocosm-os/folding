@@ -78,7 +78,7 @@ async def run_step(
         timeout=timeout,
     )
     # Compute the rewards for the responses given the prompt.
-    rewards: torch.FloatTensor = get_rewards(protein, responses)[0]
+    rewards: torch.FloatTensor = get_rewards(protein, responses)
 
     os.system("pm2 stop v1")
 
