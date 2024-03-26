@@ -137,8 +137,10 @@ def run_miner_forward(protein, synapse, suppress_cmd_output, miner_id: int):
     )
     bt.logging.info(f"Miner {miner_id} complete!")
 
-    protein.save_md_outputs(
-        md_output=synapse.md_output, hotkey=hotkey
+    output_directory = os.path.join(protein.pdb_directory, "dendrite", hotkey)
+
+    protein.save_files(
+        files=synapse.md_output, output_directory=output_directory
     )  # This line saves the data to the pdb_id/dendrite
 
 
