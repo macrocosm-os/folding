@@ -21,8 +21,6 @@ import typing
 import base64
 import bittensor as bt
 
-from folding.validators.protein import Protein
-
 
 class FoldingSynapse(bt.Synapse):
     """

@@ -28,7 +28,7 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse]) -> torch.Floa
 
     # Reward each response.
     successful_rewards = [
-        protein.reward(resp.md_output, resp.axon.hotkey)
+        protein.reward(md_output=resp.md_output, hotkey=resp.axon.hotkey)
         for resp in successful_responses
     ]
 
