@@ -43,6 +43,7 @@ def forward(synapse) -> FoldingSynapse:
             file.write(content)
 
     # TODO(developer): Replace with actual implementation logic.
+
     commands = [
         "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
         "gmx mdrun -deffnm nvt " + synapse.mdrun_args,

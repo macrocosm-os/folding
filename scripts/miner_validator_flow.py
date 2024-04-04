@@ -72,6 +72,7 @@ def miner_forward(
     # TODO: Determine how many steps to run based on timeout
     bt.logging.info(
         f"Running GROMACS simulation for protein: {synapse.pdb_id} with files {synapse.md_inputs.keys()} mdrun_args: {synapse.mdrun_args}"
+        f"Running GROMACS simulation for protein: {synapse.pdb_id} with files {synapse.md_inputs.keys()} mdrun_args: {synapse.mdrun_args}"
     )
     synapse.md_output = {}
 
@@ -93,22 +94,22 @@ def miner_forward(
         with open(filename, "w") as file:
             bt.logging.info(f"\nWriting {filename} to {output_directory}")
             file.write(content)
-
+    bt.logging.warning(f'md args: {synapse.mdrun_args}')
     commands = [
         "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
         "gmx mdrun -deffnm nvt " + synapse.mdrun_args,
         "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
         "gmx mdrun -deffnm npt " + synapse.mdrun_args,
         "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
-        "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args,
+        "gmx mdrun -ntmpi 2 -deffnm md_0_1" + synapse.mdrun_args,
     ]
 
     for cmd in tqdm.tqdm(commands):
         # We want to catch any errors that occur in the above steps and then return the error to the user
         bt.logging.info(f"Running GROMACS command: {cmd}")
 
-        if suppress_cmd_output:
-            cmd += " > /dev/null 2>&1"
+        # if suppress_cmd_output:
+        #     cmd += " > /dev/null 2>&1"
         os.system(cmd)
 
     # load the output files as bytes and add to synapse.md_output
@@ -127,7 +128,7 @@ def miner_forward(
     return synapse
 
 
-def run_miner_forward(protein, synapse, suppress_cmd_output, miner_id: int):
+def run_miner_forward(protein, synapse, suppress_cmd_output, miner_id:int ):
     hotkey = generate_random_string()  # The miner's hotkey
 
     # Call your function here
@@ -189,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--suppress_cmd_output",
         action="store_false",
-        default=True,
+        default=False,
         help="suppress_cmd_output",
     )
 

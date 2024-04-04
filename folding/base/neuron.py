@@ -141,6 +141,8 @@ class BaseNeuron(ABC):
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
+        if not self.metagraph.validator_permit[self.uid]:
+            return False
         return (
             self.block - self.metagraph.last_update[self.uid]
         ) > self.config.neuron.epoch_length
@@ -152,6 +154,9 @@ class BaseNeuron(ABC):
 
         # Check if enough epoch blocks have elapsed since the last epoch.
         if self.config.neuron.disable_set_weights:
+            return False
+
+        if not self.metagraph.validator_permit[self.uid]:
             return False
 
         # Define appropriate logic for when set weights.

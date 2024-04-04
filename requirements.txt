@@ -10,7 +10,7 @@ beautifulsoup4
 # GROMACS dependencies
 # cmake
 # pybind11
-# mpi4py
+# mpi4pypm2 
 
 # # GROMACS
 # gmxapi
