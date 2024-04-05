@@ -1,0 +1,24 @@
+
+Basis of molecular dynamics simulations (slides) 
+    - https://drive.google.com/file/d/1GuALu1dI4t0bIg4QCnPWoblwxaqtys22/view 
+
+Getting good performance in GROMACS 
+    - https://www.ebi.ac.uk/training/materials/biomolecular-simulations-materials/molecular-dynamics-simulations/short-talk-gmx/
+
+mapping High performing Computing (hpc) to heterogeneous architectures 
+    - https://figshare.com/articles/presentation/Intro_to_HPC_for_Life_Scientists_GPU_accelerators_and_heterogeneous_architectures/22303477
+
+Improve simulation performance when running on GPU's 
+    - https://enccs.github.io/gromacs-gpu-performance/
+
+
+THIS IS THE TUTORIAL I CHOSE TO DO 
+    - https://tutorials.gromacs.org/docs/md-intro-tutorial.html
+    - Notes: 
+        - The simulation took 00:14:11:05 Minutes to minimise. 
+        - I used the -v flag (verbose) such that it prints its progress to the screen at every step. NEVER  use this flag if run in background, on a HPC center or on a local cluster, it prints unnecessary data in the standard output file.
+        -  `-deffnm` defines the file names of the input and output. 
+        - `/workspace/folding/md-intro-tutorial/md-intro-tutorial-main/data/input/emin-charmm.mdp` this was the mdp file used. Note that `nsteps = -1` which means 'run as long as we need.'
+        - Determining if the run was successful: potential energy Epot should be negative and for a simple protein in water, on the order of 100000 KJ/(mol nm). 
+            - The run was indeed successful, we ended up with a potential energy around -600000 KJ/(mol nm)
+            
