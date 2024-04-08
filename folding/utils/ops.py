@@ -1,6 +1,6 @@
 import os
+import tqdm
 from typing import List
-from tqdm import tqdm
 import bittensor as bt
 
 

@@ -43,12 +43,12 @@ class Protein:
         self.config = config
 
     def setup_pdb_id(self):
-        if pdb_id is None:
-            pdb_id = self.select_random_pdb_id()
-            bt.logging.success(f"Selected random pdb id: {pdb_id!r}")
+        if self.pdb_id is None:
+            self.pdb_id = self.select_random_pdb_id()
+            bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 
         self.pdb_id = (
-            pdb_id.lower()
+            self.pdb_id.lower()
         )  # pdb_id is insensitive to capitalization so we convert to lowercase
 
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -152,7 +152,7 @@ class Protein:
         self.remaining_steps = []
 
     def __str__(self):
-        return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}, output_directory={self.pdb_directory})"
+        return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
 
     def __repr__(self):
         return self.__str__()

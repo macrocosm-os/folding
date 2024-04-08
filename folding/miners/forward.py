@@ -1,6 +1,8 @@
 import os
 import glob
 import base64
+from typing import Dict
+
 import bittensor as bt
 
 from folding.utils.ops import run_cmd_commands, check_if_directory_exists
@@ -10,7 +12,7 @@ from folding.protocol import FoldingSynapse
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def forward(synapse: FoldingSynapse, config: bt.Config) -> FoldingSynapse:
+def forward(synapse: FoldingSynapse, config: Dict) -> FoldingSynapse:
     # TODO: Determine how many steps to run based on timeout
     bt.logging.info(
         f"Running GROMACS simulation for protein: {synapse.pdb_id} with files {synapse.md_inputs.keys()} mdrun_args: {synapse.mdrun_args}"
