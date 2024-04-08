@@ -161,7 +161,14 @@ class Protein:
                 This is to reduce the amount of data that gets saved during simulation.
         """
 
-        return self.max_steps // num_steps_to_save
+        save_interval = self.max_steps // num_steps_to_save
+
+        bt.logging.success(
+            f"Setting save_interval to {save_interval}, from max_steps = {self.max_steps}"
+        )
+        if save_interval == 0:  # only happens when max_steps is < num_steps
+            return 1
+        return save_interval
 
     # Function to generate GROMACS input files
     def generate_input_files(self):
@@ -238,11 +245,11 @@ class Protein:
                 )
             for param in params_to_change:
                 if param in content:
-                    bt.logging.info(f"Changing {param} in {file} to 1...")
+                    bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
                     content = re.sub(
                         f"{param}\\s+=\\s+\\d+",
                         f"{param} = {save_interval}",
-                        content,  # int(max_steps * save_frequency)
+                        content,
                     )
 
             self.md_inputs[file] = content
@@ -301,49 +308,51 @@ class Protein:
         output_directory = os.path.join(self.pdb_directory, "dendrite", hotkey)
         filetypes = self.save_files(files=md_output, output_directory=output_directory)
 
-        bt.logging.info(
-            f"Recieved the following files from hotkey {hotkey}: {list(filetypes.keys())}"
-        )
-        edr = filetypes.get("edr")
-        if not edr:
-            bt.logging.error(
-                f"No .edr file found in md_output ({list(md_output.keys())}), so reward is zero!"
-            )
-            return 0
+        return None
 
-        gro = filetypes.get("gro")
-        if not gro:
-            bt.logging.error(
-                f"No .gro file found in md_output ({list(md_output.keys())}), so reward is zero!"
-            )
-            return 0
+        # bt.logging.info(
+        #     f"Recieved the following files from hotkey {hotkey}: {list(filetypes.keys())}"
+        # )
+        # edr = filetypes.get("edr")
+        # if not edr:
+        #     bt.logging.error(
+        #         f"No .edr file found in md_output ({list(md_output.keys())}), so reward is zero!"
+        #     )
+        #     return 0
 
-        gro_path = os.path.join(output_directory, gro)
-        if self.gro_hash(self.gro_path) != self.gro_hash(gro_path):
-            bt.logging.error(
-                f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
-            )
-            return 0
-        bt.logging.success(f"The hash for .gro file is correct!")
+        # gro = filetypes.get("gro")
+        # if not gro:
+        #     bt.logging.error(
+        #         f"No .gro file found in md_output ({list(md_output.keys())}), so reward is zero!"
+        #     )
+        #     return 0
 
-        os.chdir(output_directory)
-        edr_path = os.path.join(output_directory, edr)
-        commands = [f'echo "13"  | gmx energy -f {edr} -o free_energy.xvg']
+        # gro_path = os.path.join(output_directory, gro)
+        # if self.gro_hash(self.gro_path) != self.gro_hash(gro_path):
+        #     bt.logging.error(
+        #         f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
+        #     )
+        #     return 0
+        # bt.logging.success(f"The hash for .gro file is correct!")
 
-        # TODO: we still need to check that the following commands are run successfully
-        for cmd in tqdm.tqdm(commands):
-            bt.logging.info(f"Running GROMACS command: {cmd}")
-            if os.system(cmd) != 0:
-                raise Exception(f"reward failed to run GROMACS command: {cmd}")
+        # os.chdir(output_directory)
+        # edr_path = os.path.join(output_directory, edr)
+        # commands = [f'echo "13"  | gmx energy -f {edr} -o free_energy.xvg']
 
-        energy_path = os.path.join(output_directory, "free_energy.xvg")
-        free_energy = self.get_average_free_energy(energy_path)
-        bt.logging.success(
-            f"Free energy of protein folding simulation is {free_energy}"
-        )
+        # # TODO: we still need to check that the following commands are run successfully
+        # for cmd in tqdm.tqdm(commands):
+        #     bt.logging.info(f"Running GROMACS command: {cmd}")
+        #     if os.system(cmd) != 0:
+        #         raise Exception(f"reward failed to run GROMACS command: {cmd}")
 
-        # return the negative of the free energy so that larger is better
-        return -free_energy
+        # energy_path = os.path.join(output_directory, "free_energy.xvg")
+        # free_energy = self.get_average_free_energy(energy_path)
+        # bt.logging.success(
+        #     f"Free energy of protein folding simulation is {free_energy}"
+        # )
+
+        # # return the negative of the free energy so that larger is better
+        # return -free_energy
 
     # Function to read the .xvg file and compute the average free energy
     def get_average_free_energy(self, filename):
