@@ -10,16 +10,25 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 
 # This is the core miner function, which decides the miner's response to a valid, high-priority request.
-def forward(synapse: FoldingSynapse) -> FoldingSynapse:
+def forward(synapse) -> FoldingSynapse:
     # This function runs after the synapse has been deserialized (i.e. after synapse.data is available).
     # This function runs after the blacklist and priority functions have been called.
     # TODO: Determine how many steps to run based on timeout
     bt.logging.info(
         f"Running GROMACS simulation for protein: {synapse.pdb_id} with files {synapse.md_inputs.keys()} mdrun_args: {synapse.mdrun_args}"
     )
+
+    suppress_cmd_output = True
     synapse.md_output = {}
 
-    output_directory = os.path.join(ROOT_DIR, "data", "miners", synapse.pdb_id)
+    output_directory = os.path.join(
+        ROOT_DIR,
+        "data",
+        "miners",
+        synapse.axon.hotkey[:8],
+        synapse.pdb_id,
+    )
+
     # Make sure the output directory exists and if not, create it
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -30,7 +39,9 @@ def forward(synapse: FoldingSynapse) -> FoldingSynapse:
     for filename, content in synapse.md_inputs.items():
         # Write the file to the output directory
         with open(filename, "w") as file:
+            bt.logging.info(f"\nWriting {filename} to {output_directory}")
             file.write(content)
+
     # TODO(developer): Replace with actual implementation logic.
     commands = [
         "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
@@ -44,6 +55,10 @@ def forward(synapse: FoldingSynapse) -> FoldingSynapse:
     for cmd in tqdm.tqdm(commands):
         # We want to catch any errors that occur in the above steps and then return the error to the user
         bt.logging.info(f"Running GROMACS command: {cmd}")
+
+        if suppress_cmd_output:
+            cmd += " > /dev/null 2>&1"
+
         os.system(cmd)
 
     # load the output files as bytes and add to synapse.md_output

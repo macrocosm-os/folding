@@ -28,29 +28,31 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse]) -> torch.Floa
 
     # Reward each response.
     successful_rewards = [
-        protein.reward(resp.md_output, resp.axon.hotkey)
+        protein.reward(md_output=resp.md_output, hotkey=resp.axon.hotkey)
         for resp in successful_responses
     ]
 
     bt.logging.success(f"successful_rewards: {successful_rewards}")
 
-    # Softmax rewards across samples.
-    successful_rewards_normalized = torch.softmax(
-        torch.tensor(successful_rewards), dim=0
-    )
+    return successful_rewards
 
-    # Init zero rewards for all calls.
-    filled_rewards = torch.ones(len(responses), dtype=torch.float32) * torch.nan
-    filled_rewards_normalized = torch.zeros(len(responses), dtype=torch.float32)
+    # # Softmax rewards across samples.
+    # successful_rewards_normalized = torch.softmax(
+    #     torch.tensor(successful_rewards), dim=0
+    # )
 
-    # Fill reward tensor.
-    for idx, reward, reward_normalized in zip(
-        successful_response_indices,
-        successful_rewards,
-        successful_rewards_normalized,
-    ):
-        filled_rewards[idx] = reward
-        filled_rewards_normalized[idx] = reward_normalized
+    # # Init zero rewards for all calls.
+    # filled_rewards = torch.ones(len(responses), dtype=torch.float32) * torch.nan
+    # filled_rewards_normalized = torch.zeros(len(responses), dtype=torch.float32)
 
-    # Return the filled rewards.
-    return filled_rewards, filled_rewards_normalized
+    # # Fill reward tensor.
+    # for idx, reward, reward_normalized in zip(
+    #     successful_response_indices,
+    #     successful_rewards,
+    #     successful_rewards_normalized,
+    # ):
+    #     filled_rewards[idx] = reward
+    #     filled_rewards_normalized[idx] = reward_normalized
+
+    # # Return the filled rewards.
+    # return filled_rewards, filled_rewards_normalized

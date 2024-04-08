@@ -161,7 +161,7 @@ class BaseValidatorNeuron(BaseNeuron):
         except Exception as err:
             bt.logging.error("Error during validation", str(err))
             bt.logging.debug(print_exception(type(err), err, err.__traceback__))
-            self.should_exit = True            
+            self.should_exit = True
 
     def run_in_background_thread(self):
         """
@@ -188,7 +188,8 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug("Stopped")
 
     def __enter__(self):
-        self.run_in_background_thread()
+        # self.run_in_background_thread()
+        self.run()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
