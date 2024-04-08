@@ -120,6 +120,13 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.suppress_cmd_output",
+        action="store_true",
+        help="If set, we suppress the text output of terminal commands to reduce terminal clutter.",
+        default=True,
+    )
+
+    parser.add_argument(
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",
@@ -163,6 +170,13 @@ def add_miner_args(cls, parser):
         type=str,
         help="Trials for this neuron go in neuron.root / (wallet_cold - wallet_hot) / neuron.name. ",
         default="miner",
+    )
+
+    parser.add_argument(
+        "--neuron.suppress_cmd_output",
+        action="store_true",
+        help="If set, we suppress the text output of terminal commands to reduce terminal clutter.",
+        default=True,
     )
 
     parser.add_argument(
