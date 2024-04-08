@@ -37,10 +37,10 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
-        self.config = config
+        self.miner_config = config
 
     async def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
-        forward(synapse)
+        forward(synapse=synapse, config=self.miner_config)
         self.step += 1
 
         return synapse
