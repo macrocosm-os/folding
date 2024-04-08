@@ -1,24 +1,21 @@
 import os
-import tqdm
 import glob
 import base64
 import bittensor as bt
+
+from folding.utils.ops import run_cmd_commands, check_if_directory_exists
 from folding.protocol import FoldingSynapse
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-# This is the core miner function, which decides the miner's response to a valid, high-priority request.
-def forward(synapse) -> FoldingSynapse:
-    # This function runs after the synapse has been deserialized (i.e. after synapse.data is available).
-    # This function runs after the blacklist and priority functions have been called.
+def forward(synapse: FoldingSynapse, config: bt.Config) -> FoldingSynapse:
     # TODO: Determine how many steps to run based on timeout
     bt.logging.info(
         f"Running GROMACS simulation for protein: {synapse.pdb_id} with files {synapse.md_inputs.keys()} mdrun_args: {synapse.mdrun_args}"
     )
 
-    suppress_cmd_output = True
     synapse.md_output = {}
 
     output_directory = os.path.join(
@@ -30,9 +27,7 @@ def forward(synapse) -> FoldingSynapse:
     )
 
     # Make sure the output directory exists and if not, create it
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
-    # Change to output directory
+    check_if_directory_exists(output_directory=output_directory)
     os.chdir(output_directory)
 
     # The following files are required for GROMACS simulations and are recieved from the validator
@@ -52,14 +47,9 @@ def forward(synapse) -> FoldingSynapse:
         "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args,
     ]
 
-    for cmd in tqdm.tqdm(commands):
-        # We want to catch any errors that occur in the above steps and then return the error to the user
-        bt.logging.info(f"Running GROMACS command: {cmd}")
-
-        if suppress_cmd_output:
-            cmd += " > /dev/null 2>&1"
-
-        os.system(cmd)
+    run_cmd_commands(
+        commands=commands, suppress_cmd_output=config.neuron.suppress_cmd_output
+    )
 
     # load the output files as bytes and add to synapse.md_output
     for filename in glob.glob("md_0_1.*"):

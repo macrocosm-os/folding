@@ -1,18 +1,15 @@
 import os
-import sys
 import re
-import tqdm
 import pickle
 import random
 import hashlib
 import requests
 from typing import List, Dict
 
-import math
 import bittensor as bt
-
 from dataclasses import dataclass
 
+from folding.utils.ops import run_cmd_commands, check_if_directory_exists
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,12 +30,19 @@ class Protein:
     def name(self):
         return self.protein_pdb.split(".")[0]
 
-    def __init__(self, pdb_id=None, ff="charmm27", box="dodecahedron", max_steps=None):
+    def __init__(
+        self, pdb_id=None, ff="charmm27", box="dodecahedron", config: Dict = None
+    ):
         # can either be local file path or a url to download
 
-        self.suppression_command = " > /dev/null 2>&1"
         self.suppress_cmd_output = True  # TODO: Replace with Config
 
+        self.pdb_id = pdb_id
+        self.ff = ff
+        self.box = box
+        self.config = config
+
+    def setup_pdb_id(self):
         if pdb_id is None:
             pdb_id = self.select_random_pdb_id()
             bt.logging.success(f"Selected random pdb id: {pdb_id!r}")
@@ -46,15 +50,10 @@ class Protein:
         self.pdb_id = (
             pdb_id.lower()
         )  # pdb_id is insensitive to capitalization so we convert to lowercase
-        self.ff = ff
-        self.box = box
-        self.max_steps = max_steps
 
         self.pdb_file = f"{self.pdb_id}.pdb"
 
-        self.base_directory = os.path.join(ROOT_DIR, "data")
-        self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
-
+    def setup_pdb_directory(self):
         bt.logging.info(f"\nChanging output directory to {self.pdb_directory}")
 
         # if directory doesn't exist, download the pdb file and save it to the directory
@@ -65,32 +64,67 @@ class Protein:
             bt.logging.info(
                 f"\n⏰ {self.pdb_file} does not exist in repository... Downloading"
             )
-            self.download_pdb()
+            self.download_pdb(pdb_directory=self.pdb_directory, pdb_file=self.pdb_file)
             bt.logging.info(f"\n💬 {self.pdb_file} Downloaded!")
         else:
             bt.logging.success(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
+    # Function to download PDB file
+    def download_pdb(self, pdb_directory: str, pdb_file: str):
+        url = f"https://files.rcsb.org/download/{pdb_file}"
+        path = os.path.join(pdb_directory, f"{pdb_file}")
+        r = requests.get(url)
+        if r.status_code == 200:
+            with open(path, "w") as file:
+                file.write(r.text)
+            bt.logging.info(
+                f"PDB file {pdb_file} downloaded successfully from {url} to path {path!r}."
+            )
+        else:
+            bt.logging.error(
+                f"Failed to download PDB file with ID {self.pdb_file} from {url}"
+            )
+            raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
+
+    def check_for_missing_files(self, required_files: List[str]):
         self.gro_path = os.path.join(self.pdb_directory, "em.gro")
         self.topol_path = os.path.join(self.pdb_directory, "topol.top")
-        mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
-        other_files = ["em.gro", "topol.top", "posre.itp"]
-        required_files = mdp_files + other_files
+
         missing_files = [
             filename
             for filename in required_files
             if not os.path.exists(os.path.join(self.pdb_directory, filename))
         ]
 
-        if missing_files:
+        if len(missing_files) > 0:
+            return missing_files
+        return None
+
+    def forward(self):
+        ## Setup the protein directory and sample a random pdb_id if not provided
+        self.setup_pdb_id()
+
+        self.base_directory = os.path.join(ROOT_DIR, "data")
+        self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
+
+        self.setup_pdb_directory()
+
+        mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
+        other_files = ["em.gro", "topol.top", "posre.itp"]
+        required_files = mdp_files + other_files
+        missing_files = self.check_for_missing_files(required_files=required_files)
+
+        if missing_files is not None:
             bt.logging.warning(
                 f"Essential files are missing from path {self.pdb_directory!r}: {missing_files!r}... Generating!"
             )
             self.generate_input_files()
 
+        # Create a validator directory to store the files
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
-        self.check_if_directory_exists(self.validator_directory)
+        check_if_directory_exists(output_directory=self.validator_directory)
 
         self.md_inputs = {}
         for file in other_files:
@@ -123,11 +157,6 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
-    def check_if_directory_exists(self, output_directory):
-        if not os.path.exists(output_directory):
-            os.makedirs(output_directory)
-            bt.logging.debug(f"Created directory {output_directory!r}")
-
     def select_random_pdb_id(self):
         """This function is really important as its where you select the protein you want to fold"""
         while True:
@@ -135,23 +164,6 @@ class Protein:
             choices = PDB_IDS[family]
             if len(choices):
                 return random.choice(choices)
-
-    # Function to download PDB file
-    def download_pdb(self):
-        url = f"https://files.rcsb.org/download/{self.pdb_file}"
-        path = os.path.join(self.pdb_directory, f"{self.pdb_file}")
-        r = requests.get(url)
-        if r.status_code == 200:
-            with open(path, "w") as file:
-                file.write(r.text)
-            bt.logging.info(
-                f"PDB file {self.pdb_file} downloaded successfully from {url} to path {path!r}."
-            )
-        else:
-            bt.logging.error(
-                f"Failed to download PDB file with ID {self.pdb_file} from {url}"
-            )
-            raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
 
     def calculate_params_save_interval(self, num_steps_to_save: int = 100) -> float:
         """determining the save_frequency to step
@@ -161,10 +173,10 @@ class Protein:
                 This is to reduce the amount of data that gets saved during simulation.
         """
 
-        save_interval = self.max_steps // num_steps_to_save
+        save_interval = self.config.max_steps // num_steps_to_save
 
         bt.logging.success(
-            f"Setting save_interval to {save_interval}, from max_steps = {self.max_steps}"
+            f"Setting save_interval to {save_interval}, from max_steps = {self.config.max_steps}"
         )
         if save_interval == 0:  # only happens when max_steps is < num_steps
             return 1
@@ -198,22 +210,14 @@ class Protein:
             f"cp {self.base_directory}/npt-{ff_base}.mdp npt.mdp",
             f"cp {self.base_directory}/md-{ff_base}.mdp  md.mdp ",
         ]
-        # run commands and raise exception if any of the commands fail
-        for cmd in tqdm.tqdm(commands):
-            bt.logging.info(f"Running GROMACS command: {cmd}")
 
-            if self.suppress_cmd_output:
-                cmd += " > /dev/null 2>&1"
+        run_cmd_commands(
+            commands=commands, suppress_cmd_output=self.suppress_cmd_output
+        )
 
-            if os.system(cmd) != 0:
-                raise Exception(
-                    f"generate_input_files failed to run GROMACS command: {cmd}"
-                )
-
-        # Here we are going to change the path to a validator folder, and move ALL the files
-
+        # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         output_directory = os.path.join(self.pdb_directory, "validator")
-        self.check_if_directory_exists(output_directory)
+        check_if_directory_exists(output_directory=output_directory)
 
         # Move all files
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {output_directory}/ \;'
@@ -239,9 +243,9 @@ class Protein:
             filepath = os.path.join(self.validator_directory, file)
             bt.logging.info(f"Processing file {filepath}")
             content = open(filepath, "r").read()
-            if self.max_steps is not None:
+            if self.config.max_steps is not None:
                 content = re.sub(
-                    "nsteps\\s+=\\s+\\d+", f"nsteps = {self.max_steps}", content
+                    "nsteps\\s+=\\s+\\d+", f"nsteps = {self.config.max_steps}", content
                 )
             for param in params_to_change:
                 if param in content:
@@ -268,7 +272,7 @@ class Protein:
             _type_: _description_
         """
         bt.logging.info(f"⏰ Saving files to {output_directory}...")
-        self.check_if_directory_exists(output_directory=output_directory)
+        check_if_directory_exists(output_directory=output_directory)
 
         filetypes = {}
         for filename, content in files.items():

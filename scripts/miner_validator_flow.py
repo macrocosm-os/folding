@@ -49,14 +49,11 @@ class MockFoldingSynapse:
         self.md_output = md_output
 
 
-def validator_forward(pdb_id, ff="charmm27", box="dodecahedron", max_steps=10):
-    protein = Protein(
-        pdb_id=pdb_id,
-        ff=ff,
-        box=box,
-        max_steps=max_steps,
-    )
+def validator_forward(pdb_id, ff="charmm27", box="dodecahedron", config=None):
+    protein = Protein(pdb_id=pdb_id, ff=ff, box=box, config=config)
     bt.logging.info(f"Protein challenge: {protein}")
+
+    protein.forward()
 
     synapse = MockFoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
 
@@ -146,20 +143,8 @@ def run_miner_forward(protein, synapse, suppress_cmd_output, miner_id: int):
 
 def main_process(args):
     bt.logging.info(f"About to run validator forward....")
-    synapse, protein = validator_forward(pdb_id=args.pdb_id, max_steps=args.max_steps)
+    synapse, protein = validator_forward(pdb_id=args.pdb_id, config=args)
     bt.logging.success(f"Validator forward complete!")
-
-    # Here will will run parallel processes to run all the "miners" at the same time.
-    # with ThreadPoolExecutor() as executor:
-    #     futures = [
-    #         executor.submit(
-    #             run_miner_forward, protein, synapse, args.suppress_cmd_output, miner_id
-    #         )
-    #         for miner_id in range(args.num_miners)
-    #     ]
-
-    #     for future in futures:
-    #         future.result()  # This blocks until the function is completed
 
     for miner_id in range(args.num_miners):
         run_miner_forward(protein, synapse, args.suppress_cmd_output, miner_id)
