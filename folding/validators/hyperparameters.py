@@ -76,14 +76,22 @@ class HyperParameters:
         Remove excluded hyperparameters from the list of possible combinations.
         """
         self.sampled_combinations: List[Dict[str, str]] = []
+
+        # Create a list of tuples, and then corresponds them in dictionary format.
         self.all_combinations = list(product(*self.parameter_set.values()))
+        self.all_combinations = [
+            {key: value for key, value in zip(self.parameter_set.keys(), combination)}
+            for combination in self.all_combinations
+        ]
+
         self.TOTAL_COMBINATIONS = len(self.all_combinations)
 
         # Randomly shuffle the parameter space to no bias simulations.
         random.shuffle(self.all_combinations)
 
     def sample_hyperparameters(self) -> Dict[str, str]:
-        # Check if all combinations have been sampled, if so, reset
+        """Return a dictionary of pdb_id and sampled hyperparameters."""
+
         if len(self.sampled_combinations) == self.TOTAL_COMBINATIONS:
             return Exception(
                 "All combinations have been sampled, reset the class to sample again."
@@ -93,4 +101,4 @@ class HyperParameters:
         sampled_combination = self.all_combinations.pop(0)
         self.sampled_combinations.append(sampled_combination)
 
-        return sampled_combination
+        return {self.pdb_id: sampled_combination}

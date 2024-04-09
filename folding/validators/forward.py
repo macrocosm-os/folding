@@ -1,16 +1,16 @@
 import time
 import torch
-import argparse
 import os
 import bittensor as bt
 
-from loguru import logger
 from typing import List
 
 from folding.validators.protein import Protein
 from folding.utils.uids import get_random_uids
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
+
+from folding.validators.hyperparameters import HyperParameters
 
 
 async def run_step(
@@ -120,12 +120,57 @@ async def run_step(
     #     logger.log("EVENTS", "events", **event)
 
 
+def parse_config(config) -> List[str]:
+    """
+    Parse config to check if key hyperparameters are set.
+    If they are, exclude them from hyperparameter search.
+    """
+    ff = config.protein.ff
+    water = config.protein.water
+    box = config.protein.box
+    exclude_in_hp_search = []
+
+    if ff is not None:
+        exclude_in_hp_search.append("ff")
+    if water is not None:
+        exclude_in_hp_search.append("water")
+    if box is not None:
+        exclude_in_hp_search.append("box")
+
+    return exclude_in_hp_search
+
+
 async def forward(self):
-    protein = Protein(
-        config=self.config.protein,
+    exclude_in_hp_search = parse_config(self.config)
+
+    hp_sampler = HyperParameters(
+        pdb_id=self.config.protein.pdb_id,
+        exclude=exclude_in_hp_search,
     )
-    bt.logging.info(f"Protein challenge: {protein}")
-    protein.forward()
+
+    try:
+        sampled_combination = hp_sampler.sample_hyperparameters()
+        hp = sampled_combination[self.config.protein.pdb_id]
+
+        protein = Protein(
+            pdb_id=self.config.protein.pdb_id,
+            ff=self.config.protein.ff
+            if self.config.protein.ff is not None
+            else hp["ff"],
+            water=self.config.protein.water
+            if self.config.protein.water is not None
+            else hp["water"],
+            box=self.config.protein.box
+            if self.config.protein.box is not None
+            else hp["box"],
+            config=self.config.protein,
+        )
+
+        bt.logging.info(f"Attempting to generate challenge: {protein}")
+        protein.forward()
+
+    except Exception as E:
+        bt.logging.error(f"Error running hyperparameters {hp}")
 
     await run_step(
         self,

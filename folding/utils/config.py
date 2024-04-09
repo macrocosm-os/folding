@@ -120,13 +120,6 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
-        "--protein.exclude_in_hp_search",
-        type=list,
-        help="Box type for protein folding.",
-        default=None,
-    )
-
-    parser.add_argument(
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
