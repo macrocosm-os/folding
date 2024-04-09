@@ -122,9 +122,6 @@ async def run_step(
 
 async def forward(self):
     protein = Protein(
-        pdb_id=self.config.protein.pdb_id,
-        ff=self.config.protein.ff,
-        box=self.config.protein.box,
         config=self.config.protein,
     )
     bt.logging.info(f"Protein challenge: {protein}")
