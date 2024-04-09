@@ -102,14 +102,28 @@ def add_args(cls, parser):
         "--protein.ff",
         type=str,
         help="Force field for protein folding.",
-        default="charmm27",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.water",
+        type=str,
+        help="Water used for protein folding.",
+        default=None,
     )
 
     parser.add_argument(
         "--protein.box",
         type=str,
         help="Box type for protein folding.",
-        default="dodecahedron",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.exclude_in_hp_search",
+        type=list,
+        help="Box type for protein folding.",
+        default=None,
     )
 
     parser.add_argument(
