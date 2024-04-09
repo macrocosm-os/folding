@@ -6,6 +6,7 @@ import bittensor as bt
 
 import argparse
 from folding.validators.protein import Protein
+from pathlib import Path 
 
 import typing
 import random
@@ -14,8 +15,8 @@ import string
 from concurrent.futures import ThreadPoolExecutor
 
 
-# root level directory for the project (I HATE THIS)
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# root level directory for the project
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def generate_random_string(length=5):
@@ -92,11 +93,11 @@ def miner_forward(
             file.write(content)
 
     commands = [
-        "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
+        "gmx grompp -f nvt-charmm.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
         "gmx mdrun -deffnm nvt " + synapse.mdrun_args,
-        "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
+        "gmx grompp -f npt-charmm.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
         "gmx mdrun -deffnm npt " + synapse.mdrun_args,
-        "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
+        "gmx grompp -f md-charmm.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
         "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args,
     ]
 
@@ -160,14 +161,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pdb_id",
         type=str,
-        default="5oxe",
+        default="2p16",
         help="protein that you want to fold",
     )
 
     parser.add_argument(
         "--num_miners",
         help="Number of miner simulations to run.",
-        default=2,
+        default=1,
         type=int,
     )
 
