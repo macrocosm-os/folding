@@ -5,14 +5,15 @@ import random
 import hashlib
 import requests
 from typing import List, Dict
+from pathlib import Path
 
 import bittensor as bt
 from dataclasses import dataclass
 
 from folding.utils.ops import run_cmd_commands, check_if_directory_exists
 
-# root level directory for the project (I HATE THIS)
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# root level directory for the project
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 PDB_PATH = os.path.join(ROOT_DIR, "./pdb_ids.pkl")
 if not os.path.exists(PDB_PATH):
@@ -52,6 +53,8 @@ class Protein:
         )  # pdb_id is insensitive to capitalization so we convert to lowercase
 
         self.pdb_file = f"{self.pdb_id}.pdb"
+        self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
+        self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
 
     def setup_pdb_directory(self):
         bt.logging.info(f"\nChanging output directory to {self.pdb_directory}")
@@ -106,13 +109,15 @@ class Protein:
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.setup_pdb_id()
 
-        self.base_directory = os.path.join(ROOT_DIR, "data")
+        self.base_directory = os.path.join(str(ROOT_DIR), "data")
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
+        self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
+
 
         self.setup_pdb_directory()
 
         mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
-        other_files = ["em.gro", "topol.top", "posre.itp"]
+        other_files = ["em.gro", "topol.top", "posre_Protein_chain_A.itp", "posre_Protein_chain_L.itp"]
         required_files = mdp_files + other_files
         missing_files = self.check_for_missing_files(required_files=required_files)
 
@@ -186,10 +191,14 @@ class Protein:
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
+        
+        bt.logging.info(f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}")
 
         # Commands to generate GROMACS input files
         commands = [
-            f"gmx pdb2gmx -f {self.pdb_file} -ff {self.ff} -o processed.gro -water spce",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
+            f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}", # remove lines with HETATM
+            f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}", # remove lines with CONECT
+            f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water tip3p",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
             f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
             "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
             "touch ions.mdp",  # Create a file to add ions to the system
@@ -197,8 +206,9 @@ class Protein:
             'echo "13" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
         # Run the first step of the simulation
+        bt.logging.info(f"print the current directory: {os.getcwd()}")
         commands += [
-            f"gmx grompp -f {self.base_directory}/minim.mdp -c solv_ions.gro -p topol.top -o em.tpr",
+            f"gmx grompp -f {self.pdb_directory}/emin-charmm.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",  # Run energy minimization
         ]
 
