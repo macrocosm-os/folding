@@ -210,7 +210,7 @@ class Protein:
         ]
 
         run_cmd_commands(
-            commands=commands, suppress_cmd_output=self.suppress_cmd_output
+            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
