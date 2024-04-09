@@ -30,14 +30,15 @@ class Protein:
     def name(self):
         return self.protein_pdb.split(".")[0]
 
-    def __init__(self, config: Dict, hyperparameters: Dict[str, str]):
+    def __init__(self, pdb_id: str, ff: str, water: str, box: str, config: Dict):
         # can either be local file path or a url to download
 
-        self.config = config
+        self.pdb_id = pdb_id
+        self.ff = ff
+        self.water = water
+        self.box = box
 
-        self.pdb_id = self.config.pdb_id
-        self.ff = self.config.ff
-        self.box = self.config.bo
+        self.config = config
 
     def setup_pdb_id(self):
         if self.pdb_id is None:
