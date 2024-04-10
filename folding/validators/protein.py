@@ -192,7 +192,7 @@ class Protein:
             "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
             "touch ions.mdp",  # Create a file to add ions to the system
             "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
-            'echo "13" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
+            'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
         # Run the first step of the simulation
         commands += [

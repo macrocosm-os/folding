@@ -66,8 +66,13 @@ def forward(config):
         num_pdbs_attempted += 1
 
         # Select a random pdb id to be iterating over.
+
+        bt.logging.info(f"CONFIG: {config}")
+
         if config.pdb_id is None:
             pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
+        else:
+            pdb_id = config.pdb_id
 
         bt.logging.info(f"Starting iteration {num_pdbs_attempted}")
         forward_start_time = time.time()
@@ -102,13 +107,14 @@ def forward(config):
 
             except Exception as E:
                 bt.logging.error(
-                    f"❌❌ Error running hyperparameters {sampled_combination} ❌❌"
+                    f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
                 )
+                bt.logging.warning(E)
                 event["status"] = False
 
             finally:
                 event["forward_time"] = time.time() - forward_start_time
-                event["pdb_id"] = protein.pdb_id
+                event["pdb_id"] = pdb_id
                 event.update(
                     sampled_combination
                 )  # add the protein hyperparameters to the event
@@ -122,7 +128,7 @@ def forward(config):
                 if event["status"] is True:
                     break  # break out of the for loop.
 
-        if num_pdbs_attempted == 10:
+        if num_pdbs_attempted == 1:
             bt.logging.success(f"Finished all possible pdbs.")
             break
 
@@ -192,14 +198,14 @@ if __name__ == "__main__":
         "--max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
-        default=10000,
+        default=100,
     )
 
     parser.add_argument(
         "--suppress_cmd_output",
         action="store_true",
         help="If set, we suppress the text output of terminal commands to reduce terminal clutter.",
-        default=True,
+        default=False,
     )
 
     config = parser.parse_args()
