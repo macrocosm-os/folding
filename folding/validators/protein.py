@@ -194,8 +194,19 @@ class Protein:
         
         bt.logging.info(f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}")
 
-        # Commands to generate GROMACS input files
+        # strip away trailing number in forcefield name e.g charmm27 -> charmm
+        ff_base = "".join([c for c in self.ff if not c.isdigit()])
+        # Copy mdp template files to protein directory
         commands = [
+            f"cp {self.base_directory}/nvt-{ff_base}.mdp {self.pdb_directory}/nvt.mdp",
+            f"cp {self.base_directory}/npt-{ff_base}.mdp {self.pdb_directory}/npt.mdp",
+            f"cp {self.base_directory}/md-{ff_base}.mdp  {self.pdb_directory}/md.mdp ",
+            f"cp {self.base_directory}/emin-{ff_base}.mdp  {self.pdb_directory}/emin.mdp ",
+            f"cp {self.base_directory}/minim.mdp  {self.pdb_directory}/minim.mdp"
+        ]   
+
+        # Commands to generate GROMACS input files
+        commands += [
             f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}", # remove lines with HETATM
             f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}", # remove lines with CONECT
             f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water tip3p",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
@@ -208,17 +219,17 @@ class Protein:
         # Run the first step of the simulation
         bt.logging.info(f"print the current directory: {os.getcwd()}")
         commands += [
-            f"gmx grompp -f {self.pdb_directory}/emin-charmm.mdp -c solv_ions.gro -p topol.top -o em.tpr",
+            f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",  # Run energy minimization
         ]
 
-        # strip away trailing number in forcefield name e.g charmm27 -> charmm
-        ff_base = "".join([c for c in self.ff if not c.isdigit()])
         # Copy mdp template files to output directory
         commands += [
             f"cp {self.base_directory}/nvt-{ff_base}.mdp nvt.mdp",
             f"cp {self.base_directory}/npt-{ff_base}.mdp npt.mdp",
             f"cp {self.base_directory}/md-{ff_base}.mdp  md.mdp ",
+            f"cp {self.base_directory}/emin-{ff_base}.mdp  emin.mdp ",
+            f"cp {self.base_directory}/minim.mdp  minim.mdp"
         ]
 
         run_cmd_commands(
