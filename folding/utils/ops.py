@@ -1,7 +1,17 @@
 import os
 import tqdm
-from typing import List
+from typing import List, Dict
 import bittensor as bt
+import random
+
+
+def select_random_pdb_id(PDB_IDS: Dict):
+    """This function is really important as its where you select the protein you want to fold"""
+    while True:
+        family = random.choice(list(PDB_IDS.keys()))
+        choices = PDB_IDS[family]
+        if len(choices):
+            return random.choice(choices)
 
 
 def check_if_directory_exists(output_directory):
