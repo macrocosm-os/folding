@@ -163,7 +163,7 @@ class Protein:
             if len(choices):
                 return random.choice(choices)
 
-    def calculate_params_save_interval(self, num_steps_to_save: int = 100) -> float:
+    def calculate_params_save_interval(self, num_steps_to_save: int = 5) -> float:
         """determining the save_frequency to step
 
         Args:
@@ -204,9 +204,9 @@ class Protein:
         ff_base = "".join([c for c in self.ff if not c.isdigit()])
         # Copy mdp template files to output directory
         commands += [
-            f"cp {self.base_directory}/nvt-{ff_base}.mdp nvt.mdp",
-            f"cp {self.base_directory}/npt-{ff_base}.mdp npt.mdp",
-            f"cp {self.base_directory}/md-{ff_base}.mdp  md.mdp ",
+            f"cp {self.base_directory}/nvt.mdp nvt.mdp",
+            f"cp {self.base_directory}/npt.mdp npt.mdp",
+            f"cp {self.base_directory}/md.mdp  md.mdp ",
         ]
 
         run_cmd_commands(

@@ -74,7 +74,7 @@ def forward(config):
         else:
             pdb_id = config.pdb_id
 
-        bt.logging.info(f"Starting iteration {num_pdbs_attempted}")
+        bt.logging.info(f"Starting pdb iteration {num_pdbs_attempted}")
         forward_start_time = time.time()
         exclude_in_hp_search = parse_config(config)
 
@@ -102,6 +102,13 @@ def forward(config):
                     config=config,
                 )
 
+                hps = {
+                    "FF": protein.ff,
+                    "WATER": protein.water,
+                    "BOX": protein.box,
+                    "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"],
+                }
+
                 bt.logging.info(f"Attempting to generate challenge: {protein}")
                 protein.forward()
 
@@ -115,9 +122,7 @@ def forward(config):
             finally:
                 event["forward_time"] = time.time() - forward_start_time
                 event["pdb_id"] = pdb_id
-                event.update(
-                    sampled_combination
-                )  # add the protein hyperparameters to the event
+                event.update(hps)  # add the protein hyperparameters to the event
 
                 if "status" not in event:
                     event["status"] = True  # simulation passed!
@@ -128,7 +133,7 @@ def forward(config):
                 if event["status"] is True:
                     break  # break out of the for loop.
 
-        if num_pdbs_attempted == 1:
+        if (num_pdbs_attempted == config.num_pdbs) or (config.pdb_id is not None):
             bt.logging.success(f"Finished all possible pdbs.")
             break
 
@@ -136,6 +141,13 @@ def forward(config):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Query a Bittensor synapse with given parameters."
+    )
+
+    parser.add_argument(
+        "--num_pdbs",
+        type=int,
+        help="Number of PDBs to test.",
+        default=20,
     )
 
     parser.add_argument(
@@ -191,7 +203,7 @@ if __name__ == "__main__":
         "--box",
         type=str,
         help="Box type for protein folding.",
-        default=None,
+        default=None,  #'dodecahedron',
     )
 
     parser.add_argument(
@@ -205,7 +217,7 @@ if __name__ == "__main__":
         "--suppress_cmd_output",
         action="store_true",
         help="If set, we suppress the text output of terminal commands to reduce terminal clutter.",
-        default=False,
+        default=True,
     )
 
     config = parser.parse_args()
