@@ -3,7 +3,7 @@ title                   = CHARMM NPT
 ; Parameters describing what to do, when to stop and what to save
 integrator              = md        ; leap-frog integrator
 dt                      = 0.002     ; 2 fs
-nsteps                  = 500000     ;  1000 ps = 1 ns
+nsteps                  = 100     ;  1000 ps = 1 ns. Changed from 500000  to 10 
 
 ; periodic boundary condition
 pbc                     = xyz       ;

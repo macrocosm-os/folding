@@ -5,7 +5,7 @@ define                  = -DPOSRES  ; position restrain the protein
 integrator              = md        ; leap-frog integrator
 dt                      = 0.002     ; 2 fs
 nsteps                  = 50000     ; 2 * 50000 = 100 ps
-nstenergy               = 500       ; save energy and temperature every 1.0 ps
+nstenergy               = 100       ; save energy and temperature every 1.0 ps. Changed from 500  to 10 
 
 ; periodic boundary condition
 pbc                     = xyz       ;

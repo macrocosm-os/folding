@@ -2,6 +2,7 @@ import os
 import tqdm
 from typing import List, Dict
 import bittensor as bt
+import subprocess
 import random
 
 
@@ -24,8 +25,18 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
     for cmd in tqdm.tqdm(commands):
         bt.logging.info(f"Running command: {cmd}")
 
-        if suppress_cmd_output:
-            cmd += " > /dev/null 2>&1"
-
-        if os.system(cmd) != 0:
-            raise Exception(f"❌ Failed to run GROMACS command ❌: {cmd}")
+        try:
+            result = subprocess.run(
+                cmd,
+                check=True,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if not suppress_cmd_output:
+                bt.logging.info(result.stdout.decode())
+        except subprocess.CalledProcessError as e:
+            bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
+            bt.logging.error(f"Output: {e.stdout.decode()}")
+            bt.logging.error(f"Error: {e.stderr.decode()}")
+            raise
