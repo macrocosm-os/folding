@@ -4,13 +4,8 @@ define                  = -DPOSRES  ; position restrain the protein
 ; Parameters describing what to do, when to stop and what to save
 integrator              = md        ; leap-frog integrator
 dt                      = 0.002     ; 2 fs
-<<<<<<< Updated upstream
 nsteps                  = 50000     ; 2 * 50000 = 100 ps
 nstenergy               = 100       ; save energy and temperature every 1.0 ps. Changed from 500  to 10 
-=======
-nsteps                  = 1000     ; 2 * 50000 = 100 ps
-nstenergy               = 500       ; save energy and temperature every 1.0 ps
->>>>>>> Stashed changes
 
 ; periodic boundary condition
 pbc                     = xyz       ;
