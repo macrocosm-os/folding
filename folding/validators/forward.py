@@ -2,6 +2,7 @@ import time
 import torch
 import os
 import bittensor as bt
+import wandb
 
 from typing import List
 
