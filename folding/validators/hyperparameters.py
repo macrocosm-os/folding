@@ -27,7 +27,7 @@ class HyperParameters:
 
         self.parameter_set = {
             "FF": self.FF,
-            "BOX_TYPE": self.BOX,
+            "BOX": self.BOX,
             "WATER": self.WATER,
             "BOX_DISTANCE": self.BOX_DISTANCE,
         }
