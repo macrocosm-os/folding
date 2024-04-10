@@ -93,11 +93,11 @@ def miner_forward(
             file.write(content)
 
     commands = [
-        "gmx grompp -f nvt-charmm.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
+        "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
         "gmx mdrun -deffnm nvt " + synapse.mdrun_args,
-        "gmx grompp -f npt-charmm.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
+        "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
         "gmx mdrun -deffnm npt " + synapse.mdrun_args,
-        "gmx grompp -f md-charmm.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
+        "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
         "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args,
     ]
 
