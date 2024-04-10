@@ -48,11 +48,11 @@ def parse_config(config) -> List[str]:
 def forward(config):
     init_wandb(config=config)
 
-    for ii in range(2):
-        print(config)
+    for ii in range(10):
         bt.logging.info(f"Starting iteration {ii}")
         forward_start_time = time.time()
         exclude_in_hp_search = parse_config(config)
+        event = {}
 
         hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
@@ -77,9 +77,11 @@ def forward(config):
 
         except Exception as E:
             bt.logging.error(f"Error running hyperparameters {sampled_combination}")
+            event["status"] = False
 
         finally:
-            event = {}
+            if "status" not in event:
+                event["status"] = True  # simulation passed!
 
             event["forward_time"] = time.time() - forward_start_time
             event["pdb_id"] = protein.pdb_id
