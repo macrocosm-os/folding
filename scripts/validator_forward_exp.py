@@ -130,8 +130,8 @@ def forward(config):
 
                 wandb.log(event)
 
-                if event["status"] is True:
-                    break  # break out of the for loop.
+                # if event["status"] is True:
+                #     break  # break out of the for loop.
 
         if (num_pdbs_attempted == config.num_pdbs) or (config.pdb_id is not None):
             bt.logging.success(f"Finished all possible pdbs.")
@@ -147,7 +147,7 @@ if __name__ == "__main__":
         "--num_pdbs",
         type=int,
         help="Number of PDBs to test.",
-        default=20,
+        default=100,
     )
 
     parser.add_argument(
