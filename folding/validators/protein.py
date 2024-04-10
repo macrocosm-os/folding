@@ -187,7 +187,7 @@ class Protein:
 
         # Commands to generate GROMACS input files
         commands = [
-            f"gmx pdb2gmx -f {self.pdb_file} -ff {self.ff} -o processed.gro -water spce",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
+            f"gmx pdb2gmx -f {self.pdb_file} -ff {self.ff} -o processed.gro -water {self.water}",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
             f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
             "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
             "touch ions.mdp",  # Create a file to add ions to the system
