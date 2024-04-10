@@ -6,9 +6,7 @@ import bittensor as bt
 
 
 class HyperParameters:
-    def __init__(
-        self, pdb_id: str, exclude: Union[Dict[str, str], List[str]] = None
-    ) -> None:
+    def __init__(self, exclude: Union[Dict[str, str], List[str]] = None) -> None:
         """Sample hyperparameters for protein folding for a specific pdb_id
 
         Args:
@@ -17,7 +15,6 @@ class HyperParameters:
                 needs to be either ['FF','BOX','WATER'] to exclude a specific hyperparameter, or
                 you can exclude a specific value(s) by passing {'FF': 'charmm27', 'BOX_TYPE': 'dodecahedron'}.
         """
-        self.pdb_id: str = pdb_id
 
         # Need to download files for specific inputs.
         self.FF: List[str] = ["charmm27", "amber03"]
@@ -101,4 +98,4 @@ class HyperParameters:
         sampled_combination = self.all_combinations.pop(0)
         self.sampled_combinations.append(sampled_combination)
 
-        return {self.pdb_id: sampled_combination}
+        return sampled_combination

@@ -36,11 +36,11 @@ def parse_config(config) -> List[str]:
     exclude_in_hp_search = []
 
     if ff is not None:
-        exclude_in_hp_search.append("ff")
+        exclude_in_hp_search.append("FF")
     if water is not None:
-        exclude_in_hp_search.append("water")
+        exclude_in_hp_search.append("WATER")
     if box is not None:
-        exclude_in_hp_search.append("box")
+        exclude_in_hp_search.append("BOX")
 
     return exclude_in_hp_search
 
@@ -54,22 +54,21 @@ def forward(config):
         forward_start_time = time.time()
         exclude_in_hp_search = parse_config(config)
 
-        hp_sampler = HyperParameters(
-            pdb_id=config.pdb_id,
-            exclude=exclude_in_hp_search,
-        )
+        hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
         try:
-            sampled_combination: Dict[str, Dict] = hp_sampler.sample_hyperparameters()
-            hp: Dict = sampled_combination[config.pdb_id]
-
-            bt.logging.info(f"Selected hyperparameters: {hp}")
+            sampled_combination: Dict = hp_sampler.sample_hyperparameters()
+            bt.logging.info(f"Selected hyperparameters: {sampled_combination}")
 
             protein = Protein(
                 pdb_id=config.pdb_id,
-                ff=config.ff if config.ff is not None else hp["FF"],
-                water=config.water if config.water is not None else hp["WATER"],
-                box=config.box if config.box is not None else hp["BOX"],
+                ff=config.ff if config.ff is not None else sampled_combination["FF"],
+                water=config.water
+                if config.water is not None
+                else sampled_combination["WATER"],
+                box=config.box
+                if config.box is not None
+                else sampled_combination["BOX"],
                 config=config,
             )
 
@@ -77,14 +76,16 @@ def forward(config):
             protein.forward()
 
         except Exception as E:
-            bt.logging.error(f"Error running hyperparameters {hp}")
+            bt.logging.error(f"Error running hyperparameters {sampled_combination}")
 
         finally:
             event = {}
 
             event["forward_time"] = time.time() - forward_start_time
-            event["pdb_id"] = config.pdb_id
-            event.update(hp)  # add the protein hyperparameters to the event
+            event["pdb_id"] = protein.pdb_id
+            event.update(
+                sampled_combination
+            )  # add the protein hyperparameters to the event
 
             wandb.log(event)
 
