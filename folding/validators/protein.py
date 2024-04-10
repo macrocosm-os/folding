@@ -204,11 +204,11 @@ class Protein:
         # Copy mdp template files to protein directory
         ff_base = "".join([c for c in self.ff if not c.isdigit()])
         commands = [
-            f"cp {self.base_directory}/nvt-{ff_base}.mdp nvt.mdp",
-            f"cp {self.base_directory}/npt-{ff_base}.mdp npt.mdp",
-            f"cp {self.base_directory}/md-{ff_base}.mdp  md.mdp ",
-            f"cp {self.base_directory}/emin-{ff_base}.mdp  emin.mdp ",
-            f"cp {self.base_directory}/minim.mdp  minim.mdp",
+            f"cp {self.base_directory}/nvt-{ff_base}.mdp {self.pdb_directory}/nvt.mdp",
+            f"cp {self.base_directory}/npt-{ff_base}.mdp {self.pdb_directory}/npt.mdp",
+            f"cp {self.base_directory}/md-{ff_base}.mdp  {self.pdb_directory}/md.mdp ",
+            f"cp {self.base_directory}/emin-{ff_base}.mdp  {self.pdb_directory}/emin.mdp ",
+            f"cp {self.base_directory}/minim.mdp  {self.pdb_directory}/minim.mdp",
         ]
 
         # Commands to generate GROMACS input files
