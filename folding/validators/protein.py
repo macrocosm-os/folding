@@ -113,11 +113,15 @@ class Protein:
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
-
         self.setup_pdb_directory()
 
         mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
-        other_files = ["em.gro", "topol.top", "posre_Protein_chain_A.itp", "posre_Protein_chain_L.itp"]
+        other_files = [
+            "em.gro",
+            "topol.top",
+            "posre_Protein_chain_A.itp",
+            "posre_Protein_chain_L.itp",
+        ]
         required_files = mdp_files + other_files
         missing_files = self.check_for_missing_files(required_files=required_files)
 
@@ -191,24 +195,26 @@ class Protein:
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
-        
-        bt.logging.info(f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}")
 
-        # strip away trailing number in forcefield name e.g charmm27 -> charmm
-        ff_base = "".join([c for c in self.ff if not c.isdigit()])
+        bt.logging.info(
+            f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
+        )
+
+        # strip away trailing number in forcefield name e.g charmm27 -> charmm, and
         # Copy mdp template files to protein directory
+        ff_base = "".join([c for c in self.ff if not c.isdigit()])
         commands = [
-            f"cp {self.base_directory}/nvt-{ff_base}.mdp {self.pdb_directory}/nvt.mdp",
-            f"cp {self.base_directory}/npt-{ff_base}.mdp {self.pdb_directory}/npt.mdp",
-            f"cp {self.base_directory}/md-{ff_base}.mdp  {self.pdb_directory}/md.mdp ",
-            f"cp {self.base_directory}/emin-{ff_base}.mdp  {self.pdb_directory}/emin.mdp ",
-            f"cp {self.base_directory}/minim.mdp  {self.pdb_directory}/minim.mdp"
-        ]   
+            f"cp {self.base_directory}/nvt-{ff_base}.mdp nvt.mdp",
+            f"cp {self.base_directory}/npt-{ff_base}.mdp npt.mdp",
+            f"cp {self.base_directory}/md-{ff_base}.mdp  md.mdp ",
+            f"cp {self.base_directory}/emin-{ff_base}.mdp  emin.mdp ",
+            f"cp {self.base_directory}/minim.mdp  minim.mdp",
+        ]
 
         # Commands to generate GROMACS input files
         commands += [
-            f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}", # remove lines with HETATM
-            f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}", # remove lines with CONECT
+            f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}",  # remove lines with HETATM
+            f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}",  # remove lines with CONECT
             f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water tip3p",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
             f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
             "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
@@ -221,15 +227,6 @@ class Protein:
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",  # Run energy minimization
-        ]
-
-        # Copy mdp template files to output directory
-        commands += [
-            f"cp {self.base_directory}/nvt-{ff_base}.mdp nvt.mdp",
-            f"cp {self.base_directory}/npt-{ff_base}.mdp npt.mdp",
-            f"cp {self.base_directory}/md-{ff_base}.mdp  md.mdp ",
-            f"cp {self.base_directory}/emin-{ff_base}.mdp  emin.mdp ",
-            f"cp {self.base_directory}/minim.mdp  minim.mdp"
         ]
 
         run_cmd_commands(
