@@ -5,15 +5,14 @@ import random
 import hashlib
 import requests
 from typing import List, Dict
-from pathlib import Path
 
 import bittensor as bt
 from dataclasses import dataclass
 
 from folding.utils.ops import run_cmd_commands, check_if_directory_exists
 
-# root level directory for the project
-ROOT_DIR = Path(__file__).resolve().parents[2]
+# root level directory for the project (I HATE THIS)
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PDB_PATH = os.path.join(ROOT_DIR, "./pdb_ids.pkl")
 if not os.path.exists(PDB_PATH):
@@ -202,10 +201,10 @@ class Protein:
         # Copy mdp template files to protein directory
         ff_base = "".join([c for c in self.ff if not c.isdigit()])
         commands = [
-            f"cp {self.base_directory}/nvt-{ff_base}.mdp {self.pdb_directory}/nvt.mdp",
-            f"cp {self.base_directory}/npt-{ff_base}.mdp {self.pdb_directory}/npt.mdp",
-            f"cp {self.base_directory}/md-{ff_base}.mdp  {self.pdb_directory}/md.mdp ",
-            f"cp {self.base_directory}/emin-{ff_base}.mdp  {self.pdb_directory}/emin.mdp ",
+            f"cp {self.base_directory}/nvt.mdp {self.pdb_directory}/nvt.mdp",
+            f"cp {self.base_directory}/npt.mdp {self.pdb_directory}/npt.mdp",
+            f"cp {self.base_directory}/md.mdp  {self.pdb_directory}/md.mdp ",
+            f"cp {self.base_directory}/emin.mdp  {self.pdb_directory}/emin.mdp ",
             f"cp {self.base_directory}/minim.mdp  {self.pdb_directory}/minim.mdp",
         ]
 
