@@ -11,6 +11,7 @@ import bittensor as bt
 from dataclasses import dataclass
 
 from folding.utils.ops import run_cmd_commands, check_if_directory_exists
+from folding.utils.data import DataExtractor
 
 # root level directory for the project
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -104,7 +105,18 @@ class Protein:
         if len(missing_files) > 0:
             return missing_files
         return None
+    
+    def parse_reward_data(self):
+        data_extractor = DataExtractor()
+        # run all methods 
+        data_extractor.energy(data_type="Potential", path = self.validator_directory)
+        # data_extractor.temperature("T-rest", self.validator_directory)
+        # data_extractor.pressure("Pressure", self.validator_directory)
+        # data_extractor.density("Density", self.validator_directory)
+        data_extractor.prod_energy("Potential", self.validator_directory)
+        data_extractor.rmsd(self.validator_directory)
 
+                          
     def forward(self):
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.setup_pdb_id()
@@ -121,7 +133,13 @@ class Protein:
             "topol.top",
             "posre_Protein_chain_A.itp",
             "posre_Protein_chain_L.itp",
+            "Potential.xvg",
+            "T-rest.xvg",
+            "Pressure.xvg",
+            "Density.xvg",
+            "rmsd_xray.xvg",
         ]
+
         required_files = mdp_files + other_files
         missing_files = self.check_for_missing_files(required_files=required_files)
 
@@ -134,6 +152,11 @@ class Protein:
         # Create a validator directory to store the files
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
         check_if_directory_exists(output_directory=self.validator_directory)
+        
+        # DE = DataExtractor()
+        bt.logging.info("Extracting Data")
+        self.parse_reward_data()
+        bt.logging.info("Extraction complete")
 
         self.md_inputs = {}
         for file in other_files:
@@ -223,10 +246,32 @@ class Protein:
             'echo "13" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
         # Run the first step of the simulation
-        bt.logging.info(f"print the current directory: {os.getcwd()}")
+        bt.logging.info("Run the first step of the simulation")
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",  # Run energy minimization
+        ]
+
+        # Run the Temperature equilibration
+        bt.logging.info("Run the Temperature equilibration")
+        commands += [
+        "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  
+        "gmx mdrun -deffnm nvt " # Temperature equilibration
+        ]
+
+        # Run the Pressure equilibration
+        bt.logging.info("Run the Pressure equilibration")
+        commands += [
+        "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  
+        "gmx mdrun -deffnm npt "  # Pressure equilibration
+        ]
+        
+        # Run the Production Run 
+        bt.logging.info("Run the Production Run")
+        commands += [
+        "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  
+        "gmx mdrun -deffnm md_0_1 "  # Production run
+        "!printf '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md.xtc -o md_center.xtc -center -pbc mol" # Center the trajectory
         ]
 
         run_cmd_commands(
