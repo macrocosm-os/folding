@@ -93,12 +93,13 @@ def miner_forward(
             file.write(content)
 
     commands = [
-        "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
-        "gmx mdrun -deffnm nvt " + synapse.mdrun_args,
-        "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
-        "gmx mdrun -deffnm npt " + synapse.mdrun_args,
-        "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
-        "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args,
+        "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  
+        "gmx mdrun -deffnm nvt " + synapse.mdrun_args, # Temperature equilibration
+        "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  
+        "gmx mdrun -deffnm npt " + synapse.mdrun_args, # Pressure equilibration
+        "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  
+        "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args, # Production run
+        "!printf '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md.xtc -o md_center.xtc -center -pbc mol" # Center the trajectory
     ]
 
     for cmd in tqdm.tqdm(commands):
