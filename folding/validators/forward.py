@@ -1,5 +1,7 @@
+import os
 import time
 import torch
+import pickle
 import bittensor as bt
 from typing import List, Tuple, Dict
 
@@ -9,7 +11,18 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
 
+from folding.utils.ops import select_random_pdb_id
 from folding.validators.hyperparameters import HyperParameters
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PDB_PATH = os.path.join(ROOT_DIR, "folding/pdb_ids.pkl")
+if not os.path.exists(PDB_PATH):
+    raise ValueError(
+        f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
+    )
+
+with open(PDB_PATH, "rb") as f:
+    PDB_IDS = pickle.load(f)
 
 
 async def run_step(
@@ -125,63 +138,96 @@ def parse_config(config) -> List[str]:
     Parse config to check if key hyperparameters are set.
     If they are, exclude them from hyperparameter search.
     """
-    ff = config.protein.ff
-    water = config.protein.water
-    box = config.protein.box
+    ff = config.ff
+    water = config.water
+    box = config.box
     exclude_in_hp_search = []
 
     if ff is not None:
-        exclude_in_hp_search.append("ff")
+        exclude_in_hp_search.append("FF")
     if water is not None:
-        exclude_in_hp_search.append("water")
+        exclude_in_hp_search.append("WATER")
     if box is not None:
-        exclude_in_hp_search.append("box")
+        exclude_in_hp_search.append("BOX")
 
     return exclude_in_hp_search
 
 
 async def forward(self):
-    forward_start_time = time.time()
-    exclude_in_hp_search = parse_config(self.config)
+    while True:
+        forward_start_time = time.time()
+        exclude_in_hp_search = parse_config(self.config)
 
-    hp_sampler = HyperParameters(
-        pdb_id=self.config.protein.pdb_id,
-        exclude=exclude_in_hp_search,
-    )
+        # We need to select a random pdb_id outside of the protein class.
+        pdb_id = (
+            select_random_pdb_id(PDB_IDS=PDB_IDS)
+            if self.config.pdb_id is None
+            else self.config.pdb_id
+        )
+        hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-    try:
-        sampled_combination: Dict[str, Dict] = hp_sampler.sample_hyperparameters()
-        hp: Dict = sampled_combination[self.config.protein.pdb_id]
+        for ii in range(hp_sampler.TOTAL_COMBINATIONS):
+            hp_sampler_time = time.time()
 
-        protein = Protein(
-            pdb_id=self.config.protein.pdb_id,
-            ff=self.config.protein.ff
-            if self.config.protein.ff is not None
-            else hp["ff"],
-            water=self.config.protein.water
-            if self.config.protein.water is not None
-            else hp["water"],
-            box=self.config.protein.box
-            if self.config.protein.box is not None
-            else hp["box"],
-            config=self.config.protein,
+            event = {}
+            try:
+                sampled_combination: Dict = hp_sampler.sample_hyperparameters()
+                bt.logging.info(
+                    f"pdb_id: {pdb_id}, Selected hyperparameters: {sampled_combination}, iteration {ii}"
+                )
+
+                protein = Protein(
+                    pdb_id=self.config.protein.pdb_id,
+                    ff=self.config.protein.ff
+                    if self.config.protein.ff is not None
+                    else sampled_combination["FF"],
+                    water=self.config.protein.water
+                    if self.config.protein.water is not None
+                    else sampled_combination["WATER"],
+                    box=self.config.protein.box
+                    if self.config.protein.box is not None
+                    else sampled_combination["BOX"],
+                    config=self.config.protein,
+                )
+
+                hps = {
+                    "FF": protein.ff,
+                    "WATER": protein.water,
+                    "BOX": protein.box,
+                    "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"],
+                }
+
+                bt.logging.info(f"Attempting to generate challenge: {protein}")
+                protein.forward()
+
+            except Exception as E:
+                bt.logging.error(
+                    f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
+                )
+                bt.logging.warning(E)
+                event["status"] = False
+
+            finally:
+                event["pdb_id"] = pdb_id
+                event.update(hps)  # add the dictionary of hyperparameters to the event
+                event["hp_sample_time"] = time.time() - hp_sampler_time
+
+                if "status" not in event:
+                    bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
+                    event["status"] = True  # simulation passed!
+                    break  # break out of the loop if the simulation was successful
+
+                log_event(
+                    self, event
+                )  # only log the event if the simulation was not successful
+
+        miner_event = await run_step(
+            self,
+            protein=protein,
+            k=self.config.neuron.sample_size,
+            timeout=self.config.neuron.timeout,
         )
 
-        bt.logging.info(f"Attempting to generate challenge: {protein}")
-        protein.forward()
-
-    except Exception as E:
-        bt.logging.error(f"Error running hyperparameters {hp}")
-
-    event = await run_step(
-        self,
-        protein=protein,
-        k=self.config.neuron.sample_size,
-        timeout=self.config.neuron.timeout,
-    )
-
-    event["forward_time"] = time.time() - forward_start_time
-    event["pdb_id"] = self.config.protein.pdb_id
-    event.update(hp)  # add the protein hyperparameters to the event
-
-    log_event(self, event)
+        event.update(miner_event)
+        event["forward_time"] = time.time() - forward_start_time
+        log_event(self, event)  # Log the entire pipeline.

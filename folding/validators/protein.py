@@ -9,7 +9,11 @@ from typing import List, Dict
 import bittensor as bt
 from dataclasses import dataclass
 
-from folding.utils.ops import run_cmd_commands, check_if_directory_exists
+from folding.utils.ops import (
+    run_cmd_commands,
+    check_if_directory_exists,
+    select_random_pdb_id,
+)
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,7 +46,7 @@ class Protein:
 
     def setup_pdb_id(self):
         if self.pdb_id is None:
-            self.pdb_id = self.select_random_pdb_id()
+            self.pdb_id = select_random_pdb_id()
             bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 
         self.pdb_id = (
@@ -170,14 +174,6 @@ class Protein:
 
     def __repr__(self):
         return self.__str__()
-
-    def select_random_pdb_id(self):
-        """This function is really important as its where you select the protein you want to fold"""
-        while True:
-            family = random.choice(list(PDB_IDS.keys()))
-            choices = PDB_IDS[family]
-            if len(choices):
-                return random.choice(choices)
 
     def calculate_params_save_interval(self, num_steps_to_save: int = 5) -> float:
         """determining the save_frequency to step
