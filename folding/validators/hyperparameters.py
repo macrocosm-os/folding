@@ -10,7 +10,6 @@ class HyperParameters:
         """Sample hyperparameters for protein folding for a specific pdb_id
 
         Args:
-            pdb_id (str): id for the protein.
             exclude (List[str], optional): List of hyperparameters to exclude. Defaults to None.
                 needs to be either ['FF','BOX','WATER'] to exclude a specific hyperparameter, or
                 you can exclude a specific value(s) by passing {'FF': 'charmm27', 'BOX_TYPE': 'dodecahedron'}.
@@ -19,7 +18,7 @@ class HyperParameters:
         # Need to download files for specific inputs.
         self.FF: List[str] = ["charmm27", "amber03"]
         self.BOX: List[str] = ["dodecahedron", "octahedron", "cubic"]
-        self.WATER: List = ["tip3p", "tip4p", "spce"]
+        self.WATER: List = ["tip3p", "spce"]
         self.BOX_DISTANCE: List[float] = [1.0]
 
         self.parameter_set = {
