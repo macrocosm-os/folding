@@ -166,14 +166,14 @@ async def forward(self):
         )
         hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-        for ii in range(hp_sampler.TOTAL_COMBINATIONS):
+        for iteration_num in range(hp_sampler.TOTAL_COMBINATIONS):
             hp_sampler_time = time.time()
 
             event = {}
             try:
                 sampled_combination: Dict = hp_sampler.sample_hyperparameters()
                 bt.logging.info(
-                    f"pdb_id: {pdb_id}, Selected hyperparameters: {sampled_combination}, iteration {ii}"
+                    f"pdb_id: {pdb_id}, Selected hyperparameters: {sampled_combination}, iteration {iteration_num}"
                 )
 
                 protein = Protein(
@@ -221,6 +221,13 @@ async def forward(self):
                     self, event
                 )  # only log the event if the simulation was not successful
 
+        if event["status"] is False:
+            bt.logging.error(
+                f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id} ❌❌"
+            )
+            continue
+
+        # The following code only runs if we have a successful run!
         miner_event = await run_step(
             self,
             protein=protein,
