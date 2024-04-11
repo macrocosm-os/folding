@@ -4,7 +4,7 @@ title       = CHARMM steepest descent enrgy minimisation
 integrator  = steep  ; Algorithm (steep = steepest descent minimization)
 emtol       = 1000.0 ; Stop minimization when the maximum force < 1000.0 kJ/mol/nm
 emstep      = 0.01   ; Minimization step size
-nstenergy   = 500    ; save energies every 1.0 ps, so we can observe if we are successful
+nstenergy   = 10    ; save energies every 1.0 ps, so we can observe if we are successful
 nsteps      = 100     ; run as long as we need. Changed from -1 to 10 
 ; Settings that make sure we run with parameters in harmony with the selected force-field
 constraints             = h-bonds   ; bonds involving H are constrained
