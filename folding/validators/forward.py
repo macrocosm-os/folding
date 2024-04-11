@@ -30,48 +30,12 @@ async def run_step(
     protein: Protein,
     k: int,
     timeout: float,
-    task: str = None,
     exclude: list = [],
 ):
-    """
-    The function takes a Protein and calculates the molecular dyanmics of it folding without further user input using the GROMACS molecular dynamics software.
-    This is done in the following steps:
-
-    1) Stabilizing the protein
-    2) Stabilizing the protein in the evironment
-
-    Notes:
-    Gromacs is typically run from the command line with heavy user input, the goal of this function is to either skip
-    the user input or use different servers to find the optimal input for us based on how "typcial" a run is for each protein
-
-    Gromacs works best for proteins folded in water. Other solutions need a different workflow
-
-    Inputs (main):
-    protein_pdb: string arg for name of the .pdb file
-    ff: forcefield, this varies by protein and is the second most important input. This is a great use of distributed computed
-        and different servers using different force fields is the most optimal way to find this.
-    box: constrain the size of the simulated environment to reduce processing speed. Barring vastly irregular shapes,
-        the rhombic dodecahedron is most optimal. This could be automated based on known size/shape of the protein or simply relgated to other servers
-    energy_min_x: an .mdp file describing the energy minimization parameters. This can be iterated upon based on validation results
-        in the tutorial, energy_min_1=emin-charmm.mdp and energy_min_2=nvt-charmm.mdp, energy_min_3=npt-charmm.mdp, energy_min_4=md-charmm.mdp
-
-
-    Inputs (optional, future):
-    solution: Non-water solutions will require different molecular dyanmics functions and workflos
-    verbose: Boolean descibing outputs for mdrun. If true, progress updates are ouput while dynamics are calculated
-    output: necessary output depends on method of transition state calculations. This can be easily changed
-
-    Final Outputs:
-    ________.xvg
-    """
-
-    # Second validation checkpoint: After temperature and pressure runs
-    # Third validation checkpoint: Post analysis on any metric such as RMSD, radius of gyration, etc.
-
     bt.logging.debug("run_step")
 
     # Record event start time.
-    event = {"pdb_id": protein.pdb_id, "task": task}
+    event = {"pdb_id": protein.pdb_id}
 
     start_time = time.time()
 
@@ -131,6 +95,14 @@ async def run_step(
     # bt.logging.debug("event:", str(event))
     # if not self.config.neuron.dont_save_events:
     #     logger.log("EVENTS", "events", **event)
+
+
+def mock_run_step(
+    protein: Protein,
+    k: int,
+    timeout: float,
+):
+    return {"mock_run": True}
 
 
 def parse_config(config) -> List[str]:
@@ -223,13 +195,19 @@ async def forward(self):
 
         if event["status"] is False:
             bt.logging.error(
-                f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id} ❌❌"
+                f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
             continue
 
         # The following code only runs if we have a successful run!
-        miner_event = await run_step(
-            self,
+        # miner_event = await run_step(
+        #     self,
+        #     protein=protein,
+        #     k=self.config.neuron.sample_size,
+        #     timeout=self.config.neuron.timeout,
+        # )
+
+        miner_event = mock_run_step(
             protein=protein,
             k=self.config.neuron.sample_size,
             timeout=self.config.neuron.timeout,
