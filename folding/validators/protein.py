@@ -46,7 +46,7 @@ class Protein:
 
     def setup_pdb_id(self):
         if self.pdb_id is None:
-            self.pdb_id = select_random_pdb_id()
+            self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 
         self.pdb_id = (

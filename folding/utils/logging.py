@@ -44,8 +44,6 @@ def init_wandb(self, reinit=False):
 
     if self.config.mock:
         tags.append("mock")
-    for task in self.active_tasks:
-        tags.append(task)
     if self.config.neuron.disable_set_weights:
         tags.append("disable_set_weights")
 
