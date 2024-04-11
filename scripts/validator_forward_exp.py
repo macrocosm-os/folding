@@ -182,7 +182,7 @@ if __name__ == "__main__":
         "--pdb_id",
         type=str,
         help="PDB ID for protein folding.",  # defaults to None
-        default=None,
+        default="5oxe",
     )
 
     parser.add_argument(

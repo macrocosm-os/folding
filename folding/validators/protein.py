@@ -116,9 +116,11 @@ class Protein:
         other_files = [
             "em.gro",
             "topol.top",
+            "posre.itp",
             "posre_Protein_chain_A.itp",
             "posre_Protein_chain_L.itp",
         ]
+
         required_files = mdp_files + other_files
         missing_files = self.check_for_missing_files(required_files=required_files)
 
@@ -134,9 +136,15 @@ class Protein:
 
         self.md_inputs = {}
         for file in other_files:
-            self.md_inputs[file] = open(
-                os.path.join(self.validator_directory, file), "r"
-            ).read()
+            try:
+                self.md_inputs[file] = open(
+                    os.path.join(self.validator_directory, file), "r"
+                ).read()
+            except Exception as E:
+                bt.logging.warning(
+                    f"Attempted to put file {file} in md_inputs.\nError: {E}"
+                )
+                continue
 
         params_to_change = [
             "nstxout",  # Save coordinates every 0 steps (not saving standard trajectories)
