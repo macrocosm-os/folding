@@ -15,7 +15,7 @@ from folding.utils.ops import select_random_pdb_id
 from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PDB_PATH = os.path.join(ROOT_DIR, "folding/pdb_ids.pkl")
+PDB_PATH = os.path.join(ROOT_DIR, "pdb_ids.pkl")
 if not os.path.exists(PDB_PATH):
     raise ValueError(
         f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
@@ -69,15 +69,10 @@ async def run_step(
     # Third validation checkpoint: Post analysis on any metric such as RMSD, radius of gyration, etc.
 
     bt.logging.debug("run_step")
-
-    # Record event start time.
-    event = {"pdb_id": protein.pdb_id, "task": task}
-
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    # uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
-    uids = [9]
+    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = FoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
 
@@ -91,26 +86,27 @@ async def run_step(
     rewards: torch.FloatTensor = get_rewards(protein, responses)
 
     # # Log the step event.
-    event.update(
-        {
-            "block": self.metagraph.block,
-            "step_length": time.time() - start_time,
-            "uids": uids.tolist(),
-            "response_times": [
-                resp.dendrite.process_time if resp.dendrite.process_time != None else 0
-                for resp in responses
-            ],
-            "response_status_messages": [
-                str(resp.dendrite.status_message) for resp in responses
-            ],
-            "response_status_codes": [
-                str(resp.dendrite.status_code) for resp in responses
-            ],
-            # "rewards": rewards.tolist(),
-        }
-    )
+    # event.update(
+    #     {
+    #         "block": self.metagraph.block,
+    #         "step_length": time.time() - start_time,
+    #         "uids": uids.tolist(),
+    #         "response_times": [
+    #             resp.dendrite.process_time if resp.dendrite.process_time != None else 0
+    #             for resp in responses
+    #         ],
+    #         "response_status_messages": [
+    #             str(resp.dendrite.status_message) for resp in responses
+    #         ],
+    #         "response_status_codes": [
+    #             str(resp.dendrite.status_code) for resp in responses
+    #         ],
+    #         # "rewards": rewards.tolist(),
+    #     }
+    # )
 
-    return event
+    # return event
+    return {"step_length": time.time() - start_time}
 
     # os.system("pm2 stop v1")
 
@@ -237,4 +233,6 @@ async def forward(self):
 
         event.update(miner_event)
         event["forward_time"] = time.time() - forward_start_time
+
+        bt.logging.success("✅ Logging pdb results to wandb ✅")
         log_event(self, event)  # Log the entire pipeline.
