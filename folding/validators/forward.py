@@ -19,15 +19,17 @@ from folding.utils.data import DataExtractor
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
 
-def parse_reward_data(path: str):
+
+def parsing_reward_data(path: str):
     data_extractor = DataExtractor()
     # run all methods
     data_extractor.energy(data_type="Potential", path=path)
-    data_extractor.temperature("T-rest", path=path)
-    data_extractor.pressure("Pressure", path=path)
-    data_extractor.density("Density", path=path)
-    data_extractor.prod_energy("Potential", path=path)
+    data_extractor.temperature(data_type="T-rest", path=path)
+    data_extractor.pressure(data_type="Pressure", path=path)
+    data_extractor.density(data_type="Density", path=path)
+    data_extractor.prod_energy(data_type="Potential", path=path)
     data_extractor.rmsd(path=path)
+
 
 async def run_step(
     self,
@@ -49,7 +51,19 @@ async def run_step(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
+        deserialize=True,
     )
+
+    for resp in responses:
+        miner_data_directory = os.path.join(
+            protein.validator_directory, resp.axon.hotkey[:8]
+        )
+        protein.save_files(
+            files=resp.md_output,
+            output_directory=miner_data_directory,
+        )
+        parsing_reward_data(path=miner_data_directory)
+
     # Compute the rewards for the responses given the prompt.
     rewards: torch.FloatTensor = get_rewards(protein, responses)
 

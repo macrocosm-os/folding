@@ -54,7 +54,7 @@ def forward(synapse: FoldingSynapse, config: Dict) -> FoldingSynapse:
     )
 
     # load the output files as bytes and add to synapse.md_output
-    for filename in glob.glob() + ['npt.edr', 'md_center.xtc']:
+    for filename in glob.glob() + ["npt.edr", "md_center.xtc"]:
         bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
         try:
             with open(filename, "rb") as f:

@@ -158,7 +158,7 @@ class Protein:
                 )
                 continue
 
-        params_to_change = [  
+        params_to_change = [
             "nstvout",  # Save velocities every 0 steps
             "nstfout",  # Save forces every 0 steps
             "nstxout-compressed",  # Save coordinates to trajectory every 50,000 steps
@@ -240,7 +240,7 @@ class Protein:
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
         )
-        
+
         # DE = DataExtractor()
         bt.logging.info("Extracting Data")
         self.parse_reward_data()
@@ -278,7 +278,7 @@ class Protein:
                 content = re.sub(
                     "nsteps\\s+=\\s+\\d+", f"nsteps = {self.config.max_steps}", content
                 )
-            
+
             for param in params_to_change:
                 if param in content:
                     bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
