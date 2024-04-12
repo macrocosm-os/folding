@@ -126,11 +126,6 @@ class Protein:
             "posre.itp",
             "posre_Protein_chain_A.itp",
             "posre_Protein_chain_L.itp",
-            "Potential.xvg",
-            "T-rest.xvg",
-            "Pressure.xvg",
-            "Density.xvg",
-            "rmsd_xray.xvg",
         ]
 
         required_files = mdp_files + other_files
