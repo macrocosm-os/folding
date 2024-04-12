@@ -35,6 +35,7 @@ class Protein:
         self.box = box
 
         self.config = config
+        self.md_inputs = {}
 
     def gather_pdb_id(self):
         if self.pdb_id is None:
@@ -140,7 +141,6 @@ class Protein:
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
         check_if_directory_exists(output_directory=self.validator_directory)
 
-        self.md_inputs = {}
         for file in other_files:
             try:
                 self.md_inputs[file] = open(
