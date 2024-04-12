@@ -42,8 +42,10 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        bt.logging.info("load_state()")
-        # self.load_state()
+        bt.logging.warning(
+            "VALIDATOR LOAD_STATE DOES NOT WORK... SKIPPING BaseValidatorNeuron.load_state()"
+        )
+        # self.load_state() #TODO: This seems to break. Unsure why.
 
         # TODO(developer): Anything specific to your use case you can do here
 
