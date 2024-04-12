@@ -1,10 +1,10 @@
 import os
 import re
 import pickle
-import random
 import hashlib
 import requests
 from typing import List, Dict
+from pathlib import Path
 
 import bittensor as bt
 from dataclasses import dataclass
@@ -16,7 +16,7 @@ from folding.utils.ops import (
 )
 
 # root level directory for the project (I HATE THIS)
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 PDB_PATH = os.path.join(ROOT_DIR, "./pdb_ids.pkl")
 if not os.path.exists(PDB_PATH):
