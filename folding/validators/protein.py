@@ -26,7 +26,7 @@ class Protein:
     def name(self):
         return self.protein_pdb.split(".")[0]
 
-    def __init__(self, pdb_id: str, ff: str, water: str, box: str, config: Dict):
+    def __init__(self, ff: str, water: str, box: str, config: Dict, pdb_id: str = None):
         # can either be local file path or a url to download
 
         self.pdb_id = pdb_id

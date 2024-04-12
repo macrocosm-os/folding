@@ -63,6 +63,10 @@ async def run_step(
     # os.system("pm2 stop v1")
 
 
+def mock_run_step():
+    return {"mock_run": True}
+
+
 def parse_config(config) -> List[str]:
     """
     Parse config to check if key hyperparameters are set.
@@ -88,11 +92,13 @@ async def forward(self):
         forward_start_time = time.time()
         exclude_in_hp_search = parse_config(self.config)
 
+        bt.logging.info(f"Running config: {self.config}")
+
         # We need to select a random pdb_id outside of the protein class.
         pdb_id = (
             select_random_pdb_id(PDB_IDS=PDB_IDS)
-            if self.config.pdb_id is None
-            else self.config.pdb_id
+            if self.config.protein.pdb_id is None
+            else self.config.protein.pdb_id
         )
         hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
@@ -159,12 +165,14 @@ async def forward(self):
             continue  # Skip to the next pdb_id
 
         # The following code only runs if we have a successful run!
-        miner_event = await run_step(
-            self,
-            protein=protein,
-            k=self.config.neuron.sample_size,
-            timeout=self.config.neuron.timeout,
-        )
+        # miner_event = await run_step(
+        #     self,
+        #     protein=protein,
+        #     k=self.config.neuron.sample_size,
+        #     timeout=self.config.neuron.timeout,
+        # )
+
+        miner_event = mock_run_step()
 
         event.update(miner_event)
         event["forward_time"] = time.time() - forward_start_time

@@ -9,7 +9,7 @@ from typing import List, Dict
 import bittensor as bt
 
 
-def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str]:
+def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
     """If you want to randomly sample pdb_ids, you need to load in
     the data that was computed via the gather_pdbs.py script.
 
