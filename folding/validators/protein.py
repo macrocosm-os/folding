@@ -15,7 +15,7 @@ from folding.utils.ops import (
     load_pdb_ids,
     select_random_pdb_id,
 )
-from folding.utils.data import DataExtractor
+
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -102,16 +102,6 @@ class Protein:
             return missing_files
         return None
 
-    def parse_reward_data(self):
-        data_extractor = DataExtractor()
-        # run all methods
-        data_extractor.energy(data_type="Potential", path=self.validator_directory)
-        # data_extractor.temperature("T-rest", self.validator_directory)
-        # data_extractor.pressure("Pressure", self.validator_directory)
-        # data_extractor.density("Density", self.validator_directory)
-        data_extractor.prod_energy("Potential", self.validator_directory)
-        data_extractor.rmsd(self.validator_directory)
-
     def forward(self):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
@@ -156,11 +146,6 @@ class Protein:
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
         check_if_directory_exists(output_directory=self.validator_directory)
 
-        # DE = DataExtractor()
-        bt.logging.info("Extracting Data")
-        self.parse_reward_data()
-        bt.logging.info("Extraction complete")
-
         self.md_inputs = {}
         for file in other_files:
             try:
@@ -173,11 +158,10 @@ class Protein:
                 )
                 continue
 
-        params_to_change = [
-            "nstxout",  # Save coordinates every 0 steps (not saving standard trajectories)
+        params_to_change = [  
             "nstvout",  # Save velocities every 0 steps
             "nstfout",  # Save forces every 0 steps
-            "nstxtcout",  # Save coordinates to trajectory every 50,000 steps
+            "nstxout-compressed",  # Save coordinates to trajectory every 50,000 steps
             "nstenergy",  # Save energies every 50,000 steps
             "nstlog",  # Update log file every 50,000 steps
         ]
@@ -253,31 +237,14 @@ class Protein:
             "gmx mdrun -v -deffnm em",  # Run energy minimization
         ]
 
-        # Run the Temperature equilibration
-        bt.logging.info("Run the Temperature equilibration")
-        commands += [
-            "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",
-            "gmx mdrun -deffnm nvt ",  # Temperature equilibration
-        ]
-
-        # Run the Pressure equilibration
-        bt.logging.info("Run the Pressure equilibration")
-        commands += [
-            "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",
-            "gmx mdrun -deffnm npt ",  # Pressure equilibration
-        ]
-
-        # Run the Production Run
-        bt.logging.info("Run the Production Run")
-        commands += [
-            "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",
-            "gmx mdrun -deffnm md_0_1 "  # Production run
-            "!printf '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md.xtc -o md_center.xtc -center -pbc mol",  # Center the trajectory
-        ]
-
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
         )
+        
+        # DE = DataExtractor()
+        bt.logging.info("Extracting Data")
+        self.parse_reward_data()
+        bt.logging.info("Extraction complete")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         output_directory = os.path.join(self.pdb_directory, "validator")
@@ -311,12 +278,13 @@ class Protein:
                 content = re.sub(
                     "nsteps\\s+=\\s+\\d+", f"nsteps = {self.config.max_steps}", content
                 )
+            
             for param in params_to_change:
                 if param in content:
                     bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
                     content = re.sub(
                         f"{param}\\s+=\\s+\\d+",
-                        f"{param} = {save_interval}",
+                        f"{param} = {1}",
                         content,
                     )
 
