@@ -175,11 +175,12 @@ async def forward(self):
                     self, event
                 )  # only log the event if the simulation was not successful
 
+        # If we exit the for loop without breaking, it means all hyperparameter combinations failed.
         if event["status"] is False:
             bt.logging.error(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
-            continue
+            continue  # Skip to the next pdb_id
 
         # The following code only runs if we have a successful run!
         miner_event = await run_step(
