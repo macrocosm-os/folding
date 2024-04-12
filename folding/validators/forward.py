@@ -63,10 +63,6 @@ async def run_step(
     # os.system("pm2 stop v1")
 
 
-def mock_run_step():
-    return {"mock_run": True}
-
-
 def parse_config(config) -> List[str]:
     """
     Parse config to check if key hyperparameters are set.
@@ -165,14 +161,12 @@ async def forward(self):
             continue  # Skip to the next pdb_id
 
         # The following code only runs if we have a successful run!
-        # miner_event = await run_step(
-        #     self,
-        #     protein=protein,
-        #     k=self.config.neuron.sample_size,
-        #     timeout=self.config.neuron.timeout,
-        # )
-
-        miner_event = mock_run_step()
+        miner_event = await run_step(
+            self,
+            protein=protein,
+            k=self.config.neuron.sample_size,
+            timeout=self.config.neuron.timeout,
+        )
 
         event.update(miner_event)
         event["forward_time"] = time.time() - forward_start_time
