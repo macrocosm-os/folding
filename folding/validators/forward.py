@@ -14,10 +14,20 @@ from folding.protocol import FoldingSynapse
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids
 from folding.validators.hyperparameters import HyperParameters
+from folding.utils.data import DataExtractor
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
 
+def parse_reward_data(path: str):
+    data_extractor = DataExtractor()
+    # run all methods
+    data_extractor.energy(data_type="Potential", path=path)
+    data_extractor.temperature("T-rest", path=path)
+    data_extractor.pressure("Pressure", path=path)
+    data_extractor.density("Density", path=path)
+    data_extractor.prod_energy("Potential", path=path)
+    data_extractor.rmsd(path=path)
 
 async def run_step(
     self,
