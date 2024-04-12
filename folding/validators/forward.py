@@ -15,7 +15,6 @@ from folding.protocol import FoldingSynapse
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids
 from folding.validators.hyperparameters import HyperParameters
 
-
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
 
@@ -61,6 +60,7 @@ async def run_step(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
+        deserialize=True,
     )
     # Compute the rewards for the responses given the prompt.
     rewards: torch.FloatTensor = get_rewards(protein, responses)

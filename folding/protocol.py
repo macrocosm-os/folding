@@ -59,5 +59,13 @@ class FoldingSynapse(bt.Synapse):
         if type(self.md_output) != dict:
             self.md_output = {}
         else:
-            self.md_output = {k: base64.b64decode(v) for k, v in self.md_output.items()}
+            md_output = {}
+            for k, v in self.md_output.items():
+                try:
+                    md_output[k] = base64.b64decode(v)
+                except Exception as e:
+                    bt.logging.error(f"Error decoding {k} from md_output: {e}")
+                    md_output[k] = None
+
+            self.md_output = md_output
         return self
