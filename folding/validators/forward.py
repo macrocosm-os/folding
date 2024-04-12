@@ -1,7 +1,5 @@
-import os
 import time
 import torch
-import pickle
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
@@ -22,6 +20,9 @@ PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
 
 
 def read_encoded_files(responses: List[FoldingSynapse], uids: List[int]) -> bytes:
+    """read encoded files from the md_output provided by the miner.
+    These are files such as the .gro, .xtc, .edr, .log, etc....
+    """
     decoded_md_output = defaultdict(dict)
 
     for uid, resp in zip(uids, responses):
