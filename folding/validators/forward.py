@@ -87,14 +87,6 @@ async def run_step(
     #     logger.log("EVENTS", "events", **event)
 
 
-def mock_run_step(
-    protein: Protein,
-    k: int,
-    timeout: float,
-):
-    return {"mock_run": True}
-
-
 def parse_config(config) -> List[str]:
     """
     Parse config to check if key hyperparameters are set.
@@ -192,12 +184,6 @@ async def forward(self):
         # The following code only runs if we have a successful run!
         miner_event = await run_step(
             self,
-            protein=protein,
-            k=self.config.neuron.sample_size,
-            timeout=self.config.neuron.timeout,
-        )
-
-        miner_event = mock_run_step(
             protein=protein,
             k=self.config.neuron.sample_size,
             timeout=self.config.neuron.timeout,
