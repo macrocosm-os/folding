@@ -1,7 +1,6 @@
 import os
 import re
 import pickle
-import random
 import hashlib
 import requests
 from typing import List, Dict
@@ -10,19 +9,15 @@ from pathlib import Path
 import bittensor as bt
 from dataclasses import dataclass
 
-from folding.utils.ops import run_cmd_commands, check_if_directory_exists
+from folding.utils.ops import (
+    run_cmd_commands,
+    check_if_directory_exists,
+    select_random_pdb_id,
+    load_pdb_ids,
+)
 
-# root level directory for the project
+# root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
-
-PDB_PATH = os.path.join(ROOT_DIR, "./pdb_ids.pkl")
-if not os.path.exists(PDB_PATH):
-    raise ValueError(
-        f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
-    )
-
-with open(PDB_PATH, "rb") as f:
-    PDB_IDS = pickle.load(f)
 
 
 @dataclass
@@ -31,21 +26,22 @@ class Protein:
     def name(self):
         return self.protein_pdb.split(".")[0]
 
-    def __init__(
-        self, pdb_id=None, ff="charmm27", box="dodecahedron", config: Dict = None
-    ):
+    def __init__(self, ff: str, water: str, box: str, config: Dict, pdb_id: str = None):
         # can either be local file path or a url to download
-
-        self.suppress_cmd_output = True  # TODO: Replace with Config
 
         self.pdb_id = pdb_id
         self.ff = ff
+        self.water = water
         self.box = box
+
         self.config = config
 
-    def setup_pdb_id(self):
+    def gather_pdb_id(self):
         if self.pdb_id is None:
-            self.pdb_id = self.select_random_pdb_id()
+            PDB_IDS = load_pdb_ids(
+                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+            )  # TODO: This should be a class variable via config
+            self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 
         self.pdb_id = (
@@ -106,8 +102,15 @@ class Protein:
         return None
 
     def forward(self):
+        """forward method defines the following:
+        1. gather the pdb_id and setup the namings.
+        2. setup the pdb directory and download the pdb file if it doesn't exist.
+        3. check for missing files and generate the input files if they are missing.
+        4. edit the necessary config files and add them to the synapse object self.md_inputs[file] = content
+        4. save the files to the validator directory for record keeping.
+        """
         ## Setup the protein directory and sample a random pdb_id if not provided
-        self.setup_pdb_id()
+        self.gather_pdb_id()
 
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
@@ -119,9 +122,11 @@ class Protein:
         other_files = [
             "em.gro",
             "topol.top",
+            "posre.itp",
             "posre_Protein_chain_A.itp",
             "posre_Protein_chain_L.itp",
         ]
+
         required_files = mdp_files + other_files
         missing_files = self.check_for_missing_files(required_files=required_files)
 
@@ -137,9 +142,15 @@ class Protein:
 
         self.md_inputs = {}
         for file in other_files:
-            self.md_inputs[file] = open(
-                os.path.join(self.validator_directory, file), "r"
-            ).read()
+            try:
+                self.md_inputs[file] = open(
+                    os.path.join(self.validator_directory, file), "r"
+                ).read()
+            except Exception as E:
+                bt.logging.warning(
+                    f"Attempted to put file {file} in md_inputs.\nError: {E}"
+                )
+                continue
 
         params_to_change = [
             "nstxout",  # Save coordinates every 0 steps (not saving standard trajectories)
@@ -166,15 +177,7 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
-    def select_random_pdb_id(self):
-        """This function is really important as its where you select the protein you want to fold"""
-        while True:
-            family = random.choice(list(PDB_IDS.keys()))
-            choices = PDB_IDS[family]
-            if len(choices):
-                return random.choice(choices)
-
-    def calculate_params_save_interval(self, num_steps_to_save: int = 100) -> float:
+    def calculate_params_save_interval(self, num_steps_to_save: int = 5) -> float:
         """determining the save_frequency to step
 
         Args:
@@ -204,10 +207,10 @@ class Protein:
         # Copy mdp template files to protein directory
         ff_base = "".join([c for c in self.ff if not c.isdigit()])
         commands = [
-            f"cp {self.base_directory}/nvt-{ff_base}.mdp {self.pdb_directory}/nvt.mdp",
-            f"cp {self.base_directory}/npt-{ff_base}.mdp {self.pdb_directory}/npt.mdp",
-            f"cp {self.base_directory}/md-{ff_base}.mdp  {self.pdb_directory}/md.mdp ",
-            f"cp {self.base_directory}/emin-{ff_base}.mdp  {self.pdb_directory}/emin.mdp ",
+            f"cp {self.base_directory}/nvt.mdp {self.pdb_directory}/nvt.mdp",
+            f"cp {self.base_directory}/npt.mdp {self.pdb_directory}/npt.mdp",
+            f"cp {self.base_directory}/md.mdp  {self.pdb_directory}/md.mdp ",
+            f"cp {self.base_directory}/emin.mdp  {self.pdb_directory}/emin.mdp ",
             f"cp {self.base_directory}/minim.mdp  {self.pdb_directory}/minim.mdp",
         ]
 
@@ -215,12 +218,12 @@ class Protein:
         commands += [
             f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}",  # remove lines with HETATM
             f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}",  # remove lines with CONECT
-            f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water tip3p",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
+            f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water {self.water}",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
             f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
             "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
             "touch ions.mdp",  # Create a file to add ions to the system
             "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
-            'echo "13" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
+            'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
         # Run the first step of the simulation
         bt.logging.info(f"print the current directory: {os.getcwd()}")
@@ -230,7 +233,7 @@ class Protein:
         ]
 
         run_cmd_commands(
-            commands=commands, suppress_cmd_output=self.suppress_cmd_output
+            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file

@@ -102,14 +102,21 @@ def add_args(cls, parser):
         "--protein.ff",
         type=str,
         help="Force field for protein folding.",
-        default="charmm27",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.water",
+        type=str,
+        help="Water used for protein folding.",
+        default=None,
     )
 
     parser.add_argument(
         "--protein.box",
         type=str,
         help="Box type for protein folding.",
-        default="dodecahedron",
+        default=None,
     )
 
     parser.add_argument(
@@ -196,7 +203,7 @@ def add_miner_args(cls, parser):
     parser.add_argument(
         "--wandb.project_name",
         type=str,
-        default="template-miners",
+        default="folding-miners",
         help="Wandb project to log to.",
     )
 
@@ -274,7 +281,7 @@ def add_validator_args(cls, parser):
         "--wandb.project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="template-validators",
+        default="folding-validators",
     )
 
     parser.add_argument(
