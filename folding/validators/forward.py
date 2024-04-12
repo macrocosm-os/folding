@@ -45,7 +45,7 @@ async def run_step(
 
     # # Log the step event.
     event = {
-        "block": self.metagraph.block,
+        "block": self.block,
         "step_length": time.time() - start_time,
         "uids": uids.tolist(),
         "response_times": [
@@ -161,12 +161,14 @@ async def forward(self):
             continue  # Skip to the next pdb_id
 
         # The following code only runs if we have a successful run!
+        bt.logging.info("⏰ Waiting for miner responses ⏰")
         miner_event = await run_step(
             self,
             protein=protein,
             k=self.config.neuron.sample_size,
             timeout=self.config.neuron.timeout,
         )
+        bt.logging.success("✅ All miners complete! ✅")
 
         event.update(miner_event)
         event["forward_time"] = time.time() - forward_start_time
