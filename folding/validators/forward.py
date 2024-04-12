@@ -5,6 +5,7 @@ import pickle
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
+from collections import defaultdict
 
 from folding.validators.protein import Protein
 from folding.utils.uids import get_random_uids
@@ -15,8 +16,25 @@ from folding.protocol import FoldingSynapse
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids
 from folding.validators.hyperparameters import HyperParameters
 
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
+
+
+def read_encoded_files(responses: List[FoldingSynapse], uids: List[int]) -> bytes:
+    decoded_md_output = defaultdict(dict)
+
+    for uid, resp in zip(uids, responses):
+        md_output = resp.md_output
+        for file in md_output.keys():
+            try:
+                with open(file, "rb") as f:
+                    decoded_md_output[uid][file] = f.read()
+            except Exception as e:
+                bt.logging.error(f"Error reading {file} from md_output: {e}")
+                decoded_md_output[uid][file] = None
+
+    return decoded_md_output
 
 
 async def run_step(
@@ -58,6 +76,8 @@ async def run_step(
         "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
         # "rewards": rewards.tolist(),
     }
+
+    decoded_md_output = read_encoded_files(responses[0].md_output, uids)
 
     return event
     # os.system("pm2 stop v1")
