@@ -9,7 +9,7 @@ from pathlib import Path
 import bittensor as bt
 from dataclasses import dataclass
 
-from folding.utils.ops import run_cmd_commands, check_if_directory_exists
+from folding.utils.ops import run_cmd_commands, check_if_directory_exists, load_pdb_ids, select_random_pdb_id
 from folding.utils.data import DataExtractor
 
 # root level directory for the project (I HATE THIS)
