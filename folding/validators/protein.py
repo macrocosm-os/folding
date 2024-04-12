@@ -13,6 +13,7 @@ from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
     select_random_pdb_id,
+    load_pdb_ids,
 )
 
 # root level directory for the project (I HATE THIS)
@@ -35,25 +36,11 @@ class Protein:
 
         self.config = config
 
-    def load_pdb_ids(self):
-        """
-        If you want to randomly sample pdb_ids from the Protein class, you need to load in
-        the data that was computed via the gather_pdbs.py script.
-        """
-        PDB_PATH = os.path.join(ROOT_DIR, "./pdb_ids.pkl")
-
-        if not os.path.exists(PDB_PATH):
-            raise ValueError(
-                f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
-            )
-
-        with open(PDB_PATH, "rb") as f:
-            PDB_IDS = pickle.load(f)
-        return PDB_IDS
-
     def gather_pdb_id(self):
         if self.pdb_id is None:
-            PDB_IDS = self.load_pdb_ids()
+            PDB_IDS = load_pdb_ids(
+                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+            )  # TODO: This should be a class variable via config
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 

@@ -3,7 +3,8 @@ import time
 import torch
 import pickle
 import bittensor as bt
-from typing import List, Tuple, Dict
+from pathlib import Path
+from typing import List, Dict
 
 from folding.validators.protein import Protein
 from folding.utils.uids import get_random_uids
@@ -11,18 +12,11 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
 
-from folding.utils.ops import select_random_pdb_id
+from folding.utils.ops import select_random_pdb_id, load_pdb_ids
 from folding.validators.hyperparameters import HyperParameters
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PDB_PATH = os.path.join(ROOT_DIR, "pdb_ids.pkl")
-if not os.path.exists(PDB_PATH):
-    raise ValueError(
-        f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
-    )
-
-with open(PDB_PATH, "rb") as f:
-    PDB_IDS = pickle.load(f)
+ROOT_DIR = Path(__file__).resolve().parents[2]
+PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
 
 
 async def run_step(
@@ -67,24 +61,6 @@ async def run_step(
 
     return event
     # os.system("pm2 stop v1")
-
-    # # Find the best response given the rewards vector.
-    # best: str = responses[rewards.argmax(dim=0)]
-
-    # # Compute forward pass rewards, assumes followup_uids and answer_uids are mutually exclusive.
-    # # shape: [ metagraph.n ]
-    # scattered_rewards: torch.FloatTensor = self.scores.scatter(0, uids, rewards).to(
-    #     self.device
-    # )
-
-    # # Update moving_averaged_scores with rewards produced by this step.
-    # # shape: [ metagraph.n ]
-    # alpha: float = self.config.neuron.moving_average_alpha
-    # self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
-
-    # bt.logging.debug("event:", str(event))
-    # if not self.config.neuron.dont_save_events:
-    #     logger.log("EVENTS", "events", **event)
 
 
 def parse_config(config) -> List[str]:
