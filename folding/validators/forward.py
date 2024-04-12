@@ -19,26 +19,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
 
 
-def read_encoded_files(
-    responses: List[FoldingSynapse], uids: List[int]
-) -> Dict[int, Dict[str:str]]:
-    """read encoded files from the md_output provided by the miner.
-    These are files such as the .gro, .xtc, .edr, .log, etc....
-    """
-    decoded_md_output = defaultdict(dict)
-
-    for uid, resp in zip(uids, responses):
-        md_output = resp.md_output
-        for file, contents in md_output.items():
-            try:
-                decoded_md_output[uid][file] = base64.b64decode(contents)
-            except Exception as e:
-                bt.logging.error(f"Error reading {file} from md_output: {e}")
-                decoded_md_output[uid][file] = None
-
-    return decoded_md_output
-
-
 async def run_step(
     self,
     protein: Protein,
@@ -60,11 +40,10 @@ async def run_step(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
-        deserialize=True,
+        deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
     # Compute the rewards for the responses given the prompt.
     rewards: torch.FloatTensor = get_rewards(protein, responses)
-    decoded_md_output = read_encoded_files(responses=responses, uids=uids)
 
     # # Log the step event.
     event = {
@@ -80,7 +59,6 @@ async def run_step(
         ],
         "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
         # "rewards": rewards.tolist(),
-        "files_decoded": [],
     }
 
     return event
