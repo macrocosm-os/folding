@@ -20,20 +20,20 @@ class DataExtractor:
         command = [f"printf '{data_type}\n0\n' | {base_command} -f {path}/em.edr -o {data_type}.xvg {xvg_command}"] 
         run_cmd_commands(command)
 
-    # def temperature(self, data_type, path, base_command: str = "gmx energy", xvg_command: str = "-xvg none"):
-    #     command = [f"echo '{data_type}' | {base_command} -f {path}/em.edr -o {data_type}.xvg {xvg_command} -b 20"]
-    #     run_cmd_commands(command)
+    def temperature(self, data_type, path, base_command: str = "gmx energy", xvg_command: str = "-xvg none"):
+        command = [f"echo '{data_type}' | {base_command} -f {path}/em.edr -o {data_type}.xvg {xvg_command} -b 20"]
+        run_cmd_commands(command)
 
-    # def pressure(self, data_type, path, base_command: str = "gmx energy", xvg_command: str = "-xvg none"):
-    #     command = [f"echo '{data_type}' | {base_command} -f {path}/npt.edr -o {data_type}.xvg {xvg_command}"]
-    #     run_cmd_commands(command)
+    def pressure(self, data_type, path, base_command: str = "gmx energy", xvg_command: str = "-xvg none"):
+        command = [f"echo '{data_type}' | {base_command} -f {path}/npt.edr -o {data_type}.xvg {xvg_command}"]
+        run_cmd_commands(command)
 
-    # def density(self, data_type, path, base_command: str = "gmx energy", xvg_command: str = "-xvg none"):
-    #     command = [f"echo '{data_type}' | {base_command} -f {path}/npt.edr -o {data_type}.xvg {xvg_command}"]
-    #     run_cmd_commands(command)
+    def density(self, data_type, path, base_command: str = "gmx energy", xvg_command: str = "-xvg none"):
+        command = [f"echo '{data_type}' | {base_command} -f {path}/npt.edr -o {data_type}.xvg {xvg_command}"]
+        run_cmd_commands(command)
 
     def prod_energy(self, data_type, path, base_command: str = "gmx energy", xvg_command: str = "-xvg none"):
-        command = [f"printf '{data_type}\n0\n' | {base_command} -f {path}/md_0_1.edr -o {data_type}.xvg {xvg_command}"] 
+        command = [f"printf '{data_type}\n0\n' | {base_command} -f {path}/md_0_1.edr -o potential_production_run.xvg {xvg_command}"] 
         run_cmd_commands(command)
 
     def rmsd(self, path, xvg_command: str = "-xvg none"):
