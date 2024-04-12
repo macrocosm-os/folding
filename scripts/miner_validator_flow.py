@@ -6,7 +6,7 @@ import bittensor as bt
 
 import argparse
 from folding.validators.protein import Protein
-from pathlib import Path 
+from pathlib import Path
 
 import typing
 import random
