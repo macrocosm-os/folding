@@ -1,4 +1,5 @@
 import time
+import base64
 import torch
 import bittensor as bt
 from pathlib import Path
@@ -19,7 +20,9 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
 
 
-def read_encoded_files(responses: List[FoldingSynapse], uids: List[int]) -> bytes:
+def read_encoded_files(
+    responses: List[FoldingSynapse], uids: List[int]
+) -> Dict[int, Dict[str:str]]:
     """read encoded files from the md_output provided by the miner.
     These are files such as the .gro, .xtc, .edr, .log, etc....
     """
@@ -27,10 +30,9 @@ def read_encoded_files(responses: List[FoldingSynapse], uids: List[int]) -> byte
 
     for uid, resp in zip(uids, responses):
         md_output = resp.md_output
-        for file in md_output.keys():
+        for file, contents in md_output.items():
             try:
-                with open(file, "rb") as f:
-                    decoded_md_output[uid][file] = f.read()
+                decoded_md_output[uid][file] = base64.b64decode(contents)
             except Exception as e:
                 bt.logging.error(f"Error reading {file} from md_output: {e}")
                 decoded_md_output[uid][file] = None
@@ -49,7 +51,8 @@ async def run_step(
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
+    # uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
+    uids = [9, 10]
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = FoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
 
@@ -61,12 +64,13 @@ async def run_step(
     )
     # Compute the rewards for the responses given the prompt.
     rewards: torch.FloatTensor = get_rewards(protein, responses)
+    decoded_md_output = read_encoded_files(responses=responses, uids=uids)
 
     # # Log the step event.
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
-        "uids": uids.tolist(),
+        "uids": uids,
         "response_times": [
             resp.dendrite.process_time if resp.dendrite.process_time != None else 0
             for resp in responses
@@ -76,9 +80,8 @@ async def run_step(
         ],
         "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
         # "rewards": rewards.tolist(),
+        "files_decoded": [],
     }
-
-    decoded_md_output = read_encoded_files(responses[0].md_output, uids)
 
     return event
     # os.system("pm2 stop v1")
@@ -158,16 +161,16 @@ async def forward(self):
                     f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
                 )
                 bt.logging.warning(E)
-                event["status"] = False
+                event["validator_search_status"] = False
 
             finally:
                 event["pdb_id"] = pdb_id
                 event.update(hps)  # add the dictionary of hyperparameters to the event
                 event["hp_sample_time"] = time.time() - hp_sampler_time
 
-                if "status" not in event:
+                if "validator_search_status" not in event:
                     bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
-                    event["status"] = True  # simulation passed!
+                    event["validator_search_status"] = True  # simulation passed!
                     break  # break out of the loop if the simulation was successful
 
                 log_event(
@@ -175,7 +178,7 @@ async def forward(self):
                 )  # only log the event if the simulation was not successful
 
         # If we exit the for loop without breaking, it means all hyperparameter combinations failed.
-        if event["status"] is False:
+        if event["validator_search_status"] is False:
             bt.logging.error(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
