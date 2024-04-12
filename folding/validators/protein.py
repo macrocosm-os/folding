@@ -18,15 +18,6 @@ from folding.utils.ops import (
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
-PDB_PATH = os.path.join(ROOT_DIR, "./pdb_ids.pkl")
-if not os.path.exists(PDB_PATH):
-    raise ValueError(
-        f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
-    )
-
-with open(PDB_PATH, "rb") as f:
-    PDB_IDS = pickle.load(f)
-
 
 @dataclass
 class Protein:
@@ -44,8 +35,25 @@ class Protein:
 
         self.config = config
 
-    def setup_pdb_id(self):
+    def load_pdb_ids(self):
+        """
+        If you want to randomly sample pdb_ids from the Protein class, you need to load in
+        the data that was computed via the gather_pdbs.py script.
+        """
+        PDB_PATH = os.path.join(ROOT_DIR, "./pdb_ids.pkl")
+
+        if not os.path.exists(PDB_PATH):
+            raise ValueError(
+                f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
+            )
+
+        with open(PDB_PATH, "rb") as f:
+            PDB_IDS = pickle.load(f)
+        return PDB_IDS
+
+    def gather_pdb_id(self):
         if self.pdb_id is None:
+            PDB_IDS = self.load_pdb_ids()
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 
@@ -107,8 +115,15 @@ class Protein:
         return None
 
     def forward(self):
+        """forward method defines the following:
+        1. gather the pdb_id and setup the namings.
+        2. setup the pdb directory and download the pdb file if it doesn't exist.
+        3. check for missing files and generate the input files if they are missing.
+        4. edit the necessary config files and add them to the synapse object self.md_inputs[file] = content
+        4. save the files to the validator directory for record keeping.
+        """
         ## Setup the protein directory and sample a random pdb_id if not provided
-        self.setup_pdb_id()
+        self.gather_pdb_id()
 
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
