@@ -1,7 +1,4 @@
-import os
 import time
-import torch
-import pickle
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
@@ -14,23 +11,9 @@ from folding.protocol import FoldingSynapse
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids
 from folding.validators.hyperparameters import HyperParameters
-from folding.utils.data import DataExtractor
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
-
-
-def parsing_reward_data(path: str):
-    data_extractor = DataExtractor()
-    # run all methods
-    data_extractor.energy(data_type="Potential", path=path)
-    data_extractor.temperature(data_type="T-rest", path=path)
-    data_extractor.pressure(data_type="Pressure", path=path)
-    data_extractor.density(data_type="Density", path=path)
-    data_extractor.prod_energy(data_type="Potential", path=path)
-    data_extractor.rmsd(path=path)
-
-    return data_extractor.data
 
 
 async def run_step(
@@ -56,20 +39,8 @@ async def run_step(
         deserialize=True,
     )
 
-    for resp in responses:
-        miner_data_directory = os.path.join(
-            protein.validator_directory, resp.axon.hotkey[:8]
-        )
-
-        # Must be done because gromacs only *reads* data, cannot take it in directly
-        protein.save_files(
-            files=resp.md_output,
-            output_directory=miner_data_directory,
-        )
-        output_data = parsing_reward_data(path=miner_data_directory)
-
     # Compute the rewards for the responses given the prompt.
-    rewards: torch.FloatTensor = get_rewards(protein, responses)
+    rewards: Dict[int:Dict] = get_rewards(protein, responses)
 
     # # Log the step event.
     event = {
