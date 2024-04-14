@@ -30,6 +30,8 @@ def parsing_reward_data(path: str):
     data_extractor.prod_energy(data_type="Potential", path=path)
     data_extractor.rmsd(path=path)
 
+    return data_extractor.data
+
 
 async def run_step(
     self,
@@ -58,11 +60,13 @@ async def run_step(
         miner_data_directory = os.path.join(
             protein.validator_directory, resp.axon.hotkey[:8]
         )
+
+        # Must be done because gromacs only *reads* data, cannot take it in directly
         protein.save_files(
             files=resp.md_output,
             output_directory=miner_data_directory,
         )
-        parsing_reward_data(path=miner_data_directory)
+        output_data = parsing_reward_data(path=miner_data_directory)
 
     # Compute the rewards for the responses given the prompt.
     rewards: torch.FloatTensor = get_rewards(protein, responses)

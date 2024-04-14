@@ -18,9 +18,9 @@ class DataExtractor:
     """
 
     def __init__(self):
-        pass
+        self.data = {}
 
-    def extract(filepath: str, names=["step", "energy"]):
+    def extract(filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
 
     def energy(
@@ -36,7 +36,9 @@ class DataExtractor:
         ]
         run_cmd_commands(command)
 
-        return self.extract(filepath=output_data_location, names=["step", "energy"])
+        self.data["energy"] = self.extract(
+            filepath=output_data_location, names=["step", "energy"]
+        )
 
     def temperature(
         self,
@@ -51,7 +53,7 @@ class DataExtractor:
         ]
         run_cmd_commands(command)
 
-        return self.extract(
+        self.data["temperature"] = self.extract(
             filepath=output_data_location, names=["step", "temperature"]
         )
 
@@ -68,7 +70,9 @@ class DataExtractor:
         ]
         run_cmd_commands(command)
 
-        return self.extract(filepath=output_data_location, names=["step", "pressure"])
+        self.data["pressure"] = self.extract(
+            filepath=output_data_location, names=["step", "pressure"]
+        )
 
     def density(
         self,
@@ -83,7 +87,9 @@ class DataExtractor:
         ]
         run_cmd_commands(command)
 
-        return self.extract(filepath=output_data_location, names=["step", "density"])
+        self.data["density"] = self.extract(
+            filepath=output_data_location, names=["step", "density"]
+        )
 
     def prod_energy(
         self,
@@ -99,8 +105,8 @@ class DataExtractor:
         ]
         run_cmd_commands(command)
 
-        return self.extract(
-            filepath=output_data_location, names=["step", "temperature"]
+        self.data["prod_energy"] = self.extract(
+            filepath=output_data_location, names=["step", "prod_energy"]
         )
 
     def rmsd(self, path: str, xvg_command: str = "-xvg none"):
@@ -111,4 +117,6 @@ class DataExtractor:
         ]
         run_cmd_commands(command)
 
-        return self.extract(filepath=output_data_location, names=["step", "rmsd"])
+        self.data["rmsd"] = self.extract(
+            filepath=output_data_location, names=["step", "rmsd"]
+        )
