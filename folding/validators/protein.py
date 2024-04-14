@@ -30,9 +30,27 @@ class Protein:
     def __init__(self, ff: str, water: str, box: str, config: Dict, pdb_id: str = None):
         # can either be local file path or a url to download
 
+        # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
+        ff_water_pairs = {'amber03': 'tip3p',# AMBER force fields
+                'amber94': 'tip3p',
+                'amber96': 'tip3p',
+                'amber99': 'tip3p',
+                'amber99sb-ildn': 'tip3p',
+                'amber99sb': 'tip3p',
+                'amberGS': 'tip3p',
+                'charmm27': 'tip3p',# CHARMM all-atom force field
+                'gromos43a1': 'spc',# GROMOS force fields
+                'gromos43a2': 'spc',
+                'gromos45a3': 'spc',
+                'gromos53a5': 'spc',
+                'gromos53a6': 'spc',
+                'gromos54a7': 'spc',
+                'oplsaa': 'tip4p', # OPLS all-atom force field
+                }
+        
         self.pdb_id = pdb_id
         self.ff = ff
-        self.water = water
+        self.water = ff_water_pairs[self.ff]
         self.box = box
 
         self.config = config
