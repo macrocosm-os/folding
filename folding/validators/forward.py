@@ -43,7 +43,7 @@ async def run_step(
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
     # Compute the rewards for the responses given the prompt.
-    rewards: torch.FloatTensor = get_rewards(protein, responses)
+    # rewards: torch.FloatTensor = get_rewards(protein, responses)
 
     # # Log the step event.
     event = {
@@ -145,6 +145,9 @@ async def forward(self):
                 event["pdb_id"] = pdb_id
                 event.update(hps)  # add the dictionary of hyperparameters to the event
                 event["hp_sample_time"] = time.time() - hp_sampler_time
+                event["forward_time"] = (
+                    time.time() - forward_start_time
+                )  # forward time if validator step fails
 
                 if "validator_search_status" not in event:
                     bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
