@@ -236,11 +236,6 @@ class Protein:
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
         )
 
-        # DE = DataExtractor()
-        bt.logging.info("Extracting Data")
-        self.parse_reward_data()
-        bt.logging.info("Extraction complete")
-
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         output_directory = os.path.join(self.pdb_directory, "validator")
         check_if_directory_exists(output_directory=output_directory)
