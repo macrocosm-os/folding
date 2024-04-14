@@ -1,7 +1,4 @@
-import os
 import time
-import torch
-import pickle
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
@@ -39,9 +36,11 @@ async def run_step(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
+        deserialize=True,
     )
+
     # Compute the rewards for the responses given the prompt.
-    rewards: torch.FloatTensor = get_rewards(protein, responses)
+    rewards: Dict[int:Dict] = get_rewards(protein, responses)
 
     # # Log the step event.
     event = {

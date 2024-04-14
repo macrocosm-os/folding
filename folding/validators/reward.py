@@ -1,40 +1,59 @@
+import os
 import torch
 import bittensor as bt
-from typing import List
+from typing import List, Dict
 
-from .protein import Protein
+from folding.validators.protein import Protein
+from folding.utils.data import DataExtractor
 from folding.protocol import FoldingSynapse
 
 
-def get_rewards(protein: Protein, responses: List[FoldingSynapse]) -> torch.FloatTensor:
-    """Applies the reward model across each call. Unsuccessful responses are zeroed."""
-    # Get indices of correctly responding calls.
+def parsing_reward_data(path: str):
+    data_extractor = DataExtractor()
+    # run all methods
+    data_extractor.energy(data_type="Potential", path=path)
+    data_extractor.temperature(data_type="T-rest", path=path)
+    data_extractor.pressure(data_type="Pressure", path=path)
+    data_extractor.density(data_type="Density", path=path)
+    data_extractor.prod_energy(data_type="Potential", path=path)
+    data_extractor.rmsd(path=path)
 
-    for idx, resp in enumerate(responses):
+    return data_extractor.data
+
+
+def get_rewards(
+    protein: Protein, responses: List[FoldingSynapse], uids: List[int]
+) -> Dict[int:Dict]:
+    """Applies the reward model across each call. Unsuccessful responses are zeroed."""
+
+    reward_data = {}
+    for uid, resp in zip(uids, responses):
+        # Output the reward data information into the terminal
         md_output_summary = {k: len(v) for k, v in resp.md_output.items()}
         bt.logging.info(
-            f"Response {idx}:\nDendrite: {resp.dendrite}\nMD Output: {md_output_summary}\n"
+            f"uid {uid}:\nDendrite: {resp.dendrite}\nMD Output: {md_output_summary}\n"
         )
 
-    successful_response_indices: List[int] = [
-        idx for idx, resp in enumerate(responses) if resp.dendrite.status_code == 200
-    ]
-    bt.logging.success(f"successful_response_indices: {successful_response_indices}")
+        miner_data_directory = os.path.join(
+            protein.validator_directory, resp.axon.hotkey[:8]
+        )
 
-    # Get all responses from responding calls.
-    successful_responses: List[str] = [
-        responses[idx] for idx in successful_response_indices
-    ]
+        if resp.dendrite.status_code != 200:
+            bt.logging.error(
+                f"uid {uid} failed with status code {resp.dendrite.status_code}"
+            )
+            reward_data[uid] = None
+            continue
 
-    # Reward each response.
-    successful_rewards = [
-        protein.reward(md_output=resp.md_output, hotkey=resp.axon.hotkey)
-        for resp in successful_responses
-    ]
+        # Must be done because gromacs only *reads* data, cannot take it in directly
+        protein.save_files(
+            files=resp.md_output,
+            output_directory=miner_data_directory,
+        )
+        output_data = parsing_reward_data(path=miner_data_directory)
+        reward_data[uid] = output_data
 
-    bt.logging.success(f"successful_rewards: {successful_rewards}")
-
-    return successful_rewards
+    return reward_data
 
     # # Softmax rewards across samples.
     # successful_rewards_normalized = torch.softmax(

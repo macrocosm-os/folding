@@ -50,8 +50,8 @@ class MockFoldingSynapse:
         self.md_output = md_output
 
 
-def validator_forward(pdb_id, ff="charmm27", box="dodecahedron", config=None):
-    protein = Protein(pdb_id=pdb_id, ff=ff, box=box, config=config)
+def validator_forward(pdb_id, ff="charmm27", box="dodecahedron", water="tip3p", config=None):
+    protein = Protein(pdb_id=pdb_id, ff=ff, box=box, water=water, config=config)
     bt.logging.info(f"Protein challenge: {protein}")
 
     protein.forward()
@@ -93,12 +93,13 @@ def miner_forward(
             file.write(content)
 
     commands = [
-        "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
-        "gmx mdrun -deffnm nvt " + synapse.mdrun_args,
-        "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
-        "gmx mdrun -deffnm npt " + synapse.mdrun_args,
-        "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
-        "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args,
+        "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  
+        "gmx mdrun -deffnm nvt " + synapse.mdrun_args, # Temperature equilibration
+        "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  
+        "gmx mdrun -deffnm npt " + synapse.mdrun_args, # Pressure equilibration
+        "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  
+        "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args, # Production run
+        "echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol" # Center the trajectory
     ]
 
     for cmd in tqdm.tqdm(commands):

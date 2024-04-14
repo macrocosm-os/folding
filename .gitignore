@@ -167,3 +167,9 @@ wandb
 .DS_Store 
 data/
 !data/*.mdp
+
+/gromacs-2024.1
+/md-intro-tutorial
+/gromacs-2024.1.tar.gz
+/pdb_ids.pkl
+/charmm36-jul2022.ff
