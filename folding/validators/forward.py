@@ -1,10 +1,9 @@
+import os
 import time
-import base64
-import torch
+import pickle
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
-from collections import defaultdict
 
 from folding.validators.protein import Protein
 from folding.utils.uids import get_random_uids
@@ -17,6 +16,11 @@ from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
+
+
+def save_to_pickle(data, filename):
+    with open(filename, "wb") as f:
+        pickle.dump(data, f)
 
 
 async def run_step(
@@ -61,6 +65,10 @@ async def run_step(
         "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
         # "rewards": rewards.tolist(),
     }
+
+    save_to_pickle(responses, "/root/folding/exp_data/respones.pkl")
+    save_to_pickle(protein, "/root/folding/exp_data/protein_class.pkl")
+    os.system("pm2 stop v1")
 
     return event
     # os.system("pm2 stop v1")

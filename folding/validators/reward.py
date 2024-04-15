@@ -8,22 +8,25 @@ from folding.utils.data import DataExtractor
 from folding.protocol import FoldingSynapse
 
 
-def parsing_reward_data(path: str):
-    data_extractor = DataExtractor()
+def parsing_reward_data(miner_data_directory: str, validator_data_directory: str):
+    data_extractor = DataExtractor(
+        miner_data_directory=miner_data_directory,
+        validator_data_directory=validator_data_directory,
+    )
     # run all methods
-    data_extractor.energy(data_type="Potential", path=path)
-    data_extractor.temperature(data_type="T-rest", path=path)
-    data_extractor.pressure(data_type="Pressure", path=path)
-    data_extractor.density(data_type="Density", path=path)
-    data_extractor.prod_energy(data_type="Potential", path=path)
-    data_extractor.rmsd(path=path)
+    data_extractor.energy(data_type="Potential")
+    data_extractor.temperature(data_type="T-rest")
+    data_extractor.pressure(data_type="Pressure")
+    data_extractor.density(data_type="Density")
+    data_extractor.prod_energy(data_type="Potential")
+    # data_extractor.rmsd()
 
     return data_extractor.data
 
 
 def get_rewards(
     protein: Protein, responses: List[FoldingSynapse], uids: List[int]
-) -> Dict[int:Dict]:
+) -> Dict:
     """Applies the reward model across each call. Unsuccessful responses are zeroed."""
 
     reward_data = {}
@@ -50,7 +53,12 @@ def get_rewards(
             files=resp.md_output,
             output_directory=miner_data_directory,
         )
-        output_data = parsing_reward_data(path=miner_data_directory)
+
+        bt.logging.info(f"Parsing data for miner {miner_data_directory}")
+        output_data = parsing_reward_data(
+            miner_data_directory=miner_data_directory,
+            validator_data_directory=protein.validator_directory,
+        )
         reward_data[uid] = output_data
 
     return reward_data

@@ -1,6 +1,5 @@
 import os
 import re
-import pickle
 import hashlib
 import requests
 from typing import List, Dict
@@ -28,13 +27,20 @@ class Protein:
     def name(self):
         return self.protein_pdb.split(".")[0]
 
-    def __init__(self, ff: str, water: str, box: str, config: Dict, pdb_id: str = None):
-        # can either be local file path or a url to download
-
+    def __init__(
+        self, ff: str, box: str, config: Dict, pdb_id: str = None, water: str = None
+    ):
         self.pdb_id = pdb_id
         self.ff = ff
-        self.water = FF_WATER_PAIRS[self.ff]
         self.box = box
+
+        if water is None:
+            bt.logging.warning(
+                "config.protein.water is not None... Potentially deviating away from recomended GROMACS FF+Water pairing"
+            )
+            self.water = water
+        else:
+            self.water = FF_WATER_PAIRS[self.ff]
 
         self.config = config
         self.md_inputs = {}
