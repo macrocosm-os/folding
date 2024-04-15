@@ -17,21 +17,25 @@ class EnergyRewardModel(BaseRewardModel):
         self.df = pd.DataFrame()
 
         for uid, dataset in data.items():
-            subset = pd.concat(dataset[self.name], ignore_index=True, axis=0)
+            subset = dataset[self.name]
             subset["uid"] = uid
             self.df = pd.concat([self.df, subset], axis=0)
 
         return self.df
 
     def get_energy(self, df: pd.DataFrame):
+        bt.logging.info(f"df: {df}")
         subset = df[~df[self.name].isna()]
 
         uids = subset.uid.unique().tolist()
         min_each_uid = subset.groupby("uid").prod_energy.min()
 
-        best_miner_uid = min_each_uid[min_each_uid == min_each_uid.min()].index[0]
-        minimum_energy = subset[best_miner_uid]
-        differences = minimum_energy - subset
+        bt.logging.info(f"Min uid each uid: {min_each_uid}")
+
+        best_miner_uid = min_each_uid.idxmin()
+        minimum_energy = min_each_uid[best_miner_uid]
+
+        differences = minimum_energy - min_each_uid
 
         mean_difference = differences.drop(best_miner_uid).mean()
         std_difference = differences.drop(best_miner_uid).std()

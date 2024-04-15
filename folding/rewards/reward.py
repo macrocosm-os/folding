@@ -51,7 +51,7 @@ class BaseRewardModel(ABC):
     def collate_data(self) -> pd.DataFrame:
         pass
 
-    def apply(self, data: Dict, reward_type: str) -> RewardEvent:
+    def apply(self, data: Dict) -> RewardEvent:
         t0 = time.time()
         batch_rewards_output = self.reward(data=data)
         batch_rewards_time = time.time() - t0
@@ -59,11 +59,8 @@ class BaseRewardModel(ABC):
         return RewardEvent(
             reward_name=self.name,
             rewards=batch_rewards_output.rewards,
-            rewards_normalized=batch_rewards_output.rewards_normalized,
-            model_type=reward_type,
             batch_time=batch_rewards_time,
             extra_info=batch_rewards_output.extra_info,
-            timings=batch_rewards_output.timings,
         )
 
     def __repr__(self):

@@ -6,6 +6,7 @@ from typing import List, Dict
 from folding.validators.protein import Protein
 from folding.utils.data import DataExtractor
 from folding.protocol import FoldingSynapse
+from folding.rewards.energy import EnergyRewardModel
 
 
 def parsing_reward_data(miner_data_directory: str, validator_data_directory: str):
@@ -22,6 +23,17 @@ def parsing_reward_data(miner_data_directory: str, validator_data_directory: str
     # data_extractor.rmsd()
 
     return data_extractor.data
+
+
+def apply_reward_pipeline(data: Dict):
+    reward_pipeline = [EnergyRewardModel()]
+    reward_events = []
+
+    for model in reward_pipeline:
+        event = model.apply(data=data)
+        reward_events.append(event)
+
+    return reward_events
 
 
 def get_rewards(
@@ -61,7 +73,9 @@ def get_rewards(
         )
         reward_data[uid] = output_data
 
-    return reward_data
+    reward_events = apply_reward_pipeline(data=reward_data)
+
+    return reward_events
 
     # # Softmax rewards across samples.
     # successful_rewards_normalized = torch.softmax(
@@ -71,15 +85,6 @@ def get_rewards(
     # # Init zero rewards for all calls.
     # filled_rewards = torch.ones(len(responses), dtype=torch.float32) * torch.nan
     # filled_rewards_normalized = torch.zeros(len(responses), dtype=torch.float32)
-
-    # # Fill reward tensor.
-    # for idx, reward, reward_normalized in zip(
-    #     successful_response_indices,
-    #     successful_rewards,
-    #     successful_rewards_normalized,
-    # ):
-    #     filled_rewards[idx] = reward
-    #     filled_rewards_normalized[idx] = reward_normalized
 
     # # Return the filled rewards.
     # return filled_rewards, filled_rewards_normalized
