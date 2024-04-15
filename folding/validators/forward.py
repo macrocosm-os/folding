@@ -42,6 +42,7 @@ async def run_step(
         timeout=timeout,
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
+
     # Compute the rewards for the responses given the prompt.
     # rewards: torch.FloatTensor = get_rewards(protein, responses)
 

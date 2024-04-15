@@ -12,9 +12,11 @@ from dataclasses import dataclass
 from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
-    select_random_pdb_id,
     load_pdb_ids,
+    select_random_pdb_id,
+    FF_WATER_PAIRS,
 )
+
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -31,7 +33,7 @@ class Protein:
 
         self.pdb_id = pdb_id
         self.ff = ff
-        self.water = water
+        self.water = FF_WATER_PAIRS[self.ff]
         self.box = box
 
         self.config = config
@@ -153,10 +155,9 @@ class Protein:
                 continue
 
         params_to_change = [
-            "nstxout",  # Save coordinates every 0 steps (not saving standard trajectories)
             "nstvout",  # Save velocities every 0 steps
             "nstfout",  # Save forces every 0 steps
-            "nstxtcout",  # Save coordinates to trajectory every 50,000 steps
+            "nstxout-compressed",  # Save coordinates to trajectory every 50,000 steps
             "nstenergy",  # Save energies every 50,000 steps
             "nstlog",  # Update log file every 50,000 steps
         ]
@@ -226,7 +227,7 @@ class Protein:
             'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
         # Run the first step of the simulation
-        bt.logging.info(f"print the current directory: {os.getcwd()}")
+        bt.logging.info("Run the first step of the simulation")
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",  # Run energy minimization
@@ -268,12 +269,13 @@ class Protein:
                 content = re.sub(
                     "nsteps\\s+=\\s+\\d+", f"nsteps = {self.config.max_steps}", content
                 )
+
             for param in params_to_change:
                 if param in content:
                     bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
                     content = re.sub(
                         f"{param}\\s+=\\s+\\d+",
-                        f"{param} = {save_interval}",
+                        f"{param} = {1}",
                         content,
                     )
 

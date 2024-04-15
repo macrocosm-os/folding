@@ -123,7 +123,7 @@ def add_args(cls, parser):
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
-        default=10000,
+        default=50,
     )
 
     parser.add_argument(
