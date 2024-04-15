@@ -1,7 +1,10 @@
 import time
+import base64
+import torch
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
+from collections import defaultdict
 
 from folding.validators.protein import Protein
 from folding.utils.uids import get_random_uids
@@ -27,7 +30,8 @@ async def run_step(
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
+    # uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
+    uids = [9, 10]
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = FoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
 
@@ -36,17 +40,17 @@ async def run_step(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
-        deserialize=True,
+        deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
 
     # Compute the rewards for the responses given the prompt.
-    rewards: Dict[int:Dict] = get_rewards(protein, responses)
+    # rewards: torch.FloatTensor = get_rewards(protein, responses)
 
     # # Log the step event.
     event = {
-        "block": self.metagraph.block,
+        "block": self.block,
         "step_length": time.time() - start_time,
-        "uids": uids.tolist(),
+        "uids": uids,
         "response_times": [
             resp.dendrite.process_time if resp.dendrite.process_time != None else 0
             for resp in responses
@@ -136,16 +140,19 @@ async def forward(self):
                     f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
                 )
                 bt.logging.warning(E)
-                event["status"] = False
+                event["validator_search_status"] = False
 
             finally:
                 event["pdb_id"] = pdb_id
                 event.update(hps)  # add the dictionary of hyperparameters to the event
                 event["hp_sample_time"] = time.time() - hp_sampler_time
+                event["forward_time"] = (
+                    time.time() - forward_start_time
+                )  # forward time if validator step fails
 
-                if "status" not in event:
+                if "validator_search_status" not in event:
                     bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
-                    event["status"] = True  # simulation passed!
+                    event["validator_search_status"] = True  # simulation passed!
                     break  # break out of the loop if the simulation was successful
 
                 log_event(
@@ -153,19 +160,21 @@ async def forward(self):
                 )  # only log the event if the simulation was not successful
 
         # If we exit the for loop without breaking, it means all hyperparameter combinations failed.
-        if event["status"] is False:
+        if event["validator_search_status"] is False:
             bt.logging.error(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
             continue  # Skip to the next pdb_id
 
         # The following code only runs if we have a successful run!
+        bt.logging.info("⏰ Waiting for miner responses ⏰")
         miner_event = await run_step(
             self,
             protein=protein,
             k=self.config.neuron.sample_size,
             timeout=self.config.neuron.timeout,
         )
+        bt.logging.success("✅ All miners complete! ✅")
 
         event.update(miner_event)
         event["forward_time"] = time.time() - forward_start_time
