@@ -1,6 +1,8 @@
 import pandas as pd
-from folding.rewards.reward import BaseRewardModel, BatchRewardOutput
 from typing import List, Dict
+import bittensor as bt
+
+from folding.rewards.reward import BaseRewardModel, BatchRewardOutput
 
 
 class EnergyRewardModel(BaseRewardModel):
@@ -46,7 +48,12 @@ class EnergyRewardModel(BaseRewardModel):
             std_difference,
         )
 
-    def reward(self, data: Dict[int : Dict[str : pd.DataFrame]]):
+    def reward(self, data: Dict) -> BatchRewardOutput:
+        """Apply the necessary steps to get energy reward data
+
+        Args:
+            data (Dict): Dict[int : Dict[str : pd.DataFrame]]
+        """
         df = self.collate_data(data=data)
         (
             rewards,
