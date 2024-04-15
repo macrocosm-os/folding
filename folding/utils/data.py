@@ -17,22 +17,34 @@ class DataExtractor:
         rmsd(): Extracts RMSD data from the simulation.
     """
 
-    def __init__(self):
+    def __init__(self, miner_data_directory: str, validator_data_directory: str):
+        """Data extraction class to obtain the necessary information needed for the reward stack
+
+        Args:
+            miner_data_directory (str): location of the validators own miner directory (ex: /root/folding/data/5oxe/validator/5CUU1KW2)
+            validator_data_directory (str): ex: '/root/folding/data/5oxe/validator'
+        """
+        self.validator_data_directory = validator_data_directory
+        self.miner_data_directory = miner_data_directory
+
         self.data = {}
 
-    def extract(filepath: str, names=["step", "default-name"]):
+    def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
 
     def energy(
         self,
         data_type: str,
-        path: str,
+        output_path: str = None,
         base_command: str = "gmx energy",
         xvg_command: str = "-xvg none",
     ):
-        output_data_location = os.path.join(path, f"{data_type}.xvg")
+        if output_path is None:
+            output_path = self.miner_data_directory
+
+        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
         command = [
-            f"printf '{data_type}\n0\n' | {base_command} -f {path}/em.edr -o {data_type}.xvg {xvg_command}"
+            f"echo '{data_type}' | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command}"
         ]
         run_cmd_commands(command)
 
@@ -43,13 +55,16 @@ class DataExtractor:
     def temperature(
         self,
         data_type: str,
-        path: str,
+        output_path: str = None,
         base_command: str = "gmx energy",
         xvg_command: str = "-xvg none",
     ):
-        output_data_location = os.path.join(path, f"{data_type}.xvg")
+        if output_path is None:
+            output_path = self.miner_data_directory
+
+        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
         command = [
-            f"echo '{data_type}' | {base_command} -f {path}/em.edr -o {output_data_location} {xvg_command} -b 20"
+            f"echo '{data_type}' | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command} -b 20"
         ]
         run_cmd_commands(command)
 
@@ -60,13 +75,16 @@ class DataExtractor:
     def pressure(
         self,
         data_type: str,
-        path: str,
+        output_path: str = None,
         base_command: str = "gmx energy",
         xvg_command: str = "-xvg none",
     ):
-        output_data_location = os.path.join(path, f"{data_type}.xvg")
+        if output_path is None:
+            output_path = self.miner_data_directory
+
+        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
         command = [
-            f"echo '{data_type}' | {base_command} -f {path}/npt.edr -o {data_type}.xvg {xvg_command}"
+            f"echo '{data_type}' | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
         ]
         run_cmd_commands(command)
 
@@ -77,13 +95,16 @@ class DataExtractor:
     def density(
         self,
         data_type: str,
-        path: str,
+        output_path: str = None,
         base_command: str = "gmx energy",
         xvg_command: str = "-xvg none",
     ):
-        output_data_location = os.path.join(path, f"{data_type}.xvg")
+        if output_path is None:
+            output_path = self.miner_data_directory
+
+        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
         command = [
-            f"echo '{data_type}' | {base_command} -f {path}/npt.edr -o {data_type}.xvg {xvg_command}"
+            f"echo '{data_type}' | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
         ]
         run_cmd_commands(command)
 
@@ -94,14 +115,17 @@ class DataExtractor:
     def prod_energy(
         self,
         data_type: str,
-        path: str,
+        output_path: str = None,
         base_command: str = "gmx energy",
         xvg_command: str = "-xvg none",
     ):
+        if output_path is None:
+            output_path = self.miner_data_directory
+
         xvg_name = "potential_production_run.xvg"
-        output_data_location = os.path.join(path, xvg_name)
+        output_data_location = os.path.join(output_path, xvg_name)
         command = [
-            f"printf '{data_type}\n0\n' | {base_command} -f {path}/md_0_1.edr -o {xvg_name} {xvg_command}"
+            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/md_0_1.edr -o {output_data_location} {xvg_command}"
         ]
         run_cmd_commands(command)
 
@@ -109,11 +133,14 @@ class DataExtractor:
             filepath=output_data_location, names=["step", "prod_energy"]
         )
 
-    def rmsd(self, path: str, xvg_command: str = "-xvg none"):
+    def rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
+        if output_path is None:
+            output_path = self.miner_data_directory
+
         xvg_name = "rmsd_xray.xvg"
-        output_data_location = os.path.join(path, xvg_name)
+        output_data_location = os.path.join(output_path, xvg_name)
         command = [
-            f"echo '4 4' | gmx rms -s {path}/md_0_1.tpr -f md_center.xtc -o {xvg_name} -tu ns {xvg_command}"
+            f"echo '4 4' | gmx rms -s {output_path}/md_0_1.tpr -f md_center.xtc -o {output_data_location} -tu ns {xvg_command}"
         ]
         run_cmd_commands(command)
 
