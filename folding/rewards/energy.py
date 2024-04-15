@@ -1,6 +1,3 @@
-import difflib
-import torch
-
 import pandas as pd
 from folding.rewards.reward import BaseRewardModel, BatchRewardOutput
 from typing import List, Dict
@@ -11,14 +8,13 @@ class EnergyRewardModel(BaseRewardModel):
     def name(self) -> str:
         return "prod_energy"
 
-    def __init__(self, data: Dict[int : Dict[str : pd.DataFrame]], **kwargs):
+    def __init__(self, **kwargs):
         super().__init__()
-        self.data = data
 
-    def collate_data(self) -> pd.DataFrame:
+    def collate_data(self, data: Dict) -> pd.DataFrame:
         self.df = pd.DataFrame()
 
-        for uid, dataset in self.data.items():
+        for uid, dataset in data.items():
             subset = pd.concat(dataset[self.name], ignore_index=True, axis=0)
             subset["uid"] = uid
             self.df = pd.concat([self.df, subset], axis=0)
@@ -27,31 +23,44 @@ class EnergyRewardModel(BaseRewardModel):
 
     def get_energy(self, df: pd.DataFrame):
         subset = df[~df[self.name].isna()]
-        minimum = subset.groupby("uid").prod_energy.min()
 
-        best_miner_uid = minimum[minimum == minimum.min()].index[0]
+        uids = subset.uid.unique().tolist()
+        min_each_uid = subset.groupby("uid").prod_energy.min()
+
+        best_miner_uid = min_each_uid[min_each_uid == min_each_uid.min()].index[0]
         minimum_energy = subset[best_miner_uid]
         differences = minimum_energy - subset
 
         mean_difference = differences.drop(best_miner_uid).mean()
         std_difference = differences.drop(best_miner_uid).std()
 
+        # Simple reward schema where all miners get 0 except the winner.
+        rewards = {uid: 0 for uid in uids}
+        rewards[best_miner_uid] = 1
+
         return (
-            best_miner_uid,
+            rewards,
             minimum_energy,
             differences,
             mean_difference,
             std_difference,
         )
 
-    def reward(self):
-        df = self.collate_data()
+    def reward(self, data: Dict[int : Dict[str : pd.DataFrame]]):
+        df = self.collate_data(data=data)
         (
-            best_miner_uid,
+            rewards,
             minimum_energy,
             differences,
             mean_difference,
             std_difference,
         ) = self.get_energy(df=df)
 
-        BatchRewardOutput(rewards=rewards, timings=timings, extra_info={"Testing": 10})
+        extra_info = {
+            "minimum_energy": minimum_energy,
+            "differences": differences,
+            "mean_difference": mean_difference,
+            "std_difference": std_difference,
+        }
+
+        return BatchRewardOutput(rewards=rewards, extra_info=extra_info)
