@@ -38,9 +38,9 @@ def apply_reward_pipeline(data: Dict) -> List[RewardEvent]:
                     reward_name=model.name, rewards=[0] * num_uids, batch_time=0
                 )
             )
-
-        event = model.apply(data=data)
-        reward_events.append(event)
+        else:
+            event = model.apply(data=data)
+            reward_events.append(event)
 
     return reward_events
 
