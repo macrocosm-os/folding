@@ -81,9 +81,6 @@ async def run_step(
     }
 
     bt.logging.warning(f"Event information: {event}")
-
-    os.system("pm2 stop v1")
-
     return event
     # os.system("pm2 stop v1")
 

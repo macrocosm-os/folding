@@ -6,6 +6,7 @@ from typing import List, Dict
 from folding.validators.protein import Protein
 from folding.utils.data import DataExtractor
 from folding.protocol import FoldingSynapse
+from folding.rewards.reward import RewardEvent
 from folding.rewards.energy import EnergyRewardModel
 
 
@@ -25,11 +26,19 @@ def parsing_reward_data(miner_data_directory: str, validator_data_directory: str
     return data_extractor.data
 
 
-def apply_reward_pipeline(data: Dict):
-    reward_pipeline = [EnergyRewardModel()]
+def apply_reward_pipeline(data: Dict) -> List[RewardEvent]:
     reward_events = []
+    reward_pipeline = [EnergyRewardModel()]
 
     for model in reward_pipeline:
+        if data.values() is None:
+            num_uids = len(data)
+            reward_events.append(
+                RewardEvent(
+                    reward_name=model.name, rewards=[0] * num_uids, batch_time=0
+                )
+            )
+
         event = model.apply(data=data)
         reward_events.append(event)
 
@@ -53,18 +62,18 @@ def get_rewards(
             protein.validator_directory, resp.axon.hotkey[:8]
         )
 
+        # Must be done because gromacs only *reads* data, cannot take it in directly
+        protein.save_files(
+            files=resp.md_output,
+            output_directory=miner_data_directory,
+        )
+
         if resp.dendrite.status_code != 200:
             bt.logging.error(
                 f"uid {uid} failed with status code {resp.dendrite.status_code}"
             )
             reward_data[uid] = None
             continue
-
-        # Must be done because gromacs only *reads* data, cannot take it in directly
-        protein.save_files(
-            files=resp.md_output,
-            output_directory=miner_data_directory,
-        )
 
         bt.logging.info(f"Parsing data for miner {miner_data_directory}")
         output_data = parsing_reward_data(

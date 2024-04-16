@@ -1,7 +1,7 @@
 import torch
 import time
 import bittensor as bt
-from typing import List, Dict
+from typing import List, Dict, Optional
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -15,16 +15,21 @@ class RewardEvent:
     reward_name: str
     rewards: Dict
     batch_time: float
-    extra_info: Dict
+
+    extra_info: Optional[Dict]
 
     # implement custom asdict to return a dict with the same keys as the dataclass using the model name
     def asdict(self) -> Dict:
-        return {
+        d = {
             f"{self.reward_name}_raw": list(self.rewards.values()),
             f"{self.reward_name}_uids": list(self.rewards.keys()),
             f"{self.reward_name}_batch_time": self.batch_time,
-            f"{self.reward_name}_extra_info": self.extra_info,
         }
+
+        if self.extra_info is not None:
+            d[f"{self.reward_name}_extra_info"] = self.extra_info
+
+        return d
 
 
 @dataclass
