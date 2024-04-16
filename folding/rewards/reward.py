@@ -18,10 +18,10 @@ class RewardEvent:
     extra_info: Dict
 
     # implement custom asdict to return a dict with the same keys as the dataclass using the model name
-    def asdict(self) -> dict:
+    def asdict(self) -> Dict:
         return {
-            f"{self.reward_name}_raw": self.rewards.values(),
-            f"{self.reward_name}_uids": self.rewards.keys(),
+            f"{self.reward_name}_raw": list(self.rewards.values()),
+            f"{self.reward_name}_uids": list(self.rewards.keys()),
             f"{self.reward_name}_batch_time": self.batch_time,
             f"{self.reward_name}_extra_info": self.extra_info,
         }

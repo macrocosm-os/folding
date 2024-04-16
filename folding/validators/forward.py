@@ -55,13 +55,13 @@ async def run_step(
     # save_to_pickle(protein, "/root/folding/exp_data/protein_class.pkl")
     # os.system("pm2 stop v1")
 
-    reward_events = get_rewards(protein=protein, responses=responses)
+    reward_events = get_rewards(protein=protein, responses=responses, uids=uids)
 
     # Right now, we are only using a single energy reward model. #TODO: Extend this over all RewardEvents
     reward_event = reward_events[0]
-    self.update_rewards(
-        rewards=torch.FloatTensor(reward_event.rewards.values()),
-        uids=torch.FloatTensor(reward_event.rewards.keys()),
+    self.update_scores(
+        rewards=torch.FloatTensor(list(reward_event.rewards.values())),
+        uids=list(reward_event.rewards.keys()),
     )
 
     # # Log the step event.
@@ -79,6 +79,10 @@ async def run_step(
         "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
         **reward_event.asdict(),  # contains another copy of the uids used for the reward stack
     }
+
+    bt.logging.warning(f"Event information: {event}")
+
+    os.system("pm2 stop v1")
 
     return event
     # os.system("pm2 stop v1")

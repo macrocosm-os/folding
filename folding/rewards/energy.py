@@ -51,7 +51,7 @@ class EnergyRewardModel(BaseRewardModel):
         return (
             rewards,
             minimum_energy,
-            differences,
+            differences.values.tolist(),
             mean_difference,
             std_difference,
         )
@@ -65,7 +65,7 @@ class EnergyRewardModel(BaseRewardModel):
 
         # need to initialize the reward dictionary with 0s
         for uid in data.keys():
-            self.reward[uid] = 0
+            self.rewards[uid] = 0
 
         df = self.collate_data(data=data)
         (
