@@ -16,7 +16,7 @@ class RewardEvent:
     rewards: Dict
     batch_time: float
 
-    extra_info: Optional[Dict]
+    extra_info: Optional[Dict] = None
 
     # implement custom asdict to return a dict with the same keys as the dataclass using the model name
     def asdict(self) -> Dict:
@@ -35,7 +35,7 @@ class RewardEvent:
 @dataclass
 class BatchRewardOutput:
     rewards: Dict
-    extra_info: Dict
+    extra_info: Optional[Dict] = None
 
 
 class BaseRewardModel(ABC):

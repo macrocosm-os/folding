@@ -20,7 +20,7 @@ class EnergyRewardModel(BaseRewardModel):
 
         for uid, dataset in data.items():
             if dataset is None:  # occurs when status_code is not 200
-                continue
+                continue  # reward is already set to 0.
 
             subset = dataset[self.name]
             subset["uid"] = uid
@@ -31,30 +31,34 @@ class EnergyRewardModel(BaseRewardModel):
     def get_energy(self, df: pd.DataFrame):
         # The dataframe has all data exported by gromacs, and therefore can have different lengths.
         # Different lengths cause NaNs in other cols.
-        subset = df[~df[self.name].isna()]
 
-        uids = subset.uid.unique().tolist()
-        min_each_uid = subset.groupby("uid").prod_energy.min()
+        try:
+            subset = df[~df[self.name].isna()]
+            min_each_uid = subset.groupby("uid").prod_energy.min()
 
-        best_miner_uid = min_each_uid.idxmin()
-        minimum_energy = min_each_uid[best_miner_uid]
+            best_miner_uid = min_each_uid.idxmin()
+            minimum_energy = min_each_uid[best_miner_uid]
 
-        differences = minimum_energy - min_each_uid
+            differences = minimum_energy - min_each_uid
 
-        mean_difference = differences.drop(best_miner_uid).mean()
-        std_difference = differences.drop(best_miner_uid).std()
+            mean_difference = differences.drop(best_miner_uid).mean()
+            std_difference = differences.drop(best_miner_uid).std()
 
-        # Simple reward schema where all miners get 0 except the winner.
-        rewards = {uid: 0 for uid in uids}
-        rewards[best_miner_uid] = 1
+            self.rewards[best_miner_uid] = 1
 
-        return (
-            rewards,
-            minimum_energy,
-            differences.values.tolist(),
-            mean_difference,
-            std_difference,
-        )
+            extra_info = dict(
+                minimum_energy=minimum_energy,
+                differences=differences.values.tolist(),
+                mean_difference=mean_difference,
+                std_difference=std_difference,
+            )
+
+        except Exception as E:
+            bt.logging.error(f"Exception in EnergyRewardModel: {E}")
+            extra_info = None
+
+        finally:
+            return self.rewards, extra_info
 
     def reward(self, data: Dict) -> BatchRewardOutput:
         """Apply the necessary steps to get energy reward data
@@ -68,19 +72,6 @@ class EnergyRewardModel(BaseRewardModel):
             self.rewards[uid] = 0
 
         df = self.collate_data(data=data)
-        (
-            rewards,
-            minimum_energy,
-            differences,
-            mean_difference,
-            std_difference,
-        ) = self.get_energy(df=df)
-
-        extra_info = {
-            "minimum_energy": minimum_energy,
-            "differences": differences,
-            "mean_difference": mean_difference,
-            "std_difference": std_difference,
-        }
+        rewards, extra_info = self.get_energy(df=df)
 
         return BatchRewardOutput(rewards=rewards, extra_info=extra_info)

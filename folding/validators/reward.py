@@ -31,16 +31,8 @@ def apply_reward_pipeline(data: Dict) -> List[RewardEvent]:
     reward_pipeline = [EnergyRewardModel()]
 
     for model in reward_pipeline:
-        if data.values() is None:
-            num_uids = len(data)
-            reward_events.append(
-                RewardEvent(
-                    reward_name=model.name, rewards=[0] * num_uids, batch_time=0
-                )
-            )
-        else:
-            event = model.apply(data=data)
-            reward_events.append(event)
+        event = model.apply(data=data)
+        reward_events.append(event)
 
     return reward_events
 
