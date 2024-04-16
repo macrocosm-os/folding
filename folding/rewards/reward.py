@@ -52,9 +52,35 @@ class BaseRewardModel(ABC):
     def reward(self, data: Dict) -> BatchRewardOutput:
         pass
 
-    @abstractmethod
-    def collate_data(self) -> pd.DataFrame:
-        pass
+    @property
+    def rewards(self, data: Dict):
+        """Sets a default dict for all RewardModels"""
+        reward_dict = {}
+        for uid in data.keys():
+            reward_dict[uid] = 0
+
+        return reward_dict
+
+    def collate_data(self, data: Dict) -> pd.DataFrame:
+        """collect the desired data for a chosen reward model.
+
+        Args:
+            data (Dict): Dictionary mapping between uid : Dict[self.name : pd.DataFrame]
+
+        Returns:
+            pd.DataFrame: Collected data across all uids for the self.name property
+        """
+        self.df = pd.DataFrame()
+
+        for uid, dataset in data.items():
+            if dataset is None:  # occurs when status_code is not 200
+                continue  # reward is already set to 0.
+
+            subset = dataset[self.name]
+            subset["uid"] = uid
+            self.df = pd.concat([self.df, subset], axis=0)
+
+        return self.df
 
     def apply(self, data: Dict) -> RewardEvent:
         t0 = time.time()

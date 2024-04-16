@@ -8,6 +8,7 @@ from folding.utils.data import DataExtractor
 from folding.protocol import FoldingSynapse
 from folding.rewards.reward import RewardEvent
 from folding.rewards.energy import EnergyRewardModel
+from folding.rewards.rmsd import RMSDRewardModel
 
 
 def parsing_reward_data(miner_data_directory: str, validator_data_directory: str):
@@ -28,13 +29,23 @@ def parsing_reward_data(miner_data_directory: str, validator_data_directory: str
 
 def apply_reward_pipeline(data: Dict) -> List[RewardEvent]:
     reward_events = []
-    reward_pipeline = [EnergyRewardModel()]
+    reward_pipeline = [EnergyRewardModel(), RMSDRewardModel()]
 
     for model in reward_pipeline:
         event = model.apply(data=data)
         reward_events.append(event)
 
     return reward_events
+
+
+def aggregate_rewards(reward_events: List[RewardEvent]):
+    """Currently, the reward mechanism takes a mean over all rewards"""
+
+    rewards = []
+    for event in reward_events:
+        rewards.append(list(event.rewards.values()))
+
+    return torch.FloatTensor(rewards).mean(dim=0)
 
 
 def get_rewards(
@@ -75,7 +86,10 @@ def get_rewards(
         reward_data[uid] = output_data
 
     reward_events = apply_reward_pipeline(data=reward_data)
-    return reward_events
+
+    rewards = aggregate_rewards()
+
+    return rewards, event
 
     # # Softmax rewards across samples.
     # successful_rewards_normalized = torch.softmax(
