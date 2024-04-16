@@ -7,7 +7,7 @@ import pickle
 from typing import List, Dict
 
 import bittensor as bt
-
+from folding.protocol import FoldingSynapse
 
 # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
 FF_WATER_PAIRS = {
@@ -78,8 +78,35 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             )
             if not suppress_cmd_output:
                 bt.logging.info(result.stdout.decode())
+
         except subprocess.CalledProcessError as e:
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
             bt.logging.error(f"Output: {e.stdout.decode()}")
             bt.logging.error(f"Error: {e.stderr.decode()}")
-            raise
+            continue
+
+
+def get_response_info(responses: List[FoldingSynapse]) -> Dict:
+    """Gather all desired response information from the set of miners."""
+
+    response_times = []
+    response_status_messages = []
+    response_status_codes = []
+    response_returned_files = []
+
+    for resp in responses:
+        if resp.dendrite.process_time != None:
+            response_times.append(resp.dendrite.process_time)
+        else:
+            response_times.append(0)
+
+        response_status_messages.append(str(resp.dendrite.status_message))
+        response_status_codes.append(str(resp.dendrite.status_code))
+        response_returned_files.append(resp.md_output.keys())
+
+    return {
+        "response_times": response_times,
+        "response_status_messages": response_status_messages,
+        "response_status_codes": response_status_codes,
+        "response_returned_files": response_returned_files,
+    }

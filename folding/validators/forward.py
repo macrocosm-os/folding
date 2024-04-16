@@ -12,7 +12,7 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
 
-from folding.utils.ops import select_random_pdb_id, load_pdb_ids
+from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -64,19 +64,14 @@ async def run_step(
         uids=list(reward_event.rewards.keys()),
     )
 
+    response_info = get_response_info(responses=responses)
+
     # # Log the step event.
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
         "uids": uids,
-        "response_times": [
-            resp.dendrite.process_time if resp.dendrite.process_time != None else 0
-            for resp in responses
-        ],
-        "response_status_messages": [
-            str(resp.dendrite.status_message) for resp in responses
-        ],
-        "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
+        **response_info,
         **reward_event.asdict(),  # contains another copy of the uids used for the reward stack
     }
 
