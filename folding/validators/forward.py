@@ -58,17 +58,17 @@ async def run_step(
     reward_events = get_rewards(protein=protein, responses=responses)
 
     # Right now, we are only using a single energy reward model. #TODO: Extend this over all RewardEvents
-    rewards = reward_events[0].rewards
+    reward_event = reward_events[0]
     self.update_rewards(
-        rewards=torch.FloatTensor(rewards.values()),
-        uids=torch.FloatTensor(rewards.keys()),
+        rewards=torch.FloatTensor(reward_event.rewards.values()),
+        uids=torch.FloatTensor(reward_event.rewards.keys()),
     )
 
     # # Log the step event.
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
-        "uids": rewards.keys(),
+        "uids": uids,
         "response_times": [
             resp.dendrite.process_time if resp.dendrite.process_time != None else 0
             for resp in responses
@@ -77,7 +77,7 @@ async def run_step(
             str(resp.dendrite.status_message) for resp in responses
         ],
         "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
-        "rewards": rewards.values(),
+        **reward_event.asdict(),  # contains another copy of the uids used for the reward stack
     }
 
     return event
