@@ -7,6 +7,7 @@ import pickle
 from typing import List, Dict
 
 import bittensor as bt
+import requests
 
 
 # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
@@ -83,3 +84,47 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             bt.logging.error(f"Output: {e.stdout.decode()}")
             bt.logging.error(f"Error: {e.stderr.decode()}")
             raise
+
+
+def download_pdb(pdb_directory: str, pdb_id: str):
+    """Download a PDB file from the RCSB PDB database.
+
+    Args:
+        pdb_directory (str): Directory to save the downloaded PDB file.
+        pdb_id (str): PDB file ID to download.
+
+    Raises:
+        Exception: If the download fails or the file contains missing values.
+
+    """
+    url = f"https://files.rcsb.org/download/{pdb_id}"
+    path = os.path.join(pdb_directory, f"{pdb_id}")
+    r = requests.get(url)
+    if r.status_code == 200:
+        if (
+            "missing" in r.text.lower()
+        ):  # Trivial placeholder solution until we find more concrete patterns, will switch to check_if_pdb_file_is_valid() later.
+            bt.logging.error(
+                f"PDB file {pdb_id} downloaded successfully but contains missing values."
+            )
+            raise Exception(
+                f"PDB file {pdb_id} downloaded successfully but contains missing values."
+            )
+        with open(path, "w") as file:
+            file.write(r.text)
+        bt.logging.info(
+            f"PDB file {pdb_id} downloaded successfully from {url} to path {path!r}."
+        )
+    else:
+        bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+        raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+
+
+# def check_if_pdb_file_is_valid(pdb_text: str) -> bool:
+#     """Check if the downloaded PDB file is valid.
+
+#     Returns:
+#         bool: True if the PDB's text file is valid, False otherwise.
+
+#     """
+#     pass

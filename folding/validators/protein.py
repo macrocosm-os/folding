@@ -14,6 +14,7 @@ from folding.utils.ops import (
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
+    download_pdb,
     FF_WATER_PAIRS,
 )
 
@@ -66,29 +67,12 @@ class Protein:
             bt.logging.info(
                 f"\n⏰ {self.pdb_file} does not exist in repository... Downloading"
             )
-            self.download_pdb(pdb_directory=self.pdb_directory, pdb_file=self.pdb_file)
+            download_pdb(pdb_directory=self.pdb_directory, pdb_file=self.pdb_file)
             bt.logging.info(f"\n💬 {self.pdb_file} Downloaded!")
         else:
             bt.logging.success(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
-
-    # Function to download PDB file
-    def download_pdb(self, pdb_directory: str, pdb_file: str):
-        url = f"https://files.rcsb.org/download/{pdb_file}"
-        path = os.path.join(pdb_directory, f"{pdb_file}")
-        r = requests.get(url)
-        if r.status_code == 200:
-            with open(path, "w") as file:
-                file.write(r.text)
-            bt.logging.info(
-                f"PDB file {pdb_file} downloaded successfully from {url} to path {path!r}."
-            )
-        else:
-            bt.logging.error(
-                f"Failed to download PDB file with ID {self.pdb_file} from {url}"
-            )
-            raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
 
     def check_for_missing_files(self, required_files: List[str]):
         self.gro_path = os.path.join(self.pdb_directory, "em.gro")
