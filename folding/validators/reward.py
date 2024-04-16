@@ -42,16 +42,22 @@ def aggregate_rewards(reward_events: List[RewardEvent]):
     """Currently, the reward mechanism takes a mean over all rewards"""
 
     rewards = []
+    events = {}
+
     for event in reward_events:
         rewards.append(list(event.rewards.values()))
+        events.update(event.asdict())
 
-    return torch.FloatTensor(rewards).mean(dim=0)
+    return torch.FloatTensor(rewards).mean(dim=0), events
 
 
-def get_rewards(
-    protein: Protein, responses: List[FoldingSynapse], uids: List[int]
-) -> Dict:
-    """Applies the reward model across each call. Unsuccessful responses are zeroed."""
+def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
+    """Takes all the data from reponse synapses, applies the reward pipeline, and aggregates the rewards
+    into a single torch.FloatTensor.
+
+    Returns:
+        rewards, events: torch.FloatTensor([reward_value_each_uid]), Dict[event_information]
+    """
 
     reward_data = {}
     for uid, resp in zip(uids, responses):
@@ -86,19 +92,6 @@ def get_rewards(
         reward_data[uid] = output_data
 
     reward_events = apply_reward_pipeline(data=reward_data)
+    rewards, events = aggregate_rewards(reward_events=reward_events)
 
-    rewards = aggregate_rewards()
-
-    return rewards, event
-
-    # # Softmax rewards across samples.
-    # successful_rewards_normalized = torch.softmax(
-    #     torch.tensor(successful_rewards), dim=0
-    # )
-
-    # # Init zero rewards for all calls.
-    # filled_rewards = torch.ones(len(responses), dtype=torch.float32) * torch.nan
-    # filled_rewards_normalized = torch.zeros(len(responses), dtype=torch.float32)
-
-    # # Return the filled rewards.
-    # return filled_rewards, filled_rewards_normalized
+    return rewards, events

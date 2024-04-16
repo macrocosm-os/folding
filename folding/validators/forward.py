@@ -50,16 +50,11 @@ async def run_step(
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
 
-    reward_events: List[RewardEvent] = get_rewards(
-        protein=protein, responses=responses, uids=uids
-    )
+    rewards, events = get_rewards(protein=protein, responses=responses, uids=uids)
 
-    # TODO: Extend this over all RewardEvents
-    # Right now, we are only using a single energy reward model.
-    reward_event = reward_events[0]
     self.update_scores(
-        rewards=torch.FloatTensor(list(reward_event.rewards.values())),
-        uids=list(reward_event.rewards.keys()),
+        rewards=rewards,
+        uids=uids,  # pretty confident these are in the correct order.
     )
 
     response_info = get_response_info(responses=responses)
@@ -70,7 +65,7 @@ async def run_step(
         "step_length": time.time() - start_time,
         "uids": uids,
         **response_info,
-        **reward_event.asdict(),  # contains another copy of the uids used for the reward stack
+        **events,  # contains another copy of the uids used for the reward stack
     }
 
     bt.logging.warning(f"Event information: {event}")
