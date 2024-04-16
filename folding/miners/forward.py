@@ -46,7 +46,7 @@ def forward(synapse: FoldingSynapse, config: Dict) -> FoldingSynapse:
         "gmx mdrun -deffnm npt " + synapse.mdrun_args,
         "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
         "gmx mdrun -deffnm md_0_1 " + synapse.mdrun_args,
-        # "printf '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
+        "echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
     ]
 
     run_cmd_commands(
@@ -54,7 +54,7 @@ def forward(synapse: FoldingSynapse, config: Dict) -> FoldingSynapse:
     )
 
     # load the output files as bytes and add to synapse.md_output
-    for filename in glob.glob("md_0_1*") + ["npt.edr", "md_center.xtc"]:
+    for filename in glob.glob("md_0_1*") + ["npt.edr"]:
         bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
         try:
             with open(filename, "rb") as f:
