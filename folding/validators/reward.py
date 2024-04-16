@@ -62,7 +62,9 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
     reward_data = {}
     for uid, resp in zip(uids, responses):
         # Output the reward data information into the terminal
-        md_output_summary = {k: len(v) for k, v in resp.md_output.items()}
+        md_output_summary = {
+            k: len(v.encode("utf-8")) for k, v in resp.md_output.items()
+        }
         bt.logging.info(
             f"uid {uid}:\nDendrite: {resp.dendrite}\nMD Output: {md_output_summary}\n"
         )
@@ -93,5 +95,7 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
 
     reward_events = apply_reward_pipeline(data=reward_data)
     rewards, events = aggregate_rewards(reward_events=reward_events)
+
+    events.update(md_output_summary)  # Will record the size of the files in
 
     return rewards, events
