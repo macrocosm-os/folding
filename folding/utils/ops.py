@@ -102,7 +102,7 @@ def get_response_info(responses: List[FoldingSynapse]) -> Dict:
 
         response_status_messages.append(str(resp.dendrite.status_message))
         response_status_codes.append(str(resp.dendrite.status_code))
-        response_returned_files.append(resp.md_output.keys())
+        response_returned_files.append(list(resp.md_output.keys()))
 
     return {
         "response_times": response_times,

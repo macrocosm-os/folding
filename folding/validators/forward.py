@@ -11,6 +11,7 @@ from folding.utils.uids import get_random_uids
 from folding.utils.logging import log_event
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
+from folding.rewards.reward import RewardEvent
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
@@ -48,16 +49,12 @@ async def run_step(
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
 
-    # Compute the rewards for the responses given the prompt.
-    # rewards: torch.FloatTensor = get_rewards(protein, responses)
+    reward_events: List[RewardEvent] = get_rewards(
+        protein=protein, responses=responses, uids=uids
+    )
 
-    # save_to_pickle(responses, "/root/folding/exp_data/respones.pkl")
-    # save_to_pickle(protein, "/root/folding/exp_data/protein_class.pkl")
-    # os.system("pm2 stop v1")
-
-    reward_events = get_rewards(protein=protein, responses=responses, uids=uids)
-
-    # Right now, we are only using a single energy reward model. #TODO: Extend this over all RewardEvents
+    # TODO: Extend this over all RewardEvents
+    # Right now, we are only using a single energy reward model.
     reward_event = reward_events[0]
     self.update_scores(
         rewards=torch.FloatTensor(list(reward_event.rewards.values())),
@@ -77,7 +74,6 @@ async def run_step(
 
     bt.logging.warning(f"Event information: {event}")
     return event
-    # os.system("pm2 stop v1")
 
 
 def parse_config(config) -> List[str]:
@@ -101,11 +97,11 @@ def parse_config(config) -> List[str]:
 
 
 async def forward(self):
+    bt.logging.info(f"Running config: {self.config}")
+
     while True:
         forward_start_time = time.time()
         exclude_in_hp_search = parse_config(self.config)
-
-        bt.logging.info(f"Running config: {self.config}")
 
         # We need to select a random pdb_id outside of the protein class.
         pdb_id = (

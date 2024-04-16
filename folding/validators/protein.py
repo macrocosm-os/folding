@@ -34,7 +34,7 @@ class Protein:
         self.ff = ff
         self.box = box
 
-        if water is None:
+        if water is not None:
             bt.logging.warning(
                 "config.protein.water is not None... Potentially deviating away from recomended GROMACS FF+Water pairing"
             )
