@@ -97,9 +97,6 @@ class Protein:
             raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
 
     def check_for_missing_files(self, required_files: List[str]):
-        self.gro_path = os.path.join(self.pdb_directory, "em.gro")
-        self.topol_path = os.path.join(self.pdb_directory, "topol.top")
-
         missing_files = [
             filename
             for filename in required_files
@@ -124,6 +121,9 @@ class Protein:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
+
+        self.gro_path = os.path.join(self.pdb_directory, "em.gro")
+        self.topol_path = os.path.join(self.pdb_directory, "topol.top")
 
         self.setup_pdb_directory()
 
@@ -234,6 +234,7 @@ class Protein:
         ]
         # Run the first step of the simulation
         bt.logging.info("Run the first step of the simulation")
+        # TODO: Move this to the miner side, but make sure that this runs!
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",  # Run energy minimization
@@ -331,70 +332,52 @@ class Protein:
 
         return hashlib.md5(name + buf.encode()).hexdigest()
 
-    def reward(self, md_output: Dict, hotkey: str):
-        """Calculates the free energy of the protein folding simulation
-        # TODO: Each miner files should be saved in a unique directory and possibly deleted after the reward is calculated
+    def delete_files(self, output_directory: str):
+        bt.logging.info(f"Deleting files in {output_directory}")
+        for file in os.listdir(output_directory):
+            os.remove(os.path.join(output_directory, file))
+        # os.rmdir(output_directory)
+
+    def get_miner_data_directory(self, hotkey: str):
+        return os.path.join(self.validator_directory, hotkey[:8])
+
+    def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
+        """
+        1. Check md_output for the required files, if unsuccessful return False
+        2. Save files if above is valid
+        3. Check the hash of the .gro file to ensure miners are running the correct protein.
+        4.
         """
 
-        hotkey = hotkey[:8]
+        required_files_extensions = ["edr", "gro"]
 
-        output_directory = os.path.join(self.pdb_directory, "dendrite", hotkey)
-        filetypes = self.save_files(files=md_output, output_directory=output_directory)
+        # This is just mapper from the file extension to the name of the file stores in the dict.
+        md_outputs_exts = {
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
+        }
 
-        return None
+        for ext in required_files_extensions:
+            if ext not in md_outputs_exts:
+                bt.logging.error(f"Missing file with extension {ext} in md_output")
+                return False
 
-        # bt.logging.info(
-        #     f"Recieved the following files from hotkey {hotkey}: {list(filetypes.keys())}"
-        # )
-        # edr = filetypes.get("edr")
-        # if not edr:
-        #     bt.logging.error(
-        #         f"No .edr file found in md_output ({list(md_output.keys())}), so reward is zero!"
-        #     )
-        #     return 0
+        output_directory = self.get_miner_data_directory(hotkey=hotkey)
 
-        # gro = filetypes.get("gro")
-        # if not gro:
-        #     bt.logging.error(
-        #         f"No .gro file found in md_output ({list(md_output.keys())}), so reward is zero!"
-        #     )
-        #     return 0
+        # Save files so we can check the hash later.
+        self.save_files(
+            files=md_output,
+            output_directory=output_directory,
+        )
 
-        # gro_path = os.path.join(output_directory, gro)
-        # if self.gro_hash(self.gro_path) != self.gro_hash(gro_path):
-        #     bt.logging.error(
-        #         f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
-        #     )
-        #     return 0
-        # bt.logging.success(f"The hash for .gro file is correct!")
+        # Check that the md_output contains the right protein through gro_hash
+        gro_path = os.path.join(output_directory, md_outputs_exts["gro"])
+        if self.gro_hash(self.gro_path) != self.gro_hash(gro_path):
+            bt.logging.warning(
+                f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
+            )
+            self.delete_files(output_directory=output_directory)
+            return False
 
-        # os.chdir(output_directory)
-        # edr_path = os.path.join(output_directory, edr)
-        # commands = [f'echo "13"  | gmx energy -f {edr} -o free_energy.xvg']
+        bt.logging.success(f"The hash for .gro file is correct!")
 
-        # # TODO: we still need to check that the following commands are run successfully
-        # for cmd in tqdm.tqdm(commands):
-        #     bt.logging.info(f"Running GROMACS command: {cmd}")
-        #     if os.system(cmd) != 0:
-        #         raise Exception(f"reward failed to run GROMACS command: {cmd}")
-
-        # energy_path = os.path.join(output_directory, "free_energy.xvg")
-        # free_energy = self.get_average_free_energy(energy_path)
-        # bt.logging.success(
-        #     f"Free energy of protein folding simulation is {free_energy}"
-        # )
-
-        # # return the negative of the free energy so that larger is better
-        # return -free_energy
-
-    # Function to read the .xvg file and compute the average free energy
-    def get_average_free_energy(self, filename):
-        # Read the file, skip the header lines that start with '@' and '&'
-        bt.logging.info(f"Calculating average free energy from file {filename!r}")
-        with open(filename) as f:
-            last_line = f.readlines()[-1]
-
-        # The energy values are typically in the second column
-        last_energy = last_line.split()[-1]
-
-        return float(last_energy)
+        return True

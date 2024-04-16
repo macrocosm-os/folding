@@ -11,7 +11,7 @@ from folding.rewards.energy import EnergyRewardModel
 from folding.rewards.rmsd import RMSDRewardModel
 
 
-def parsing_reward_data(miner_data_directory: str, validator_data_directory: str):
+def parsing_miner_data(miner_data_directory: str, validator_data_directory: str):
     data_extractor = DataExtractor(
         miner_data_directory=miner_data_directory,
         validator_data_directory=validator_data_directory,
@@ -69,15 +69,11 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
             f"uid {uid}:\nDendrite: {resp.dendrite}\nMD Output: {md_output_summary}\n"
         )
 
-        miner_data_directory = os.path.join(
-            protein.validator_directory, resp.axon.hotkey[:8]
-        )
-
-        # Must be done because gromacs only *reads* data, cannot take it in directly
-        protein.save_files(
-            files=resp.md_output,
-            output_directory=miner_data_directory,
-        )
+        if not protein.process_md_output(
+            md_output=resp.md_output, hotkey=resp.axon.hotkey
+        ):
+            reward_data[uid] = None
+            continue
 
         if resp.dendrite.status_code != 200:
             bt.logging.error(
@@ -86,9 +82,9 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
             reward_data[uid] = None
             continue
 
-        bt.logging.info(f"Parsing data for miner {miner_data_directory}")
-        output_data = parsing_reward_data(
-            miner_data_directory=miner_data_directory,
+        bt.logging.info(f"Parsing data for miner {protein.miner_data_directory}")
+        output_data = parsing_miner_data(
+            miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
             validator_data_directory=protein.validator_directory,
         )
         reward_data[uid] = output_data
