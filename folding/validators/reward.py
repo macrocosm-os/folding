@@ -74,7 +74,6 @@ def get_rewards(
         reward_data[uid] = output_data
 
     reward_events = apply_reward_pipeline(data=reward_data)
-
     return reward_events
 
     # # Softmax rewards across samples.

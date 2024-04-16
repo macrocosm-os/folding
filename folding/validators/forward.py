@@ -1,5 +1,6 @@
 import os
 import time
+import torch
 import pickle
 import bittensor as bt
 from pathlib import Path
@@ -50,11 +51,24 @@ async def run_step(
     # Compute the rewards for the responses given the prompt.
     # rewards: torch.FloatTensor = get_rewards(protein, responses)
 
+    # save_to_pickle(responses, "/root/folding/exp_data/respones.pkl")
+    # save_to_pickle(protein, "/root/folding/exp_data/protein_class.pkl")
+    # os.system("pm2 stop v1")
+
+    reward_events = get_rewards(protein=protein, responses=responses)
+
+    # Right now, we are only using a single energy reward model. #TODO: Extend this over all RewardEvents
+    rewards = reward_events[0].rewards
+    self.update_rewards(
+        rewards=torch.FloatTensor(rewards.values()),
+        uids=torch.FloatTensor(rewards.keys()),
+    )
+
     # # Log the step event.
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
-        "uids": uids,
+        "uids": rewards.keys(),
         "response_times": [
             resp.dendrite.process_time if resp.dendrite.process_time != None else 0
             for resp in responses
@@ -63,12 +77,8 @@ async def run_step(
             str(resp.dendrite.status_message) for resp in responses
         ],
         "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
-        # "rewards": rewards.tolist(),
+        "rewards": rewards.values(),
     }
-
-    save_to_pickle(responses, "/root/folding/exp_data/respones.pkl")
-    save_to_pickle(protein, "/root/folding/exp_data/protein_class.pkl")
-    os.system("pm2 stop v1")
 
     return event
     # os.system("pm2 stop v1")

@@ -13,10 +13,15 @@ class EnergyRewardModel(BaseRewardModel):
     def __init__(self, **kwargs):
         super().__init__()
 
+        self.rewards = {}
+
     def collate_data(self, data: Dict) -> pd.DataFrame:
         self.df = pd.DataFrame()
 
         for uid, dataset in data.items():
+            if dataset is None:  # occurs when status_code is not 200
+                continue
+
             subset = dataset[self.name]
             subset["uid"] = uid
             self.df = pd.concat([self.df, subset], axis=0)
@@ -24,13 +29,12 @@ class EnergyRewardModel(BaseRewardModel):
         return self.df
 
     def get_energy(self, df: pd.DataFrame):
-        bt.logging.info(f"df: {df}")
+        # The dataframe has all data exported by gromacs, and therefore can have different lengths.
+        # Different lengths cause NaNs in other cols.
         subset = df[~df[self.name].isna()]
 
         uids = subset.uid.unique().tolist()
         min_each_uid = subset.groupby("uid").prod_energy.min()
-
-        bt.logging.info(f"Min uid each uid: {min_each_uid}")
 
         best_miner_uid = min_each_uid.idxmin()
         minimum_energy = min_each_uid[best_miner_uid]
@@ -56,8 +60,13 @@ class EnergyRewardModel(BaseRewardModel):
         """Apply the necessary steps to get energy reward data
 
         Args:
-            data (Dict): Dict[int : Dict[str : pd.DataFrame]]
+            data (Dict): Dict[uid : Dict[str : pd.DataFrame]]
         """
+
+        # need to initialize the reward dictionary with 0s
+        for uid in data.keys():
+            self.reward[uid] = 0
+
         df = self.collate_data(data=data)
         (
             rewards,
