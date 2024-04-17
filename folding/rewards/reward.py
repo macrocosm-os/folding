@@ -49,17 +49,16 @@ class BaseRewardModel(ABC):
         pass
 
     @abstractmethod
-    def reward(self, data: Dict) -> BatchRewardOutput:
+    def get_rewards(self, data: Dict) -> BatchRewardOutput:
         pass
 
-    @property
-    def rewards(self, data: Dict):
+    def setup_rewards(self, data: Dict):
         """Sets a default dict for all RewardModels"""
-        reward_dict = {}
+        rewards = {}
         for uid in data.keys():
-            reward_dict[uid] = 0
+            rewards[uid] = 0
 
-        return reward_dict
+        return rewards
 
     def collate_data(self, data: Dict) -> pd.DataFrame:
         """collect the desired data for a chosen reward model.
@@ -83,8 +82,10 @@ class BaseRewardModel(ABC):
         return self.df
 
     def apply(self, data: Dict) -> RewardEvent:
+        self.rewards = self.setup_rewards(data=data)
+
         t0 = time.time()
-        batch_rewards_output = self.reward(data=data)
+        batch_rewards_output = self.get_rewards(data=data)
         batch_rewards_time = time.time() - t0
 
         return RewardEvent(

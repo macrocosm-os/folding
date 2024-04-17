@@ -42,7 +42,7 @@ class RMSDRewardModel(BaseRewardModel):
         finally:
             return self.rewards, extra_info
 
-    def reward(self, data: Dict) -> BatchRewardOutput:
+    def get_rewards(self, data: Dict) -> BatchRewardOutput:
         df = self.collate_data(data=data)
         rewards, extra_info = self.get_rmsd(df=df)
 

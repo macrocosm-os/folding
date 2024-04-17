@@ -22,7 +22,7 @@ def parsing_miner_data(miner_data_directory: str, validator_data_directory: str)
     data_extractor.pressure(data_type="Pressure")
     data_extractor.density(data_type="Density")
     data_extractor.prod_energy(data_type="Potential")
-    # data_extractor.rmsd()
+    data_extractor.rmsd()
 
     return data_extractor.data
 
@@ -61,13 +61,7 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
 
     reward_data = {}
     for uid, resp in zip(uids, responses):
-        # Output the reward data information into the terminal
-        md_output_summary = {
-            k: len(v.encode("utf-8")) for k, v in resp.md_output.items()
-        }
-        bt.logging.info(
-            f"uid {uid}:\nDendrite: {resp.dendrite}\nMD Output: {md_output_summary}\n"
-        )
+        md_output_summary = {k: len(v) for k, v in resp.md_output.items()}
 
         if not protein.process_md_output(
             md_output=resp.md_output, hotkey=resp.axon.hotkey
@@ -82,7 +76,6 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
             reward_data[uid] = None
             continue
 
-        bt.logging.info(f"Parsing data for miner {protein.miner_data_directory}")
         output_data = parsing_miner_data(
             miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
             validator_data_directory=protein.validator_directory,
@@ -92,6 +85,6 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
     reward_events = apply_reward_pipeline(data=reward_data)
     rewards, events = aggregate_rewards(reward_events=reward_events)
 
-    events.update(md_output_summary)  # Will record the size of the files in
+    events.update(md_output_summary)  # Record the size of the files in md_output
 
     return rewards, events

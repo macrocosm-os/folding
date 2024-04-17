@@ -122,10 +122,11 @@ class Protein:
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
-        self.gro_path = os.path.join(self.pdb_directory, "em.gro")
-        self.topol_path = os.path.join(self.pdb_directory, "topol.top")
-
         self.setup_pdb_directory()
+
+        self.validator_directory = os.path.join(self.pdb_directory, "validator")
+        self.gro_path = os.path.join(self.validator_directory, "em.gro")
+        self.topol_path = os.path.join(self.validator_directory, "topol.top")
 
         mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
         other_files = [
@@ -146,7 +147,6 @@ class Protein:
             self.generate_input_files()
 
         # Create a validator directory to store the files
-        self.validator_directory = os.path.join(self.pdb_directory, "validator")
         check_if_directory_exists(output_directory=self.validator_directory)
 
         for file in other_files:
@@ -282,7 +282,7 @@ class Protein:
                     bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
                     content = re.sub(
                         f"{param}\\s+=\\s+\\d+",
-                        f"{param} = {1}",
+                        f"{param} = {save_interval}",
                         content,
                     )
 
@@ -313,7 +313,14 @@ class Protein:
 
         return filetypes
 
-    def gro_hash(self, gro_path):
+    def gro_hash(self, gro_path: str):
+        """Generates the hash for a specific gro file.
+        Enables validators to ensure that miners are running the correct
+        protein, and not generating fake data.
+
+        Args:
+            gro_path (str): location to the gro file
+        """
         bt.logging.info(f"Calculating hash for path {gro_path!r}")
         pattern = re.compile(r"\s*(\d+\w+)\s+(\w+\d*\s*\d+)\s+(\-?\d+\.\d+)+")
 
@@ -332,10 +339,10 @@ class Protein:
 
         return hashlib.md5(name + buf.encode()).hexdigest()
 
-    def delete_files(self, output_directory: str):
-        bt.logging.info(f"Deleting files in {output_directory}")
-        for file in os.listdir(output_directory):
-            os.remove(os.path.join(output_directory, file))
+    def delete_files(self, directory: str):
+        bt.logging.info(f"Deleting files in {directory}")
+        for file in os.listdir(directory):
+            os.remove(os.path.join(directory, file))
         # os.rmdir(output_directory)
 
     def get_miner_data_directory(self, hotkey: str):
@@ -356,6 +363,11 @@ class Protein:
             k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
         }
 
+        bt.logging.warning(
+            f"Files that have been sent back by the miner: {md_output.keys()}"
+        )
+        bt.logging.warning(f"non zero length files: {md_outputs_exts.values()}")
+
         for ext in required_files_extensions:
             if ext not in md_outputs_exts:
                 bt.logging.error(f"Missing file with extension {ext} in md_output")
@@ -375,9 +387,8 @@ class Protein:
             bt.logging.warning(
                 f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
             )
-            self.delete_files(output_directory=output_directory)
+            self.delete_files(directory=output_directory)
             return False
 
         bt.logging.success(f"The hash for .gro file is correct!")
-
         return True

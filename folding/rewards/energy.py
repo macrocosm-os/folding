@@ -45,7 +45,7 @@ class EnergyRewardModel(BaseRewardModel):
         finally:
             return self.rewards, extra_info
 
-    def reward(self, data: Dict) -> BatchRewardOutput:
+    def get_rewards(self, data: Dict) -> BatchRewardOutput:
         """Apply the necessary steps to get energy reward data
 
         Args:
