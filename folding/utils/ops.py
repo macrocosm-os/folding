@@ -1,7 +1,9 @@
 import os
+import re
 import tqdm
 import random
 import subprocess
+import hashlib
 
 import pickle
 from typing import List, Dict
@@ -56,6 +58,33 @@ def select_random_pdb_id(PDB_IDS: Dict) -> str:
         choices = PDB_IDS[family]
         if len(choices):
             return random.choice(choices)
+
+
+def gro_hash(gro_path: str):
+    """Generates the hash for a specific gro file.
+    Enables validators to ensure that miners are running the correct
+    protein, and not generating fake data.
+
+    Args:
+        gro_path (str): location to the gro file
+    """
+    bt.logging.info(f"Calculating hash for path {gro_path!r}")
+    pattern = re.compile(r"\s*(\d+\w+)\s+(\w+\d*\s*\d+)\s+(\-?\d+\.\d+)+")
+
+    with open(gro_path, "rb") as f:
+        name, length, *lines, _ = f.readlines()
+        length = int(length)
+        bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
+
+    buf = ""
+    for line in lines:
+        line = line.decode().strip()
+        match = pattern.match(line)
+        if not match:
+            raise Exception(f"Error parsing line in {gro_path!r}: {line!r}")
+        buf += match.group(1) + match.group(2).replace(" ", "")
+
+    return hashlib.md5(name + buf.encode()).hexdigest()
 
 
 def check_if_directory_exists(output_directory):

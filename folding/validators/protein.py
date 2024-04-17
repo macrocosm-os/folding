@@ -1,6 +1,5 @@
 import os
 import re
-import hashlib
 import requests
 from typing import List, Dict
 from pathlib import Path
@@ -11,6 +10,7 @@ from dataclasses import dataclass
 from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
+    gro_hash,
     load_pdb_ids,
     select_random_pdb_id,
     FF_WATER_PAIRS,
@@ -313,32 +313,6 @@ class Protein:
 
         return filetypes
 
-    def gro_hash(self, gro_path: str):
-        """Generates the hash for a specific gro file.
-        Enables validators to ensure that miners are running the correct
-        protein, and not generating fake data.
-
-        Args:
-            gro_path (str): location to the gro file
-        """
-        bt.logging.info(f"Calculating hash for path {gro_path!r}")
-        pattern = re.compile(r"\s*(\d+\w+)\s+(\w+\d*\s*\d+)\s+(\-?\d+\.\d+)+")
-
-        with open(gro_path, "rb") as f:
-            name, length, *lines, _ = f.readlines()
-            length = int(length)
-            bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
-
-        buf = ""
-        for line in lines:
-            line = line.decode().strip()
-            match = pattern.match(line)
-            if not match:
-                raise Exception(f"Error parsing line in {gro_path!r}: {line!r}")
-            buf += match.group(1) + match.group(2).replace(" ", "")
-
-        return hashlib.md5(name + buf.encode()).hexdigest()
-
     def delete_files(self, directory: str):
         bt.logging.info(f"Deleting files in {directory}")
         for file in os.listdir(directory):
@@ -383,7 +357,7 @@ class Protein:
 
         # Check that the md_output contains the right protein through gro_hash
         gro_path = os.path.join(output_directory, md_outputs_exts["gro"])
-        if self.gro_hash(self.gro_path) != self.gro_hash(gro_path):
+        if gro_hash(self.gro_path) != gro_hash(gro_path):
             bt.logging.warning(
                 f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
             )
