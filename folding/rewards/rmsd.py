@@ -14,8 +14,16 @@ class RMSDRewardModel(BaseRewardModel):
         super().__init__()
 
     def get_rmsd(self, df: pd.DataFrame):
+        curves = []
+        steps = []
         try:
             subset = df[~df[self.name].isna()]
+
+            for uid in subset.uid.unique():
+                s = subset[subset.uid == uid]
+                curves.append(list(s[self.name].values))
+                steps.append(list(s["step"].values))
+
             min_each_uid = subset.groupby("uid")[self.name].min()
 
             best_miner_uid = min_each_uid.idxmin()
@@ -33,6 +41,8 @@ class RMSDRewardModel(BaseRewardModel):
                 differences=differences.values.tolist(),
                 mean_difference=mean_difference,
                 std_difference=std_difference,
+                curves=curves,
+                steps=steps,
             )
 
         except Exception as E:

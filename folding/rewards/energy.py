@@ -17,8 +17,16 @@ class EnergyRewardModel(BaseRewardModel):
         # The dataframe has all data exported by gromacs, and therefore can have different lengths.
         # Different lengths cause NaNs in other cols.
 
+        curves = []
+        steps = []
         try:
             subset = df[~df[self.name].isna()]
+
+            for uid in subset.uid.unique():
+                s = subset[subset.uid == uid]
+                curves.append(list(s[self.name].values))
+                steps.append(list(s["step"].values))
+
             min_each_uid = subset.groupby("uid")[self.name].min()
 
             best_miner_uid = min_each_uid.idxmin()
@@ -36,6 +44,8 @@ class EnergyRewardModel(BaseRewardModel):
                 differences=differences.values.tolist(),
                 mean_difference=mean_difference,
                 std_difference=std_difference,
+                curves=curves,
+                steps=steps,
             )
 
         except Exception as E:
