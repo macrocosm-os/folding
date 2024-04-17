@@ -1,9 +1,13 @@
 import pytest
+
+import os
+from pathlib import Path
 from folding.utils.ops import gro_hash
 
+ROOT_PATH = Path(__file__).parent
 
-MINER_GRO_FILE = "/root/folding/tests/fixtures/gro_files/md_0_1.gro"
-VALIDATOR_GRO_FILE = "/root/folding/tests/fixtures/gro_files/em.gro"
+MINER_GRO_FILE = os.path.join(ROOT_PATH, "fixtures/gro_files/md_0_1.gro")
+VALIDATOR_GRO_FILE = os.path.join(ROOT_PATH, "fixtures/gro_files/em.gro")
 
 
 def test_gro_hash():
