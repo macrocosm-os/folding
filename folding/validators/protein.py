@@ -337,10 +337,8 @@ class Protein:
             k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
         }
 
-        bt.logging.warning(
-            f"Files that have been sent back by the miner: {md_output.keys()}"
-        )
-        bt.logging.warning(f"non zero length files: {md_outputs_exts.values()}")
+        if len(md_output.keys()) == 0:
+            bt.logging.warning(f"Miner {hotkey} returned empty md_output...")
 
         for ext in required_files_extensions:
             if ext not in md_outputs_exts:

@@ -44,6 +44,10 @@ def aggregate_rewards(reward_events: List[RewardEvent]):
     rewards = []
     events = {}
 
+    # Return 0 rewards for all miners if they all failed.
+    if not any(reward_events):
+        return torch.FloatTensor([0] * len(reward_events)), events
+
     for event in reward_events:
         rewards.append(list(event.rewards.values()))
         events.update(event.asdict())
@@ -74,15 +78,19 @@ def get_rewards(protein: Protein, responses: List[FoldingSynapse], uids: List[in
                 f"uid {uid} failed with status code {resp.dendrite.status_code}"
             )
             reward_data[uid] = None
-            continue
+        else:
+            output_data = parsing_miner_data(
+                miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
+                validator_data_directory=protein.validator_directory,
+            )
+            reward_data[uid] = output_data
 
-        output_data = parsing_miner_data(
-            miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
-            validator_data_directory=protein.validator_directory,
-        )
-        reward_data[uid] = output_data
-
-    reward_events = apply_reward_pipeline(data=reward_data)
+    # There are situations where all miners are non-200 status codes or fail md_output parsing.
+    reward_events = (
+        apply_reward_pipeline(data=reward_data)
+        if any(reward_data.values())
+        else list(reward_data.values())
+    )  # list of None
     rewards, events = aggregate_rewards(reward_events=reward_events)
 
     events.update(md_output_summary)  # Record the size of the files in md_output

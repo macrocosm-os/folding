@@ -79,7 +79,7 @@ class BaseRewardModel(ABC):
             subset["uid"] = uid
             self.df = pd.concat([self.df, subset], axis=0)
 
-        return self.df
+        return self.df  # if no miners return data, then this is an empty dataframe.
 
     def apply(self, data: Dict) -> RewardEvent:
         self.rewards = self.setup_rewards(data=data)
