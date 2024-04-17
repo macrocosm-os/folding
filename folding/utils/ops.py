@@ -65,6 +65,15 @@ def gro_hash(gro_path: str):
     Enables validators to ensure that miners are running the correct
     protein, and not generating fake data.
 
+    Connects the (residue name, atom name, and residue number) from each line
+    together into a single string. This way, we can ensure that the protein is the same.
+
+    Example:
+    10LYS  N  1
+    10LYS  H1 2
+
+    Output: 10LYSN1LYSH12
+
     Args:
         gro_path (str): location to the gro file
     """
