@@ -135,6 +135,8 @@ class Protein:
             "posre.itp",
             "posre_Protein_chain_A.itp",
             "posre_Protein_chain_L.itp",
+            "topol_Protein_chain_A.itp",
+            "topol_Protein_chain_L.itp",
         ]
 
         required_files = mdp_files + other_files
@@ -169,7 +171,9 @@ class Protein:
         ]
 
         # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(mdp_files=mdp_files, params_to_change=params_to_change)
+        self.edit_files(
+            mdp_files=mdp_files, params_to_change=params_to_change
+        )  # TODO: Verifiy the validity of this saving condition.
         self.save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
@@ -201,6 +205,41 @@ class Protein:
             return 1
         return save_interval
 
+    def check_configuration_file_commands(self) -> List[str]:
+        """
+        There are a set of configuration files that are used to setup the simulation
+        environment. These are typically denoted by the force field name. If they do
+        not exist, then we default to the same names without the force field included.
+        """
+        # strip away trailing number in forcefield name e.g charmm27 -> charmm, and
+        ff_base = "".join([c for c in self.ff if not c.isdigit()])
+
+        filepaths = [
+            f"{self.base_directory}/nvt_{ff_base}.mdp",
+            f"{self.base_directory}/npt_{ff_base}.mdp",
+            f"{self.base_directory}/md_{ff_base}.mdp",
+            f"{self.base_directory}/emin_{ff_base}.mdp",
+        ]
+
+        commands = []
+
+        for file_path in filepaths:
+            match = re.search(
+                r"/([^/]+)_" + re.escape(ff_base) + r"\.mdp", file_path
+            )  # extract the nvt, npt...
+            config_name = match.group(1)
+
+            if os.path.exists(file_path):
+                commands.append(
+                    f"cp {file_path} {self.pdb_directory}/{config_name}.mdp"
+                )
+            else:
+                # If the file with the _ff suffix doesn't exist, remove it from the base filepath.
+                path = re.sub(r"_" + re.escape(ff_base), "", file_path)
+                commands.append(f"cp {path} {self.pdb_directory}/{config_name}.mdp")
+
+        return commands
+
     # Function to generate GROMACS input files
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
@@ -210,16 +249,8 @@ class Protein:
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        # strip away trailing number in forcefield name e.g charmm27 -> charmm, and
-        # Copy mdp template files to protein directory
-        ff_base = "".join([c for c in self.ff if not c.isdigit()])
-        commands = [
-            f"cp {self.base_directory}/nvt.mdp {self.pdb_directory}/nvt.mdp",
-            f"cp {self.base_directory}/npt.mdp {self.pdb_directory}/npt.mdp",
-            f"cp {self.base_directory}/md.mdp  {self.pdb_directory}/md.mdp ",
-            f"cp {self.base_directory}/emin.mdp  {self.pdb_directory}/emin.mdp ",
-            f"cp {self.base_directory}/minim.mdp  {self.pdb_directory}/minim.mdp",
-        ]
+        commands = self.check_configuration_file_commands()
+        bt.logging.warning(f"New commands: {commands}")
 
         # Commands to generate GROMACS input files
         commands += [
@@ -237,7 +268,7 @@ class Protein:
         # TODO: Move this to the miner side, but make sure that this runs!
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
-            "gmx mdrun -v -deffnm em",  # Run energy minimization
+            "gmx mdrun -v -deffnm em",
         ]
 
         run_cmd_commands(
@@ -266,7 +297,9 @@ class Protein:
         bt.logging.info("Editing file content...")
 
         # TODO: save_frequency = 0.10 needs to be replaced with config.save_frequency
-        save_interval = self.calculate_params_save_interval(num_steps_to_save=100)
+        save_interval = self.calculate_params_save_interval(
+            num_steps_to_save=self.config.num_steps_to_save
+        )
 
         for file in mdp_files:
             filepath = os.path.join(self.validator_directory, file)
