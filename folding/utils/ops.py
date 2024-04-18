@@ -136,7 +136,12 @@ def is_pdb_complete(pdb_text: str) -> bool:
     return True
 
 
-def classify_pdb_batch(data, verbose=False):
+def save_pkl(file, data):
+    with open(file, "wb") as f:
+        pkl.dump(data, f)
+
+
+def classify_pdb_batch(data: Dict, verbose=False):
     """Downloads PDB files from a batch of PDB IDs and classifies them into complete, incomplete, and not downloadable lists. Saves the results to pickle files.
 
     Args:
@@ -171,19 +176,14 @@ def classify_pdb_batch(data, verbose=False):
                 continue
 
             if count % 10 == 0:  # Saving progress for safety
-                with open(complete_file, "wb") as f:
-                    pkl.dump(complete, f)
-                with open(incomplete_file, "wb") as f:
-                    pkl.dump(incomplete, f)
-                with open(not_downloadable_file, "wb") as f:
-                    pkl.dump(not_downloadable, f)
+                save_pkl(file=complete_file, data=complete)
+                save_pkl(file=incomplete_file, data=incomplete)
+                save_pkl(file=not_downloadable_file, data=not_downloadable)
 
-    with open(complete_file, "wb") as f:
-        pkl.dump(complete, f)
-    with open(incomplete_file, "wb") as f:
-        pkl.dump(incomplete, f)
-    with open(not_downloadable_file, "wb") as f:
-        pkl.dump(not_downloadable, f)
+    # Once the entire process is finished, we save all the data.
+    save_pkl(file=complete_file, data=complete)
+    save_pkl(file=incomplete_file, data=incomplete)
+    save_pkl(file=not_downloadable_file, data=not_downloadable)
 
     if verbose:
         complete_percentage = len(complete) / number_of_pdb_ids * 100
@@ -252,12 +252,10 @@ def parallel_classify_pdb_batch(data, verbose=False):
         ]
         concurrent.futures.wait(futures)
 
-    with open(complete_file, "wb") as f:
-        pkl.dump(complete, f)
-    with open(incomplete_file, "wb") as f:
-        pkl.dump(incomplete, f)
-    with open(not_downloadable_file, "wb") as f:
-        pkl.dump(not_downloadable, f)
+    save_pkl(file=complete_file, data=complete)
+    save_pkl(file=incomplete_file, data=incomplete)
+    save_pkl(file=not_downloadable_file, data=not_downloadable)
+
     if verbose:
         complete_percentage = len(complete) / number_of_pdb_ids * 100
         incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
