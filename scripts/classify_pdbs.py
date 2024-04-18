@@ -144,9 +144,13 @@ def parallel_classify_pdb_batch(data, verbose=False):
     print("=====================================")
 
 
-def main(classification_type: str = "parallel", verbose=False):
+def main(
+    classification_type: str = "parallel",
+    verbose=False,
+    pdb_id_path: str = "scripts/pdb_ids.pkl",
+):
     # Load the PDB IDs
-    with open("scripts/pdb_ids.pkl", "rb") as f:
+    with open(pdb_id_path, "rb") as f:
         PDB_IDS = pkl.load(f)
 
     if classification_type == "parallel":
@@ -163,7 +167,17 @@ if __name__ == "__main__":
         default="parallel",
         help="Type of classification (parallel or sequential)",
     )
+    parser.add_argument(
+        "--pdb_id_path",
+        type=str,
+        default="scripts/pdb_ids.pkl",
+        help="Path to the PDB ID file",
+    )
     parser.add_argument("--verbose", action="store_true", help="Print analysis summary")
     args = parser.parse_args()
 
-    main(classification_type=args.classification_type, verbose=args.verbose)
+    main(
+        classification_type=args.classification_type,
+        verbose=args.verbose,
+        pdb_id_path=args.pdb_id_path,
+    )
