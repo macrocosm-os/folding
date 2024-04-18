@@ -1,7 +1,5 @@
 import os
 import re
-import pickle
-import hashlib
 import requests
 from typing import List, Dict
 from pathlib import Path
@@ -12,6 +10,7 @@ from dataclasses import dataclass
 from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
+    gro_hash,
     load_pdb_ids,
     select_random_pdb_id,
     FF_WATER_PAIRS,
@@ -28,13 +27,20 @@ class Protein:
     def name(self):
         return self.protein_pdb.split(".")[0]
 
-    def __init__(self, ff: str, water: str, box: str, config: Dict, pdb_id: str = None):
-        # can either be local file path or a url to download
-
+    def __init__(
+        self, ff: str, box: str, config: Dict, pdb_id: str = None, water: str = None
+    ):
         self.pdb_id = pdb_id
         self.ff = ff
-        self.water = FF_WATER_PAIRS[self.ff]
         self.box = box
+
+        if water is not None:
+            bt.logging.warning(
+                "config.protein.water is not None... Potentially deviating away from recomended GROMACS FF+Water pairing"
+            )
+            self.water = water
+        else:
+            self.water = FF_WATER_PAIRS[self.ff]
 
         self.config = config
         self.md_inputs = {}
@@ -91,9 +97,6 @@ class Protein:
             raise Exception(f"Failed to download PDB file with ID {self.pdb_file}.")
 
     def check_for_missing_files(self, required_files: List[str]):
-        self.gro_path = os.path.join(self.pdb_directory, "em.gro")
-        self.topol_path = os.path.join(self.pdb_directory, "topol.top")
-
         missing_files = [
             filename
             for filename in required_files
@@ -121,6 +124,10 @@ class Protein:
 
         self.setup_pdb_directory()
 
+        self.validator_directory = os.path.join(self.pdb_directory, "validator")
+        self.gro_path = os.path.join(self.validator_directory, "em.gro")
+        self.topol_path = os.path.join(self.validator_directory, "topol.top")
+
         mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
         other_files = [
             "em.gro",
@@ -128,6 +135,8 @@ class Protein:
             "posre.itp",
             "posre_Protein_chain_A.itp",
             "posre_Protein_chain_L.itp",
+            "topol_Protein_chain_A.itp",
+            "topol_Protein_chain_L.itp",
         ]
 
         required_files = mdp_files + other_files
@@ -140,7 +149,6 @@ class Protein:
             self.generate_input_files()
 
         # Create a validator directory to store the files
-        self.validator_directory = os.path.join(self.pdb_directory, "validator")
         check_if_directory_exists(output_directory=self.validator_directory)
 
         for file in other_files:
@@ -163,7 +171,9 @@ class Protein:
         ]
 
         # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(mdp_files=mdp_files, params_to_change=params_to_change)
+        self.edit_files(
+            mdp_files=mdp_files, params_to_change=params_to_change
+        )  # TODO: Verifiy the validity of this saving condition.
         self.save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
@@ -195,6 +205,44 @@ class Protein:
             return 1
         return save_interval
 
+    def check_configuration_file_commands(self) -> List[str]:
+        """
+        There are a set of configuration files that are used to setup the simulation
+        environment. These are typically denoted by the force field name. If they do
+        not exist, then we default to the same names without the force field included.
+        """
+        # strip away trailing number in forcefield name e.g charmm27 -> charmm, and
+        ff_base = "".join([c for c in self.ff if not c.isdigit()])
+
+        filepaths = [
+            f"{self.base_directory}/nvt_{ff_base}.mdp",
+            f"{self.base_directory}/npt_{ff_base}.mdp",
+            f"{self.base_directory}/md_{ff_base}.mdp",
+            f"{self.base_directory}/emin_{ff_base}.mdp",
+        ]
+
+        commands = []
+
+        for file_path in filepaths:
+            match = re.search(
+                r"/([^/]+)_" + re.escape(ff_base) + r"\.mdp", file_path
+            )  # extract the nvt, npt...
+            config_name = match.group(1)
+
+            if os.path.exists(file_path):
+                commands.append(
+                    f"cp {file_path} {self.pdb_directory}/{config_name}.mdp"
+                )
+            else:
+                # If the file with the _ff suffix doesn't exist, remove it from the base filepath.
+                path = re.sub(r"_" + re.escape(ff_base), "", file_path)
+                commands.append(f"cp {path} {self.pdb_directory}/{config_name}.mdp")
+                bt.logging.warning(
+                    f"{config_name}_{ff_base}.mdp does not exist... Defaulting to {config_name}.mdp"
+                )
+
+        return commands
+
     # Function to generate GROMACS input files
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
@@ -204,16 +252,8 @@ class Protein:
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        # strip away trailing number in forcefield name e.g charmm27 -> charmm, and
-        # Copy mdp template files to protein directory
-        ff_base = "".join([c for c in self.ff if not c.isdigit()])
-        commands = [
-            f"cp {self.base_directory}/nvt.mdp {self.pdb_directory}/nvt.mdp",
-            f"cp {self.base_directory}/npt.mdp {self.pdb_directory}/npt.mdp",
-            f"cp {self.base_directory}/md.mdp  {self.pdb_directory}/md.mdp ",
-            f"cp {self.base_directory}/emin.mdp  {self.pdb_directory}/emin.mdp ",
-            f"cp {self.base_directory}/minim.mdp  {self.pdb_directory}/minim.mdp",
-        ]
+        commands = self.check_configuration_file_commands()
+        bt.logging.warning(f"New commands: {commands}")
 
         # Commands to generate GROMACS input files
         commands += [
@@ -228,9 +268,10 @@ class Protein:
         ]
         # Run the first step of the simulation
         bt.logging.info("Run the first step of the simulation")
+        # TODO: Move this to the miner side, but make sure that this runs!
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
-            "gmx mdrun -v -deffnm em",  # Run energy minimization
+            "gmx mdrun -v -deffnm em",
         ]
 
         run_cmd_commands(
@@ -259,7 +300,9 @@ class Protein:
         bt.logging.info("Editing file content...")
 
         # TODO: save_frequency = 0.10 needs to be replaced with config.save_frequency
-        save_interval = self.calculate_params_save_interval(num_steps_to_save=100)
+        save_interval = self.calculate_params_save_interval(
+            num_steps_to_save=self.config.num_steps_to_save
+        )
 
         for file in mdp_files:
             filepath = os.path.join(self.validator_directory, file)
@@ -275,7 +318,7 @@ class Protein:
                     bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
                     content = re.sub(
                         f"{param}\\s+=\\s+\\d+",
-                        f"{param} = {1}",
+                        f"{param} = {save_interval}",
                         content,
                     )
 
@@ -306,89 +349,54 @@ class Protein:
 
         return filetypes
 
-    def gro_hash(self, gro_path):
-        bt.logging.info(f"Calculating hash for path {gro_path!r}")
-        pattern = re.compile(r"\s*(\d+\w+)\s+(\w+\d*\s*\d+)\s+(\-?\d+\.\d+)+")
+    def delete_files(self, directory: str):
+        bt.logging.info(f"Deleting files in {directory}")
+        for file in os.listdir(directory):
+            os.remove(os.path.join(directory, file))
+        # os.rmdir(output_directory)
 
-        with open(gro_path, "rb") as f:
-            name, length, *lines, _ = f.readlines()
-            length = int(length)
-            bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
+    def get_miner_data_directory(self, hotkey: str):
+        return os.path.join(self.validator_directory, hotkey[:8])
 
-        buf = ""
-        for line in lines:
-            line = line.decode().strip()
-            match = pattern.match(line)
-            if not match:
-                raise Exception(f"Error parsing line in {gro_path!r}: {line!r}")
-            buf += match.group(1) + match.group(2).replace(" ", "")
-
-        return hashlib.md5(name + buf.encode()).hexdigest()
-
-    def reward(self, md_output: Dict, hotkey: str):
-        """Calculates the free energy of the protein folding simulation
-        # TODO: Each miner files should be saved in a unique directory and possibly deleted after the reward is calculated
+    def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
+        """
+        1. Check md_output for the required files, if unsuccessful return False
+        2. Save files if above is valid
+        3. Check the hash of the .gro file to ensure miners are running the correct protein.
+        4.
         """
 
-        hotkey = hotkey[:8]
+        required_files_extensions = ["edr", "gro"]
 
-        output_directory = os.path.join(self.pdb_directory, "dendrite", hotkey)
-        filetypes = self.save_files(files=md_output, output_directory=output_directory)
+        # This is just mapper from the file extension to the name of the file stores in the dict.
+        md_outputs_exts = {
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
+        }
 
-        return None
+        if len(md_output.keys()) == 0:
+            bt.logging.warning(f"Miner {hotkey[:8]} returned empty md_output...")
 
-        # bt.logging.info(
-        #     f"Recieved the following files from hotkey {hotkey}: {list(filetypes.keys())}"
-        # )
-        # edr = filetypes.get("edr")
-        # if not edr:
-        #     bt.logging.error(
-        #         f"No .edr file found in md_output ({list(md_output.keys())}), so reward is zero!"
-        #     )
-        #     return 0
+        for ext in required_files_extensions:
+            if ext not in md_outputs_exts:
+                bt.logging.error(f"Missing file with extension {ext} in md_output")
+                return False
 
-        # gro = filetypes.get("gro")
-        # if not gro:
-        #     bt.logging.error(
-        #         f"No .gro file found in md_output ({list(md_output.keys())}), so reward is zero!"
-        #     )
-        #     return 0
+        output_directory = self.get_miner_data_directory(hotkey=hotkey)
 
-        # gro_path = os.path.join(output_directory, gro)
-        # if self.gro_hash(self.gro_path) != self.gro_hash(gro_path):
-        #     bt.logging.error(
-        #         f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
-        #     )
-        #     return 0
-        # bt.logging.success(f"The hash for .gro file is correct!")
+        # Save files so we can check the hash later.
+        self.save_files(
+            files=md_output,
+            output_directory=output_directory,
+        )
 
-        # os.chdir(output_directory)
-        # edr_path = os.path.join(output_directory, edr)
-        # commands = [f'echo "13"  | gmx energy -f {edr} -o free_energy.xvg']
+        # Check that the md_output contains the right protein through gro_hash
+        gro_path = os.path.join(output_directory, md_outputs_exts["gro"])
+        if gro_hash(self.gro_path) != gro_hash(gro_path):
+            bt.logging.warning(
+                f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
+            )
+            self.delete_files(directory=output_directory)
+            return False
 
-        # # TODO: we still need to check that the following commands are run successfully
-        # for cmd in tqdm.tqdm(commands):
-        #     bt.logging.info(f"Running GROMACS command: {cmd}")
-        #     if os.system(cmd) != 0:
-        #         raise Exception(f"reward failed to run GROMACS command: {cmd}")
-
-        # energy_path = os.path.join(output_directory, "free_energy.xvg")
-        # free_energy = self.get_average_free_energy(energy_path)
-        # bt.logging.success(
-        #     f"Free energy of protein folding simulation is {free_energy}"
-        # )
-
-        # # return the negative of the free energy so that larger is better
-        # return -free_energy
-
-    # Function to read the .xvg file and compute the average free energy
-    def get_average_free_energy(self, filename):
-        # Read the file, skip the header lines that start with '@' and '&'
-        bt.logging.info(f"Calculating average free energy from file {filename!r}")
-        with open(filename) as f:
-            last_line = f.readlines()[-1]
-
-        # The energy values are typically in the second column
-        last_energy = last_line.split()[-1]
-
-        return float(last_energy)
+        bt.logging.success(f"The hash for .gro file is correct!")
+        return True
