@@ -46,7 +46,7 @@ def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List
         )
 
     with open(PDB_PATH, "rb") as f:
-        PDB_IDS = pickle.load(f)
+        PDB_IDS = pkl.load(f)
     return PDB_IDS
 
 
@@ -259,7 +259,6 @@ def parallel_classify_pdb_batch(data, verbose=False):
     with open(not_downloadable_file, "wb") as f:
         pkl.dump(not_downloadable, f)
     if verbose:
-
         complete_percentage = len(complete) / number_of_pdb_ids * 100
         incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
         not_downloadable_percentage = len(not_downloadable) / number_of_pdb_ids * 100
