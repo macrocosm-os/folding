@@ -2,12 +2,12 @@ import os
 import tqdm
 import random
 import subprocess
-
-import pickle
+import concurrent.futures
+import pickle as pkl
 from typing import List, Dict
+import requests
 
 import bittensor as bt
-import requests
 
 
 # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
@@ -86,45 +86,194 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             raise
 
 
-def download_pdb(pdb_directory: str, pdb_id: str):
+def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
     """Download a PDB file from the RCSB PDB database.
 
     Args:
         pdb_directory (str): Directory to save the downloaded PDB file.
         pdb_id (str): PDB file ID to download.
 
+    Returns:
+        bool: True if the PDB file is downloaded successfully and doesn't contain missing values, False otherwise.
+
     Raises:
-        Exception: If the download fails or the file contains missing values.
+        Exception: If download fails.
 
     """
     url = f"https://files.rcsb.org/download/{pdb_id}"
     path = os.path.join(pdb_directory, f"{pdb_id}")
     r = requests.get(url)
     if r.status_code == 200:
-        if (
-            "missing" in r.text.lower()
-        ):  # Trivial placeholder solution until we find more concrete patterns, will switch to check_if_pdb_file_is_valid() later.
+        if is_pdb_complete(r.text):
+            with open(path, "w") as file:
+                file.write(r.text)
+            bt.logging.info(
+                f"PDB file {pdb_id} downloaded successfully from {url} to path {path!r}."
+            )
+            return True
+        else:
             bt.logging.error(
                 f"PDB file {pdb_id} downloaded successfully but contains missing values."
             )
-            raise Exception(
-                f"PDB file {pdb_id} downloaded successfully but contains missing values."
-            )
-        with open(path, "w") as file:
-            file.write(r.text)
-        bt.logging.info(
-            f"PDB file {pdb_id} downloaded successfully from {url} to path {path!r}."
-        )
+            return False
     else:
         bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
         raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
 
 
-# def check_if_pdb_file_is_valid(pdb_text: str) -> bool:
-#     """Check if the downloaded PDB file is valid.
+def is_pdb_complete(pdb_text: str) -> bool:
+    """Check if the downloaded PDB file is complete.
 
-#     Returns:
-#         bool: True if the PDB's text file is valid, False otherwise.
+    Returns:
+        bool: True if the PDB file is complete, False otherwise.
 
-#     """
-#     pass
+    """
+    missing_values = {"missing heteroatom", "missing residues", "missing atom"}
+    pdb_text_lower = pdb_text.lower()
+    for value in missing_values:
+        if value in pdb_text_lower:
+            return False
+    return True
+
+
+def classify_pdb_batch(data, verbose=False):
+    """Downloads PDB files from a batch of PDB IDs and classifies them into complete, incomplete, and not downloadable lists. Saves the results to pickle files.
+
+    Args:
+        data (defaultdict[List]): A batch of PDB IDs, as returned by scripts/gather_pdbs.py.
+        verbose (bool, optional): If True, print the time required by the analysis and the percentages + frequencies of each list. Defaults to False.
+
+    Returns:
+        None
+    """
+    number_of_pdb_ids = sum([len(v) for v in data.values()])
+
+    complete = []
+    incomplete = []
+    not_downloadable = []
+    count = 0
+    complete_file = "scripts/pdb_ids_complete.pkl"
+    incomplete_file = "scripts/pdb_ids_incomplete.pkl"
+    not_downloadable_file = "scripts/pdb_ids_not_downloadable.pkl"
+
+    for v in tqdm(data.values()):
+        for pdb_id in v:
+            count += 1
+
+            try:
+                result = download_pdb("./complete_pdbs/", pdb_id + ".pdb")
+                if result:  # PDB was correctly downloaded and is complete
+                    complete.append(pdb_id)
+                else:  # PDB was correctly downloaded but is incomplete
+                    incomplete.append(pdb_id)
+            except Exception:  # Unable to download PDB
+                not_downloadable.append(pdb_id)
+                continue
+
+            if count % 10 == 0:  # Saving progress for safety
+                with open(complete_file, "wb") as f:
+                    pkl.dump(complete, f)
+                with open(incomplete_file, "wb") as f:
+                    pkl.dump(incomplete, f)
+                with open(not_downloadable_file, "wb") as f:
+                    pkl.dump(not_downloadable, f)
+
+    with open(complete_file, "wb") as f:
+        pkl.dump(complete, f)
+    with open(incomplete_file, "wb") as f:
+        pkl.dump(incomplete, f)
+    with open(not_downloadable_file, "wb") as f:
+        pkl.dump(not_downloadable, f)
+
+    if verbose:
+        complete_percentage = len(complete) / number_of_pdb_ids * 100
+        incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
+        not_downloadable_percentage = len(not_downloadable) / number_of_pdb_ids * 100
+
+        print("=====================================")
+        print("Analysis Summary:")
+        print(f"Total number of PDB IDs: {number_of_pdb_ids}")
+        print(f"Complete: {len(complete)} ({complete_percentage:.2f}%)")
+        print(f"Incomplete: {len(incomplete)} ({incomplete_percentage:.2f}%)")
+        print(
+            f"Not Downloadable: {len(not_downloadable)} ({not_downloadable_percentage:.2f}%)"
+        )
+
+    print(
+        f"Analysis done!\nFiles saved at {complete_file}, {incomplete_file}, and {not_downloadable_file}"
+    )
+    print("=====================================")
+
+
+def parallel_classify_pdb_batch(data, verbose=False):
+    """
+    Classifies PDB IDs in parallel and saves the results to pickle files.
+
+    Args:
+        data (dict): A dictionary containing PDB IDs to be classified into complete, incomplete and not_downloadable.
+        verbose (bool, optional): If True, prints an analysis summary. Defaults to False.
+
+    Returns:
+        None
+
+    Raises:
+        None
+
+    Example:
+        data = {
+            'group1': ['pdb1', 'pdb2', 'pdb3'],
+            'group2': ['pdb4', 'pdb5']
+        }
+        parallel_classify_pdb_batch(data, verbose=True)
+
+    """
+    number_of_pdb_ids = sum([len(v) for v in data.values()])
+    complete = []
+    incomplete = []
+    not_downloadable = []
+    complete_file = "scripts/pdb_ids_complete.pkl"
+    incomplete_file = "scripts/pdb_ids_incomplete.pkl"
+    not_downloadable_file = "scripts/pdb_ids_not_downloadable.pkl"
+
+    def process_pdb(pdb_id):
+        nonlocal complete, incomplete, not_downloadable
+        try:
+            result = download_pdb("./complete_pdbs/", pdb_id + ".pdb")
+            if result:
+                complete.append(pdb_id)
+            else:
+                incomplete.append(pdb_id)
+        except Exception:
+            not_downloadable.append(pdb_id)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(process_pdb, pdb_id) for v in data.values() for pdb_id in v
+        ]
+        concurrent.futures.wait(futures)
+
+    with open(complete_file, "wb") as f:
+        pkl.dump(complete, f)
+    with open(incomplete_file, "wb") as f:
+        pkl.dump(incomplete, f)
+    with open(not_downloadable_file, "wb") as f:
+        pkl.dump(not_downloadable, f)
+    if verbose:
+
+        complete_percentage = len(complete) / number_of_pdb_ids * 100
+        incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
+        not_downloadable_percentage = len(not_downloadable) / number_of_pdb_ids * 100
+
+        print("=====================================")
+        print("Analysis Summary:")
+        print(f"Total number of PDB IDs: {number_of_pdb_ids}")
+        print(f"Complete: {len(complete)} ({complete_percentage:.2f}%)")
+        print(f"Incomplete: {len(incomplete)} ({incomplete_percentage:.2f}%)")
+        print(
+            f"Not Downloadable: {len(not_downloadable)} ({not_downloadable_percentage:.2f}%)"
+        )
+
+    print(
+        f"Analysis done!\nFiles saved at {complete_file}, {incomplete_file}, and {not_downloadable_file}"
+    )
+    print("=====================================")
