@@ -64,7 +64,7 @@ class DataExtractor:
 
         output_data_location = os.path.join(output_path, f"{data_type}.xvg")
         command = [
-            f"echo '{data_type}' | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command} -b 20"
+            f"echo Potential | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command} -b 20"
         ]
         run_cmd_commands(command)
 
@@ -84,7 +84,7 @@ class DataExtractor:
 
         output_data_location = os.path.join(output_path, f"{data_type}.xvg")
         command = [
-            f"echo '{data_type}' | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
+            f"echo Potential | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
         ]
         run_cmd_commands(command)
 
