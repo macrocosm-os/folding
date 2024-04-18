@@ -338,7 +338,7 @@ class Protein:
         }
 
         if len(md_output.keys()) == 0:
-            bt.logging.warning(f"Miner {hotkey} returned empty md_output...")
+            bt.logging.warning(f"Miner {hotkey[:8]} returned empty md_output...")
 
         for ext in required_files_extensions:
             if ext not in md_outputs_exts:
