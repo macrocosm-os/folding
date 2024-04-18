@@ -17,12 +17,9 @@ from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_i
 from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
-
-
-def save_to_pickle(data, filename):
-    with open(filename, "wb") as f:
-        pickle.dump(data, f)
+PDB_IDS = load_pdb_ids(
+    root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+)  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 
 async def run_step(
@@ -31,15 +28,17 @@ async def run_step(
     k: int,
     timeout: float,
     exclude: list = [],
+    mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
 ):
     bt.logging.debug("run_step")
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    # uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
-    uids = [9, 10, 11]
+    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
     axons = [self.metagraph.axons[uid] for uid in uids]
-    synapse = FoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
+    synapse = FoldingSynapse(
+        pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
+    )
 
     # Make calls to the network with the prompt.
     responses: List[FoldingSynapse] = await self.dendrite(
@@ -77,9 +76,9 @@ def parse_config(config) -> List[str]:
     Parse config to check if key hyperparameters are set.
     If they are, exclude them from hyperparameter search.
     """
-    ff = config.ff
-    water = config.water
-    box = config.box
+    ff = config.protein.ff
+    water = config.protein.water
+    box = config.protein.box
     exclude_in_hp_search = []
 
     if ff is not None:
@@ -106,6 +105,8 @@ async def forward(self):
             else self.config.protein.pdb_id
         )
         hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
+
+        bt.logging.info(f"Total paramter space: {hp_sampler.parameter_set}")
 
         for iteration_num in range(hp_sampler.TOTAL_COMBINATIONS):
             hp_sampler_time = time.time()
