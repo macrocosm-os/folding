@@ -1,7 +1,7 @@
 import os
-import pandas as pd
-import bittensor as bt
+from typing import Dict
 
+import pandas as pd
 from folding.utils.ops import run_cmd_commands
 
 
@@ -28,122 +28,101 @@ class DataExtractor:
         self.miner_data_directory = miner_data_directory
 
         self.data = {}
+        self.commands = []
+
+        self.pipelines = [
+            dict(
+                method=self.get_energy,
+                kwargs=dict(name="energy", input_file_name="em.edr"),
+            ),
+            dict(
+                method=self.get_energy,
+                kwargs=dict(name="temperature", input_file_name="em.edr"),
+            ),
+            dict(
+                method=self.get_energy,
+                kwargs=dict(name="pressure", input_file_name="npt.edr"),
+            ),
+            dict(
+                method=self.get_energy,
+                kwargs=dict(name="density", input_file_name="npt.edr"),
+            ),
+            dict(
+                method=self.get_energy,
+                kwargs=dict(
+                    name="prod_energy",
+                    input_file_name="md_0_1.edr",
+                ),
+            ),
+            dict(
+                method=self.get_rmsd,
+                kwargs=dict(
+                    name="rmsd",
+                    data_type="Potential",
+                    input_file_name="md_0_1_center.xtc",
+                ),
+            ),
+        ]
 
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
 
-    def energy(
+    def forward(self) -> Dict:
+        for pipe in self.pipelines:
+            for method, kwargs in pipe.items():
+                method(**kwargs)
+
+        return self.data
+
+    def get_energy(
         self,
-        data_type: str,
-        output_path: str = None,
+        name: str,
+        input_file_name: str,
+        data_type: str = "Potential",
         base_command: str = "gmx energy",
         xvg_command: str = "-xvg none",
     ):
-        if output_path is None:
-            output_path = self.miner_data_directory
+        output_data_location = os.path.join(self.miner_data_directory, f"{name}.xvg")
 
-        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
-        command = [
-            f"echo '{data_type}' | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command}"
-        ]
-        run_cmd_commands(command)
-
-        self.data["energy"] = self.extract(
-            filepath=output_data_location, names=["step", "energy"]
+        # The em.edr file is something that the validator INITIALLY creates, before sending anything to the miner.
+        # Therefore, we know the location is in the validator directory.
+        input_file_parent = (
+            self.validator_data_directory
+            if input_file_name == "em.edr"
+            else self.miner_data_directory
         )
 
-    def temperature(
+        # Hardcoded constraints on prod_energy
+        cmd = f"{data_type}\n0\n" if name == "prod_energy" else f"echo '{data_type}'"
+        command = [
+            f"{cmd} | {base_command} -f {input_file_parent}/{input_file_name} -o {output_data_location} {xvg_command}"
+        ]
+
+        run_cmd_commands(
+            command
+        )  # necessary to run because we need to create the file before extraction
+
+        self.data[name] = self.extract(
+            filepath=output_data_location, names=["step", f"{name}-energy"]
+        )
+
+    def get_rmsd(
         self,
+        name: str,
         data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
         xvg_command: str = "-xvg none",
+        **kwargs,
     ):
-        if output_path is None:
-            output_path = self.miner_data_directory
-
-        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
-        command = [
-            f"echo Potential | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command} -b 20"
-        ]
-        run_cmd_commands(command)
-
-        self.data["temperature"] = self.extract(
-            filepath=output_data_location, names=["step", "temperature"]
+        output_data_location = os.path.join(
+            self.miner_data_directory, f"{data_type}.xvg"
         )
 
-    def pressure(
-        self,
-        data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
-        xvg_command: str = "-xvg none",
-    ):
-        if output_path is None:
-            output_path = self.miner_data_directory
-
-        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
         command = [
-            f"echo Potential | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
+            f"echo '4 4' | gmx rms -s {self.miner_data_directory}/md_0_1.tpr -f {self.miner_data_directory}/md_0_1_center.xtc -o {output_data_location} -tu ns {xvg_command}"
         ]
+
         run_cmd_commands(command)
 
-        self.data["pressure"] = self.extract(
-            filepath=output_data_location, names=["step", "pressure"]
-        )
-
-    def density(
-        self,
-        data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
-        xvg_command: str = "-xvg none",
-    ):
-        if output_path is None:
-            output_path = self.miner_data_directory
-
-        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
-        command = [
-            f"echo '{data_type}' | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
-        ]
-        run_cmd_commands(command)
-
-        self.data["density"] = self.extract(
-            filepath=output_data_location, names=["step", "density"]
-        )
-
-    def prod_energy(
-        self,
-        data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
-        xvg_command: str = "-xvg none",
-    ):
-        if output_path is None:
-            output_path = self.miner_data_directory
-
-        xvg_name = "potential_production_run.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/md_0_1.edr -o {output_data_location} {xvg_command}"
-        ]
-        run_cmd_commands(command)
-
-        self.data["prod_energy"] = self.extract(
-            filepath=output_data_location, names=["step", "prod_energy"]
-        )
-
-    def rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
-        if output_path is None:
-            output_path = self.miner_data_directory
-
-        xvg_name = "rmsd_xray.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"echo '4 4' | gmx rms -s {output_path}/md_0_1.tpr -f {output_path}/md_0_1_center.xtc -o {output_data_location} -tu ns {xvg_command}"
-        ]
-        run_cmd_commands(command)
-
-        self.data["rmsd"] = self.extract(
+        self.data[name] = self.extract(
             filepath=output_data_location, names=["step", "rmsd"]
         )

@@ -16,15 +16,8 @@ def parsing_miner_data(miner_data_directory: str, validator_data_directory: str)
         miner_data_directory=miner_data_directory,
         validator_data_directory=validator_data_directory,
     )
-    # TODO: include these back in if we need them for the reward stack
-    data_extractor.energy(data_type="Potential")
-    data_extractor.temperature(data_type="T-rest")
-    data_extractor.pressure(data_type="Pressure")
-    # data_extractor.density(data_type="Density")
-    data_extractor.prod_energy(data_type="Potential")
-    data_extractor.rmsd()
 
-    return data_extractor.data
+    return data_extractor.forward()
 
 
 def apply_reward_pipeline(data: Dict) -> List[RewardEvent]:

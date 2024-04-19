@@ -1,6 +1,8 @@
 import os
 import glob
 import base64
+import time
+import subprocess
 from typing import Dict
 import bittensor as bt
 
@@ -12,11 +14,11 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 
 def forward(synapse: FoldingSynapse, config: Dict) -> FoldingSynapse:
-    # TODO: Determine how many steps to run based on timeout
     bt.logging.info(
         f"Running GROMACS simulation for protein: {synapse.pdb_id} with files {synapse.md_inputs.keys()} mdrun_args: {synapse.mdrun_args}"
     )
 
+    event = {}
     synapse.md_output = {}
 
     output_directory = os.path.join(
@@ -38,7 +40,6 @@ def forward(synapse: FoldingSynapse, config: Dict) -> FoldingSynapse:
             bt.logging.info(f"\nWriting {filename} to {output_directory}")
             file.write(content)
 
-    # TODO(developer): Replace with actual implementation logic.
     commands = [
         "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
         "gmx mdrun -deffnm nvt " + synapse.mdrun_args,
@@ -49,21 +50,35 @@ def forward(synapse: FoldingSynapse, config: Dict) -> FoldingSynapse:
         "echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
     ]
 
-    run_cmd_commands(
+    start_time = time.time()
+    # This will run, but it will not stop execution if error is present.
+    cmd_timings, errors = run_cmd_commands(
         commands=commands, suppress_cmd_output=config.neuron.suppress_cmd_output
     )
 
-    # load the output files as bytes and add to synapse.md_output
-    desired_files = glob.glob("md_0_1*") + glob.glob("*.edr")
-    bt.logging.warning(f"Desired files to send to the validator: {desired_files}")
-    for filename in desired_files:
-        bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
-        try:
-            with open(filename, "rb") as f:
-                synapse.md_output[filename] = base64.b64encode(f.read())
-        except Exception as e:
-            bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
+    event["forward_time"] = time.time() - start_time
+    event.update(cmd_timings)
+    event.update(errors)
 
-    bt.logging.success(
-        f"Finished running GROMACS simulation for protein: {synapse.pdb_id} and attached {len(synapse.md_output)} files to synapse.md_output"
-    )
+    if len(errors) > 0:
+        event["simulation_status"] = False
+
+    else:
+        # load the output files as bytes and add to synapse.md_output
+        desired_files = glob.glob("md_0_1*") + glob.glob("*.edr")
+        bt.logging.warning(f"Desired files to send to the validator: {desired_files}")
+        for filename in desired_files:
+            bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
+            try:
+                with open(filename, "rb") as f:
+                    synapse.md_output[filename] = base64.b64encode(f.read())
+            except Exception as e:
+                bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
+
+        bt.logging.success(
+            f"Finished running GROMACS simulation for protein: {synapse.pdb_id} and attached {len(synapse.md_output)} files to synapse.md_output"
+        )
+        event["simulation_status"] = True
+        event["files_returned"] = desired_files
+
+    return event

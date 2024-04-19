@@ -26,6 +26,7 @@ import bittensor as bt
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
 from folding.miners.forward import forward
+from folding.utils.logging import log_event
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,7 +37,8 @@ class Miner(BaseMinerNeuron):
         super(Miner, self).__init__(config=config)
 
     async def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
-        forward(synapse=synapse, config=self.config)
+        event = forward(synapse=synapse, config=self.config)
+        log_event(self, event)
         self.step += 1
 
         return synapse

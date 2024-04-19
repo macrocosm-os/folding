@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import tqdm
 import random
 import subprocess
@@ -107,9 +108,13 @@ def check_if_directory_exists(output_directory):
 
 
 def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
+    timings = {}
+    errors = {}
+
     for cmd in tqdm.tqdm(commands):
         bt.logging.info(f"Running command: {cmd}")
 
+        start_time = time.time()
         try:
             result = subprocess.run(
                 cmd,
@@ -118,15 +123,23 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
+
+            timings[cmd] = time.time() - start_time
+
             if not suppress_cmd_output:
                 bt.logging.info(result.stdout.decode())
 
         except subprocess.CalledProcessError as e:
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
             if not suppress_cmd_output:
-                bt.logging.error(f"Output: {e.stdout.decode()}")
                 bt.logging.error(f"Error: {e.stderr.decode()}")
-            raise
+
+            errors["breaking_command"] = e.cmd
+            errors["command_output"] = e.stdout.decode()
+            errors["return_code"] = e.returncode
+            return timings, errors
+
+    return timings, errors
 
 
 def get_response_info(responses: List[FoldingSynapse]) -> Dict:
