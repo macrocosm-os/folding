@@ -391,12 +391,16 @@ class Protein:
 
         # Check that the md_output contains the right protein through gro_hash
         gro_path = os.path.join(output_directory, md_outputs_exts["gro"])
-        if gro_hash(self.gro_path) != gro_hash(gro_path):
-            bt.logging.warning(
-                f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
-            )
-            self.delete_files(directory=output_directory)
-            return False
+        try:
+            if gro_hash(self.gro_path) != gro_hash(gro_path):
+                bt.logging.warning(
+                    f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
+                )
+                self.delete_files(directory=output_directory)
+                return False
+        except Exception as E:
+            bt.logging.warning(f"Error with checking the gro_hash: {E}")
+            return False  # if there is some type of error
 
         bt.logging.success(f"The hash for .gro file is correct!")
         return True

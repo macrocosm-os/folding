@@ -54,10 +54,14 @@ def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List
 def select_random_pdb_id(PDB_IDS: Dict) -> str:
     """This function is really important as its where you select the protein you want to fold"""
     while True:
-        family = random.choice(list(PDB_IDS.keys()))
-        choices = PDB_IDS[family]
-        if len(choices):
-            return random.choice(choices)
+        try:
+            family = random.choice(list(PDB_IDS.keys()))
+            choices = PDB_IDS[family]
+        except:
+            choices = PDB_IDS  # There is a clase where the dictionary is just a list of values.
+        finally:
+            if len(choices):
+                return random.choice(choices)
 
 
 def gro_hash(gro_path: str):
@@ -119,8 +123,10 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
 
         except subprocess.CalledProcessError as e:
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            bt.logging.error(f"Output: {e.stdout.decode()}")
-            bt.logging.error(f"Error: {e.stderr.decode()}")
+        finally:
+            if not suppress_cmd_output:
+                bt.logging.error(f"Output: {e.stdout.decode()}")
+                bt.logging.error(f"Error: {e.stderr.decode()}")
             continue
 
 
