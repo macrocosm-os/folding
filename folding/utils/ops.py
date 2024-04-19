@@ -122,6 +122,8 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
             bt.logging.error(f"Output: {e.stdout.decode()}")
             bt.logging.error(f"Error: {e.stderr.decode()}")
+            continue
+
 
 def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
     """Download a PDB file from the RCSB PDB database.
@@ -159,7 +161,8 @@ def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
     else:
         bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
         raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
-  
+
+
 def is_pdb_complete(pdb_text: str) -> bool:
     """Check if the downloaded PDB file is complete.
 
@@ -173,7 +176,8 @@ def is_pdb_complete(pdb_text: str) -> bool:
         if value in pdb_text_lower:
             return False
     return True
-  
+
+
 def get_response_info(responses: List[FoldingSynapse]) -> Dict:
     """Gather all desired response information from the set of miners."""
 
