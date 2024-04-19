@@ -1,13 +1,16 @@
 import os
+import re
 import tqdm
 import random
 import subprocess
+import hashlib
 import pickle as pkl
+
 from typing import List, Dict
 import requests
 
 import bittensor as bt
-
+from folding.protocol import FoldingSynapse
 
 # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
 FF_WATER_PAIRS = {
@@ -58,6 +61,42 @@ def select_random_pdb_id(PDB_IDS: Dict) -> str:
             return random.choice(choices)
 
 
+def gro_hash(gro_path: str):
+    """Generates the hash for a specific gro file.
+    Enables validators to ensure that miners are running the correct
+    protein, and not generating fake data.
+
+    Connects the (residue name, atom name, and residue number) from each line
+    together into a single string. This way, we can ensure that the protein is the same.
+
+    Example:
+    10LYS  N  1
+    10LYS  H1 2
+
+    Output: 10LYSN1LYSH12
+
+    Args:
+        gro_path (str): location to the gro file
+    """
+    bt.logging.info(f"Calculating hash for path {gro_path!r}")
+    pattern = re.compile(r"\s*(\d+\w+)\s+(\w+\d*\s*\d+)\s+(\-?\d+\.\d+)+")
+
+    with open(gro_path, "rb") as f:
+        name, length, *lines, _ = f.readlines()
+        length = int(length)
+        bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
+
+    buf = ""
+    for line in lines:
+        line = line.decode().strip()
+        match = pattern.match(line)
+        if not match:
+            raise Exception(f"Error parsing line in {gro_path!r}: {line!r}")
+        buf += match.group(1) + match.group(2).replace(" ", "")
+
+    return hashlib.md5(name + buf.encode()).hexdigest()
+
+
 def check_if_directory_exists(output_directory):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -78,12 +117,11 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             )
             if not suppress_cmd_output:
                 bt.logging.info(result.stdout.decode())
+
         except subprocess.CalledProcessError as e:
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
             bt.logging.error(f"Output: {e.stdout.decode()}")
             bt.logging.error(f"Error: {e.stderr.decode()}")
-            raise
-
 
 def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
     """Download a PDB file from the RCSB PDB database.
@@ -121,8 +159,7 @@ def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
     else:
         bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
         raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
-
-
+  
 def is_pdb_complete(pdb_text: str) -> bool:
     """Check if the downloaded PDB file is complete.
 
@@ -136,3 +173,28 @@ def is_pdb_complete(pdb_text: str) -> bool:
         if value in pdb_text_lower:
             return False
     return True
+  
+def get_response_info(responses: List[FoldingSynapse]) -> Dict:
+    """Gather all desired response information from the set of miners."""
+
+    response_times = []
+    response_status_messages = []
+    response_status_codes = []
+    response_returned_files = []
+
+    for resp in responses:
+        if resp.dendrite.process_time != None:
+            response_times.append(resp.dendrite.process_time)
+        else:
+            response_times.append(0)
+
+        response_status_messages.append(str(resp.dendrite.status_message))
+        response_status_codes.append(str(resp.dendrite.status_code))
+        response_returned_files.append(list(resp.md_output.keys()))
+
+    return {
+        "response_times": response_times,
+        "response_status_messages": response_status_messages,
+        "response_status_codes": response_status_codes,
+        "response_returned_files": response_returned_files,
+    }

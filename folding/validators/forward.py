@@ -1,22 +1,25 @@
+import os
 import time
-import base64
 import torch
+import pickle
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
-from collections import defaultdict
 
 from folding.validators.protein import Protein
 from folding.utils.uids import get_random_uids
 from folding.utils.logging import log_event
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
+from folding.rewards.reward import RewardEvent
 
-from folding.utils.ops import select_random_pdb_id, load_pdb_ids
+from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-PDB_IDS = load_pdb_ids(root_dir=ROOT_DIR, filename="pdb_ids.pkl")
+PDB_IDS = load_pdb_ids(
+    root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+)  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 
 async def run_step(
@@ -25,15 +28,17 @@ async def run_step(
     k: int,
     timeout: float,
     exclude: list = [],
+    mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
 ):
     bt.logging.debug("run_step")
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    # uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
-    uids = [9, 10]
+    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
     axons = [self.metagraph.axons[uid] for uid in uids]
-    synapse = FoldingSynapse(pdb_id=protein.pdb_id, md_inputs=protein.md_inputs)
+    synapse = FoldingSynapse(
+        pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
+    )
 
     # Make calls to the network with the prompt.
     responses: List[FoldingSynapse] = await self.dendrite(
@@ -43,27 +48,27 @@ async def run_step(
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
 
-    # Compute the rewards for the responses given the prompt.
-    # rewards: torch.FloatTensor = get_rewards(protein, responses)
+    rewards, events = get_rewards(protein=protein, responses=responses, uids=uids)
+
+    self.update_scores(
+        rewards=rewards,
+        uids=uids,  # pretty confident these are in the correct order.
+    )
+
+    response_info = get_response_info(responses=responses)
 
     # # Log the step event.
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
         "uids": uids,
-        "response_times": [
-            resp.dendrite.process_time if resp.dendrite.process_time != None else 0
-            for resp in responses
-        ],
-        "response_status_messages": [
-            str(resp.dendrite.status_message) for resp in responses
-        ],
-        "response_status_codes": [str(resp.dendrite.status_code) for resp in responses],
-        # "rewards": rewards.tolist(),
+        "rewards": rewards,
+        **response_info,
+        **events,  # contains another copy of the uids used for the reward stack
     }
 
+    bt.logging.warning(f"Event information: {event}")
     return event
-    # os.system("pm2 stop v1")
 
 
 def parse_config(config) -> List[str]:
@@ -71,9 +76,9 @@ def parse_config(config) -> List[str]:
     Parse config to check if key hyperparameters are set.
     If they are, exclude them from hyperparameter search.
     """
-    ff = config.ff
-    water = config.water
-    box = config.box
+    ff = config.protein.ff
+    water = config.protein.water
+    box = config.protein.box
     exclude_in_hp_search = []
 
     if ff is not None:
@@ -87,11 +92,11 @@ def parse_config(config) -> List[str]:
 
 
 async def forward(self):
+    bt.logging.info(f"Running config: {self.config}")
+
     while True:
         forward_start_time = time.time()
         exclude_in_hp_search = parse_config(self.config)
-
-        bt.logging.info(f"Running config: {self.config}")
 
         # We need to select a random pdb_id outside of the protein class.
         pdb_id = (
@@ -100,6 +105,8 @@ async def forward(self):
             else self.config.protein.pdb_id
         )
         hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
+
+        bt.logging.info(f"Total paramter space: {hp_sampler.parameter_set}")
 
         for iteration_num in range(hp_sampler.TOTAL_COMBINATIONS):
             hp_sampler_time = time.time()
