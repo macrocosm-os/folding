@@ -127,7 +127,7 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             if not suppress_cmd_output:
                 bt.logging.error(f"Output: {e.stdout.decode()}")
                 bt.logging.error(f"Error: {e.stderr.decode()}")
-            continue
+            raise
 
 
 def get_response_info(responses: List[FoldingSynapse]) -> Dict:
