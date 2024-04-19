@@ -101,6 +101,9 @@ def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
     """
     url = f"https://files.rcsb.org/download/{pdb_id}"
     path = os.path.join(pdb_directory, f"{pdb_id}")
+    if not os.path.exists(pdb_directory):
+        os.makedirs(pdb_directory)
+        bt.logging.debug(f"Created directory {pdb_directory!r}")
     r = requests.get(url)
     if r.status_code == 200:
         if is_pdb_complete(r.text):
