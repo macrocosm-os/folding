@@ -263,7 +263,7 @@ class Protein:
             f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
             "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
             "touch ions.mdp",  # Create a file to add ions to the system
-            "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
+            "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr -maxwarn 5",
             'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
         # Run the first step of the simulation
