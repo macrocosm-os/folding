@@ -5,9 +5,11 @@ from typing import Dict, List
 import concurrent.futures
 from folding.utils.ops import download_pdb
 
-COMPLETE_FILE = "./pdb_ids_complete.pkl"
-INCOMPLETE_FILE = "./pdb_ids_incomplete.pkl"
-NOT_DOWNLOADABLE_FILE = "./pdb_ids_not_downloadable.pkl"
+COMPLETE_IDs_FILE = "./pdb_ids_complete.pkl"
+INCOMPLETE_IDs_FILE = "./pdb_ids_incomplete.pkl"
+NOT_DOWNLOADABLE_IDs_FILE = "./pdb_ids_not_downloadable.pkl"
+
+COMPLETE_PDB_FILES = "./complete_pdbs/"
 
 
 def save_pkl(file, data):
@@ -15,7 +17,23 @@ def save_pkl(file, data):
         pkl.dump(data, f)
 
 
-def classify_pdb_batch(data: Dict[List], verbose=False):
+def verbose_analysis(complete, incomplete, not_downloadable, number_of_pdb_ids):
+    complete_percentage = len(complete) / number_of_pdb_ids * 100
+    incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
+    not_downloadable_percentage = len(not_downloadable) / number_of_pdb_ids * 100
+
+    print("=====================================")
+    print("Analysis Summary:")
+    print(f"Total number of PDB IDs: {number_of_pdb_ids}")
+    print(f"Complete: {len(complete)} ({complete_percentage:.2f}%)")
+    print(f"Incomplete: {len(incomplete)} ({incomplete_percentage:.2f}%)")
+    print(
+        f"Not Downloadable: {len(not_downloadable)} ({not_downloadable_percentage:.2f}%)"
+    )
+    print("=====================================")
+
+
+def classify_pdb_batch(data, verbose=False):
     """Downloads PDB files from a batch of PDB IDs and classifies them into complete, incomplete, and not downloadable lists. Saves the results to pickle files.
 
     Args:
@@ -37,7 +55,7 @@ def classify_pdb_batch(data: Dict[List], verbose=False):
             count += 1
 
             try:
-                result = download_pdb("./complete_pdbs/", pdb_id + ".pdb")
+                result = download_pdb(COMPLETE_PDB_FILES, pdb_id + ".pdb")
                 if result:  # PDB was correctly downloaded and is complete
                     complete.append(pdb_id)
                 else:  # PDB was correctly downloaded but is incomplete
@@ -47,31 +65,19 @@ def classify_pdb_batch(data: Dict[List], verbose=False):
                 continue
 
             if count % 10 == 0:  # Saving progress for safety
-                save_pkl(file=COMPLETE_FILE, data=complete)
-                save_pkl(file=INCOMPLETE_FILE, data=incomplete)
-                save_pkl(file=NOT_DOWNLOADABLE_FILE, data=not_downloadable)
+                save_pkl(file=COMPLETE_IDs_FILE, data=complete)
+                save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
+                save_pkl(file=NOT_DOWNLOADABLE_IDs_FILE, data=not_downloadable)
 
     # Once the entire process is finished, we save all the data.
-    save_pkl(file=COMPLETE_FILE, data=complete)
-    save_pkl(file=INCOMPLETE_FILE, data=incomplete)
-    save_pkl(file=NOT_DOWNLOADABLE_FILE, data=not_downloadable)
+    save_pkl(file=COMPLETE_IDs_FILE, data=complete)
+    save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
+    save_pkl(file=NOT_DOWNLOADABLE_IDs_FILE, data=not_downloadable)
 
     if verbose:
-        complete_percentage = len(complete) / number_of_pdb_ids * 100
-        incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
-        not_downloadable_percentage = len(not_downloadable) / number_of_pdb_ids * 100
-
-        print("=====================================")
-        print("Analysis Summary:")
-        print(f"Total number of PDB IDs: {number_of_pdb_ids}")
-        print(f"Complete: {len(complete)} ({complete_percentage:.2f}%)")
-        print(f"Incomplete: {len(incomplete)} ({incomplete_percentage:.2f}%)")
-        print(
-            f"Not Downloadable: {len(not_downloadable)} ({not_downloadable_percentage:.2f}%)"
-        )
-
+        verbose_analysis(complete, incomplete, not_downloadable, number_of_pdb_ids)
     print(
-        f"Analysis done!\nFiles saved at {COMPLETE_FILE}, {INCOMPLETE_FILE}, and {NOT_DOWNLOADABLE_FILE}"
+        f"Analysis done!\nPDB ID files saved at {COMPLETE_IDs_FILE}, {INCOMPLETE_IDs_FILE}, and {NOT_DOWNLOADABLE_IDs_FILE}\nPDB files saved at {COMPLETE_PDB_FILES}"
     )
     print("=====================================")
 
@@ -106,7 +112,7 @@ def parallel_classify_pdb_batch(data, verbose=False):
     def process_pdb(pdb_id):
         nonlocal complete, incomplete, not_downloadable
         try:
-            result = download_pdb("./complete_pdbs/", pdb_id + ".pdb")
+            result = download_pdb(COMPLETE_PDB_FILES, pdb_id + ".pdb")
             if result:
                 complete.append(pdb_id)
             else:
@@ -120,26 +126,15 @@ def parallel_classify_pdb_batch(data, verbose=False):
         ]
         concurrent.futures.wait(futures)
 
-    save_pkl(file=COMPLETE_FILE, data=complete)
-    save_pkl(file=INCOMPLETE_FILE, data=incomplete)
-    save_pkl(file=NOT_DOWNLOADABLE_FILE, data=not_downloadable)
+    save_pkl(file=COMPLETE_IDs_FILE, data=complete)
+    save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
+    save_pkl(file=NOT_DOWNLOADABLE_IDs_FILE, data=not_downloadable)
 
     if verbose:
-        complete_percentage = len(complete) / number_of_pdb_ids * 100
-        incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
-        not_downloadable_percentage = len(not_downloadable) / number_of_pdb_ids * 100
-
-        print("=====================================")
-        print("Analysis Summary:")
-        print(f"Total number of PDB IDs: {number_of_pdb_ids}")
-        print(f"Complete: {len(complete)} ({complete_percentage:.2f}%)")
-        print(f"Incomplete: {len(incomplete)} ({incomplete_percentage:.2f}%)")
-        print(
-            f"Not Downloadable: {len(not_downloadable)} ({not_downloadable_percentage:.2f}%)"
-        )
+        verbose_analysis(complete, incomplete, not_downloadable, number_of_pdb_ids)
 
     print(
-        f"Analysis done!\nFiles saved at {COMPLETE_FILE}, {INCOMPLETE_FILE}, and {NOT_DOWNLOADABLE_FILE}"
+        f"Analysis done!\nPDB ID files saved at {COMPLETE_IDs_FILE}, {INCOMPLETE_IDs_FILE}, and {NOT_DOWNLOADABLE_IDs_FILE}\nPDB files saved at {COMPLETE_PDB_FILES}"
     )
     print("=====================================")
 
@@ -147,7 +142,7 @@ def parallel_classify_pdb_batch(data, verbose=False):
 def main(
     classification_type: str = "parallel",
     verbose=False,
-    pdb_id_path: str = "scripts/pdb_ids.pkl",
+    pdb_id_path: str = "pdb_ids.pkl",
 ):
     # Load the PDB IDs
     with open(pdb_id_path, "rb") as f:
@@ -170,7 +165,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pdb_id_path",
         type=str,
-        default="scripts/pdb_ids.pkl",
+        default="pdb_ids.pkl",
         help="Path to the PDB ID file",
     )
     parser.add_argument("--verbose", action="store_true", help="Print analysis summary")
