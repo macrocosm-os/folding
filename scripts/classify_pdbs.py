@@ -1,4 +1,4 @@
-import tqdm
+from tqdm import tqdm
 import pickle as pkl
 import argparse
 from typing import Dict, List
@@ -18,56 +18,79 @@ def save_pkl(file, data):
 
 
 def verbose_analysis(complete, incomplete, not_downloadable, number_of_pdb_ids):
-    complete_percentage = len(complete) / number_of_pdb_ids * 100
-    incomplete_percentage = len(incomplete) / number_of_pdb_ids * 100
-    not_downloadable_percentage = len(not_downloadable) / number_of_pdb_ids * 100
+    """
+    Perform a verbose analysis of the given PDB data.
+
+    Args:
+        complete (dict): A dictionary containing complete PDB data.
+        incomplete (dict): A dictionary containing incomplete PDB data.
+        not_downloadable (dict): A dictionary containing not downloadable PDB data.
+        number_of_pdb_ids (int): The total number of PDB IDs.
+
+    Returns:
+        None
+
+    Prints the analysis summary, including the total number of PDB IDs, the number of complete,
+    incomplete, and not downloadable PDBs, and their respective percentages.
+    """
+    total_complete = sum([len(v) for v in complete.values()])
+    total_incomplete = sum([len(v) for v in incomplete.values()])
+    total_not_downloadable = sum([len(v) for v in not_downloadable.values()])
+    complete_percentage = total_complete / number_of_pdb_ids * 100
+    incomplete_percentage = total_incomplete / number_of_pdb_ids * 100
+    not_downloadable_percentage = total_not_downloadable / number_of_pdb_ids * 100
 
     print("=====================================")
     print("Analysis Summary:")
     print(f"Total number of PDB IDs: {number_of_pdb_ids}")
-    print(f"Complete: {len(complete)} ({complete_percentage:.2f}%)")
-    print(f"Incomplete: {len(incomplete)} ({incomplete_percentage:.2f}%)")
+    print(f"Complete: {total_complete} ({complete_percentage:.2f}%)")
+    print(f"Incomplete: {total_incomplete} ({incomplete_percentage:.2f}%)")
     print(
-        f"Not Downloadable: {len(not_downloadable)} ({not_downloadable_percentage:.2f}%)"
+        f"Not Downloadable: {total_not_downloadable} ({not_downloadable_percentage:.2f}%)"
     )
     print("=====================================")
 
 
 def classify_pdb_batch(data, verbose=False):
-    """Downloads PDB files from a batch of PDB IDs and classifies them into complete, incomplete, and not downloadable lists. Saves the results to pickle files.
+    """Downloads PDB files from a batch of PDB IDs and classifies them into complete, incomplete, and not downloadable dictionaries. Saves the results to pickle files.
 
     Args:
         data (defaultdict[List]): A batch of PDB IDs, as returned by scripts/gather_pdbs.py.
-        verbose (bool, optional): If True, print the time required by the analysis and the percentages + frequencies of each list. Defaults to False.
+        verbose (bool, optional): If True, print the time required by the analysis and the percentages + frequencies of each dictionary. Defaults to False.
 
     Returns:
         None
     """
     number_of_pdb_ids = sum([len(v) for v in data.values()])
 
-    complete = []
-    incomplete = []
-    not_downloadable = []
+    complete = {k: [] for k in data.keys()}
+    incomplete = {k: [] for k in data.keys()}
+    not_downloadable = {k: [] for k in data.keys()}
     count = 0
 
-    for v in tqdm(data.values()):
+    for k, v in tqdm(data.items()):
+
         for pdb_id in v:
             count += 1
-
             try:
                 result = download_pdb(COMPLETE_PDB_FILES, pdb_id + ".pdb")
                 if result:  # PDB was correctly downloaded and is complete
-                    complete.append(pdb_id)
+                    complete[k].append(pdb_id)
                 else:  # PDB was correctly downloaded but is incomplete
-                    incomplete.append(pdb_id)
+                    incomplete[k].append(pdb_id)
             except Exception:  # Unable to download PDB
-                not_downloadable.append(pdb_id)
+                not_downloadable[k].append(pdb_id)
                 continue
 
             if count % 10 == 0:  # Saving progress for safety
                 save_pkl(file=COMPLETE_IDs_FILE, data=complete)
                 save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
                 save_pkl(file=NOT_DOWNLOADABLE_IDs_FILE, data=not_downloadable)
+
+    # Filtering out empty lists
+    complete = {k: v for k, v in complete.items() if v}
+    incomplete = {k: v for k, v in incomplete.items() if v}
+    not_downloadable = {k: v for k, v in not_downloadable.items() if v}
 
     # Once the entire process is finished, we save all the data.
     save_pkl(file=COMPLETE_IDs_FILE, data=complete)
@@ -105,26 +128,33 @@ def parallel_classify_pdb_batch(data, verbose=False):
 
     """
     number_of_pdb_ids = sum([len(v) for v in data.values()])
-    complete = []
-    incomplete = []
-    not_downloadable = []
+    complete = {k: [] for k in data.keys()}
+    incomplete = {k: [] for k in data.keys()}
+    not_downloadable = {k: [] for k in data.keys()}
 
-    def process_pdb(pdb_id):
+    def process_pdb(pdb_id, k):
         nonlocal complete, incomplete, not_downloadable
         try:
             result = download_pdb(COMPLETE_PDB_FILES, pdb_id + ".pdb")
             if result:
-                complete.append(pdb_id)
+                complete[k].append(pdb_id)
             else:
-                incomplete.append(pdb_id)
+                incomplete[k].append(pdb_id)
         except Exception:
-            not_downloadable.append(pdb_id)
+            not_downloadable[k].append(pdb_id)
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [
-            executor.submit(process_pdb, pdb_id) for v in data.values() for pdb_id in v
+            executor.submit(process_pdb, pdb_id, k)
+            for k, v in data.items()
+            for pdb_id in v
         ]
         concurrent.futures.wait(futures)
+
+    # Filtering out empty lists
+    complete = {k: v for k, v in complete.items() if v}
+    incomplete = {k: v for k, v in incomplete.items() if v}
+    not_downloadable = {k: v for k, v in not_downloadable.items() if v}
 
     save_pkl(file=COMPLETE_IDs_FILE, data=complete)
     save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
