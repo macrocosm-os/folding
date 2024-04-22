@@ -4,6 +4,7 @@ import argparse
 from typing import Dict, List
 import concurrent.futures
 from folding.utils.ops import download_pdb
+from collections import defaultdict
 
 COMPLETE_IDs_FILE = "./pdb_ids_complete.pkl"
 INCOMPLETE_IDs_FILE = "./pdb_ids_incomplete.pkl"
@@ -63,9 +64,9 @@ def classify_pdb_batch(data, verbose=False):
     """
     number_of_pdb_ids = sum([len(v) for v in data.values()])
 
-    complete = {k: [] for k in data.keys()}
-    incomplete = {k: [] for k in data.keys()}
-    not_downloadable = {k: [] for k in data.keys()}
+    complete = defaultdict(list)
+    incomplete = defaultdict(list)
+    not_downloadable = defaultdict(list)
     count = 0
 
     for k, v in tqdm(data.items()):
@@ -86,11 +87,6 @@ def classify_pdb_batch(data, verbose=False):
                 save_pkl(file=COMPLETE_IDs_FILE, data=complete)
                 save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
                 save_pkl(file=NOT_DOWNLOADABLE_IDs_FILE, data=not_downloadable)
-
-    # Filtering out empty lists
-    complete = {k: v for k, v in complete.items() if v}
-    incomplete = {k: v for k, v in incomplete.items() if v}
-    not_downloadable = {k: v for k, v in not_downloadable.items() if v}
 
     # Once the entire process is finished, we save all the data.
     save_pkl(file=COMPLETE_IDs_FILE, data=complete)
@@ -128,9 +124,9 @@ def parallel_classify_pdb_batch(data, verbose=False):
 
     """
     number_of_pdb_ids = sum([len(v) for v in data.values()])
-    complete = {k: [] for k in data.keys()}
-    incomplete = {k: [] for k in data.keys()}
-    not_downloadable = {k: [] for k in data.keys()}
+    complete = defaultdict(list)
+    incomplete = defaultdict(list)
+    not_downloadable = defaultdict(list)
 
     def process_pdb(pdb_id, k):
         nonlocal complete, incomplete, not_downloadable
@@ -150,11 +146,6 @@ def parallel_classify_pdb_batch(data, verbose=False):
             for pdb_id in v
         ]
         concurrent.futures.wait(futures)
-
-    # Filtering out empty lists
-    complete = {k: v for k, v in complete.items() if v}
-    incomplete = {k: v for k, v in incomplete.items() if v}
-    not_downloadable = {k: v for k, v in not_downloadable.items() if v}
 
     save_pkl(file=COMPLETE_IDs_FILE, data=complete)
     save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
