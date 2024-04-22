@@ -177,6 +177,5 @@ scripts/test_pdb_ids.pkl
 scripts/pdb_ids_complete.pkl
 scripts/pdb_ids_incomplete.pkl
 scripts/pdb_ids_not_downloadable.pkl
-scripts/complete_pdbs/
 
 /charmm36-jul2022.ff

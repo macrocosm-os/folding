@@ -1,9 +1,7 @@
-from tqdm import tqdm
 import pickle as pkl
 import argparse
-from typing import Dict, List
 import concurrent.futures
-from folding.utils.ops import download_pdb
+from folding.utils.ops import check_and_download_pdbs
 from collections import defaultdict
 
 COMPLETE_IDs_FILE = "./pdb_ids_complete.pkl"
@@ -52,55 +50,6 @@ def verbose_analysis(complete, incomplete, not_downloadable, number_of_pdb_ids):
     print("=====================================")
 
 
-def classify_pdb_batch(data, verbose=False):
-    """Downloads PDB files from a batch of PDB IDs and classifies them into complete, incomplete, and not downloadable dictionaries. Saves the results to pickle files.
-
-    Args:
-        data (defaultdict[List]): A batch of PDB IDs, as returned by scripts/gather_pdbs.py.
-        verbose (bool, optional): If True, print the time required by the analysis and the percentages + frequencies of each dictionary. Defaults to False.
-
-    Returns:
-        None
-    """
-    number_of_pdb_ids = sum([len(v) for v in data.values()])
-
-    complete = defaultdict(list)
-    incomplete = defaultdict(list)
-    not_downloadable = defaultdict(list)
-    count = 0
-
-    for k, v in tqdm(data.items()):
-
-        for pdb_id in v:
-            count += 1
-            try:
-                result = download_pdb(COMPLETE_PDB_FILES, pdb_id + ".pdb")
-                if result:  # PDB was correctly downloaded and is complete
-                    complete[k].append(pdb_id)
-                else:  # PDB was correctly downloaded but is incomplete
-                    incomplete[k].append(pdb_id)
-            except Exception:  # Unable to download PDB
-                not_downloadable[k].append(pdb_id)
-                continue
-
-            if count % 10 == 0:  # Saving progress for safety
-                save_pkl(file=COMPLETE_IDs_FILE, data=complete)
-                save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
-                save_pkl(file=NOT_DOWNLOADABLE_IDs_FILE, data=not_downloadable)
-
-    # Once the entire process is finished, we save all the data.
-    save_pkl(file=COMPLETE_IDs_FILE, data=complete)
-    save_pkl(file=INCOMPLETE_IDs_FILE, data=incomplete)
-    save_pkl(file=NOT_DOWNLOADABLE_IDs_FILE, data=not_downloadable)
-
-    if verbose:
-        verbose_analysis(complete, incomplete, not_downloadable, number_of_pdb_ids)
-    print(
-        f"Analysis done!\nPDB ID files saved at {COMPLETE_IDs_FILE}, {INCOMPLETE_IDs_FILE}, and {NOT_DOWNLOADABLE_IDs_FILE}\nPDB files saved at {COMPLETE_PDB_FILES}"
-    )
-    print("=====================================")
-
-
 def parallel_classify_pdb_batch(data, verbose=False):
     """
     Classifies PDB IDs in parallel and saves the results to pickle files.
@@ -131,7 +80,9 @@ def parallel_classify_pdb_batch(data, verbose=False):
     def process_pdb(pdb_id, k):
         nonlocal complete, incomplete, not_downloadable
         try:
-            result = download_pdb(COMPLETE_PDB_FILES, pdb_id + ".pdb")
+            result = check_and_download_pdbs(
+                pdb_directory=COMPLETE_PDB_FILES, pdb_id=pdb_id + ".pdb", download=False
+            )
             if result:
                 complete[k].append(pdb_id)
             else:
@@ -161,39 +112,27 @@ def parallel_classify_pdb_batch(data, verbose=False):
 
 
 def main(
-    classification_type: str = "parallel",
-    verbose=False,
+    verbose=True,
     pdb_id_path: str = "pdb_ids.pkl",
 ):
     # Load the PDB IDs
     with open(pdb_id_path, "rb") as f:
         PDB_IDS = pkl.load(f)
 
-    if classification_type == "parallel":
-        parallel_classify_pdb_batch(PDB_IDS, verbose=verbose)
-    else:
-        classify_pdb_batch(PDB_IDS, verbose=verbose)
+    parallel_classify_pdb_batch(PDB_IDS, verbose=verbose)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--classification_type",
-        type=str,
-        default="parallel",
-        help="Type of classification (parallel or sequential)",
-    )
+
     parser.add_argument(
         "--pdb_id_path",
         type=str,
         default="pdb_ids.pkl",
         help="Path to the PDB ID file",
     )
-    parser.add_argument("--verbose", action="store_true", help="Print analysis summary")
     args = parser.parse_args()
 
     main(
-        classification_type=args.classification_type,
-        verbose=args.verbose,
         pdb_id_path=args.pdb_id_path,
     )

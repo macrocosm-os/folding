@@ -125,8 +125,10 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             raise
 
 
-def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
-    """Download a PDB file from the RCSB PDB database.
+def check_and_download_pdbs(
+    pdb_directory: str, pdb_id: str, download: bool = True
+) -> bool:
+    """Check the status and optionally download a PDB file from the RCSB PDB database.
 
     Args:
         pdb_directory (str): Directory to save the downloaded PDB file.
@@ -141,17 +143,20 @@ def download_pdb(pdb_directory: str, pdb_id: str) -> bool:
     """
     url = f"https://files.rcsb.org/download/{pdb_id}"
     path = os.path.join(pdb_directory, f"{pdb_id}")
-    if not os.path.exists(pdb_directory):
-        os.makedirs(pdb_directory)
-        bt.logging.debug(f"Created directory {pdb_directory!r}")
+
     r = requests.get(url)
     if r.status_code == 200:
         if is_pdb_complete(r.text):
-            with open(path, "w") as file:
-                file.write(r.text)
-            bt.logging.info(
-                f"PDB file {pdb_id} downloaded successfully from {url} to path {path!r}."
-            )
+            if download:
+                check_if_directory_exists(output_directory=pdb_directory)
+                with open(path, "w") as file:
+                    file.write(r.text)
+
+                bt.logging.info(
+                    f"PDB file {pdb_id} downloaded and saved successfully from {url} to path {path!r}."
+                )
+
+            bt.logging.success(f"PDB file {pdb_id} is complete.")
             return True
         else:
             bt.logging.error(

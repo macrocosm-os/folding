@@ -13,7 +13,7 @@ from folding.utils.ops import (
     gro_hash,
     load_pdb_ids,
     select_random_pdb_id,
-    download_pdb,
+    check_and_download_pdbs,
     FF_WATER_PAIRS,
 )
 
@@ -73,7 +73,9 @@ class Protein:
             bt.logging.info(
                 f"\n⏰ {self.pdb_file} does not exist in repository... Downloading"
             )
-            if download_pdb(pdb_directory=self.pdb_directory, pdb_file=self.pdb_file):
+            if check_and_download_pdbs(
+                pdb_directory=self.pdb_directory, pdb_file=self.pdb_file
+            ):
                 bt.logging.info(f"\n💬 {self.pdb_file} Downloaded and complete!")
         else:
             bt.logging.success(
