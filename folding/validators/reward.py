@@ -23,6 +23,7 @@ def parsing_miner_data(miner_data_directory: str, validator_data_directory: str)
     # data_extractor.density(data_type="Density")
     data_extractor.prod_energy(data_type="Potential")
     data_extractor.rmsd()
+    data_extractor.rerun_potential()
 
     return data_extractor.data
 
