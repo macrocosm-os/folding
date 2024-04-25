@@ -4,7 +4,6 @@ import requests
 from typing import List, Dict
 from pathlib import Path
 
-import subprocess
 import bittensor as bt
 from dataclasses import dataclass
 
