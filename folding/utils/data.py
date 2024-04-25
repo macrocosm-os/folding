@@ -155,7 +155,7 @@ class DataExtractor:
         xvg_name = "potential_rerun.xvg"
         output_data_location = os.path.join(output_path, xvg_name)
         command = [
-            f"! echo '11' | gmx energy -f {output_path}/rerun_calculation.edr -o {output_path}/{xvg_name}"
+            f"! echo 'Potential' | gmx energy -f {output_path}/rerun_calculation.edr -o {output_path}/{xvg_name}"
         ]
 
         run_cmd_commands(command)
