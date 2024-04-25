@@ -109,14 +109,14 @@ class Protein:
         return None
 
     def rerun(self):
-        bt.logging.info("Prepare validator rerun directory")
         # prepare and run the 0 step simulation
         commands = [
-            f"gmx grompp -f {self.validator_directory}rerun.mdp -c {self.validator_directory}md_0_1.gro -p {self.validator_directory}topol.top -o {self.validator_directory}/rerun_calculation.tpr",
+            f"gmx grompp -f {self.validator_directory}/rerun.mdp -c {self.validator_directory}/md_0_1.gro -p {self.validator_directory}/topol.top -o {self.validator_directory}/rerun_calculation.tpr",
             f"gmx mdrun -deffnm {self.validator_directory}/rerun_calculation -rerun {self.validator_directory}/md_0_1.gro ",
         ]
-        for command in commands:
-            subprocess.run(command, shell=True, check=True)
+        run_cmd_commands(
+            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
+        )
 
     def forward(self):
         """forward method defines the following:
