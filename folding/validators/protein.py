@@ -108,11 +108,12 @@ class Protein:
             return missing_files
         return None
 
-    def rerun(self):
+    def rerun(self, args: dict):
+        gro_file_name = os.path.splitext(args["gro_file"])[0]
         # prepare and run the 0 step simulation
         commands = [
-            f"gmx grompp -f {self.validator_directory}/rerun.mdp -c {self.validator_directory}/md_0_1.gro -p {self.validator_directory}/topol.top -o {self.validator_directory}/rerun_calculation.tpr",
-            f"gmx mdrun -deffnm {self.validator_directory}/rerun_calculation -rerun {self.validator_directory}/md_0_1.gro ",
+            f"gmx grompp -f {self.validator_directory}/rerun.mdp -c {self.validator_directory}/{args['gro_file']} -p {self.validator_directory}/topol.top -o {self.validator_directory}/rerun_{gro_file_name}_calculation.tpr",
+            f"gmx mdrun -deffnm {self.validator_directory}/rerun_{gro_file_name}_calculation -rerun {self.validator_directory}/{args['gro_file']} ",
         ]
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
