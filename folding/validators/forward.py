@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import List, Dict
 
 from folding.validators.protein import Protein
-from folding.utils.uids import get_random_uids
 from folding.utils.logging import log_event
 from folding.validators.reward import get_rewards
 from folding.protocol import FoldingSynapse
@@ -25,16 +24,14 @@ PDB_IDS = load_pdb_ids(
 async def run_step(
     self,
     protein: Protein,
-    k: int,
+    uids: List[int],
     timeout: float,
-    exclude: list = [],
     mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
 ):
     bt.logging.debug("run_step")
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = FoldingSynapse(
         pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
@@ -188,3 +185,90 @@ async def forward(self):
 
         bt.logging.success("✅ Logging pdb results to wandb ✅")
         log_event(self, event)  # Log the entire pipeline.
+
+
+def create_new_challenge(self, exclude):
+
+    while True:
+        forward_start_time = time.time()
+
+        # Select a random pdb
+        pdb_id = (
+            self.config.protein.pdb_id
+            or select_random_pdb_id(PDB_IDS=PDB_IDS, exclude=exclude)
+        )
+
+        # Perform a hyperparameter search until we find a valid configuration for the pdb
+        event = try_prepare_challenge()
+
+        if event.get("validator_search_status") == True:
+            return event
+        else:
+            # forward time if validator step fails
+            event["forward_time"] = time.time() - forward_start_time
+
+            # only log the event if the simulation was not successful
+            log_event(self, event)
+            bt.logging.error(
+                f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
+            )
+            exclude.append(pdb_id)
+
+
+def try_prepare_challenge(config, pdb_id):
+    """Attempts to setup a simulation environment for the specific pdb & config
+    Uses a stochastic sampler to find hyperparameters that are compatible with the protein
+    """
+
+    exclude_in_hp_search = parse_config(config)
+
+    hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
+
+    bt.logging.info(f"Total paramter space: {hp_sampler.parameter_set}")
+
+    for iteration_num in range(hp_sampler.TOTAL_COMBINATIONS):
+        hp_sampler_time = time.time()
+
+        event = {}
+        try:
+            sampled_combination: Dict = hp_sampler.sample_hyperparameters()
+            bt.logging.info(
+                f"pdb_id: {pdb_id}, Selected hyperparameters: {sampled_combination}, iteration {iteration_num}"
+            )
+
+            hps = {
+                "ff": config.protein.ff or sampled_combination["FF"],
+                "water": config.protein.water or sampled_combination["WATER"],
+                "box": config.protein.box or sampled_combination["BOX"],
+                "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"],
+            }
+
+            protein = Protein(
+                pdb_id=config.protein.pdb_id or pdb_id,
+                config=config.protein,
+                **hps
+            )
+
+            bt.logging.info(f"Attempting to generate challenge: {protein}")
+            protein.forward()
+
+        except Exception as E:
+            bt.logging.error(
+                f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
+            )
+            bt.logging.warning(E)
+            event["validator_search_status"] = False
+
+        finally:
+            event["pdb_id"] = pdb_id
+            event.update(hps)  # add the dictionary of hyperparameters to the event
+            event["hp_sample_time"] = time.time() - hp_sampler_time
+
+            if "validator_search_status" not in event:
+                bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
+                event["validator_search_status"] = True  # simulation passed!
+                # break out of the loop if the simulation was successful
+                break
+
+    return event
+
