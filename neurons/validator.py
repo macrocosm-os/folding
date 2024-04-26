@@ -45,7 +45,8 @@ class Validator(BaseValidatorNeuron):
             "VALIDATOR LOAD_STATE DOES NOT WORK... SKIPPING BaseValidatorNeuron.load_state()"
         )
 
-        self.db = PandasJobStore()
+        # TODO: Change the store to SQLiteJobStore if you want to use SQLite
+        self.store = PandasJobStore()
 
     async def forward(self, job):
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
@@ -58,7 +59,7 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
 
         Args:
-            job (Job): _description_
+            job (Job): Job object containing the pdb and hotkeys
         """
 
         # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
@@ -72,10 +73,10 @@ class Validator(BaseValidatorNeuron):
                          timeout=self.config.neuron.timeout,
         )
 
-    def add_jobs(self, current_jobs, k):
+    def add_jobs(self, k):
         """Creates new jobs and assigns them to available workers. Updates DB with new records
         """
-        exclude_pdbs = list(map(lambda x: x.pdb, current_jobs))
+        exclude_pdbs = self.store.get_queue(ready=False).index.tolist()
 
         for i in range(k):
 
@@ -83,7 +84,7 @@ class Validator(BaseValidatorNeuron):
             job = create_new_challenge(self, exclude = exclude_pdbs)
 
             # assign workers to the job (hotkeys)
-            active_jobs = self.db.get_queue(ready=False)
+            active_jobs = self.store.get_queue(ready=False)
             # exclude hotkeys that are already in use by this validator (a single job)
             active_hotkeys = active_jobs['hotkeys'].explode().unique().tolist()
             exclude_uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in active_hotkeys]
