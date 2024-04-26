@@ -45,6 +45,16 @@ class Protein:
         self.config = config
         self.md_inputs = {}
 
+    @staticmethod
+    def from_pdb(pdb):
+        params = {}
+        with open(os.path.join(ROOT_DIR, pdb, 'config.txt'),'r') as f:
+            for line in f.readlines():
+                key, value = line.split('=')
+                params[key] = value
+
+        return Protein(**params)
+
     def gather_pdb_id(self):
         if self.pdb_id is None:
             PDB_IDS = load_pdb_ids(
@@ -128,6 +138,7 @@ class Protein:
         self.gro_path = os.path.join(self.validator_directory, "em.gro")
         self.topol_path = os.path.join(self.validator_directory, "topol.top")
 
+        # TODO: Enable this to send checkpoints rather than only the initial set of files
         mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
         other_files = [
             "em.gro",
