@@ -94,7 +94,9 @@ class Validator(BaseValidatorNeuron):
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
 
             # TODO: We can pass other custom stuff like update_interval, max_time_no_improvement and min_updates to control length
-            # job['wait_time'] = 60 * np.log10(job['pdb_length'])
+            # update_interval = 60 * np.log10(job['pdb_length'])
+            # min_updates = 10
+            # max_time_no_improvement = min_updates * update_interval
 
             self.store.insert(pdb=job['pdb_id'], hotkeys=selected_hotkeys)
 
