@@ -19,6 +19,7 @@
 
 
 import copy
+import time
 import torch
 import asyncio
 import argparse
@@ -137,10 +138,25 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
+
+                # Our BaseValidator logic is intentionally as generic as possible so that the Validator neuron can apply problem-specific logic
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                # Run multiple forwards concurrently.
-                self.loop.run_until_complete(self.concurrent_forward())
+                queue =  self.get_queue()
+                if len(queue) < self.config.queue_size:
+                    # Here is where we select, download and preprocess a pdb
+                    # We also assign the pdb to a group of workers (miners), based on their workloads
+                    self.add_jobs(queue, k = self.config.queue_size - len(queue))
+                    continue
+
+                # TODO: maybe concurrency for the loop below
+                for job in queue.queue:
+                    # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
+                    event = self.forward(job)
+
+                    # Determine the status of the job based on the current energy and the previous values (early stopping)
+                    # Update the DB with the current status
+                    self.update_job(job, event)
 
                 # Check if we should exit.
                 if self.should_exit:
@@ -150,6 +166,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
+                time.sleep(self.config.wait_time)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
