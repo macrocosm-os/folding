@@ -142,12 +142,15 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Our BaseValidator logic is intentionally as generic as possible so that the Validator neuron can apply problem-specific logic
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                queue =  self.get_queue()
-                if len(queue) < self.config.queue_size:
+                # Check if we need to add more jobs to the queue
+                if self.store.get_queue(ready=False) < self.config.queue_size:
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
-                    self.add_jobs(queue, k = self.config.queue_size - len(queue))
+                    self.add_jobs(k = self.config.queue_size - len(queue))
                     continue
+
+                # Check if we have any ready jobs in the queue
+                queue = self.store.get_queue()
 
                 # TODO: maybe concurrency for the loop below
                 for job in queue.queue:
