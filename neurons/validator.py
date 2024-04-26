@@ -19,24 +19,23 @@
 
 
 import time
+import numpy as np
 
-# Bittensor
 import bittensor as bt
 
-
-from folding.validators.forward import forward
+from folding.store import SQLiteJobStore, PandasJobStore
+from folding.utils.uids import get_random_uids
+from folding.validators.forward import forward, create_new_challenge, run_step
+from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
 from folding.base.validator import BaseValidatorNeuron
 
 
+
 class Validator(BaseValidatorNeuron):
     """
-    Your validator neuron class. You should use this class to define your validator's behavior. In particular, you should replace the forward function with your own logic.
-
-    This class inherits from the BaseValidatorNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
-
-    This class provides reasonable default behavior for a validator such as keeping a moving average of the scores of the miners and using them to set weights at the end of each epoch. Additionally, the scores are reset for new hotkeys at the end of each epoch.
+    Protein folding validator neuron. This neuron is responsible for validating the folding of proteins by querying the miners and updating the scores based on the responses.
     """
 
     def __init__(self, config=None):
@@ -45,21 +44,76 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning(
             "VALIDATOR LOAD_STATE DOES NOT WORK... SKIPPING BaseValidatorNeuron.load_state()"
         )
-        # self.load_state() #TODO: This seems to break. Unsure why.
 
-        # TODO(developer): Anything specific to your use case you can do here
+        self.db = PandasJobStore()
 
-    async def forward(self):
-        """
+    async def forward(self, job):
+        """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
+
         Validator forward pass. Consists of:
         - Generating the query
         - Querying the miners
         - Getting the responses
         - Rewarding the miners
         - Updating the scores
+
+        Args:
+            job (Job): _description_
         """
-        # TODO(developer): Rewrite this function based on your protocol definition.
-        return await forward(self)
+
+        # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
+        protein = Protein.from_pdb(job.pdb)
+        uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
+        # query the miners and get the rewards for their responses
+        # Check check_uid_availability to ensure that the hotkeys are valid and active
+        return await run_step(self,
+                         protein=protein,
+                         uids=uids,
+                         timeout=self.config.neuron.timeout,
+        )
+
+    def add_jobs(self, current_jobs, k):
+        """Creates new jobs and assigns them to available workers. Updates DB with new records
+        """
+        exclude_pdbs = list(map(lambda x: x.pdb, current_jobs))
+
+        for i in range(k):
+
+            # selects a new pdb, downloads data, preprocesses and gets hyperparams.
+            job = create_new_challenge(self, exclude = exclude_pdbs)
+
+            # assign workers to the job (hotkeys)
+            active_jobs = self.db.get_queue(ready=False)
+            # exclude hotkeys that are already in use by this validator (a single job)
+            active_hotkeys = active_jobs['hotkeys'].explode().unique().tolist()
+            exclude_uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in active_hotkeys]
+
+            uids = get_random_uids(self, self.config.neuron.sample_size, exclude=exclude_uids)
+
+            selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
+
+            # TODO: We can pass other custom stuff like update_interval, max_time_no_improvement and min_updates to control length
+            # job['wait_time'] = 60 * np.log10(job['pdb_length'])
+
+            self.store.insert(pdb=job['pdb_id'], hotkeys=selected_hotkeys)
+
+    def update_job(self, job, event):
+        """Updates the job status based on the event information
+
+        TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
+        """
+
+        # set updated_at to most recent query
+        # maybe attach some metadata about the specific checkpoints that are the current head
+        loss = event['best_loss']
+        hotkey = event['best_hotkey']
+        commit_hash = '' # For next time
+        gro_hash = '' # For next time
+
+        # check if early stopping criteria is met
+        job.update(loss=loss, hotkey=hotkey, commit_hash=commit_hash, gro_hash=gro_hash)
+
+        self.store.update(job)
 
 
 # The main function parses the configuration and runs the validator.
