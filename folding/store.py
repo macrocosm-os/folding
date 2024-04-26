@@ -2,13 +2,15 @@ import os
 import random
 import sqlite3
 import string
-import queue
+
+from queue import Queue
 
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, asdict
 
 class SQLiteJobStore:
+    # Unfinished!
     columns = {
                 'id': 'INT AUTO_INCREMENT PRIMARY KEY',
                 'pdb': 'TEXT',
@@ -119,18 +121,22 @@ class PandasJobStore:
 
         return pd.read_csv(self.file_path).astype(self.columns).set_index('pdb')
 
-    def get_queue(self):
+    def get_queue(self, ready=True):
         """Checks DB for all jobs with active status and returns them as a DataFrame."""
         active = self._db['active'] == True
-        pending = (pd.Timestamp.now() - self._db['updated_at']) >= self._db['update_interval']
+        
+        if ready:
+            pending = (pd.Timestamp.now() - self._db['updated_at']) >= self._db['update_interval']
 
-        ready_jobs = self._db.loc[active & pending]
+            jobs = self._db.loc[active & pending]
+        else:
+            jobs = self._db.loc[active]
 
-        jobs = queue.Queue()
-        for pdb, row in ready_jobs.iterrows():
-            jobs.put(Job(pdb=pdb, **row.to_dict()))
+        queue = Queue()
+        for pdb, row in jobs.iterrows():
+            queue.put(Job(pdb=pdb, **row.to_dict()))
 
-        return jobs
+        return queue
 
     def insert(self, pdb, hotkeys, **kwargs):
         """Adds a new job to the database."""
