@@ -124,7 +124,7 @@ class PandasJobStore:
     def get_queue(self, ready=True):
         """Checks DB for all jobs with active status and returns them as a DataFrame."""
         active = self._db['active'] == True
-        
+
         if ready:
             pending = (pd.Timestamp.now() - self._db['updated_at']) >= self._db['update_interval']
 
@@ -190,9 +190,11 @@ class Job:
         return pd.DataFrame([self.to_series()])
 
     def update(self, loss, hotkey, commit_hash, gro_hash):
-        self.updated_at = pd.Timestamp.now()
         if hotkey not in self.hotkeys:
             raise ValueError(f'Hotkey {hotkey!r} is not a valid choice')
+
+        self.updated_at = pd.Timestamp.now()
+        self.updated_count += 1
 
         if loss < self.best_loss:
             self.best_loss = loss
@@ -200,7 +202,6 @@ class Job:
             self.best_hotkey = hotkey
             self.commit_hash = commit_hash
             self.gro_hash = gro_hash
-            self.updated_count += 1
         elif (
             pd.Timestamp.now() - self.best_loss_at > self.max_time_no_improvement and self.updated_count >= self.min_updates
         ):
