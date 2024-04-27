@@ -62,7 +62,7 @@ class FoldingMiner(BaseMinerNeuron):
         super(FoldingMiner, self).__init__(config=config)
 
         self.executors = {}  # Maps identifiers to futures
-
+        self.futures = {}
         self.max_num_processes = psutil.cpu_count(logical=False)  # Only physical cores
         self.max_workers=self.max_num_processes - 1
 
@@ -120,24 +120,38 @@ class FoldingMiner(BaseMinerNeuron):
 
         #If we are already running a process with the same identifier, return intermediate information
         if synapse.pdb_id in self.executors:
-            data_directroy = self.output_dirs[synapse.pdb_id]
             simulation_state = self.executors[synapse.pdb_id].get_state()
-            return self.compute_itermediate_gro(synapse=synapse, data_directory=data_directroy, state = simulation_state)
+            data_directory = self.executors[synapse.pdb_id].output_dir
+            return self.compute_itermediate_gro(synapse=synapse, data_directory=data_directory, state = simulation_state)
             
         # Check if the number of active processes is less than the number of CPUs
         if len(self.executors) >= self.max_workers:
             bt.logging.warning("Cannot start new process: CPU limit reached.")
             return synapse # Return the synapse as is
         
-        self.output_dirs[synapse.pdb_id] = self.get_output_dir(synapse=synapse)
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         #Create the job and submit it to the executor
         gromax_executor = GromacsExecutor(synapse = synapse)
-        self.executor.submit(gromax_executor.run, synapse, state_commands, self.config)
-        self.executors[synapse.pdb_id] = gromax_executor
+        future = self.executor.submit(gromax_executor.run, synapse, state_commands, self.config)
 
-        return synapse
+        self.executors[synapse.pdb_id] = gromax_executor
+        self.futures[synapse.pdb_id] = future
+
+        #Here we will always check the total number of processes running and return the final synapse if we are done with a process.
+        while True:
+            if len(self.executors) == 0: 
+                break
+
+            futures = self.futures
+            for pdb_id, future in futures.items():
+                if future.done():
+                    gromacs_executor = self.executors[pdb_id] 
+                    final_synapse = gromacs_executor.final_synapse
+
+                    del gromacs_executor #no need to keep the data in memory. 
+                    del self.futures[pdb_id] #remove any artifact of the future. 
+                    return final_synapse
 
     
 class GromacsExecutor():
@@ -187,7 +201,7 @@ class GromacsExecutor():
                 commands=commands, suppress_cmd_output=config.neuron.suppress_cmd_output
             )
 
-        return attach_files_to_synapse(synapse=synapse, data_directory=self.output_dir, state=self.state) 
+        self.final_synapse = attach_files_to_synapse(synapse=synapse, data_directory=self.output_dir, state=self.state) 
 
     def get_state(self):
         return self.state #retuns which protion of the simulation stack the miner is in. 
