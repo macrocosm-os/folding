@@ -82,6 +82,7 @@ def gro_hash(gro_path: str):
 
     with open(gro_path, "rb") as f:
         name, length, *lines, _ = f.readlines()
+        name = name.decode().split(' t=')[0].strip("\n").encode() #if we are rerunning the gro file using trajectory, we need to include this
         length = int(length)
         bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
 
@@ -121,7 +122,7 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
             bt.logging.error(f"Output: {e.stdout.decode()}")
             bt.logging.error(f"Error: {e.stderr.decode()}")
-            continue
+            raise #stop the execution, log the error downstream
 
 
 def get_response_info(responses: List[FoldingSynapse]) -> Dict:
