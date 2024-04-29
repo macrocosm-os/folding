@@ -20,6 +20,12 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 def attach_files_to_synapse(synapse: FoldingSynapse, data_directory:str, state:str, desired_files:List[str] = None) -> FoldingSynapse:
     """load the output files as bytes and add to synapse.md_output
 
+    Args:
+        synapse (FoldingSynapse): Recently received synapse object
+        data_directory (str): directory where the miner is holding the necessary data for the validator.
+        state (str): the current state of the simulation
+        desired_files (List[str], optional): List of files to attach to the synapse. Defaults to None.
+    
     state is either:
      1. nvt
      2. npt
@@ -61,10 +67,10 @@ class FoldingMiner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(FoldingMiner, self).__init__(config=config)
 
-        self.executors = {}  # Maps identifiers to futures
-        self.futures = {}
+        self.executors = {}  # Maps pdb_ids to GromacsExecutors 
+        self.futures = {}    # Maps pdb_ids to futures
         self.max_num_processes = psutil.cpu_count(logical=False)  # Only physical cores
-        self.max_workers=self.max_num_processes - 1
+        self.max_workers=self.max_num_processes - 1 #subtract one to ensure that we are not using all the processors. 
 
         self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers) #remove one for safety
 
@@ -165,7 +171,7 @@ class GromacsExecutor():
                     synapse.pdb_id,
                 )
     
-    def run(self, synapse: FoldingSynapse, commands:List, config:Dict) -> FoldingSynapse:
+    def run(self, synapse: FoldingSynapse, commands:Dict, config:Dict) -> FoldingSynapse:
         """run method to handle the processing of the gromacs simulation.
 
         Args:
