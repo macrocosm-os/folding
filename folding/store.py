@@ -10,24 +10,25 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, asdict
 
+
 class SQLiteJobStore:
     # Unfinished!
     columns = {
-                'id': 'INT AUTO_INCREMENT PRIMARY KEY',
-                'pdb': 'TEXT',
-                'active': 'BOOL',
-                'hotkeys': 'VARCHAR(64) NOT NULL',
-                'created_at': 'TIMESTAMP NOT NULL',
-                'updated_at': 'TIMESTAMP NOT NULL',
-                'best_loss': 'REAL',
-                'best_loss_at': 'TEXT',
-                'best_uid': 'TEXT',
-                'commit_hash': 'TEXT',
-                'gro_hash': 'TEXT',
-                'num_updates': 'INT',
-            }
+        "id": "INT AUTO_INCREMENT PRIMARY KEY",
+        "pdb": "TEXT",
+        "active": "BOOL",
+        "hotkeys": "VARCHAR(64) NOT NULL",
+        "created_at": "TIMESTAMP NOT NULL",
+        "updated_at": "TIMESTAMP NOT NULL",
+        "best_loss": "REAL",
+        "best_loss_at": "TEXT",
+        "best_uid": "TEXT",
+        "commit_hash": "TEXT",
+        "gro_hash": "TEXT",
+        "num_updates": "INT",
+    }
 
-    def __init__(self, db_path, table_name='protein_jobs'):
+    def __init__(self, db_path, table_name="protein_jobs"):
         self.db_path = db_path
         self.table_name = table_name
 
@@ -36,14 +37,18 @@ class SQLiteJobStore:
         # Use context manager to handle the database connection
         with sqlite3.connect(self.db_path) as conn:
             # Use another context manager to handle the cursor
-            column_definitions = ', '.join([f'{name} {datatype}' for name, datatype in self.columns.items()])
+            column_definitions = ", ".join(
+                [f"{name} {datatype}" for name, datatype in self.columns.items()]
+            )
             with conn.cursor() as cursor:
                 # Create table
-                cursor.execute(f'''
+                cursor.execute(
+                    f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
                     {column_definitions}
                 )
-                ''')
+                """
+                )
                 # Commit the changes
                 conn.commit()
 
@@ -53,9 +58,11 @@ class SQLiteJobStore:
         with sqlite3.connect(self.db_path) as conn:
             # Use another context manager to handle the cursor
             with conn.cursor() as cursor:
-                cursor.execute(f'''
+                cursor.execute(
+                    f"""
                 SELECT * FROM {self.table_name} WHERE status = 'active'
-                ''')
+                """
+                )
                 jobs = cursor.fetchall()
 
                 # Return a pandas DataFrame containing the jobs
@@ -68,50 +75,68 @@ class SQLiteJobStore:
             # Use another context manager to handle the cursor
             with conn.cursor() as cursor:
                 # Create a list of values to insert
-                values = ', '.join([job.get(column) for column in self.columns.keys()])
+                values = ", ".join([job.get(column) for column in self.columns.keys()])
 
                 # Insert the values into the table
-                cursor.execute(f'''
+                cursor.execute(
+                    f"""
                 INSERT INTO {self.table_name} ({', '.join(self.columns.keys())})
                 VALUES ({values})
-                ''')
+                """
+                )
 
                 # Commit the changes
                 conn.commit()
+
 
 class PandasJobStore:
     """Basic csv-based job store using pandas."""
 
     columns = {
-        'pdb': 'str',
-        'active': 'bool',
-        'hotkeys': 'object',
-        'created_at': 'datetime64[s]',
-        'updated_at': 'datetime64[s]',
-        'best_loss': 'float64',
-        'best_loss_at': 'datetime64[s]',
-        'best_hotkey': 'str',
-        'commit_hash': 'str',
-        'gro_hash': 'str',
-        'update_interval': 'timedelta64[s]',
-        'updated_count': 'int',
+        "pdb": "str",
+        "active": "bool",
+        "hotkeys": "object",
+        "created_at": "datetime64[s]",
+        "updated_at": "datetime64[s]",
+        "best_loss": "float64",
+        "best_loss_at": "datetime64[s]",
+        "best_hotkey": "str",
+        "commit_hash": "str",
+        "gro_hash": "str",
+        "update_interval": "timedelta64[s]",
+        "updated_count": "int",
     }
 
-    def __init__(self, db_path, table_name='protein_jobs', force_create=False):
+    def __init__(self, db_path, table_name="protein_jobs", force_create=False):
         self.db_path = db_path
         self.table_name = table_name
-        self.file_path = os.path.join(self.db_path, f'{self.table_name}.csv')
+        self.file_path = os.path.join(self.db_path, f"{self.table_name}.csv")
 
         self._db = self.load_table(force_create=force_create)
 
     def __repr__(self):
         """Just shows the underlying DataFrame."""
-        return f'{self.__class__.__name__}\n{self._db.__repr__()}'
+        return f"{self.__class__.__name__}\n{self._db.__repr__()}"
 
-    def write(self):
-        self._db.to_csv(self.file_path, index=False)
+    def write(self, reset_index=False):
+        """The write method writes data to the _db attribute.
 
-    def load_table(self, force_create=False):
+        Args:
+            reset_index (bool, optional):
+                On the creation of the _db method, the dataframe is made with the columns
+                explicitly set as indicated in the self.columns attribute. Therefore,
+                pdb is a column when initially created. When inserting and updating, the
+                job.to_frame() method is used to convert the job to a DataFrame, where the
+                pdb is actually the index. So, we need to make this in to a column to not remove
+                it when calling the write method. Defaults to False.
+
+        """
+        if reset_index:
+            self._db.reset_index(names="pdb").to_csv(self.file_path, index=False)
+        else:
+            self._db.to_csv(self.file_path, index=False)
+
+    def load_table(self, force_create=False) -> pd.DataFrame:
         """Creates a table in the database to store jobs."""
         # Use context manager to handle the database connection
         if not os.path.exists(self.file_path) or force_create:
@@ -120,7 +145,7 @@ class PandasJobStore:
             self._db = pd.DataFrame(columns=self.columns.keys())
             self.write()
 
-        return pd.read_csv(self.file_path).astype(self.columns).set_index('pdb')
+        return pd.read_csv(self.file_path).astype(self.columns).set_index("pdb")
 
     def get_queue(self, ready=True) -> Queue:
         """Checks DB for all jobs with active status and returns them as a DataFrame.
@@ -131,10 +156,12 @@ class PandasJobStore:
         Returns:
             Queue: queue with jobs
         """
-        active = self._db['active'] == True
+        active = self._db["active"] == True
 
         if ready:
-            pending = (pd.Timestamp.now() - self._db['updated_at']) >= self._db['update_interval']
+            pending = (pd.Timestamp.now() - self._db["updated_at"]) >= self._db[
+                "update_interval"
+            ]
 
             jobs = self._db.loc[active & pending]
         else:
@@ -146,26 +173,29 @@ class PandasJobStore:
 
         return queue
 
-    def insert(self, pdb:str, hotkeys:List[str], **kwargs):
+    def insert(self, pdb: str, hotkeys: List[str], **kwargs):
         """Adds a new job to the database."""
 
         if pdb in self._db.index.tolist():
-            raise ValueError(f'pdb {pdb!r} is already in the store')
+            raise ValueError(f"pdb {pdb!r} is already in the store")
 
         job = Job(pdb=pdb, hotkeys=hotkeys, **kwargs).to_frame()
 
         if len(self._db) == 0:
-            self._db = job#.astype(self.columns)
+            self._db = job  # .astype(self.columns)
         else:
             self._db = pd.concat([self._db, job], ignore_index=False, axis=0)
 
-        self.write()
+        self.write(reset_index=True)
 
     def update(self, job):
         """Updates the status of a job in the database."""
 
-        self._db.update(job.to_frame())
-        self.write()
+        job_to_update = job.to_frame()
+
+        self._db.update(job_to_update)
+        self.write(reset_index=True)
+
 
 @dataclass
 class Job:
@@ -174,8 +204,8 @@ class Job:
     pdb: str
     hotkeys: list
     active: bool = True
-    created_at: pd.Timestamp = pd.Timestamp.now()
-    updated_at: pd.Timestamp = pd.Timestamp.now()
+    created_at: pd.Timestamp = pd.Timestamp.now().floor("s")
+    updated_at: pd.Timestamp = pd.Timestamp.now().floor("s")
     best_loss: float = np.inf
     best_loss_at: pd.Timestamp = pd.NaT
     best_hotkey: str = None
@@ -191,17 +221,17 @@ class Job:
 
     def to_series(self):
         data = asdict(self)
-        name = data.pop('pdb')
+        name = data.pop("pdb")
         return pd.Series(data, name=name)
 
     def to_frame(self):
         return pd.DataFrame([self.to_series()])
 
-    def update(self, loss:float, hotkey:str, commit_hash:str, gro_hash:str):
+    def update(self, loss: float, hotkey: str, commit_hash: str, gro_hash: str):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
 
         if hotkey not in self.hotkeys:
-            raise ValueError(f'Hotkey {hotkey!r} is not a valid choice')
+            raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
         self.updated_at = pd.Timestamp.now()
         self.updated_count += 1
@@ -213,18 +243,19 @@ class Job:
             self.commit_hash = commit_hash
             self.gro_hash = gro_hash
         elif (
-            pd.Timestamp.now() - self.best_loss_at > self.max_time_no_improvement and self.updated_count >= self.min_updates
+            pd.Timestamp.now() - self.best_loss_at > self.max_time_no_improvement
+            and self.updated_count >= self.min_updates
         ):
             self.active = False
 
 
-
 class MockJob(Job):
-
     def __init__(self, n_hotkeys=5, update_seconds=5, stop_after_seconds=10):
         self.pdb = self._make_pdb()
         self.hotkeys = self._make_hotkeys(n_hotkeys)
-        self.created_at = pd.Timestamp.now() - pd.Timedelta(seconds=random.randint(0, 3600*24))
+        self.created_at = (
+            pd.Timestamp.now() - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
+        ).floor("s")
         self.best_loss = random.random()
         self.best_hotkey = random.choice(self.hotkeys)
         self.commit_hash = self._make_commit_hash()
@@ -233,10 +264,9 @@ class MockJob(Job):
         self.min_updates = 1
         self.max_time_no_improvement = pd.Timedelta(seconds=stop_after_seconds)
 
-
     @staticmethod
     def _make_pdb():
-        return ''.join(random.choices(string.digits + string.ascii_lowercase, k=4))
+        return "".join(random.choices(string.digits + string.ascii_lowercase, k=4))
 
     @staticmethod
     def _make_hotkeys(n=10, length=8):
@@ -244,9 +274,8 @@ class MockJob(Job):
 
     @staticmethod
     def _make_hotkey(length=8):
-        return ''.join(random.choices(string.digits + string.ascii_letters, k=length))
+        return "".join(random.choices(string.digits + string.ascii_letters, k=length))
 
     @staticmethod
     def _make_commit_hash(k=40):
-        return ''.join(random.choices(string.digits + string.ascii_letters, k=k))
-
+        return "".join(random.choices(string.digits + string.ascii_letters, k=k))
