@@ -72,8 +72,13 @@ class Validator(BaseValidatorNeuron):
             timeout=self.config.neuron.timeout,
         )
 
-    def add_jobs(self, k):
-        """Creates new jobs and assigns them to available workers. Updates DB with new records"""
+    def add_jobs(self, k: int):
+        """Creates new jobs and assigns them to available workers. Updates DB with new records.
+        Each "job" is an individual protein folding challenge that is distributed to the miners.
+
+        Args:
+            k (int): The number of jobs create and distribute to miners.
+        """
         exclude_pdbs = self.store.get_queue(ready=False).index.tolist()
 
         for i in range(k):

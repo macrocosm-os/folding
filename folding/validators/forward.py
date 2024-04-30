@@ -187,14 +187,22 @@ async def forward(self):
         log_event(self, event)  # Log the entire pipeline.
 
 
-def create_new_challenge(self, exclude:List) -> Dict:
+def create_new_challenge(self, exclude: List) -> Dict:
+    """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
+    using the try_prepare_challenge function.
+
+    Args:
+        exclude (List): list of pdb_ids to exclude from the search
+
+    Returns:
+        Dict: event dictionary containing the results of the hyperparameter search
+    """
     while True:
         forward_start_time = time.time()
 
         # Select a random pdb
-        pdb_id = (
-            self.config.protein.pdb_id
-            or select_random_pdb_id(PDB_IDS=PDB_IDS, exclude=exclude)
+        pdb_id = self.config.protein.pdb_id or select_random_pdb_id(
+            PDB_IDS=PDB_IDS, exclude=exclude
         )
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
@@ -214,7 +222,7 @@ def create_new_challenge(self, exclude:List) -> Dict:
             exclude.append(pdb_id)
 
 
-def try_prepare_challenge(config, pdb_id:str) -> Dict:
+def try_prepare_challenge(config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
@@ -243,9 +251,7 @@ def try_prepare_challenge(config, pdb_id:str) -> Dict:
             }
 
             protein = Protein(
-                pdb_id=config.protein.pdb_id or pdb_id,
-                config=config.protein,
-                **hps
+                pdb_id=config.protein.pdb_id or pdb_id, config=config.protein, **hps
             )
 
             bt.logging.info(f"Attempting to generate challenge: {protein}")
@@ -270,4 +276,3 @@ def try_prepare_challenge(config, pdb_id:str) -> Dict:
                 break
 
     return event
-
