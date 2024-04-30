@@ -6,6 +6,8 @@ pandas
 beautifulsoup4
 python-dotenv
 wandb==0.15.10
+nglview 
+mdanalysis
 
 ## Lots of instructions to install GROMACS correctly https://manual.gromacs.org/current/gmxapi/userguide/install.html#install-dependencies
 
