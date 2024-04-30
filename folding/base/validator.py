@@ -138,7 +138,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-
                 # Our BaseValidator logic is intentionally as generic as possible so that the Validator neuron can apply problem-specific logic
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
@@ -146,7 +145,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 if self.store.get_queue(ready=False) < self.config.queue_size:
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
-                    self.add_jobs(k = self.config.queue_size - len(queue))
+                    self.add_jobs(k=self.config.queue_size - len(queue))
                     continue
 
                 # Check if we have any ready jobs (Job) in the queue
@@ -169,7 +168,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                time.sleep(self.config.wait_time)
+                time.sleep(self.config.neuron.update_interval)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
