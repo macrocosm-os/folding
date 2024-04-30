@@ -44,7 +44,7 @@ class Validator(BaseValidatorNeuron):
         )
 
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
-        self.store = PandasJobStore(db_path=self.config.neuron.db_path)
+        self.store = PandasJobStore(db_path=self.config.neuron.db_path_location)
 
     async def forward(self, job: Job):
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
