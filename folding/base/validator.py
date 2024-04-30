@@ -146,10 +146,10 @@ class BaseValidatorNeuron(BaseNeuron):
                 queue: Queue = self.store.get_queue(ready=True)
 
                 # Check if we need to add more jobs to the queue
-                if self.store.get_queue(ready=False) < self.config.queue_size:
+                if self.store.get_queue(ready=False).qsize() < self.config.queue_size:
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
-                    self.add_jobs(k=self.config.queue_size - len(queue))
+                    self.add_jobs(k=self.config.queue_size - queue.qsize())
                     continue
 
                 # TODO: maybe concurrency for the loop below
