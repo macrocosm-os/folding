@@ -3,6 +3,7 @@ import random
 import sqlite3
 import string
 
+from typing import List
 from queue import Queue
 
 import numpy as np
@@ -121,8 +122,15 @@ class PandasJobStore:
 
         return pd.read_csv(self.file_path).astype(self.columns).set_index('pdb')
 
-    def get_queue(self, ready=True):
-        """Checks DB for all jobs with active status and returns them as a DataFrame."""
+    def get_queue(self, ready=True) -> Queue:
+        """Checks DB for all jobs with active status and returns them as a DataFrame.
+
+        Args:
+            ready (bool, optional): Return rows where rows of the db have not been updated longer than the update_interval. Defaults to True.
+
+        Returns:
+            Queue: queue with jobs
+        """
         active = self._db['active'] == True
 
         if ready:
@@ -138,7 +146,7 @@ class PandasJobStore:
 
         return queue
 
-    def insert(self, pdb, hotkeys, **kwargs):
+    def insert(self, pdb:str, hotkeys:List[str], **kwargs):
         """Adds a new job to the database."""
 
         if pdb in self._db.index.tolist():
@@ -164,7 +172,7 @@ class Job:
     # TODO: inherit from pydantic BaseModel which should take care of dtypes and mutation
 
     pdb: str
-    hotkeys: str
+    hotkeys: list
     active: bool = True
     created_at: pd.Timestamp = pd.Timestamp.now()
     updated_at: pd.Timestamp = pd.Timestamp.now()
@@ -189,7 +197,7 @@ class Job:
     def to_frame(self):
         return pd.DataFrame([self.to_series()])
 
-    def update(self, loss, hotkey, commit_hash, gro_hash):
+    def update(self, loss:float, hotkey:str, commit_hash:str, gro_hash:str):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
 
         if hotkey not in self.hotkeys:

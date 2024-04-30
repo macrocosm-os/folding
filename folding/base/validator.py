@@ -149,7 +149,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     self.add_jobs(k = self.config.queue_size - len(queue))
                     continue
 
-                # Check if we have any ready jobs in the queue
+                # Check if we have any ready jobs (Job) in the queue
                 queue = self.store.get_queue()
 
                 # TODO: maybe concurrency for the loop below

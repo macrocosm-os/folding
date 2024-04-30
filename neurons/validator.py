@@ -1,7 +1,5 @@
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
+# Copyright © 2024 Macrocosmos
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -20,7 +18,7 @@
 
 import time
 import numpy as np
-
+from typing import Dict
 import bittensor as bt
 
 from folding.store import SQLiteJobStore, PandasJobStore
@@ -29,8 +27,8 @@ from folding.validators.forward import forward, create_new_challenge, run_step
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
+from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
-
 
 
 class Validator(BaseValidatorNeuron):
@@ -48,7 +46,7 @@ class Validator(BaseValidatorNeuron):
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = PandasJobStore()
 
-    async def forward(self, job):
+    async def forward(self, job:Job):
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
         Validator forward pass. Consists of:
@@ -63,7 +61,7 @@ class Validator(BaseValidatorNeuron):
         """
 
         # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
-        protein = Protein.from_pdb(job.pdb)
+        protein = Protein.from_pdb(pdb_id = job.pdb)
         uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
@@ -81,7 +79,7 @@ class Validator(BaseValidatorNeuron):
         for i in range(k):
 
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
-            job = create_new_challenge(self, exclude = exclude_pdbs)
+            job_event: Dict = create_new_challenge(self, exclude = exclude_pdbs)
 
             # assign workers to the job (hotkeys)
             active_jobs = self.store.get_queue(ready=False)
@@ -98,9 +96,9 @@ class Validator(BaseValidatorNeuron):
             # min_updates = 10
             # max_time_no_improvement = min_updates * update_interval
 
-            self.store.insert(pdb=job['pdb_id'], hotkeys=selected_hotkeys)
+            self.store.insert(pdb=job_event['pdb_id'], hotkeys=selected_hotkeys)
 
-    def update_job(self, job, event):
+    def update_job(self, job:Job, event:Dict):
         """Updates the job status based on the event information
 
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
@@ -116,7 +114,7 @@ class Validator(BaseValidatorNeuron):
         # check if early stopping criteria is met
         job.update(loss=loss, hotkey=hotkey, commit_hash=commit_hash, gro_hash=gro_hash)
 
-        self.store.update(job)
+        self.store.update(job=job)
 
 
 # The main function parses the configuration and runs the validator.

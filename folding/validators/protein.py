@@ -46,9 +46,9 @@ class Protein:
         self.md_inputs = {}
 
     @staticmethod
-    def from_pdb(pdb):
+    def from_pdb(pdb_id:str):
         params = {}
-        with open(os.path.join(ROOT_DIR, pdb, 'config.txt'),'r') as f:
+        with open(os.path.join(ROOT_DIR, pdb_id, 'config.txt'),'r') as f:
             for line in f.readlines():
                 key, value = line.split('=')
                 params[key] = value

@@ -187,8 +187,7 @@ async def forward(self):
         log_event(self, event)  # Log the entire pipeline.
 
 
-def create_new_challenge(self, exclude):
-
+def create_new_challenge(self, exclude:List) -> Dict:
     while True:
         forward_start_time = time.time()
 
@@ -215,7 +214,7 @@ def create_new_challenge(self, exclude):
             exclude.append(pdb_id)
 
 
-def try_prepare_challenge(config, pdb_id):
+def try_prepare_challenge(config, pdb_id:str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
