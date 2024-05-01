@@ -81,7 +81,7 @@ class Validator(BaseValidatorNeuron):
         """
         exclude_pdbs = self.store.get_queue(ready=False).index.tolist()
 
-        for i in range(k):
+        for _ in range(k):
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 
