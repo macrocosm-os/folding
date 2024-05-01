@@ -1,12 +1,11 @@
 import os
 import glob
 import base64
-import time
 import psutil
 import concurrent.futures
 
 import bittensor as bt
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
@@ -117,8 +116,14 @@ class FoldingMiner(BaseMinerNeuron):
 
         return state_commands
 
-    async def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
+    def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
         """The main async function that is called by the dendrite to run the simulation.
+        There are a set of default behaviours the miner should carry out based on the form
+        the synapse comes in as: 
+            1. If the synapse has a pdb_id that is already being processed, return the intermediate gro file
+            2. If the synapse md_inputs contains a ckpt file, then we are expected to either accept/reject a simulation rebase. 
+            3. If none of the above conditions are met, we start a new simulation.
+                - If the number of active processes is less than the number of CPUs and the pdb_id is unique, start a new process
 
         Returns:
             FoldingSynapse: synapse with md_output attached
@@ -143,21 +148,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.executors[synapse.pdb_id] = gromax_executor
         self.futures[synapse.pdb_id] = future
-
-        #Here we will always check the total number of processes running and return the final synapse if we are done with a process.
-        while True:
-            if len(self.executors) == 0: 
-                break
-
-            futures = self.futures
-            for pdb_id, future in futures.items():
-                if future.done():
-                    gromacs_executor = self.executors[pdb_id] 
-                    final_synapse = gromacs_executor.final_synapse
-
-                    del gromacs_executor #no need to keep the data in memory. 
-                    del self.futures[pdb_id] #remove any artifact of the future. 
-                    return final_synapse
 
     
 class GromacsExecutor():
