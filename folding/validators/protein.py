@@ -52,6 +52,8 @@ class Protein:
             for line in f.readlines():
                 key, value = line.split('=')
                 params[key] = value
+                
+        bt.logging.info(f"Loaded protein from {pdb_id} with params: {params}")
 
         return Protein(**params)
 

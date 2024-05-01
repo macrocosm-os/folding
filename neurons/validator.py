@@ -20,10 +20,11 @@ import time
 import numpy as np
 from typing import Dict
 import bittensor as bt
+from itertools import chain
 
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
-from folding.validators.forward import forward, create_new_challenge, run_step
+from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
@@ -80,16 +81,17 @@ class Validator(BaseValidatorNeuron):
             k (int): The number of jobs create and distribute to miners.
         """
         
-        exclude_pdbs = [queued_job.pdb for queued_job in self.store.get_queue(ready=False)]
+        exclude_pdbs = [queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue]
 
         for _ in range(k):
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 
             # assign workers to the job (hotkeys)
-            active_jobs = self.store.get_queue(ready=False)
-            # exclude hotkeys that are already in use by this validator (a single job)
-            active_hotkeys = active_jobs["hotkeys"].explode().unique().tolist()
+            active_jobs = self.store.get_queue(ready=False).queue
+            active_hotkeys = [j.hotkeys for j in active_jobs]
+            active_hotkeys = list(chain.from_iterable(active_hotkeys))
+            
             exclude_uids = [
                 self.metagaph.hotkeys.index(hotkey) for hotkey in active_hotkeys
             ]
