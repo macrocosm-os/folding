@@ -62,10 +62,14 @@ class Validator(BaseValidatorNeuron):
         """
 
         # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
+        bt.logging.warning("INSIDE OF THE VALIDATOR ASYNC FORWARD")
+        
         protein = Protein.from_pdb(pdb_id=job.pdb)
         uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
+        
+        bt.logging.info("⏰ Waiting for miner responses ⏰")
         return await run_step(
             self,
             protein=protein,
@@ -81,9 +85,13 @@ class Validator(BaseValidatorNeuron):
             k (int): The number of jobs create and distribute to miners.
         """
         
+        #Set of pdbs that are currently in the process of running. 
         exclude_pdbs = [queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue]
-
-        for _ in range(k):
+        
+        # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
+        for ii in range(k):
+            bt.logging.error(f"Adding job: {ii+1}/{k}")
+            
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 
