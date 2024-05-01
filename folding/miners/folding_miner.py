@@ -81,11 +81,11 @@ def attach_files_to_synapse(
             f"Attached {len(synapse.md_output)} files to synapse.md_output for protein: {synapse.pdb_id}"
         )
 
-    except Exception as E:
-        bt.logging.error(f"Error attaching files to synapse: {E}")
+    except Exception as e:
+        bt.logging.error(f"Failed to attach files with error: {e}")
 
     finally:
-        return synapse
+        return synapse  # either return the synapse wth the md_output attached or the synapse as is.
 
 
 class FoldingMiner(BaseMinerNeuron):
@@ -132,6 +132,7 @@ class FoldingMiner(BaseMinerNeuron):
         run_cmd_commands(
             commands=command, suppress_cmd_output=self.config.neuron.suppress_cmd_output
         )
+
         return attach_files_to_synapse(
             synapse=synapse,
             data_directory=data_directory,
@@ -184,6 +185,7 @@ class FoldingMiner(BaseMinerNeuron):
                     state="md_0_1",  # attach the last state of the simulation as not files are labelled as 'finished'
                 )
 
+                # This will run if final_synapse exists.
                 del self.simulations[
                     synapse.pdb_id
                 ]  # Remove the simulation from the list
@@ -199,6 +201,7 @@ class FoldingMiner(BaseMinerNeuron):
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the files from the last simulation. This only works if you have kept the data.
             output_dir = os.path.join(BASE_DATA_PATH, synapse.pdb_id)
+
             return attach_files_to_synapse(
                 synapse=synapse, data_directory=output_dir, state="md_0_1"
             )
