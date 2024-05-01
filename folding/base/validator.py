@@ -27,7 +27,6 @@ import threading
 import bittensor as bt
 
 from typing import List
-from queue import Queue
 from traceback import print_exception
 
 from folding.base.neuron import BaseNeuron
@@ -154,9 +153,8 @@ class BaseValidatorNeuron(BaseNeuron):
                 # TODO: maybe concurrency for the loop below
                 for job in self.store.get_queue(ready=False).queue:
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
-                    bt.logging.warning(f"RUNNING FORWARD JOB {job.pdb}")
-                    event = self.forward(job)
-
+                    event = self.forward(job = job) 
+                    
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
                     self.update_job(job, event)
