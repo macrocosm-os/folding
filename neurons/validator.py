@@ -79,7 +79,8 @@ class Validator(BaseValidatorNeuron):
         Args:
             k (int): The number of jobs create and distribute to miners.
         """
-        exclude_pdbs = self.store.get_queue(ready=False).index.tolist()
+        
+        exclude_pdbs = [queued_job.pdb for queued_job in self.store.get_queue(ready=False)]
 
         for _ in range(k):
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
@@ -129,7 +130,7 @@ class Validator(BaseValidatorNeuron):
 if __name__ == "__main__":
     with Validator() as v:
         while v.is_running and not v.should_exit:
-            bt.logging.info(
-                f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
-            )
+            # bt.logging.info(
+            #     f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
+            # )
             time.sleep(15)
