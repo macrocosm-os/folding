@@ -173,11 +173,16 @@ class FoldingMiner(BaseMinerNeuron):
             simulation = self.simulations[synapse.pdb_id]
 
             if simulation["executor"].get_state() == "finished":
-                return attach_files_to_synapse(
+                final_synapse = attach_files_to_synapse(
                     synapse=synapse,
                     data_directory=simulation["output_dir"],
                     state="md_0_1",  # attach the last state of the simulation as not files are labelled as 'finished'
                 )
+
+                del self.simulations[
+                    synapse.pdb_id
+                ]  # Remove the simulation from the list
+                return final_synapse
 
             return self.compute_itermediate_gro(
                 synapse=synapse,
