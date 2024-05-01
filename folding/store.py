@@ -93,7 +93,7 @@ class PandasJobStore:
     """Basic csv-based job store using pandas."""
 
     columns = {
-        "pdb": "str",
+        # "pdb": "str",
         "active": "bool",
         "hotkeys": "object",
         "created_at": "datetime64[s]",
@@ -105,6 +105,7 @@ class PandasJobStore:
         "gro_hash": "str",
         "update_interval": "timedelta64[s]",
         "updated_count": "int",
+        "max_time_no_improvement": "timedelta64[s]",
     }
 
     def __init__(self, db_path, table_name="protein_jobs", force_create=False):
@@ -118,23 +119,10 @@ class PandasJobStore:
         """Just shows the underlying DataFrame."""
         return f"{self.__class__.__name__}\n{self._db.__repr__()}"
 
-    def write(self, reset_index=False):
-        """The write method writes data to the _db attribute.
-
-        Args:
-            reset_index (bool, optional):
-                On the creation of the _db method, the dataframe is made with the columns
-                explicitly set as indicated in the self.columns attribute. Therefore,
-                pdb is a column when initially created. When inserting and updating, the
-                job.to_frame() method is used to convert the job to a DataFrame, where the
-                pdb is actually the index. So, we need to make this in to a column to not remove
-                it when calling the write method. Defaults to False.
-
+    def write(self):
+        """The write method writes the current state of the database to a csv file.
         """
-        if reset_index:
-            self._db.reset_index(names="pdb").to_csv(self.file_path, index=False)
-        else:
-            self._db.to_csv(self.file_path, index=False)
+        self._db.to_csv(self.file_path, index=True, index_label="pdb")
 
     def load_table(self, force_create=False) -> pd.DataFrame:
         """Creates a table in the database to store jobs."""
@@ -142,10 +130,15 @@ class PandasJobStore:
         if not os.path.exists(self.file_path) or force_create:
             os.makedirs(self.db_path, exist_ok=True)
 
-            self._db = pd.DataFrame(columns=self.columns.keys())
+            self._db = pd.DataFrame(
+                columns=self.columns.keys(),
+                index=pd.Index([],name='pdb')
+            )
             self.write()
 
-        return pd.read_csv(self.file_path).astype(self.columns).set_index("pdb")
+        df = pd.read_csv(self.file_path).astype(self.columns).set_index("pdb")
+        df['hotkeys'] = df['hotkeys'].apply(eval)
+        return df
 
     def get_queue(self, ready=True) -> Queue:
         """Checks DB for all jobs with active status and returns them as a DataFrame.
@@ -186,7 +179,10 @@ class PandasJobStore:
         else:
             self._db = pd.concat([self._db, job], ignore_index=False, axis=0)
 
-        self.write(reset_index=True)
+        self._db.index.name = 'pdb'
+        self._db = self._db.astype(self.columns)
+
+        self.write()
 
     def update(self, job):
         """Updates the status of a job in the database."""
@@ -194,7 +190,7 @@ class PandasJobStore:
         job_to_update = job.to_frame()
 
         self._db.update(job_to_update)
-        self.write(reset_index=True)
+        self.write()
 
 
 @dataclass
