@@ -47,40 +47,45 @@ def attach_files_to_synapse(
 
     synapse.md_output = {}  # ensure that the initial state is empty
 
-    if desired_files is None:
-        state_files = os.path.join(
-            data_directory, f"{state}"
-        )  # The current state of the simulation. Likely to always be the last state
-        desired_files = glob.glob(f"{state_files}*") + glob.glob(
-            f"{data_directory}/*.edr"
-        )  # Grab all the state_files and the edr files
+    try:
+        if desired_files is None:
+            state_files = os.path.join(
+                data_directory, f"{state}"
+            )  # The current state of the simulation. Likely to always be the last state
+            desired_files = glob.glob(f"{state_files}*") + glob.glob(
+                f"{data_directory}/*.edr"
+            )  # Grab all the state_files and the edr files
 
-    else:
-        # If we pass a list of files, we will attach the latest checkpoint file as well.
-        latest_cpt_file = max(
-            glob.glob("*.cpt"), key=os.path.getctime
-        )  # TODO: This is default behaviour, but maybe we shouldn't do this?
+        else:
+            # If we pass a list of files, we will attach the latest checkpoint file as well.
+            latest_cpt_file = max(
+                glob.glob("*.cpt"), key=os.path.getctime
+            )  # TODO: This is default behaviour, but maybe we shouldn't do this?
 
-        desired_files.append(latest_cpt_file)
+            desired_files.append(latest_cpt_file)
 
-        desired_files = [
-            os.path.join(data_directory, file) for file in desired_files
-        ]  # Explicitly add the data_directory to the files
+            desired_files = [
+                os.path.join(data_directory, file) for file in desired_files
+            ]  # Explicitly add the data_directory to the files
 
-    bt.logging.info(f"Desired files to send to the validator: {desired_files}")
-    for filename in desired_files:
-        bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
-        try:
-            with open(filename, "rb") as f:
-                synapse.md_output[filename] = base64.b64encode(f.read())
-        except Exception as e:
-            bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
+        bt.logging.info(f"Desired files to send to the validator: {desired_files}")
+        for filename in desired_files:
+            bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
+            try:
+                with open(filename, "rb") as f:
+                    synapse.md_output[filename] = base64.b64encode(f.read())
+            except Exception as e:
+                bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
 
-    bt.logging.success(
-        f"Attached {len(synapse.md_output)} files to synapse.md_output for protein: {synapse.pdb_id}"
-    )
+        bt.logging.success(
+            f"Attached {len(synapse.md_output)} files to synapse.md_output for protein: {synapse.pdb_id}"
+        )
 
-    return synapse
+    except Exception as E:
+        bt.logging.error(f"Error attaching files to synapse: {E}")
+
+    finally:
+        return synapse
 
 
 class FoldingMiner(BaseMinerNeuron):
@@ -188,6 +193,14 @@ class FoldingMiner(BaseMinerNeuron):
                 synapse=synapse,
                 data_directory=simulation["output_dir"],
                 state=simulation["executor"].get_state(),
+            )
+
+        elif synapse.pdb_id in os.listdir(BASE_DATA_PATH):
+            # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
+            # and we can return the files from the last simulation. This only works if you have kept the data.
+            output_dir = os.path.join(BASE_DATA_PATH, synapse.pdb_id)
+            return attach_files_to_synapse(
+                synapse=synapse, data_directory=output_dir, state="md_0_1"
             )
 
         # Check if the number of active processes is less than the number of CPUs
