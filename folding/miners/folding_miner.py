@@ -37,6 +37,7 @@ def attach_files_to_synapse(
      1. nvt
      2. npt
      3. md_0_1
+     4. finished
 
     State depends on the current state of the simulation (controlled in GromacsExecutor.run() method)
 
@@ -59,6 +60,7 @@ def attach_files_to_synapse(
         latest_cpt_file = max(
             glob.glob("*.cpt"), key=os.path.getctime
         )  # TODO: This is default behaviour, but maybe we shouldn't do this?
+
         desired_files.append(latest_cpt_file)
 
         desired_files = [
@@ -169,6 +171,14 @@ class FoldingMiner(BaseMinerNeuron):
         # If we are already running a process with the same identifier, return intermediate information
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
+
+            if simulation["executor"].get_state() == "finished":
+                return attach_files_to_synapse(
+                    synapse=synapse,
+                    data_directory=simulation["output_dir"],
+                    state="md_0_1",  # attach the last state of the simulation as not files are labelled as 'finished'
+                )
+
             return self.compute_itermediate_gro(
                 synapse=synapse,
                 data_directory=simulation["output_dir"],
@@ -176,7 +186,7 @@ class FoldingMiner(BaseMinerNeuron):
             )
 
         # Check if the number of active processes is less than the number of CPUs
-        if len(self.executors) >= self.max_workers:
+        if len(self.simulations) >= self.max_workers:
             bt.logging.warning("Cannot start new process: CPU limit reached.")
             return synapse  # Return the synapse as is
 
@@ -246,6 +256,7 @@ class GromacsExecutor:
             )
 
         bt.logging.success(f"✅Finished GROMACS simulation for protein: {pdb_id}✅")
+        self.state = "finished"
 
     def get_state(self):
         return (
