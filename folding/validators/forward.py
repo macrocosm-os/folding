@@ -21,7 +21,7 @@ PDB_IDS = load_pdb_ids(
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 
-async def run_step(
+def run_step(
     self,
     protein: Protein,
     uids: List[int],
@@ -36,20 +36,18 @@ async def run_step(
         pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
     )
 
-    # Make calls to the network with the prompt.
-    responses: List[FoldingSynapse] = await self.dendrite(
+    # Make calls to the network with the prompt - this is synchronous.
+    responses: List[FoldingSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
 
-    rewards, events = get_rewards(protein=protein, responses=responses, uids=uids)
-
-    self.update_scores(
-        rewards=rewards,
-        uids=uids,  # pretty confident these are in the correct order.
-    )
+    # For now we just want to get the losses, we are not rewarding yet
+    # TODO: reframe the rewarding classes to just return the loss (e.g energy) for each response
+    # We need to be super careful that the shape of losses is the same as the shape of the uids (becuase re refer to things downstream by index and assign rewards to the hotkey at that index)
+    losses, events = get_losses(protein=protein, responses=responses, uids=uids)
 
     response_info = get_response_info(responses=responses)
 
@@ -58,10 +56,11 @@ async def run_step(
         "block": self.block,
         "step_length": time.time() - start_time,
         "uids": uids,
-        "rewards": rewards,
+        "losses": losses,
         **response_info,
         **events,  # contains another copy of the uids used for the reward stack
     }
+    
 
     bt.logging.warning(f"Event information: {event}")
     return event
