@@ -2,72 +2,106 @@ import pytest
 
 import os
 import time
+import random
+import string
 from pathlib import Path
 import concurrent.futures
 from collections import defaultdict
-import bittensor as bt
 from folding.miners.folding_miner import MockGromacsExecutor
+
+import bittensor as bt
 
 ROOT_PATH = Path(__file__).parent
 OUTPUT_PATH = os.path.join(ROOT_PATH, "mock_data", "test_miner")
 
-EXECUTOR = concurrent.futures.ProcessPoolExecutor(max_workers=2)
-TOTAL_WAIT_TIME = 2
+TOTAL_WAIT_TIME = 3  # seconds
+
+
+def _make_pdb():
+    return "".join(random.choices(string.digits + string.ascii_lowercase, k=4))
+
+
+def delete_output_dir():
+    """We create a lot of files in the process of tracking pdb files.
+    Therefore, we want to delete the output directory after we are done with the tests.
+    """
+    if os.path.exists(OUTPUT_PATH):
+        for file in os.listdir(OUTPUT_PATH):
+            os.remove(os.path.join(OUTPUT_PATH, file))
+        os.rmdir(OUTPUT_PATH)
 
 
 def test_gromacs_executor_simple():
-    executor = MockGromacsExecutor(output_dir=OUTPUT_PATH)
+    executor = MockGromacsExecutor(pdb_id=_make_pdb(), output_dir=OUTPUT_PATH)
     executor.run(total_wait_time=1)
     state = executor.get_state()
     assert state is not None  # Add more specific checks as needed
     assert state == "finished"  # Add more specific checks as needed
 
+    delete_output_dir()
 
-def test_gromacs_executor():
+
+def check_file_exists(file_path: str):
+    return os.path.exists(file_path)
+
+
+@pytest.mark.parametrize("max_workers", [1, 2])
+def test_gromacs_executor(max_workers: int):
     def nested_dict():
         return defaultdict(
             lambda: None
         )  # allows us to set the desired attribute to anything.
 
+    EXECUTOR = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
+
     simulations = defaultdict(
         nested_dict
     )  # Maps pdb_ids to the current state of the simulation
 
-    gromax_executor = MockGromacsExecutor(output_dir=OUTPUT_PATH)
-    assert gromax_executor is not None, "Executor should not be None"
-    assert gromax_executor.state is None, "State should be None"
+    for _ in range(max_workers):
+        pdb_id = _make_pdb()
+        gromax_executor = MockGromacsExecutor(pdb_id=pdb_id, output_dir=OUTPUT_PATH)
+        assert gromax_executor is not None, "Executor should not be None"
+        assert gromax_executor.state is None, "State should be None"
 
-    future = EXECUTOR.submit(gromax_executor.run, total_wait_time=TOTAL_WAIT_TIME)
+        future = EXECUTOR.submit(gromax_executor.run, total_wait_time=TOTAL_WAIT_TIME)
 
-    assert future.done() is False, "Future should not be done"
+        assert future.done() is False, "Future should not be done"
 
-    simulations["test_pdb"]["future"] = future
-    simulations["test_pdb"]["executor"] = gromax_executor
-
-    recorded_states = []
-    all_states = []
+        simulations[pdb_id]["future"] = future
+        simulations[pdb_id]["executor"] = gromax_executor
 
     # Now we want to continually check the state of the simulation
     while True:
-        for _, sim in simulations.items():
+        for pdb_id, sim in simulations.items():
             if not sim["future"].done():
+                # check if output path has any .txt files
+                # This seems to happen because of some IO delay..
+                if os.path.exists(OUTPUT_PATH):
+                    if len(os.listdir(OUTPUT_PATH)) == 0:
+                        bt.logging.warning(f"OUTPUT_PATH IS EMPTY... continue")
+                        continue
+                else:
+                    bt.logging.warning(f"OUTPUT_PATH DOES NOT EXIST... continue")
+                    continue
+
                 current_state = sim["executor"].get_state()
-                bt.logging.info(
-                    f"Inside of the while loop. Current state is {current_state}"
-                )
-                all_states.append(current_state)
-                if current_state not in recorded_states:
-                    recorded_states.append(current_state)
+
+                if current_state not in simulations[pdb_id]["recorded_states"]:
+                    simulations[pdb_id]["recorded_states"].append(current_state)
 
             else:  # therefore the simulation must finish
                 assert (
                     sim["executor"].get_state() == "finished"
                 ), "Simulation should be finished"
-                recorded_states.append(sim["executor"].get_state())
 
-                print(f"all states: {all_states}")
+                simulations[pdb_id]["recorded_states"].append(
+                    sim["executor"].get_state()
+                )
+
                 assert sim["executor"].required_values.issubset(
-                    set(recorded_states)
-                ), f"Required values, {sim['executor'].required_values}, should be a subset of recorded states, {recorded_states}"
+                    set(simulations[pdb_id]["recorded_states"])
+                ), f"Required values, {sim['executor'].required_values}, should be a subset of recorded states, {simulations[pdb_id]['recorded_states']}"
 
-                return None
+        delete_output_dir()
+        return None

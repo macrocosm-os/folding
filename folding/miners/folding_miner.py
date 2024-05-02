@@ -292,8 +292,8 @@ class GromacsExecutor:
 
 
 class MockGromacsExecutor(GromacsExecutor):
-    def __init__(self, output_dir: str) -> None:
-        super().__init__(pdb_id="test_pdb")
+    def __init__(self, pdb_id: str, output_dir: str) -> None:
+        super().__init__(pdb_id=pdb_id)
         self.required_values = set(["init", "wait", "finished"])
         self.output_dir = output_dir
 
@@ -318,4 +318,3 @@ class MockGromacsExecutor(GromacsExecutor):
             bt.logging.info(f"Total state_time: {time.time() - state_time}")
 
         bt.logging.warning(f"Total run method time: {time.time() - start_time}")
-        return None
