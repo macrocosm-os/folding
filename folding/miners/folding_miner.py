@@ -1,4 +1,5 @@
 import os
+import time
 import glob
 import base64
 import psutil
@@ -214,16 +215,13 @@ class FoldingMiner(BaseMinerNeuron):
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         # Create the job and submit it to the executor
-        gromax_executor = GromacsExecutor()
+        gromax_executor = GromacsExecutor(pdb_id=synapse.pdb_id)
 
-        output_dir = os.path.join(BASE_DATA_PATH, synapse.pdb_id)
         future = self.executor.submit(
             gromax_executor.run,
-            synapse.pdb_id,
             synapse.md_inputs,
-            output_dir,
             state_commands,
-            self.config,
+            self.config.neuron.suppress_cmd_output,
         )
 
         self.simulations[synapse.pdb_id]["executor"] = gromax_executor
@@ -231,17 +229,19 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["output_dir"] = output_dir
 
 
-@dataclass
 class GromacsExecutor:
-    state: str = None
+    def __init__(self, pdb_id: str) -> None:
+        self.pdb_id = pdb_id
+        self.state: str = None
+        self.state_file_name = f"{pdb_id}_state.txt"
+
+        self.output_dir = os.path.join(BASE_DATA_PATH, self.pdb_id)
 
     def run(
         self,
-        pdb_id: str,
         md_inputs: Dict,
-        output_dir: str,
         commands: Dict,
-        config: Dict,
+        suppress_cmd_output: bool = True,
     ) -> FoldingSynapse:
         """run method to handle the processing of the gromacs simulation.
 
@@ -254,32 +254,68 @@ class GromacsExecutor:
             FoldingSynapse: The ORIGINAL synapse with the md_output attached
         """
         bt.logging.info(
-            f"Running GROMACS simulation for protein: {pdb_id} with files {md_inputs.keys()}"
+            f"Running GROMACS simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
 
         # Make sure the output directory exists and if not, create it
-        check_if_directory_exists(output_directory=output_dir)
-        os.chdir(output_dir)  # TODO: will this be a problem with many processes?
+        check_if_directory_exists(output_directory=self.output_dir)
+        os.chdir(self.output_dir)  # TODO: will this be a problem with many processes?
 
         # The following files are required for GROMACS simulations and are recieved from the validator
         for filename, content in md_inputs.items():
             # Write the file to the output directory
             with open(filename, "w") as file:
-                bt.logging.info(f"\nWriting {filename} to {output_dir}")
+                bt.logging.info(f"\nWriting {filename} to {self.output_dir}")
                 file.write(content)
 
         for state, commands in commands.items():
             bt.logging.info(f"Running {state} commands")
-            self.state = state
 
-            run_cmd_commands(
-                commands=commands, suppress_cmd_output=config.neuron.suppress_cmd_output
-            )
+            with open(self.state_file_name, "w") as f:
+                f.write(f"{state}\n")
 
-        bt.logging.success(f"✅Finished GROMACS simulation for protein: {pdb_id}✅")
-        self.state = "finished"
+            run_cmd_commands(commands=commands, suppress_cmd_output=suppress_cmd_output)
+
+        bt.logging.success(f"✅Finished GROMACS simulation for protein: {self.pdb_id}✅")
+
+        state = "finished"
+        with open(self.state_file_name, "w") as f:
+            f.write(f"{state}\n")
 
     def get_state(self):
-        return (
-            self.state
-        )  # retuns which protion of the simulation stack the miner is in.
+        with open(os.path.join(self.output_dir, self.state_file_name), "r") as f:
+            lines = f.readlines()
+
+            if lines:
+                return lines[-1].strip()  # return the last line of the file
+            return None
+
+
+class MockGromacsExecutor(GromacsExecutor):
+    def __init__(self, output_dir: str) -> None:
+        super().__init__(pdb_id="test_pdb")
+        self.required_values = set(["init", "wait", "finished"])
+        self.output_dir = output_dir
+
+    def run(self, total_wait_time: int = 1):
+        start_time = time.time()
+
+        bt.logging.success(f"✅ MockGromacsExecutor.run is running ✅")
+        check_if_directory_exists(output_directory=self.output_dir)
+
+        store = os.path.join(self.output_dir, self.state_file_name)
+        states = ["init", "wait", "finished"]
+
+        itermediate_interval = total_wait_time / len(states)
+
+        for state in states:
+            bt.logging.info(f"Running state: {state}")
+            state_time = time.time()
+            with open(store, "w") as f:
+                f.write(f"{state}\n")
+
+            time.sleep(itermediate_interval)
+            bt.logging.info(f"Total state_time: {time.time() - state_time}")
+
+        bt.logging.warning(f"Total run method time: {time.time() - start_time}")
+        return None
