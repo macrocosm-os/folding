@@ -232,7 +232,9 @@ class Job:
         self.updated_at = pd.Timestamp.now()
         self.updated_count += 1
 
-        if loss < self.best_loss:
+        # TODO: make epsilon a param, or a class attrib
+        epsilon = 0.001
+        if loss < self.best_loss - epsilon:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now()
             self.best_hotkey = hotkey
