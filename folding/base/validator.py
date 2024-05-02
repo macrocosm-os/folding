@@ -27,7 +27,6 @@ import threading
 import bittensor as bt
 
 from typing import List
-from queue import Queue
 from traceback import print_exception
 
 from folding.base.neuron import BaseNeuron
@@ -142,21 +141,20 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Our BaseValidator logic is intentionally as generic as possible so that the Validator neuron can apply problem-specific logic
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                # Check if we have any ready jobs (Job) in the queue
-                queue: Queue = self.store.get_queue(ready=True)
-
                 # Check if we need to add more jobs to the queue
-                if self.store.get_queue(ready=False).qsize() < self.config.queue_size:
+                queue = self.store.get_queue(ready=False)
+                
+                if queue.qsize() < self.config.neuron.queue_size:
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
-                    self.add_jobs(k=self.config.queue_size - queue.qsize())
+                    self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
                     continue
 
                 # TODO: maybe concurrency for the loop below
-                for job in queue.queue:
+                for job in self.store.get_queue(ready=False).queue:
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
-                    event = self.forward(job)
-
+                    event = self.forward(job = job) 
+                    
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
                     self.update_job(job, event)

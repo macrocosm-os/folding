@@ -20,10 +20,11 @@ import time
 import numpy as np
 from typing import Dict
 import bittensor as bt
+from itertools import chain
 
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
-from folding.validators.forward import forward, create_new_challenge, run_step
+from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
@@ -61,10 +62,14 @@ class Validator(BaseValidatorNeuron):
         """
 
         # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
+        bt.logging.warning("INSIDE OF THE VALIDATOR ASYNC FORWARD")
+        
         protein = Protein.from_pdb(pdb_id=job.pdb)
         uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
+        
+        bt.logging.info("⏰ Waiting for miner responses ⏰")
         return await run_step(
             self,
             protein=protein,
@@ -79,16 +84,22 @@ class Validator(BaseValidatorNeuron):
         Args:
             k (int): The number of jobs create and distribute to miners.
         """
-        exclude_pdbs = self.store.get_queue(ready=False).index.tolist()
-
-        for i in range(k):
+        
+        #Set of pdbs that are currently in the process of running. 
+        exclude_pdbs = [queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue]
+        
+        # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
+        for ii in range(k):
+            bt.logging.error(f"Adding job: {ii+1}/{k}")
+            
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 
             # assign workers to the job (hotkeys)
-            active_jobs = self.store.get_queue(ready=False)
-            # exclude hotkeys that are already in use by this validator (a single job)
-            active_hotkeys = active_jobs["hotkeys"].explode().unique().tolist()
+            active_jobs = self.store.get_queue(ready=False).queue
+            active_hotkeys = [j.hotkeys for j in active_jobs]
+            active_hotkeys = list(chain.from_iterable(active_hotkeys))
+            
             exclude_uids = [
                 self.metagaph.hotkeys.index(hotkey) for hotkey in active_hotkeys
             ]
@@ -129,7 +140,7 @@ class Validator(BaseValidatorNeuron):
 if __name__ == "__main__":
     with Validator() as v:
         while v.is_running and not v.should_exit:
-            bt.logging.info(
-                f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
-            )
+            # bt.logging.info(
+            #     f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
+            # )
             time.sleep(15)
