@@ -21,6 +21,7 @@ import numpy as np
 from typing import Dict
 import bittensor as bt
 from itertools import chain
+from typing import List
 
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
@@ -82,8 +83,10 @@ class Validator(BaseValidatorNeuron):
         Args:
             k (int): The number of jobs create and distribute to miners.
         """
-        #Set of pdbs that are currently in the process of running.
-        exclude_pdbs = [queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue]
+        # Set of pdbs that are currently in the process of running.
+        exclude_pdbs = [
+            queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue
+        ]
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
             bt.logging.error(f"Adding job: {ii+1}/{k}")
@@ -117,13 +120,13 @@ class Validator(BaseValidatorNeuron):
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
-        losses = event['losses']
+        losses: List = event["losses"]
 
         best_index = np.argmin(losses)
         best_loss = losses[best_index]
         best_hotkey = job.hotkeys[best_index]
 
-        print(f'{best_index=}, {best_loss=}, {best_hotkey=}')
+        # print(f'{best_index=}, {best_loss=}, {best_hotkey=}')
 
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
@@ -162,4 +165,4 @@ if __name__ == "__main__":
             # bt.logging.info(
             #     f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
             # )
-            time.sleep(15)
+            time.sleep(30)

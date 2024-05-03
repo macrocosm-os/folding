@@ -8,7 +8,7 @@ from typing import List, Dict
 
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
-from folding.validators.reward import get_rewards
+from folding.validators.reward import get_losses
 from folding.protocol import FoldingSynapse
 from folding.rewards.reward import RewardEvent
 
@@ -60,7 +60,6 @@ def run_step(
         **response_info,
         **events,  # contains another copy of the uids used for the reward stack
     }
-    
 
     bt.logging.warning(f"Event information: {event}")
     return event
@@ -105,7 +104,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
         )
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
-        event = try_prepare_challenge(config = self.config, pdb_id = pdb_id)
+        event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
 
         if event.get("validator_search_status") == True:
             return event
