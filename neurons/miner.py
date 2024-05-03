@@ -15,13 +15,13 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
-import time 
+import time
 import bittensor as bt
 from folding.miners.folding_miner import FoldingMiner
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
-    with Miner() as m:
+    with FoldingMiner() as m:
         while True:
             bt.logging.info(
                 f"Miner running:: network: {m.subtensor.network} | step: {m.step} | uid: {m.uid} | trust: {m.metagraph.trust[m.uid]:.3f} | emission {m.metagraph.emission[m.uid]:.3f}"

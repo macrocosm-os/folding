@@ -83,7 +83,9 @@ def gro_hash(gro_path: str):
 
     with open(gro_path, "rb") as f:
         name, length, *lines, _ = f.readlines()
-        name = name.decode().split(' t=')[0].strip("\n").encode() #if we are rerunning the gro file using trajectory, we need to include this
+        name = (
+            name.decode().split(" t=")[0].strip("\n").encode()
+        )  # if we are rerunning the gro file using trajectory, we need to include this
         length = int(length)
         bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
 
