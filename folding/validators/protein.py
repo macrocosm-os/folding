@@ -73,10 +73,13 @@ class Protein:
             bt.logging.info(
                 f"\n⏰ {self.pdb_file} does not exist in repository... Downloading"
             )
-            if check_and_download_pdbs(
+            if not check_and_download_pdbs(
                 pdb_directory=self.pdb_directory, pdb_file=self.pdb_file
             ):
-                bt.logging.info(f"\n💬 {self.pdb_file} Downloaded and complete!")
+                raise Exception(
+                    f"Failed to download {self.pdb_file} to {self.pdb_directory}"
+                )
+
         else:
             bt.logging.success(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
