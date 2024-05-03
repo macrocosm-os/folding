@@ -7,9 +7,8 @@ from pathlib import Path
 from typing import List, Dict
 
 from folding.validators.protein import Protein
-from folding.utils.uids import get_random_uids
 from folding.utils.logging import log_event
-from folding.validators.reward import get_rewards
+from folding.validators.reward import get_losses
 from folding.protocol import FoldingSynapse
 from folding.rewards.reward import RewardEvent
 
@@ -22,38 +21,33 @@ PDB_IDS = load_pdb_ids(
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 
-async def run_step(
+def run_step(
     self,
     protein: Protein,
-    k: int,
+    uids: List[int],
     timeout: float,
-    exclude: list = [],
     mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
 ):
-    bt.logging.debug("run_step")
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    uids = get_random_uids(self, k=k, exclude=exclude).to(self.device)
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = FoldingSynapse(
         pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
     )
 
-    # Make calls to the network with the prompt.
-    responses: List[FoldingSynapse] = await self.dendrite(
+    # Make calls to the network with the prompt - this is synchronous.
+    responses: List[FoldingSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
 
-    rewards, events = get_rewards(protein=protein, responses=responses, uids=uids)
-
-    self.update_scores(
-        rewards=rewards,
-        uids=uids,  # pretty confident these are in the correct order.
-    )
+    # For now we just want to get the losses, we are not rewarding yet
+    # TODO: reframe the rewarding classes to just return the loss (e.g energy) for each response
+    # We need to be super careful that the shape of losses is the same as the shape of the uids (becuase re refer to things downstream by index and assign rewards to the hotkey at that index)
+    losses, events = get_losses(protein=protein, responses=responses, uids=uids)
 
     response_info = get_response_info(responses=responses)
 
@@ -62,7 +56,7 @@ async def run_step(
         "block": self.block,
         "step_length": time.time() - start_time,
         "uids": uids,
-        "rewards": rewards,
+        "losses": losses,
         **response_info,
         **events,  # contains another copy of the uids used for the reward stack
     }
@@ -91,100 +85,92 @@ def parse_config(config) -> List[str]:
     return exclude_in_hp_search
 
 
-async def forward(self):
-    bt.logging.info(f"Running config: {self.config}")
+def create_new_challenge(self, exclude: List) -> Dict:
+    """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
+    using the try_prepare_challenge function.
 
+    Args:
+        exclude (List): list of pdb_ids to exclude from the search
+
+    Returns:
+        Dict: event dictionary containing the results of the hyperparameter search
+    """
     while True:
         forward_start_time = time.time()
-        exclude_in_hp_search = parse_config(self.config)
 
-        # We need to select a random pdb_id outside of the protein class.
-        pdb_id = (
-            select_random_pdb_id(PDB_IDS=PDB_IDS)
-            if self.config.protein.pdb_id is None
-            else self.config.protein.pdb_id
+        # Select a random pdb
+        pdb_id = self.config.protein.pdb_id or select_random_pdb_id(
+            PDB_IDS=PDB_IDS, exclude=exclude
         )
-        hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-        bt.logging.info(f"Total paramter space: {hp_sampler.parameter_set}")
+        # Perform a hyperparameter search until we find a valid configuration for the pdb
+        event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
 
-        for iteration_num in range(hp_sampler.TOTAL_COMBINATIONS):
-            hp_sampler_time = time.time()
+        if event.get("validator_search_status") == True:
+            return event
+        else:
+            # forward time if validator step fails
+            event["forward_time"] = time.time() - forward_start_time
 
-            event = {}
-            try:
-                sampled_combination: Dict = hp_sampler.sample_hyperparameters()
-                bt.logging.info(
-                    f"pdb_id: {pdb_id}, Selected hyperparameters: {sampled_combination}, iteration {iteration_num}"
-                )
-
-                protein = Protein(
-                    pdb_id=self.config.protein.pdb_id,
-                    ff=self.config.protein.ff
-                    if self.config.protein.ff is not None
-                    else sampled_combination["FF"],
-                    water=self.config.protein.water
-                    if self.config.protein.water is not None
-                    else sampled_combination["WATER"],
-                    box=self.config.protein.box
-                    if self.config.protein.box is not None
-                    else sampled_combination["BOX"],
-                    config=self.config.protein,
-                )
-
-                hps = {
-                    "FF": protein.ff,
-                    "WATER": protein.water,
-                    "BOX": protein.box,
-                    "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"],
-                }
-
-                bt.logging.info(f"Attempting to generate challenge: {protein}")
-                protein.forward()
-
-            except Exception as E:
-                bt.logging.error(
-                    f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
-                )
-                bt.logging.warning(E)
-                event["validator_search_status"] = False
-
-            finally:
-                event["pdb_id"] = pdb_id
-                event.update(hps)  # add the dictionary of hyperparameters to the event
-                event["hp_sample_time"] = time.time() - hp_sampler_time
-                event["forward_time"] = (
-                    time.time() - forward_start_time
-                )  # forward time if validator step fails
-
-                if "validator_search_status" not in event:
-                    bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
-                    event["validator_search_status"] = True  # simulation passed!
-                    break  # break out of the loop if the simulation was successful
-
-                log_event(
-                    self, event
-                )  # only log the event if the simulation was not successful
-
-        # If we exit the for loop without breaking, it means all hyperparameter combinations failed.
-        if event["validator_search_status"] is False:
+            # only log the event if the simulation was not successful
+            log_event(self, event)
             bt.logging.error(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
-            continue  # Skip to the next pdb_id
+            exclude.append(pdb_id)
 
-        # The following code only runs if we have a successful run!
-        bt.logging.info("⏰ Waiting for miner responses ⏰")
-        miner_event = await run_step(
-            self,
-            protein=protein,
-            k=self.config.neuron.sample_size,
-            timeout=self.config.neuron.timeout,
-        )
-        bt.logging.success("✅ All miners complete! ✅")
 
-        event.update(miner_event)
-        event["forward_time"] = time.time() - forward_start_time
+def try_prepare_challenge(config, pdb_id: str) -> Dict:
+    """Attempts to setup a simulation environment for the specific pdb & config
+    Uses a stochastic sampler to find hyperparameters that are compatible with the protein
+    """
 
-        bt.logging.success("✅ Logging pdb results to wandb ✅")
-        log_event(self, event)  # Log the entire pipeline.
+    exclude_in_hp_search = parse_config(config)
+
+    hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
+
+    bt.logging.info(f"Total parameter space: {hp_sampler.parameter_set}")
+
+    for iteration_num in range(hp_sampler.TOTAL_COMBINATIONS):
+        hp_sampler_time = time.time()
+
+        event = {}
+        try:
+            sampled_combination: Dict = hp_sampler.sample_hyperparameters()
+            bt.logging.info(
+                f"pdb_id: {pdb_id}, Selected hyperparameters: {sampled_combination}, iteration {iteration_num}"
+            )
+
+            hps = {
+                "ff": config.protein.ff or sampled_combination["FF"],
+                "water": config.protein.water or sampled_combination["WATER"],
+                "box": config.protein.box or sampled_combination["BOX"],
+                # "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"], #TODO: Add this to the downstream logic.
+            }
+
+            protein = Protein(
+                pdb_id=config.protein.pdb_id or pdb_id, config=config.protein, **hps
+            )
+
+            bt.logging.info(f"Attempting to generate challenge: {protein}")
+            protein.forward()
+
+        except Exception as E:
+            bt.logging.error(
+                f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
+            )
+            bt.logging.warning(E)
+            event["validator_search_status"] = False
+
+        finally:
+            event["pdb_id"] = pdb_id
+            event.update(hps)  # add the dictionary of hyperparameters to the event
+            event["hp_sample_time"] = time.time() - hp_sampler_time
+
+            if "validator_search_status" not in event:
+                bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
+                event["validator_search_status"] = True  # simulation passed!
+                # break out of the loop if the simulation was successful
+                break
+
+    return event

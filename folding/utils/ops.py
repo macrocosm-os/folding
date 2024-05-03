@@ -51,13 +51,16 @@ def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List
     return PDB_IDS
 
 
-def select_random_pdb_id(PDB_IDS: Dict) -> str:
+def select_random_pdb_id(PDB_IDS: Dict, exclude: list = None) -> str:
     """This function is really important as its where you select the protein you want to fold"""
     while True:
         family = random.choice(list(PDB_IDS.keys()))
         choices = PDB_IDS[family]
-        if len(choices):
-            return random.choice(choices)
+        if not len(choices):
+            continue
+        selected_pdb_id = random.choice(choices)
+        if exclude is not None and selected_pdb_id not in exclude:
+            return selected_pdb_id
 
 
 def gro_hash(gro_path: str):
