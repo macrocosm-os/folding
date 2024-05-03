@@ -4,9 +4,10 @@ import tqdm
 import random
 import subprocess
 import hashlib
+import pickle as pkl
 
-import pickle
 from typing import List, Dict
+import requests
 
 import bittensor as bt
 from folding.protocol import FoldingSynapse
@@ -47,7 +48,7 @@ def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List
         )
 
     with open(PDB_PATH, "rb") as f:
-        PDB_IDS = pickle.load(f)
+        PDB_IDS = pkl.load(f)
     return PDB_IDS
 
 
@@ -121,7 +122,65 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
             bt.logging.error(f"Output: {e.stdout.decode()}")
             bt.logging.error(f"Error: {e.stderr.decode()}")
-            continue
+            raise
+
+
+def check_and_download_pdbs(
+    pdb_directory: str, pdb_id: str, download: bool = True
+) -> bool:
+    """Check the status and optionally download a PDB file from the RCSB PDB database.
+
+    Args:
+        pdb_directory (str): Directory to save the downloaded PDB file.
+        pdb_id (str): PDB file ID to download.
+
+    Returns:
+        bool: True if the PDB file is downloaded successfully and doesn't contain missing values, False otherwise.
+
+    Raises:
+        Exception: If download fails.
+
+    """
+    url = f"https://files.rcsb.org/download/{pdb_id}"
+    path = os.path.join(pdb_directory, f"{pdb_id}")
+
+    r = requests.get(url)
+    if r.status_code == 200:
+        if is_pdb_complete(r.text):
+            if download:
+                check_if_directory_exists(output_directory=pdb_directory)
+                with open(path, "w") as file:
+                    file.write(r.text)
+
+                bt.logging.info(
+                    f"PDB file {pdb_id} downloaded and saved successfully from {url} to path {path!r}."
+                )
+
+            bt.logging.success(f"PDB file {pdb_id} is complete.")
+            return True
+        else:
+            bt.logging.error(
+                f"PDB file {pdb_id} downloaded successfully but contains missing values."
+            )
+            return False
+    else:
+        bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+        raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+
+
+def is_pdb_complete(pdb_text: str) -> bool:
+    """Check if the downloaded PDB file is complete.
+
+    Returns:
+        bool: True if the PDB file is complete, False otherwise.
+
+    """
+    missing_values = {"missing heteroatom", "missing residues", "missing atom"}
+    pdb_text_lower = pdb_text.lower()
+    for value in missing_values:
+        if value in pdb_text_lower:
+            return False
+    return True
 
 
 def get_response_info(responses: List[FoldingSynapse]) -> Dict:

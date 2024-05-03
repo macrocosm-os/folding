@@ -171,5 +171,14 @@ data/
 /gromacs-2024.1
 /md-intro-tutorial
 /gromacs-2024.1.tar.gz
-# /pdb_ids.pkl
+
+scripts/pdb_ids.pkl
+scripts/test_pdb_ids.pkl
+scripts/pdb_ids_complete.pkl
+scripts/pdb_ids_incomplete.pkl
+scripts/pdb_ids_not_downloadable.pkl
+scripts/complete_pdbs/
+scripts/incomplete_pdbs/
+*.csv
+
 /charmm36-jul2022.ff
