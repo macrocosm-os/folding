@@ -17,11 +17,11 @@ def parsing_miner_data(miner_data_directory: str, validator_data_directory: str)
         validator_data_directory=validator_data_directory,
     )
     # TODO: include these back in if we need them for the reward stack
-    data_extractor.energy(data_type="Potential")
+    # data_extractor.energy(data_type="Potential")
     # data_extractor.temperature(data_type="T-rest")
     # data_extractor.pressure(data_type="Pressure")
     # # data_extractor.density(data_type="Density")
-    # data_extractor.prod_energy(data_type="Potential")
+    data_extractor.prod_energy(data_type="Potential")
     # data_extractor.rmsd()
 
     return data_extractor.data
@@ -94,9 +94,8 @@ def get_losses(protein: Protein, responses: List[FoldingSynapse], uids: List[int
         apply_reward_pipeline(data=loss_data)
         if any(loss_data.values())
         else list(loss_data.values())
-    )  # list of None
+    )
     rewards, events = aggregate_rewards(reward_events=reward_events)
 
     events.update(md_output_summary)  # Record the size of the files in md_output
-
     return rewards, events

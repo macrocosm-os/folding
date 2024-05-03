@@ -119,24 +119,6 @@ class Protein:
             return missing_files
         return None
 
-    def rerun(self, args: dict):
-        """Rerun method is to rerun a step of a miner simulation to ensure that
-        the miner is running the correct protein.
-
-        Args:
-            args (dict): _description_
-        """
-        gro_file = args["gro_file"]
-        gro_file_name = os.path.splitext(gro_file)[0]
-        # prepare and run a 0 step simulation
-        commands = [
-            f"gmx grompp -f {self.validator_directory}/rerun.mdp -c {self.validator_directory}/{gro_file} -p {self.validator_directory}/topol.top -o {self.validator_directory}/rerun_{gro_file_name}_calculation.tpr",
-            f"gmx mdrun -deffnm {self.validator_directory}/rerun_{gro_file_name}_calculation -rerun {self.validator_directory}/{gro_file} ",
-        ]
-        run_cmd_commands(
-            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
-        )
-
     def forward(self):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
@@ -389,6 +371,23 @@ class Protein:
     def get_miner_data_directory(self, hotkey: str):
         return os.path.join(self.validator_directory, hotkey[:8])
 
+    def rerun(self, output_directory: str, gro_file_name: str):
+        """Rerun method is to rerun a step of a miner simulation to ensure that
+        the miner is running the correct protein.
+
+        Args:
+            output_directory: The directory where the files are stored and where the rerun files will be written to.
+            gro_file_name: The name of the .gro file that will be rerun. This is calculated by the *validator* beforehand.
+        """
+        gro_file_no_ext = os.path.splitext(gro_file_name)[0]
+        commands = [
+            f"gmx grompp -f {output_directory}/rerun.mdp -c {output_directory}/{gro_file_name} -p {output_directory}/topol.top -o {output_directory}/rerun_{gro_file_no_ext}_calculation.tpr",
+            f"gmx mdrun -deffnm {output_directory}/rerun_{gro_file_no_ext}_calculation -rerun {output_directory}/{gro_file_name} ",
+        ]
+        run_cmd_commands(
+            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
+        )
+
     def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
         """
         1. Check md_output for the required files, if unsuccessful return False
@@ -413,6 +412,10 @@ class Protein:
                 return False
 
         output_directory = self.get_miner_data_directory(hotkey=hotkey)
+
+        # We need to run a single step of the simulation to ensure that the miner is running the right pdb_id
+        self.calculate_itermediate_gro()  # TODO: Implement this. Currently on the miner side.
+        self.rerun()
 
         # Save files so we can check the hash later.
         self.save_files(
