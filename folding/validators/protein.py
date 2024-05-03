@@ -46,13 +46,13 @@ class Protein:
         self.md_inputs = {}
 
     @staticmethod
-    def from_pdb(pdb_id:str):
+    def from_pdb(pdb_id: str):
         params = {}
-        with open(os.path.join(ROOT_DIR, pdb_id, 'config.txt'),'r') as f:
+        with open(os.path.join(ROOT_DIR, pdb_id, "config.txt"), "r") as f:
             for line in f.readlines():
-                key, value = line.split('=')
+                key, value = line.split("=")
                 params[key] = value
-                
+
         bt.logging.info(f"Loaded protein from {pdb_id} with params: {params}")
 
         return Protein(**params)
@@ -120,11 +120,18 @@ class Protein:
         return None
 
     def rerun(self, args: dict):
-        gro_file_name = os.path.splitext(args["gro_file"])[0]
-        # prepare and run the 0 step simulation
+        """Rerun method is to rerun a step of a miner simulation to ensure that
+        the miner is running the correct protein.
+
+        Args:
+            args (dict): _description_
+        """
+        gro_file = args["gro_file"]
+        gro_file_name = os.path.splitext(gro_file)[0]
+        # prepare and run a 0 step simulation
         commands = [
-            f"gmx grompp -f {self.validator_directory}/rerun.mdp -c {self.validator_directory}/{args['gro_file']} -p {self.validator_directory}/topol.top -o {self.validator_directory}/rerun_{gro_file_name}_calculation.tpr",
-            f"gmx mdrun -deffnm {self.validator_directory}/rerun_{gro_file_name}_calculation -rerun {self.validator_directory}/{args['gro_file']} ",
+            f"gmx grompp -f {self.validator_directory}/rerun.mdp -c {self.validator_directory}/{gro_file} -p {self.validator_directory}/topol.top -o {self.validator_directory}/rerun_{gro_file_name}_calculation.tpr",
+            f"gmx mdrun -deffnm {self.validator_directory}/rerun_{gro_file_name}_calculation -rerun {self.validator_directory}/{gro_file} ",
         ]
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
