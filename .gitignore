@@ -182,3 +182,5 @@ scripts/incomplete_pdbs/
 *.csv
 
 /charmm36-jul2022.ff
+
+tests/mock_data

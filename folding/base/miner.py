@@ -16,12 +16,12 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import torch
 import asyncio
 import threading
 import argparse
 import traceback
 
+from typing import Tuple
 import bittensor as bt
 
 from folding.base.neuron import BaseNeuron
@@ -179,3 +179,41 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
+
+    async def blacklist(self, synapse) -> Tuple[bool, str]:
+        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        if (
+            not self.config.blacklist.allow_non_registered
+            and synapse.dendrite.hotkey not in self.metagraph.hotkeys
+        ):
+            # Ignore requests from un-registered entities.
+            bt.logging.trace(
+                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
+            )
+            return True, "Unrecognized hotkey"
+
+        if self.config.blacklist.force_validator_permit:
+            # If the config is set to force validator permit, then we should only allow requests from validators.
+            if not self.metagraph.validator_permit[uid]:
+                bt.logging.warning(
+                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
+                )
+                return True, "Non-validator hotkey"
+
+        bt.logging.trace(
+            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
+        )
+        return False, "Hotkey recognized!"
+
+    async def priority(self, synapse) -> float:
+        # TODO(developer): Define how miners should prioritize requests.
+        caller_uid = self.metagraph.hotkeys.index(
+            synapse.dendrite.hotkey
+        )  # Get the caller index.
+        priority = float(
+            self.metagraph.S[caller_uid]
+        )  # Return the stake as the priority.
+        bt.logging.trace(
+            f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority
+        )
+        return priority

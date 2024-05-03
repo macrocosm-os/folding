@@ -83,6 +83,7 @@ def gro_hash(gro_path: str):
 
     with open(gro_path, "rb") as f:
         name, length, *lines, _ = f.readlines()
+        name = name.decode().split(' t=')[0].strip("\n").encode() #if we are rerunning the gro file using trajectory, we need to include this
         length = int(length)
         bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
 
@@ -152,15 +153,11 @@ def check_and_download_pdbs(
                 with open(path, "w") as file:
                     file.write(r.text)
 
-                bt.logging.info(
-                    f"PDB file {pdb_id} downloaded and saved successfully from {url} to path {path!r}."
-                )
-
             bt.logging.success(f"PDB file {pdb_id} is complete.")
             return True
         else:
             bt.logging.error(
-                f"PDB file {pdb_id} downloaded successfully but contains missing values."
+                f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
             )
             return False
     else:
