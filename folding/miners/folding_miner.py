@@ -282,7 +282,8 @@ class GromacsExecutor:
         with open(self.state_file_name, "w") as f:
             f.write(f"{state}\n")
 
-    def get_state(self):
+    def get_state(self) -> str:
+        """get_state reads a txt file that contains the current state of the simulation"""
         with open(os.path.join(self.output_dir, self.state_file_name), "r") as f:
             lines = f.readlines()
 
