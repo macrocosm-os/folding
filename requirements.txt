@@ -8,6 +8,9 @@ python-dotenv
 wandb==0.15.10
 nglview 
 mdanalysis
+imageio
+kaleido
+threading
 
 ## Lots of instructions to install GROMACS correctly https://manual.gromacs.org/current/gmxapi/userguide/install.html#install-dependencies
 
