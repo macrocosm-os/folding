@@ -5,7 +5,6 @@ gromacs
 pandas 
 beautifulsoup4
 python-dotenv
-biopython
 wandb==0.15.10
 
 ## Lots of instructions to install GROMACS correctly https://manual.gromacs.org/current/gmxapi/userguide/install.html#install-dependencies
