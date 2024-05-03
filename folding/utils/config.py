@@ -235,8 +235,22 @@ def add_validator_args(cls, parser):
     parser.add_argument(
         "--neuron.timeout",
         type=float,
-        help="The timeout for each forward call in seconds.",
-        default=3600,
+        help="The timeout for each forward call. (seconds)",
+        default=15,
+    )
+
+    parser.add_argument(
+        "--neuron.update_interval",
+        type=float,
+        help="The interval in which the validators query the miners for updates. (seconds)",
+        default=120,
+    )
+
+    parser.add_argument(
+        "--neuron.db_path_location",
+        type=str,
+        help="The location where the local database of running jobs is stored.",
+        default=".",  # defaults to the neurons/validator.py file location
     )
 
     parser.add_argument(
@@ -244,6 +258,13 @@ def add_validator_args(cls, parser):
         type=int,
         help="The number of concurrent forwards running at any time.",
         default=1,
+    )
+    
+    parser.add_argument(
+        "--neuron.queue_size",
+        type=int,
+        help="The number of jobs to keep in the queue.",
+        default=4,
     )
 
     parser.add_argument(

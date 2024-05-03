@@ -19,6 +19,7 @@
 
 
 import copy
+import time
 import torch
 import asyncio
 import argparse
@@ -137,10 +138,26 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
+                # Our BaseValidator logic is intentionally as generic as possible so that the Validator neuron can apply problem-specific logic
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                # Run multiple forwards concurrently.
-                self.loop.run_until_complete(self.concurrent_forward())
+                # Check if we need to add more jobs to the queue
+                queue = self.store.get_queue(ready=False)
+                
+                if queue.qsize() < self.config.neuron.queue_size:
+                    # Here is where we select, download and preprocess a pdb
+                    # We also assign the pdb to a group of workers (miners), based on their workloads
+                    self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
+                    continue
+
+                # TODO: maybe concurrency for the loop below
+                for job in self.store.get_queue(ready=False).queue:
+                    # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
+                    event = self.forward(job = job) 
+                    
+                    # Determine the status of the job based on the current energy and the previous values (early stopping)
+                    # Update the DB with the current status
+                    self.update_job(job, event)
 
                 # Check if we should exit.
                 if self.should_exit:
@@ -150,6 +167,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
+                time.sleep(self.config.neuron.update_interval)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
