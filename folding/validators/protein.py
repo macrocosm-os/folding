@@ -66,9 +66,8 @@ class Protein:
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 
-        self.pdb_id = (
-            self.pdb_id.lower()
-        )  # pdb_id is insensitive to capitalization so we convert to lowercase
+        # pdb_id is insensitive to capitalization so we convert to lowercase
+        self.pdb_id = self.pdb_id.lower()
 
         self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
