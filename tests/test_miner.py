@@ -7,7 +7,7 @@ import string
 from pathlib import Path
 import concurrent.futures
 from collections import defaultdict
-from folding.miners.folding_miner import MockGromacsExecutor
+from folding.miners.folding_miner import MockSimulationManager
 
 import bittensor as bt
 
@@ -32,7 +32,7 @@ def delete_output_dir():
 
 
 def test_gromacs_executor_simple():
-    executor = MockGromacsExecutor(pdb_id=_make_pdb(), output_dir=OUTPUT_PATH)
+    executor = MockSimulationManager(pdb_id=_make_pdb(), output_dir=OUTPUT_PATH)
     executor.run(total_wait_time=1)
     state = executor.get_state()
     assert state is not None  # Add more specific checks as needed
@@ -60,7 +60,7 @@ def test_gromacs_executor(max_workers: int):
 
     for _ in range(max_workers):
         pdb_id = _make_pdb()
-        gromax_executor = MockGromacsExecutor(pdb_id=pdb_id, output_dir=OUTPUT_PATH)
+        gromax_executor = MockSimulationManager(pdb_id=pdb_id, output_dir=OUTPUT_PATH)
         assert gromax_executor is not None, "Executor should not be None"
         assert gromax_executor.state is None, "State should be None"
 

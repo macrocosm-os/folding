@@ -91,7 +91,7 @@ def attach_files_to_synapse(
 
 class FoldingMiner(BaseMinerNeuron):
     def __init__(self, config=None):
-        super(FoldingMiner, self).__init__(config=config)
+        super().__init__(config=config)
 
         def nested_dict():
             return defaultdict(
@@ -188,7 +188,7 @@ class FoldingMiner(BaseMinerNeuron):
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         # Create the job and submit it to the executor
-        gromax_executor = GromacsExecutor(pdb_id=synapse.pdb_id)
+        gromax_executor = SimulationManager(pdb_id=synapse.pdb_id)
 
         future = self.executor.submit(
             gromax_executor.run,
@@ -199,10 +199,10 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.simulations[synapse.pdb_id]["executor"] = gromax_executor
         self.simulations[synapse.pdb_id]["future"] = future
-        self.simulations[synapse.pdb_id]["output_dir"] = output_dir
+        self.simulations[synapse.pdb_id]["output_dir"] = gromax_executor.output_dir
 
 
-class GromacsExecutor:
+class SimulationManager:
     def __init__(self, pdb_id: str) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
@@ -215,19 +215,16 @@ class GromacsExecutor:
         md_inputs: Dict,
         commands: Dict,
         suppress_cmd_output: bool = True,
-    ) -> FoldingSynapse:
-        """run method to handle the processing of the gromacs simulation.
+    ):
+        """run method to handle the processing of generic simulations.
 
         Args:
             synapse (FoldingSynapse): synapse object that contains the information for the simulation
             commands (Dict): Dict of lists of commands that we are meant to run in the executor
             config (Dict): configuration file for the miner
-
-        Returns:
-            FoldingSynapse: The ORIGINAL synapse with the md_output attached
         """
         bt.logging.info(
-            f"Running GROMACS simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
+            f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
 
         # Make sure the output directory exists and if not, create it
@@ -249,7 +246,7 @@ class GromacsExecutor:
 
             run_cmd_commands(commands=commands, suppress_cmd_output=suppress_cmd_output)
 
-        bt.logging.success(f"✅Finished GROMACS simulation for protein: {self.pdb_id}✅")
+        bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
 
         state = "finished"
         with open(self.state_file_name, "w") as f:
@@ -265,7 +262,7 @@ class GromacsExecutor:
             return None
 
 
-class MockGromacsExecutor(GromacsExecutor):
+class MockSimulationManager(SimulationManager):
     def __init__(self, pdb_id: str, output_dir: str) -> None:
         super().__init__(pdb_id=pdb_id)
         self.required_values = set(["init", "wait", "finished"])
@@ -274,7 +271,7 @@ class MockGromacsExecutor(GromacsExecutor):
     def run(self, total_wait_time: int = 1):
         start_time = time.time()
 
-        bt.logging.success(f"✅ MockGromacsExecutor.run is running ✅")
+        bt.logging.success(f"✅ MockSimulationManager.run is running ✅")
         check_if_directory_exists(output_directory=self.output_dir)
 
         store = os.path.join(self.output_dir, self.state_file_name)
