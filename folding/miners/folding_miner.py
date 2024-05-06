@@ -98,6 +98,10 @@ class FoldingMiner(BaseMinerNeuron):
     def __init__(self, config=None):
         super().__init__(config=config)
 
+        # TODO: There needs to be a timeout manager. Right now, if
+        # the simulation times out, the only time the memory is freed is when the miner
+        # is restarted, or sampled again.
+
         def nested_dict():
             return defaultdict(
                 lambda: None
@@ -220,7 +224,6 @@ class SimulationManager:
         self.state: str = None
         self.state_file_name = f"{pdb_id}_state.txt"
 
-        self.start_time = None
         self.output_dir = os.path.join(BASE_DATA_PATH, self.pdb_id)
 
     def run(
@@ -242,7 +245,7 @@ class SimulationManager:
             f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
 
-        self.start_time = time.time()
+        start_time = time.time()
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
@@ -257,7 +260,7 @@ class SimulationManager:
 
         for state, commands in commands.items():
             # Check to see if the simulation is taking longer than the timeout condition.
-            if (time.time() - self.start_time) > timeout:
+            if (time.time() - start_time) > timeout:
                 bt.logging.error(f"Timeout reached for protein: {self.pdb_id}")
 
                 state = "timeout"
@@ -276,11 +279,12 @@ class SimulationManager:
                 for ext in ["tpr", "xtc", "edr", "cpt"]:
                     create_generic_file(os.path.join(self.output_dir, f"{state}.{ext}"))
 
-        bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
+        if state is not "timeout":
+            bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
 
-        state = "finished"
-        with open(self.state_file_name, "w") as f:
-            f.write(f"{state}\n")
+            state = "finished"
+            with open(self.state_file_name, "w") as f:
+                f.write(f"{state}\n")
 
     def get_state(self) -> str:
         """get_state reads a txt file that contains the current state of the simulation"""
