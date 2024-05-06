@@ -45,6 +45,7 @@ class Protein:
 
         self.config = config
         self.md_inputs = {}
+        self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
     @staticmethod
     def from_pdb(pdb_id: str):
@@ -118,7 +119,6 @@ class Protein:
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
 
-        self.base_directory = os.path.join(str(ROOT_DIR), "data")
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
@@ -359,18 +359,57 @@ class Protein:
     def get_miner_data_directory(self, hotkey: str):
         return os.path.join(self.validator_directory, hotkey[:8])
 
-    def rerun(self, output_directory: str, gro_file_name: str):
+    def compute_intermediate_gro(
+        self,
+        md_output: Dict,
+        output_directory: str,
+        file_extensions: str = ["tpr", "xtc"],
+    ) -> str:
+        """
+        Compute the intermediate gro file from the xtc and tpr file from the miner.
+        We do this because we need to ensure that the miners are running the correct protein.
+
+        Args:
+            md_output (Dict): dictionary of information from the miner.
+            file_extensions (str, optional): Files that we need for computing. Defaults to ["tpr", "xtc"].
+        """
+
+        files = {ext: md_output[ext] for ext in file_extensions if ext in md_output}
+
+        gro_file_location = os.path.join(output_directory, "intermediate.gro")
+        tpr_file = os.path.join(output_directory, files["tpr"])
+        xtc_file = os.path.join(output_directory, files["xtc"])
+
+        command = [
+            f"gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -dump -1"
+        ]  # TODO: Could have an internal counter to show how many times we have been queried.
+
+        run_cmd_commands(
+            commands=command, suppress_cmd_output=self.config.neuron.suppress_cmd_output
+        )
+
+        return gro_file_location
+
+    def rerun(self, output_directory: str, gro_file_location: str):
         """Rerun method is to rerun a step of a miner simulation to ensure that
         the miner is running the correct protein.
 
         Args:
             output_directory: The directory where the files are stored and where the rerun files will be written to.
+                output location will be the miner directory held on the validator side, from get_miner_data_directory
             gro_file_name: The name of the .gro file that will be rerun. This is calculated by the *validator* beforehand.
         """
-        gro_file_no_ext = os.path.splitext(gro_file_name)[0]
+        rerun_mdp = os.path.join(
+            self.base_directory, "rerun.mdp"
+        )  # rerun file is a base config that we never change.
+        topol_path = os.path.join(
+            self.pdb_directory, "topol.top"
+        )  # all miners get the same topol file.
+        tpr_path = os.path.join(output_directory, "rerun.tpr")
+
         commands = [
-            f"gmx grompp -f {output_directory}/rerun.mdp -c {output_directory}/{gro_file_name} -p {output_directory}/topol.top -o {output_directory}/rerun_{gro_file_no_ext}_calculation.tpr",
-            f"gmx mdrun -deffnm {output_directory}/rerun_{gro_file_no_ext}_calculation -rerun {output_directory}/{gro_file_name} ",
+            f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
+            f"gmx mdrun -deffnm {tpr_path} -rerun {gro_file_location}",
         ]
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
@@ -384,7 +423,7 @@ class Protein:
         4.
         """
 
-        required_files_extensions = ["edr", "gro"]
+        required_files_extensions = ["edr", "xtc", "tpr"]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         md_outputs_exts = {
@@ -401,9 +440,10 @@ class Protein:
 
         output_directory = self.get_miner_data_directory(hotkey=hotkey)
 
-        # We need to run a single step of the simulation to ensure that the miner is running the right pdb_id
-        self.calculate_itermediate_gro()  # TODO: Implement this. Currently on the miner side.
-        self.rerun()
+        # We need to generate the gro file from the miner to ensure they are not cheating.
+        gro_file_location = self.compute_intermediate_gro(
+            md_output=md_output, output_directory=output_directory
+        )
 
         # Save files so we can check the hash later.
         self.save_files(
@@ -419,6 +459,10 @@ class Protein:
             )
             self.delete_files(directory=output_directory)
             return False
-
         bt.logging.success(f"The hash for .gro file is correct!")
+
+        # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
+        self.rerun(
+            output_directory=output_directory, gro_file_location=gro_file_location
+        )
         return True
