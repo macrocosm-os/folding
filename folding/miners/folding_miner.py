@@ -7,7 +7,7 @@ import concurrent.futures
 from typing import Dict, List
 from collections import defaultdict
 from dataclasses import dataclass
-
+from utils.monitor import auto_plot
 import bittensor as bt
 
 # import base miner class which takes care of most of the boilerplate
@@ -142,6 +142,9 @@ class FoldingMiner(BaseMinerNeuron):
         )
 
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
+        # get the monitoring commands
+        monitoring_commands = self.configure_monitoring_commands()
+
         commands = [
             "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
             "gmx mdrun -deffnm nvt " + mdrun_args,
@@ -159,7 +162,28 @@ class FoldingMiner(BaseMinerNeuron):
             "md_0_1": commands[4:],
         }
 
+        # Append the monitoring commands to each state
+        for state, cmds in state_commands.items():
+            # check if the last command in the state is still running. 
+            monitoring_block = f"while pgrep -f '{cmds[-1]}' > /dev/null; do {monitoring_commands[state][0]}; sleep 1; done"
+            cmds.append(monitoring_block)
+
         return state_commands
+
+    def configure_monitoring_commands(self):
+        commands = [
+            "echo 'Potential' | gmx energy -f nvt.edr -o 'nvt_potential.xvg' -nobackup", # -nobackup overwrites the output file
+            "echo 'Potential' | gmx energy -f npt.edr -o 'npt_potential.xvg' -nobackup",
+            "echo 'Potential' | gmx energy -f md_0_1.edr -o 'md_0_1_potential.xvg' -nobackup",
+        ]
+        state_commands_for_monitoring = {
+            "nvt": commands[:1],
+            "npt": commands[1:2],
+            "md_0_1": commands[2:],
+        }
+
+        return state_commands_for_monitoring
+    
 
     def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
         """
@@ -273,8 +297,12 @@ class GromacsExecutor:
 
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
-
+                plot_state = f.read().strip()
+                
             run_cmd_commands(commands=commands, suppress_cmd_output=suppress_cmd_output)
+            
+            if plot_state in ["nvt", "npt", "md_0_1"]:
+                auto_plot(data_location=self.output_dir, file_name=f"{state}_potential.xvg", output_file=f"{state}_potential.png")
 
         bt.logging.success(f"✅Finished GROMACS simulation for protein: {self.pdb_id}✅")
 
