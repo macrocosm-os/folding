@@ -24,7 +24,6 @@ def attach_files_to_synapse(
     synapse: FoldingSynapse,
     data_directory: str,
     state: str,
-    desired_files: List[str] = None,
 ) -> FoldingSynapse:
     """load the output files as bytes and add to synapse.md_output
 
@@ -32,7 +31,6 @@ def attach_files_to_synapse(
         synapse (FoldingSynapse): Recently received synapse object
         data_directory (str): directory where the miner is holding the necessary data for the validator.
         state (str): the current state of the simulation
-        desired_files (List[str], optional): List of files to attach to the synapse. Defaults to None.
 
     state is either:
      1. nvt
@@ -40,7 +38,15 @@ def attach_files_to_synapse(
      3. md_0_1
      4. finished
 
-    State depends on the current state of the simulation (controlled in GromacsExecutor.run() method)
+    State depends on the current state of the simulation (controlled in GromacsExecutor.run() method).
+
+    During the simulation procedure, the validator queries the miner for the current state of the simulation.
+    The files that the miner needs to return are:
+        1. .tpr (created during grompp commands)
+        2. .xtc (created during mdrun commands, logged every nstxout-compressed steps)
+        3. .edr (created during mdrun commands, logged every nstenergy steps)
+        4. .cpt (created during mdrun commands, logged every nstcheckpoint steps)
+
 
     Returns:
         FoldingSynapse: synapse with md_output attached
@@ -49,28 +55,22 @@ def attach_files_to_synapse(
     synapse.md_output = {}  # ensure that the initial state is empty
 
     try:
-        if desired_files is None:
-            state_files = os.path.join(
-                data_directory, f"{state}"
-            )  # The current state of the simulation. Likely to always be the last state
-            desired_files = glob.glob(f"{state_files}*") + glob.glob(
-                f"{data_directory}/*.edr"
-            )  # Grab all the state_files and the edr files
+        state_files = os.path.join(
+            data_directory, f"{state}"
+        )  # mdrun commands make the filenames [state.*]
 
-        else:
-            # If we pass a list of files, we will attach the latest checkpoint file as well.
-            latest_cpt_file = max(
-                glob.glob("*.cpt"), key=os.path.getctime
-            )  # TODO: This is default behaviour, but maybe we shouldn't do this?
+        # applying glob to state_files will get the necessary files we need (e.g. nvt.tpr, nvt.xtc, nvt.cpt, nvt.edr, etc.)
+        all_state_files = glob.glob(f"{state_files}*")  # Grab all the state_files
+        latest_cpt_file = max(
+            glob.glob("*.cpt"), key=os.path.getctime
+        )  # get most recent cpt file #TODO: Might only need to look for state.cpt
 
-            desired_files.append(latest_cpt_file)
+        files_to_attach: List = (
+            all_state_files + latest_cpt_file
+        )  # combine the state files and the latest checkpoint file
 
-            desired_files = [
-                os.path.join(data_directory, file) for file in desired_files
-            ]  # Explicitly add the data_directory to the files
-
-        bt.logging.info(f"Desired files to send to the validator: {desired_files}")
-        for filename in desired_files:
+        bt.logging.info(f"Sending files to validator: {files_to_attach}")
+        for filename in files_to_attach:
             bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
             try:
                 with open(filename, "rb") as f:
@@ -111,36 +111,6 @@ class FoldingMiner(BaseMinerNeuron):
             max_workers=self.max_workers
         )  # remove one for safety
 
-    def compute_itermediate_gro(
-        self, synapse: FoldingSynapse, data_directory: str, state: str
-    ) -> FoldingSynapse:
-        """Compute the intermediate gro file from the xtc file.
-
-        Args:
-            synapse (FoldingSynapse): Recently received synapse object
-            data_directory (str): directory where the miner is holding the necessary intermediate data.
-            state (str): the current state of the simulation
-
-        Returns:
-            FoldingSynapse: synapse with md_output attached
-        """
-        file_location = os.path.join(data_directory, f"{state}")
-        gro_filename = f"{state}_intermediate.gro"
-        command = [
-            f"gmx trjconv -s {file_location}.tpr -f {file_location}.xtc -o {gro_filename} -dump -1"
-        ]  # TODO: Could have an internal counter to show how many times we have been queried.
-
-        run_cmd_commands(
-            commands=command, suppress_cmd_output=self.config.neuron.suppress_cmd_output
-        )
-
-        return attach_files_to_synapse(
-            synapse=synapse,
-            data_directory=data_directory,
-            state=state,
-            desired_files=[gro_filename],
-        )
-
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
         commands = [
             "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
@@ -178,8 +148,9 @@ class FoldingMiner(BaseMinerNeuron):
         # If we are already running a process with the same identifier, return intermediate information
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
+            current_executor_state = simulation["executor"].get_state()
 
-            if simulation["executor"].get_state() == "finished":
+            if current_executor_state == "finished":
                 final_synapse = attach_files_to_synapse(
                     synapse=synapse,
                     data_directory=simulation["output_dir"],
@@ -192,13 +163,15 @@ class FoldingMiner(BaseMinerNeuron):
                 ]  # Remove the simulation from the list
                 return final_synapse
 
-            return self.compute_itermediate_gro(
-                synapse=synapse,
-                data_directory=simulation["output_dir"],
-                state=simulation["executor"].get_state(),
-            )
+            else:
+                # Don't delete the simulation if it's not finished
+                return attach_files_to_synapse(
+                    synapse=synapse,
+                    data_directory=simulation["output_dir"],
+                    state=current_executor_state,
+                )
 
-        elif synapse.pdb_id in os.listdir(BASE_DATA_PATH):
+        if synapse.pdb_id in os.listdir(BASE_DATA_PATH):
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the files from the last simulation. This only works if you have kept the data.
             output_dir = os.path.join(BASE_DATA_PATH, synapse.pdb_id)
