@@ -156,7 +156,9 @@ class FoldingMiner(BaseMinerNeuron):
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
 
-            if current_executor_state == "finished":
+            if (current_executor_state == "finished") or (
+                current_executor_state == "timeout"
+            ):
                 final_synapse = attach_files_to_synapse(
                     synapse=synapse,
                     data_directory=simulation["output_dir"],
@@ -202,6 +204,7 @@ class FoldingMiner(BaseMinerNeuron):
             gromax_executor.run,
             synapse.md_inputs,
             state_commands,
+            self.config.timeout,
             self.config.neuron.suppress_cmd_output,
             self.config.mock,
         )
@@ -217,12 +220,14 @@ class SimulationManager:
         self.state: str = None
         self.state_file_name = f"{pdb_id}_state.txt"
 
+        self.start_time = None
         self.output_dir = os.path.join(BASE_DATA_PATH, self.pdb_id)
 
     def run(
         self,
         md_inputs: Dict,
         commands: Dict,
+        timeout: float = 10,
         suppress_cmd_output: bool = True,
         mock: bool = False,
     ):
@@ -237,6 +242,8 @@ class SimulationManager:
             f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
 
+        self.start_time = time.time()
+
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
         os.chdir(self.output_dir)  # TODO: will this be a problem with many processes?
@@ -249,8 +256,16 @@ class SimulationManager:
                 file.write(content)
 
         for state, commands in commands.items():
-            bt.logging.info(f"Running {state} commands")
+            # Check to see if the simulation is taking longer than the timeout condition.
+            if (time.time() - self.start_time) > timeout:
+                bt.logging.error(f"Timeout reached for protein: {self.pdb_id}")
 
+                state = "timeout"
+                with open(self.state_file_name, "w") as f:
+                    f.write(f"{state}\n")
+                break  # Aka "finishing" the simulation
+
+            bt.logging.info(f"Running {state} commands")
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
 

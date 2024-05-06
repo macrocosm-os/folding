@@ -194,6 +194,13 @@ def add_miner_args(cls, parser):
     )
 
     parser.add_argument(
+        "--timeout",
+        type=float,
+        help="Timeout for the simulation in seconds.",
+        default=60 * 60,  # default is 1h.
+    )
+
+    parser.add_argument(
         "--blacklist.force_validator_permit",
         action="store_true",
         help="If set, we will force incoming requests to have a permit.",
@@ -259,7 +266,7 @@ def add_validator_args(cls, parser):
         help="The number of concurrent forwards running at any time.",
         default=1,
     )
-    
+
     parser.add_argument(
         "--neuron.queue_size",
         type=int,
