@@ -95,7 +95,7 @@ def create_generic_file(file_path: str):
 
 
 class FoldingMiner(BaseMinerNeuron):
-    def __init__(self, config=None):
+    def __init__(self, config=None, base_data_path: str = None):
         super().__init__(config=config)
 
         # TODO: There needs to be a timeout manager. Right now, if
@@ -107,6 +107,9 @@ class FoldingMiner(BaseMinerNeuron):
                 lambda: None
             )  # allows us to set the desired attribute to anything.
 
+        self.base_data_path = (
+            base_data_path if base_data_path is not None else BASE_DATA_PATH
+        )
         self.simulations = defaultdict(
             nested_dict
         )  # Maps pdb_ids to the current state of the simulation
@@ -185,10 +188,12 @@ class FoldingMiner(BaseMinerNeuron):
                     state=current_executor_state,
                 )
 
-        if synapse.pdb_id in os.listdir(BASE_DATA_PATH):
+        if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
+            self.base_data_path
+        ):
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the files from the last simulation. This only works if you have kept the data.
-            output_dir = os.path.join(BASE_DATA_PATH, synapse.pdb_id)
+            output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
             return attach_files_to_synapse(
                 synapse=synapse, data_directory=output_dir, state="md_0_1"
@@ -202,10 +207,13 @@ class FoldingMiner(BaseMinerNeuron):
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         # Create the job and submit it to the executor
-        gromax_executor = SimulationManager(pdb_id=synapse.pdb_id)
+        simulation_manager = SimulationManager(
+            pdb_id=synapse.pdb_id,
+            output_dir=os.path.join(self.base_data_path, synapse.pdb_id),
+        )
 
         future = self.executor.submit(
-            gromax_executor.run,
+            simulation_manager.run,
             synapse.md_inputs,
             state_commands,
             self.config.timeout,
@@ -213,18 +221,18 @@ class FoldingMiner(BaseMinerNeuron):
             self.config.mock,
         )
 
-        self.simulations[synapse.pdb_id]["executor"] = gromax_executor
+        self.simulations[synapse.pdb_id]["executor"] = simulation_manager
         self.simulations[synapse.pdb_id]["future"] = future
-        self.simulations[synapse.pdb_id]["output_dir"] = gromax_executor.output_dir
+        self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
 
 
 class SimulationManager:
-    def __init__(self, pdb_id: str) -> None:
+    def __init__(self, pdb_id: str, output_dir: str) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
         self.state_file_name = f"{pdb_id}_state.txt"
 
-        self.output_dir = os.path.join(BASE_DATA_PATH, self.pdb_id)
+        self.output_dir = output_dir
 
     def run(
         self,
