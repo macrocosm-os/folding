@@ -43,17 +43,18 @@ def check_config(cls, config: "bt.Config"):
 
     if not config.neuron.dont_save_events:
         # Add custom event logger for the events.
-        logger.level("EVENTS", no=38, icon="📝")
-        logger.add(
-            os.path.join(config.neuron.full_path, "events.log"),
-            rotation=config.neuron.events_retention_size,
-            serialize=True,
-            enqueue=True,
-            backtrace=False,
-            diagnose=False,
-            level="EVENTS",
-            format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
-        )
+        if "EVENTS" not in logger._core.levels:
+            logger.level("EVENTS", no=38, icon="📝")
+            logger.add(
+                os.path.join(config.neuron.full_path, "events.log"),
+                rotation=config.neuron.events_retention_size,
+                serialize=True,
+                enqueue=True,
+                backtrace=False,
+                diagnose=False,
+                level="EVENTS",
+                format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
+            )
 
 
 def add_args(cls, parser):
@@ -197,7 +198,7 @@ def add_miner_args(cls, parser):
         "--timeout",
         type=float,
         help="Timeout for the simulation in seconds.",
-        default=60 * 60,  # default is 1h.
+        default=3600,  # default is 1h.
     )
 
     parser.add_argument(
