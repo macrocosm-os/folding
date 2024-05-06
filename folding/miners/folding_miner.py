@@ -61,9 +61,9 @@ def attach_files_to_synapse(
 
         # applying glob to state_files will get the necessary files we need (e.g. nvt.tpr, nvt.xtc, nvt.cpt, nvt.edr, etc.)
         all_state_files = glob.glob(f"{state_files}*")  # Grab all the state_files
-        latest_cpt_file = max(
-            glob.glob("*.cpt"), key=os.path.getctime
-        )  # get most recent cpt file #TODO: Might only need to look for state.cpt
+        # bt.logging.info(f"all_state_files: {all_state_files}")
+        latest_cpt_file = glob.glob("*.cpt")
+        # bt.logging.info(f"latest_cpt_file: {latest_cpt_file}")
 
         files_to_attach: List = (
             all_state_files + latest_cpt_file
@@ -79,7 +79,7 @@ def attach_files_to_synapse(
                 bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
 
         bt.logging.success(
-            f"Attached {len(synapse.md_output)} files to synapse.md_output for protein: {synapse.pdb_id}"
+            f"✅ Attached {len(synapse.md_output)} files to synapse.md_output for protein: {synapse.pdb_id} ✅"
         )
 
     except Exception as e:
@@ -87,6 +87,11 @@ def attach_files_to_synapse(
 
     finally:
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
+
+
+def create_generic_file(file_path: str):
+    with open(file_path, "w") as f:
+        pass
 
 
 class FoldingMiner(BaseMinerNeuron):
@@ -146,6 +151,7 @@ class FoldingMiner(BaseMinerNeuron):
         """
 
         # If we are already running a process with the same identifier, return intermediate information
+        bt.logging.info(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
@@ -161,6 +167,8 @@ class FoldingMiner(BaseMinerNeuron):
                 del self.simulations[
                     synapse.pdb_id
                 ]  # Remove the simulation from the list
+
+                # TODO: Here, place some type of delete method to remove some files?
                 return final_synapse
 
             else:
@@ -195,6 +203,7 @@ class FoldingMiner(BaseMinerNeuron):
             synapse.md_inputs,
             state_commands,
             self.config.neuron.suppress_cmd_output,
+            self.config.mock,
         )
 
         self.simulations[synapse.pdb_id]["executor"] = gromax_executor
@@ -215,6 +224,7 @@ class SimulationManager:
         md_inputs: Dict,
         commands: Dict,
         suppress_cmd_output: bool = True,
+        mock: bool = False,
     ):
         """run method to handle the processing of generic simulations.
 
@@ -245,6 +255,11 @@ class SimulationManager:
                 f.write(f"{state}\n")
 
             run_cmd_commands(commands=commands, suppress_cmd_output=suppress_cmd_output)
+
+            if mock:
+                bt.logging.warning("Running in mock mode, creating fake files...")
+                for ext in ["tpr", "xtc", "edr", "cpt"]:
+                    create_generic_file(os.path.join(self.output_dir, f"{state}.{ext}"))
 
         bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
 
