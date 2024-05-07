@@ -155,19 +155,19 @@ class Job:
         if hotkey not in self.hotkeys:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
-        self.updated_at = pd.Timestamp.now()
+        self.updated_at = pd.Timestamp.now().floor('s')
         self.updated_count += 1
 
         # TODO: make epsilon a param, or a class attrib
         epsilon = 0.001
         if loss < self.best_loss - epsilon:
             self.best_loss = loss
-            self.best_loss_at = pd.Timestamp.now()
+            self.best_loss_at = pd.Timestamp.now().floor('s')
             self.best_hotkey = hotkey
             self.commit_hash = commit_hash
             self.gro_hash = gro_hash
         elif (
-            pd.Timestamp.now() - self.best_loss_at > self.max_time_no_improvement
+            pd.Timestamp.now().floor('s') - self.best_loss_at > self.max_time_no_improvement
             and self.updated_count >= self.min_updates
         ):
             self.active = False
@@ -181,7 +181,7 @@ class MockJob(Job):
         self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
         self.created_at = (
-            pd.Timestamp.now() - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
+            pd.Timestamp.now().floor('s') - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
         ).floor("s")
         self.best_loss = random.random()
         self.best_hotkey = random.choice(self.hotkeys)
