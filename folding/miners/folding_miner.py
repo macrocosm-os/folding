@@ -285,7 +285,7 @@ class SimulationManager:
             if mock:
                 bt.logging.warning("Running in mock mode, creating fake files...")
                 for ext in ["tpr", "xtc", "edr", "cpt"]:
-                    create_generic_file(os.path.join(self.output_dir, f"{state}.{ext}"))
+                    create_empty_file(os.path.join(self.output_dir, f"{state}.{ext}"))
 
         if state is not "timeout":
             bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
