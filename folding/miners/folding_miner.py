@@ -61,9 +61,7 @@ def attach_files_to_synapse(
 
         # applying glob to state_files will get the necessary files we need (e.g. nvt.tpr, nvt.xtc, nvt.cpt, nvt.edr, etc.)
         all_state_files = glob.glob(f"{state_files}*")  # Grab all the state_files
-        # bt.logging.info(f"all_state_files: {all_state_files}")
         latest_cpt_file = glob.glob("*.cpt")
-        # bt.logging.info(f"latest_cpt_file: {latest_cpt_file}")
 
         files_to_attach: List = (
             all_state_files + latest_cpt_file
