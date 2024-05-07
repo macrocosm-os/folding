@@ -3,13 +3,13 @@
 </div> -->
 
 <picture>
-    <source srcset="./assets/macrocosmos-black.png"  media="(prefers-color-scheme: dark)">
-    <img src="macrocosmos-black.png">
+    <source srcset="./assets/macrocosmos-white.png"  media="(prefers-color-scheme: dark)">
+    <img src="macrocosmos-white.png">
 </picture>
 
 <picture>
-    <source srcset="./assets/macrocosmos-white.png"  media="(prefers-color-scheme: white)">
-    <img src="macrocosmos-white.png">
+    <source srcset="./assets/macrocosmos-black.png"  media="(prefers-color-scheme: white)">
+    <img src="macrocosmos-black.png">
 </picture>
 
 <div align="center">
