@@ -68,7 +68,7 @@ setup(
     description="folding",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/synapse-alpha/folding",
+    url="https://github.com/macrocosm-os/folding",
     author="Macrocosmos",
     packages=find_packages(),
     include_package_data=True,
