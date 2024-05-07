@@ -69,8 +69,8 @@ class Validator(BaseValidatorNeuron):
         """
 
         # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
-        protein = Protein.from_job(job)
-        
+        protein = Protein.from_job(job=job, config=self.config.protein)
+
         uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active

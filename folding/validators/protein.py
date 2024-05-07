@@ -50,13 +50,10 @@ class Protein:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
     @staticmethod
-    def from_job(job: Job):
-        config = SimpleNamespace(
-            max_steps=None,
-            num_steps_to_save=100,
-            suppress_cmd_output=True,
+    def from_job(job: Job, config: Dict):
+        return Protein(
+            pdb_id=job.pdb, ff=job.ff, box=job.box, water=job.water, config=config
         )
-        return Protein(ff=job.ff, box=job.box, config=config, pdb_id=job.pdb)
 
     def gather_pdb_id(self):
         if self.pdb_id is None:
@@ -74,18 +71,13 @@ class Protein:
         self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
 
     def setup_pdb_directory(self):
-        bt.logging.info(f"\nChanging output directory to {self.pdb_directory}")
-
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
             os.makedirs(self.pdb_directory)
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
-            bt.logging.info(
-                f"\n⏰ {self.pdb_file} does not exist in repository... Downloading"
-            )
             if not check_and_download_pdbs(
-                pdb_directory=self.pdb_directory, pdb_id=self.pdb_file
+                pdb_directory=self.pdb_directory, pdb_id=self.pdb_file, download=True
             ):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
@@ -143,9 +135,6 @@ class Protein:
         missing_files = self.check_for_missing_files(required_files=required_files)
 
         if missing_files is not None:
-            bt.logging.warning(
-                f"Essential files are missing from path {self.pdb_directory!r}: {missing_files!r}... Generating!"
-            )
             self.generate_input_files()
 
         # Create a validator directory to store the files
@@ -188,18 +177,19 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
-    def calculate_params_save_interval(self, num_steps_to_save: int = 5) -> float:
+    def calculate_params_save_interval(
+        self, max_steps: int, num_steps_to_save: int = 5
+    ) -> float:
         """determining the save_frequency to step
 
         Args:
             num_steps_to_save (int, optional): How many steps to save during the simulation.
                 This is to reduce the amount of data that gets saved during simulation.
         """
-
-        save_interval = self.config.max_steps // num_steps_to_save
+        save_interval = max_steps // num_steps_to_save
 
         bt.logging.success(
-            f"Setting save_interval to {save_interval}, from max_steps = {self.config.max_steps}"
+            f"Setting save_interval to {save_interval}, from max_steps = {max_steps}"
         )
         if save_interval == 0:  # only happens when max_steps is < num_steps
             return 1
@@ -297,30 +287,34 @@ class Protein:
             mdp_files (List): Files that contain parameters to change.
             params_to_change (List): List of parameters to change in the desired file(s)
         """
-        bt.logging.info("Editing file content...")
 
-        # TODO: save_frequency = 0.10 needs to be replaced with config.save_frequency
-        save_interval = self.calculate_params_save_interval(
-            num_steps_to_save=self.config.num_steps_to_save
-        )
+        save_interval = None
 
         for file in mdp_files:
             filepath = os.path.join(self.validator_directory, file)
-            bt.logging.info(f"Processing file {filepath}")
             content = open(filepath, "r").read()
+
             if self.config.max_steps is not None:
                 content = re.sub(
                     "nsteps\\s+=\\s+\\d+", f"nsteps = {self.config.max_steps}", content
                 )
 
-            for param in params_to_change:
-                if param in content:
-                    bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
-                    content = re.sub(
-                        f"{param}\\s+=\\s+\\d+",
-                        f"{param} = {save_interval}",
-                        content,
-                    )
+                save_interval = self.calculate_params_save_interval(
+                    max_steps=self.config.max_steps,
+                    num_steps_to_save=self.config.num_steps_to_save,
+                )
+
+            if save_interval is not None:
+                for param in params_to_change:
+                    if param in content:
+                        bt.logging.info(
+                            f"Changing {param} in {file} to {save_interval}..."
+                        )
+                        content = re.sub(
+                            f"{param}\\s+=\\s+\\d+",
+                            f"{param} = {save_interval}",
+                            content,
+                        )
 
             self.md_inputs[file] = content
 
