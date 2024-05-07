@@ -135,41 +135,42 @@ class Validator(BaseValidatorNeuron):
         """
 
         energies: List = event["energies"]
-
-        best_index = np.argmin(energies)
-        best_loss = energies[best_index].item() #item because it's a torch.tensor
-        best_hotkey = job.hotkeys[best_index]
-
-        # print(f'{best_index=}, {best_loss=}, {best_hotkey=}')
-
+        rewards = torch.zeros_like(energies) #one-hot per update step
+        
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
         gro_hash = ""  # For next time
+        
+        #If no miners respond appropriately, the energies will be all zeros
+        if torch.all(energies == 0):
+            bt.logging.warning(f"Received all zero energies for {job.pdb}... Not updating.")
+        else:
+            best_index = np.argmin(energies)
+            best_loss = energies[best_index].item() #item because it's a torch.tensor
+            best_hotkey = job.hotkeys[best_index]
 
-        # This does a bunch of important things:
-        # 1. checks if best loss in this round is the best loss overall and updates the best_hotkey and hashes accordingly
-        # 2. Potentially applies early stopping criteria
-        # 3. Ensures that all timestamps and counters are updated correctly
-        job.update(
-            loss=best_loss,
-            hotkey=best_hotkey,
-            commit_hash=commit_hash,
-            gro_hash=gro_hash,
-        )
+            # This does a bunch of important things:
+            # 1. checks if best loss in this round is the best loss overall and updates the best_hotkey and hashes accordingly
+            # 2. Potentially applies early stopping criteria
+            # 3. Ensures that all timestamps and counters are updated correctly
+            job.update(
+                loss=best_loss,
+                hotkey=best_hotkey,
+                commit_hash=commit_hash,
+                gro_hash=gro_hash,
+            )
+            
+            # note that the reward goes to current leader (even if they didn't do well this round)
+            rewards[best_index] = job.hotkeys.index(job.best_hotkey)
 
-        # one hot rewards (1 for winner, 0 for everyone else)
-        rewards = torch.zeros_like(energies)
-        # note that the reward goes to current leader (even if they didn't do well this round)
-        rewards[best_index] = job.hotkeys.index(job.best_hotkey)
+            uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
+            self.update_scores(
+                rewards=rewards,
+                uids=uids,  # pretty confident these are in the correct order.
+            )
 
-        uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
-        self.update_scores(
-            rewards=rewards,
-            uids=uids,  # pretty confident these are in the correct order.
-        )
-
-        # Finally, we update the job in the store
-        self.store.update(job=job)
+            # Finally, we update the job in the store
+            self.store.update(job=job)
 
 
 # The main function parses the configuration and runs the validator.

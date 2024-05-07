@@ -150,7 +150,7 @@ class Job:
         return pd.DataFrame([self.to_series()])
 
     def update(self, loss: float, hotkey: str, commit_hash: str, gro_hash: str):
-        """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
+        """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""            
 
         if hotkey not in self.hotkeys:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
