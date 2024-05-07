@@ -8,9 +8,8 @@ from typing import List, Dict
 
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
-from folding.validators.reward import get_losses
+from folding.validators.reward import get_energies
 from folding.protocol import FoldingSynapse
-from folding.rewards.reward import RewardEvent
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
@@ -47,7 +46,7 @@ def run_step(
     # For now we just want to get the losses, we are not rewarding yet
     # TODO: reframe the rewarding classes to just return the loss (e.g energy) for each response
     # We need to be super careful that the shape of losses is the same as the shape of the uids (becuase re refer to things downstream by index and assign rewards to the hotkey at that index)
-    losses, events = get_losses(protein=protein, responses=responses, uids=uids)
+    energies = get_energies(protein=protein, responses=responses, uids=uids)
 
     response_info = get_response_info(responses=responses)
 
@@ -56,9 +55,8 @@ def run_step(
         "block": self.block,
         "step_length": time.time() - start_time,
         "uids": uids,
-        "losses": losses,
+        "energies": energies,
         **response_info,
-        **events,  # contains another copy of the uids used for the reward stack
     }
 
     bt.logging.warning(f"Event information: {event}")
@@ -148,8 +146,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
                 # "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"], #TODO: Add this to the downstream logic.
             }
 
-            protein = Protein(
-                pdb_id=config.protein.pdb_id or pdb_id, config=config.protein, **hps
+            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps
             )
 
             bt.logging.info(f"Attempting to generate challenge: {protein}")

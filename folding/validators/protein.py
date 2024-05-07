@@ -5,6 +5,8 @@ from typing import List, Dict
 from pathlib import Path
 
 import bittensor as bt
+
+from types import SimpleNamespace
 from dataclasses import dataclass
 
 from folding.utils.ops import (
@@ -16,7 +18,7 @@ from folding.utils.ops import (
     check_and_download_pdbs,
     FF_WATER_PAIRS,
 )
-
+from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -46,18 +48,14 @@ class Protein:
         self.config = config
         self.md_inputs = {}
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
+        
+        bt.logging.info(f"Launching {pdb_id} Protein Job with the following configuration\nff : {ff}\nbox : {box}\nwater : {water}")
 
     @staticmethod
-    def from_pdb(pdb_id: str):
-        params = {}
-        with open(os.path.join(ROOT_DIR, pdb_id, "config.txt"), "r") as f:
-            for line in f.readlines():
-                key, value = line.split("=")
-                params[key] = value
-
-        bt.logging.info(f"Loaded protein from {pdb_id} with params: {params}")
-
-        return Protein(**params)
+    def from_job(job: Job, config: Dict):
+        return Protein(
+            pdb_id=job.pdb, ff=job.ff, box=job.box, water=job.water, config=config
+        )
 
     def gather_pdb_id(self):
         if self.pdb_id is None:
@@ -75,18 +73,13 @@ class Protein:
         self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
 
     def setup_pdb_directory(self):
-        bt.logging.info(f"\nChanging output directory to {self.pdb_directory}")
-
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
             os.makedirs(self.pdb_directory)
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
-            bt.logging.info(
-                f"\n⏰ {self.pdb_file} does not exist in repository... Downloading"
-            )
             if not check_and_download_pdbs(
-                pdb_directory=self.pdb_directory, pdb_file=self.pdb_file
+                pdb_directory=self.pdb_directory, pdb_id=self.pdb_file, download=True
             ):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
@@ -144,9 +137,6 @@ class Protein:
         missing_files = self.check_for_missing_files(required_files=required_files)
 
         if missing_files is not None:
-            bt.logging.warning(
-                f"Essential files are missing from path {self.pdb_directory!r}: {missing_files!r}... Generating!"
-            )
             self.generate_input_files()
 
         # Create a validator directory to store the files
@@ -189,18 +179,19 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
-    def calculate_params_save_interval(self, num_steps_to_save: int = 5) -> float:
+    def calculate_params_save_interval(
+        self, max_steps: int, num_steps_to_save: int = 5
+    ) -> float:
         """determining the save_frequency to step
 
         Args:
             num_steps_to_save (int, optional): How many steps to save during the simulation.
                 This is to reduce the amount of data that gets saved during simulation.
         """
-
-        save_interval = self.config.max_steps // num_steps_to_save
+        save_interval = max_steps // num_steps_to_save
 
         bt.logging.success(
-            f"Setting save_interval to {save_interval}, from max_steps = {self.config.max_steps}"
+            f"Setting save_interval to {save_interval}, from max_steps = {max_steps}"
         )
         if save_interval == 0:  # only happens when max_steps is < num_steps
             return 1
@@ -298,30 +289,34 @@ class Protein:
             mdp_files (List): Files that contain parameters to change.
             params_to_change (List): List of parameters to change in the desired file(s)
         """
-        bt.logging.info("Editing file content...")
 
-        # TODO: save_frequency = 0.10 needs to be replaced with config.save_frequency
-        save_interval = self.calculate_params_save_interval(
-            num_steps_to_save=self.config.num_steps_to_save
-        )
+        save_interval = None
 
         for file in mdp_files:
             filepath = os.path.join(self.validator_directory, file)
-            bt.logging.info(f"Processing file {filepath}")
             content = open(filepath, "r").read()
+
             if self.config.max_steps is not None:
                 content = re.sub(
                     "nsteps\\s+=\\s+\\d+", f"nsteps = {self.config.max_steps}", content
                 )
 
-            for param in params_to_change:
-                if param in content:
-                    bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
-                    content = re.sub(
-                        f"{param}\\s+=\\s+\\d+",
-                        f"{param} = {save_interval}",
-                        content,
-                    )
+                save_interval = self.calculate_params_save_interval(
+                    max_steps=self.config.max_steps,
+                    num_steps_to_save=self.config.num_steps_to_save,
+                )
+
+            if save_interval is not None:
+                for param in params_to_change:
+                    if param in content:
+                        bt.logging.info(
+                            f"Changing {param} in {file} to {save_interval}..."
+                        )
+                        content = re.sub(
+                            f"{param}\\s+=\\s+\\d+",
+                            f"{param} = {save_interval}",
+                            content,
+                        )
 
             self.md_inputs[file] = content
 
@@ -462,6 +457,7 @@ class Protein:
         bt.logging.success(f"The hash for .gro file is correct!")
 
         # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
+        # .gro -> .edr
         self.rerun(
             output_directory=output_directory, gro_file_location=gro_file_location
         )

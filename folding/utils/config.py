@@ -255,13 +255,6 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.db_path_location",
-        type=str,
-        help="The location where the local database of running jobs is stored.",
-        default=".",  # defaults to the neurons/validator.py file location
-    )
-
-    parser.add_argument(
         "--neuron.num_concurrent_forwards",
         type=int,
         help="The number of concurrent forwards running at any time.",
@@ -339,3 +332,4 @@ def config(cls):
     bt.axon.add_args(parser)
     cls.add_args(parser)
     return bt.config(parser)
+

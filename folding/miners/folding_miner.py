@@ -44,8 +44,8 @@ def attach_files_to_synapse(
     The files that the miner needs to return are:
         1. .tpr (created during grompp commands)
         2. .xtc (created during mdrun commands, logged every nstxout-compressed steps)
-        3. .edr (created during mdrun commands, logged every nstenergy steps)
-        4. .cpt (created during mdrun commands, logged every nstcheckpoint steps)
+        3. .edr (created during mdrun commands, logged every nstenergy steps) # TODO: remove (we can regen outselves on vali side)
+        4. .cpt (created during mdrun commands, logged every nstcheckpoint steps) # TODO: remove (re create .gro file from .tpr and .xtc)
 
 
     Returns:

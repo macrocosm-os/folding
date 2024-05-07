@@ -19,9 +19,11 @@
 import time
 import numpy as np
 from typing import Dict
-import bittensor as bt
 from itertools import chain
 from typing import List
+
+import torch 
+import bittensor as bt
 
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
@@ -41,12 +43,8 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        bt.logging.warning(
-            "VALIDATOR LOAD_STATE DOES NOT WORK... SKIPPING BaseValidatorNeuron.load_state()"
-        )
-
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
-        self.store = PandasJobStore(db_path=self.config.neuron.db_path_location)
+        self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
 
     def parse_mdrun_args(self) -> str:
@@ -73,9 +71,9 @@ class Validator(BaseValidatorNeuron):
         """
 
         # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
-        bt.logging.warning("INSIDE OF THE VALIDATOR ASYNC FORWARD")
-        protein = Protein.from_pdb(pdb_id=job.pdb)
-        uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
+        protein = Protein.from_job(job=job, config=self.config.protein)
+
+        uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
         bt.logging.info("⏰ Waiting for miner responses ⏰")
@@ -100,7 +98,7 @@ class Validator(BaseValidatorNeuron):
         ]
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
-            bt.logging.error(f"Adding job: {ii+1}/{k}")
+            bt.logging.info(f"Adding job: {ii+1}/{k}")
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 
@@ -109,7 +107,7 @@ class Validator(BaseValidatorNeuron):
             active_hotkeys = [j.hotkeys for j in active_jobs]
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = [
-                self.metagaph.hotkeys.index(hotkey) for hotkey in active_hotkeys
+                self.metagraph.hotkeys.index(hotkey) for hotkey in active_hotkeys
             ]
 
             uids = get_random_uids(
@@ -123,7 +121,12 @@ class Validator(BaseValidatorNeuron):
             # min_updates = 10
             # max_time_no_improvement = min_updates * update_interval
 
-            self.store.insert(pdb=job_event["pdb_id"], hotkeys=selected_hotkeys)
+            self.store.insert(
+                pdb=job_event["pdb_id"], 
+                ff = job_event["ff"],
+                water = job_event["water"],
+                box = job_event["box"],
+                hotkeys=selected_hotkeys)
 
     def update_job(self, job: Job, event: Dict):
         """Updates the job status based on the event information
@@ -131,42 +134,43 @@ class Validator(BaseValidatorNeuron):
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
-        losses: List = event["losses"]
-
-        best_index = np.argmin(losses)
-        best_loss = losses[best_index]
-        best_hotkey = job.hotkeys[best_index]
-
-        # print(f'{best_index=}, {best_loss=}, {best_hotkey=}')
-
+        energies: List = event["energies"]
+        rewards = torch.zeros_like(energies) #one-hot per update step
+        
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
         gro_hash = ""  # For next time
+        
+        #If no miners respond appropriately, the energies will be all zeros
+        if torch.all(energies == 0):
+            bt.logging.warning(f"Received all zero energies for {job.pdb}... Not updating.")
+        else:
+            best_index = np.argmin(energies)
+            best_loss = energies[best_index].item() #item because it's a torch.tensor
+            best_hotkey = job.hotkeys[best_index]
 
-        # This does a bunch of important things:
-        # 1. checks if best loss in this round is the best loss overall and updates the best_hotkey and hashes accordingly
-        # 2. Potentially applies early stopping criteria
-        # 3. Ensures that all timestamps and counters are updated correctly
-        job.update(
-            loss=best_loss,
-            hotkey=best_hotkey,
-            commit_hash=commit_hash,
-            gro_hash=gro_hash,
-        )
+            # This does a bunch of important things:
+            # 1. checks if best loss in this round is the best loss overall and updates the best_hotkey and hashes accordingly
+            # 2. Potentially applies early stopping criteria
+            # 3. Ensures that all timestamps and counters are updated correctly
+            job.update(
+                loss=best_loss,
+                hotkey=best_hotkey,
+                commit_hash=commit_hash,
+                gro_hash=gro_hash,
+            )
+            
+            # note that the reward goes to current leader (even if they didn't do well this round)
+            rewards[best_index] = job.hotkeys.index(job.best_hotkey)
 
-        # one hot rewards (1 for winner, 0 for everyone else)
-        rewards = np.zeros_like(losses)
-        # note that the reward goes to current leader (even if they didn't do well this round)
-        rewards[best_index] = job.hotkeys.index(job.best_hotkey)
+            uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
+            self.update_scores(
+                rewards=rewards,
+                uids=uids,  # pretty confident these are in the correct order.
+            )
 
-        uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
-        self.update_scores(
-            rewards=rewards,
-            uids=uids,  # pretty confident these are in the correct order.
-        )
-
-        # Finally, we update the job in the store
-        self.store.update(job=job)
+            # Finally, we update the job in the store
+            self.store.update(job=job)
 
 
 # The main function parses the configuration and runs the validator.
