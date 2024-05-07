@@ -5,6 +5,8 @@ from typing import List, Dict
 from pathlib import Path
 
 import bittensor as bt
+
+from types import SimpleNamespace
 from dataclasses import dataclass
 
 from folding.utils.ops import (
@@ -16,7 +18,7 @@ from folding.utils.ops import (
     check_and_download_pdbs,
     FF_WATER_PAIRS,
 )
-
+from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -48,16 +50,13 @@ class Protein:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
     @staticmethod
-    def from_pdb(pdb_id: str):
-        params = {}
-        with open(os.path.join(ROOT_DIR, pdb_id, "config.txt"), "r") as f:
-            for line in f.readlines():
-                key, value = line.split("=")
-                params[key] = value
-
-        bt.logging.info(f"Loaded protein from {pdb_id} with params: {params}")
-
-        return Protein(**params)
+    def from_job(job: Job):
+        config = SimpleNamespace(
+            max_steps=None,
+            num_steps_to_save=100,
+            suppress_cmd_output=True,
+        )
+        return Protein(ff=job.ff, box=job.box, config=config, pdb_id=job.pdb)
 
     def gather_pdb_id(self):
         if self.pdb_id is None:
@@ -86,7 +85,7 @@ class Protein:
                 f"\n⏰ {self.pdb_file} does not exist in repository... Downloading"
             )
             if not check_and_download_pdbs(
-                pdb_directory=self.pdb_directory, pdb_file=self.pdb_file
+                pdb_directory=self.pdb_directory, pdb_id=self.pdb_file
             ):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
@@ -462,6 +461,7 @@ class Protein:
         bt.logging.success(f"The hash for .gro file is correct!")
 
         # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
+        # .gro -> .edr
         self.rerun(
             output_directory=output_directory, gro_file_location=gro_file_location
         )
