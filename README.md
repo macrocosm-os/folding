@@ -1,6 +1,16 @@
-<div align="center">
+<!-- <div align="center">
     <img src="./assets/macrocosmos-black.png" alt="Alt generative-folding-tao">
-</div>
+</div> -->
+
+<picture>
+    <source srcset="./assets/macrocosmos-black.png"  media="(prefers-color-scheme: dark)">
+    <img src="macrocosmos-black.png">
+</picture>
+
+<picture>
+    <source srcset="./assets/macrocosmos-white.png"  media="(prefers-color-scheme: white)">
+    <img src="macrocosmos-white.png">
+</picture>
 
 <div align="center">
 
