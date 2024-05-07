@@ -163,9 +163,7 @@ class FoldingMiner(BaseMinerNeuron):
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
 
-            if (current_executor_state == "finished") or (
-                current_executor_state == "timeout"
-            ):
+            if current_executor_state == "finished":
                 final_synapse = attach_files_to_synapse(
                     synapse=synapse,
                     data_directory=simulation["output_dir"],
@@ -216,7 +214,6 @@ class FoldingMiner(BaseMinerNeuron):
             simulation_manager.run,
             synapse.md_inputs,
             state_commands,
-            self.config.timeout,
             self.config.neuron.suppress_cmd_output,
             self.config.mock,
         )
@@ -238,7 +235,6 @@ class SimulationManager:
         self,
         md_inputs: Dict,
         commands: Dict,
-        timeout: float = 10,
         suppress_cmd_output: bool = True,
         mock: bool = False,
     ):
@@ -267,15 +263,6 @@ class SimulationManager:
                 file.write(content)
 
         for state, commands in commands.items():
-            # Check to see if the simulation is taking longer than the timeout condition.
-            if (time.time() - start_time) > timeout:
-                bt.logging.error(f"Timeout reached for protein: {self.pdb_id}")
-
-                state = "timeout"
-                with open(self.state_file_name, "w") as f:
-                    f.write(f"{state}\n")
-                break  # Aka "finishing" the simulation
-
             bt.logging.info(f"Running {state} commands")
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
@@ -287,12 +274,13 @@ class SimulationManager:
                 for ext in ["tpr", "xtc", "edr", "cpt"]:
                     create_empty_file(os.path.join(self.output_dir, f"{state}.{ext}"))
 
-        if state is not "timeout":
-            bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
+        bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
 
-            state = "finished"
-            with open(self.state_file_name, "w") as f:
-                f.write(f"{state}\n")
+        state = "finished"
+        with open(self.state_file_name, "w") as f:
+            f.write(f"{state}\n")
+
+        total_run_rime = time.time() - start_time
 
     def get_state(self) -> str:
         """get_state reads a txt file that contains the current state of the simulation"""

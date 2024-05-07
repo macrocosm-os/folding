@@ -176,6 +176,13 @@ def add_args(cls, parser):
         default="",
     )
 
+    parser.add_argument(
+        "--mdrun_args.maxh",
+        type=str,
+        help="Timeout for the mdrun simulation in seconds (each step).",
+        default=3600,  # default is 1h.
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
@@ -192,13 +199,6 @@ def add_miner_args(cls, parser):
         action="store_true",
         help="If set, we suppress the text output of terminal commands to reduce terminal clutter.",
         default=True,
-    )
-
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        help="Timeout for the simulation in seconds.",
-        default=3600,  # default is 1h.
     )
 
     parser.add_argument(

@@ -47,6 +47,16 @@ class Validator(BaseValidatorNeuron):
 
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = PandasJobStore(db_path=self.config.neuron.db_path_location)
+        self.mdrun_args = self.parse_mdrun_args()
+
+    def parse_mdrun_args(self) -> str:
+        mdrun_args = ""
+
+        for arg, value in self.config.mdrun_args.items():
+            if value is not None:
+                mdrun_args += f"-{arg} {value} "
+
+        return mdrun_args
 
     def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
@@ -74,6 +84,7 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
+            mdrun_args=self.mdrun_args,
         )
 
     def add_jobs(self, k: int):
