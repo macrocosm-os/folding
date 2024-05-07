@@ -43,17 +43,18 @@ def check_config(cls, config: "bt.Config"):
 
     if not config.neuron.dont_save_events:
         # Add custom event logger for the events.
-        logger.level("EVENTS", no=38, icon="📝")
-        logger.add(
-            os.path.join(config.neuron.full_path, "events.log"),
-            rotation=config.neuron.events_retention_size,
-            serialize=True,
-            enqueue=True,
-            backtrace=False,
-            diagnose=False,
-            level="EVENTS",
-            format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
-        )
+        if "EVENTS" not in logger._core.levels:
+            logger.level("EVENTS", no=38, icon="📝")
+            logger.add(
+                os.path.join(config.neuron.full_path, "events.log"),
+                rotation=config.neuron.events_retention_size,
+                serialize=True,
+                enqueue=True,
+                backtrace=False,
+                diagnose=False,
+                level="EVENTS",
+                format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
+            )
 
 
 def add_args(cls, parser):
@@ -175,6 +176,13 @@ def add_args(cls, parser):
         default="",
     )
 
+    parser.add_argument(
+        "--mdrun_args.maxh",
+        type=str,
+        help="Timeout for the mdrun simulation in seconds (each step).",
+        default=3600,  # default is 1h.
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
@@ -259,7 +267,7 @@ def add_validator_args(cls, parser):
         help="The number of concurrent forwards running at any time.",
         default=1,
     )
-    
+
     parser.add_argument(
         "--neuron.queue_size",
         type=int,

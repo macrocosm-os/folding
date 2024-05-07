@@ -2,106 +2,104 @@ import pytest
 
 import os
 import time
-import random
-import string
+import shutil
+import random, string
+from typing import Dict
 from pathlib import Path
-import concurrent.futures
-from collections import defaultdict
-from folding.miners.folding_miner import MockGromacsExecutor
-
 import bittensor as bt
+
+from folding.protocol import FoldingSynapse
+from folding.miners.folding_miner import FoldingMiner
+from folding.utils.config import add_miner_args, add_args
+
+from tests.fixtures.gro_files.default_config import get_test_config
 
 ROOT_PATH = Path(__file__).parent
 OUTPUT_PATH = os.path.join(ROOT_PATH, "mock_data", "test_miner")
-
-TOTAL_WAIT_TIME = 3  # seconds
-
-
-def _make_pdb():
-    return "".join(random.choices(string.digits + string.ascii_lowercase, k=4))
 
 
 def delete_output_dir():
     """We create a lot of files in the process of tracking pdb files.
     Therefore, we want to delete the output directory after we are done with the tests.
     """
-    if os.path.exists(OUTPUT_PATH):
-        for file in os.listdir(OUTPUT_PATH):
-            os.remove(os.path.join(OUTPUT_PATH, file))
-        os.rmdir(OUTPUT_PATH)
+    shutil.rmtree(OUTPUT_PATH)
 
 
-def test_gromacs_executor_simple():
-    executor = MockGromacsExecutor(pdb_id=_make_pdb(), output_dir=OUTPUT_PATH)
-    executor.run(total_wait_time=1)
-    state = executor.get_state()
-    assert state is not None  # Add more specific checks as needed
-    assert state == "finished"  # Add more specific checks as needed
+# create a testfoldingminer to not run anything gromacs, just some waits.
+class TestFoldingMiner(FoldingMiner):
+    """A class that closely follows the true logic of the FoldingMiner class with some
+    non-simulation specific tests.
+    """
+
+    def __init__(self, config=None, base_data_path=OUTPUT_PATH):
+        # Need to the make the blacklist methods None.
+        self.blacklist = None
+        self.priority = None
+
+        super().__init__(config=config, base_data_path=base_data_path)
+
+    def configure_commands(self, mdrun_args) -> Dict:
+        """The set of commands that will run for each state of the simulation.
+
+        Args:
+            mdrun_args: Empty, but needed since it is referred in base class
+        """
+        sleep_time = 2
+        commands = [
+            'echo "command 0"',
+            f"sleep {sleep_time}",
+            'echo "command 1"',
+            f"sleep {sleep_time}",
+            'echo "command 2"',
+            f"sleep {sleep_time}",
+            'echo "command 3"',
+        ]
+
+        state_commands = {
+            "nvt": commands[:2],
+            "npt": commands[2:4],
+            "md_0_1": commands[4:],
+        }
+
+        return state_commands
+
+
+def create_miner(config=None):
+    return TestFoldingMiner(config=config)
+
+
+def _make_pdb():
+    return "test_" + "".join(
+        random.choices(string.digits + string.ascii_lowercase, k=4)
+    )
+
+
+@pytest.mark.parametrize("num_requests", [2])
+def test_miner(num_requests: int):
+    test_config = get_test_config()
+
+    if "timeout" not in test_config:
+        test_config["timeout"] = 10
+
+    test_config.protein.pdb_id = _make_pdb()
+
+    miner = create_miner(config=test_config)
+
+    # the creation of N jobs
+    for ii in range(num_requests):
+        test_synapse = FoldingSynapse(
+            pdb_id=test_config.protein.pdb_id + f"_{ii}", md_inputs={}
+        )
+
+        miner.forward(synapse=test_synapse)
+
+    time.sleep(5)  # give some time before the miner starts.
+
+    # This will ask for information from the last synapse created.
+    returned_synapse = miner.forward(synapse=test_synapse)
+    bt.logging.info(f"Returned synapse: {returned_synapse}")
+    assert (
+        len(miner.simulations.keys()) == num_requests
+    ), f"The number of simulations {len(miner.simulations.keys())} should be equal to the number of requests {num_requests}"
 
     delete_output_dir()
-
-
-def check_file_exists(file_path: str):
-    return os.path.exists(file_path)
-
-
-@pytest.mark.parametrize("max_workers", [1, 2])
-def test_gromacs_executor(max_workers: int):
-    def nested_dict():
-        return defaultdict(
-            lambda: None
-        )  # allows us to set the desired attribute to anything.
-
-    EXECUTOR = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
-
-    simulations = defaultdict(
-        nested_dict
-    )  # Maps pdb_ids to the current state of the simulation
-
-    for _ in range(max_workers):
-        pdb_id = _make_pdb()
-        gromax_executor = MockGromacsExecutor(pdb_id=pdb_id, output_dir=OUTPUT_PATH)
-        assert gromax_executor is not None, "Executor should not be None"
-        assert gromax_executor.state is None, "State should be None"
-
-        future = EXECUTOR.submit(gromax_executor.run, total_wait_time=TOTAL_WAIT_TIME)
-
-        assert future.done() is False, "Future should not be done"
-
-        simulations[pdb_id]["future"] = future
-        simulations[pdb_id]["executor"] = gromax_executor
-
-    # Now we want to continually check the state of the simulation
-    while True:
-        for pdb_id, sim in simulations.items():
-            if not sim["future"].done():
-                # check if output path has any .txt files
-                # This seems to happen because of some IO delay..
-                if os.path.exists(OUTPUT_PATH):
-                    if len(os.listdir(OUTPUT_PATH)) == 0:
-                        bt.logging.warning(f"OUTPUT_PATH IS EMPTY... continue")
-                        continue
-                else:
-                    bt.logging.warning(f"OUTPUT_PATH DOES NOT EXIST... continue")
-                    continue
-
-                current_state = sim["executor"].get_state()
-
-                if current_state not in simulations[pdb_id]["recorded_states"]:
-                    simulations[pdb_id]["recorded_states"].append(current_state)
-
-            else:  # therefore the simulation must finish
-                assert (
-                    sim["executor"].get_state() == "finished"
-                ), "Simulation should be finished"
-
-                simulations[pdb_id]["recorded_states"].append(
-                    sim["executor"].get_state()
-                )
-
-                assert sim["executor"].required_values.issubset(
-                    set(simulations[pdb_id]["recorded_states"])
-                ), f"Required values, {sim['executor'].required_values}, should be a subset of recorded states, {simulations[pdb_id]['recorded_states']}"
-
-        delete_output_dir()
-        return None
