@@ -89,7 +89,7 @@ def attach_files_to_synapse(
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
 
 
-def create_generic_file(file_path: str):
+def create_empty_file(file_path: str):
     with open(file_path, "w") as f:
         pass
 
