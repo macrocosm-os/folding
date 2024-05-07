@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, asdict
 
+DB_DIR = os.path.join(os.path.dirname(__file__), "db")
+
 class PandasJobStore:
     """Basic csv-based job store using pandas."""
 
@@ -29,7 +31,7 @@ class PandasJobStore:
         "max_time_no_improvement": "timedelta64[s]",
     }
 
-    def __init__(self, db_path, table_name="protein_jobs", force_create=False):
+    def __init__(self, db_path=DB_DIR, table_name="protein_jobs", force_create=False):
         self.db_path = db_path
         self.table_name = table_name
         self.file_path = os.path.join(self.db_path, f"{self.table_name}.csv")
@@ -87,13 +89,13 @@ class PandasJobStore:
 
         return queue
 
-    def insert(self, pdb: str, hotkeys: List[str], **kwargs):
+    def insert(self, pdb: str, ff: str, box: str, water: str, hotkeys: List[str], **kwargs):
         """Adds a new job to the database."""
 
         if pdb in self._db.index.tolist():
             raise ValueError(f"pdb {pdb!r} is already in the store")
 
-        job = Job(pdb=pdb, hotkeys=hotkeys, **kwargs).to_frame()
+        job = Job(pdb=pdb, ff=ff, box=box, water=water, hotkeys=hotkeys, **kwargs).to_frame()
 
         if len(self._db) == 0:
             self._db = job  # .astype(self.columns)
@@ -119,6 +121,9 @@ class Job:
     # TODO: inherit from pydantic BaseModel which should take care of dtypes and mutation
 
     pdb: str
+    ff: str
+    box: str
+    water: str
     hotkeys: list
     active: bool = True
     created_at: pd.Timestamp = pd.Timestamp.now().floor("s")
@@ -171,6 +176,9 @@ class Job:
 class MockJob(Job):
     def __init__(self, n_hotkeys=5, update_seconds=5, stop_after_seconds=10):
         self.pdb = self._make_pdb()
+        self.ff = "charmm27"
+        self.box = "cubic"
+        self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
         self.created_at = (
             pd.Timestamp.now() - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
