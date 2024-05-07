@@ -17,7 +17,7 @@ from folding.utils.ops import run_cmd_commands, check_if_directory_exists
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-BASE_DATA_PATH = os.path.join(ROOT_DIR, "data")
+BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
 
 def attach_files_to_synapse(
@@ -72,6 +72,7 @@ def attach_files_to_synapse(
             bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
             try:
                 with open(filename, "rb") as f:
+                    filename = filename.split('/')[-1] # remove the directory from the filename
                     synapse.md_output[filename] = base64.b64encode(f.read())
             except Exception as e:
                 bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
@@ -213,12 +214,14 @@ class FoldingMiner(BaseMinerNeuron):
             synapse.md_inputs,
             state_commands,
             self.config.neuron.suppress_cmd_output,
-            self.config.mock,
+            self.config.mock or self.mock, #self.mock is inside of MockFoldingMiner
         )
 
         self.simulations[synapse.pdb_id]["executor"] = simulation_manager
         self.simulations[synapse.pdb_id]["future"] = future
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
+        
+        bt.logging.success(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
 
 
 class SimulationManager:

@@ -13,9 +13,12 @@ class MockFoldingMiner(FoldingMiner):
 
     def __init__(self, base_data_path: str = None, config=None):
         # Need to the make the blacklist methods None.
+        self.blacklist = None 
+        self.priority = None 
+        self.mock = True
         super().__init__(config=config, base_data_path=base_data_path)
 
-    def configure_commands(self, mdrun_args) -> Dict:
+    def configure_commands(self, mdrun_args:str) -> Dict:
         """The set of commands that will run for each state of the simulation.
 
         Args:
