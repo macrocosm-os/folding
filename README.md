@@ -8,7 +8,7 @@
 </picture>
 
 <picture>
-    <source srcset="./assets/macrocosmos-black.png"  media="(prefers-color-scheme: white)">
+    <source srcset="./assets/macrocosmos-black.png"  media="(prefers-color-scheme: light)">
     <img src="macrocosmos-black.png">
 </picture>
 
