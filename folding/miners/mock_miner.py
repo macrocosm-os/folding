@@ -6,16 +6,13 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "data")
 
 
-class TestFoldingMiner(FoldingMiner):
+class MockFoldingMiner(FoldingMiner):
     """A class that closely follows the true logic of the FoldingMiner class with some
     non-simulation specific tests.
     """
 
     def __init__(self, base_data_path: str = None, config=None):
         # Need to the make the blacklist methods None.
-        self.blacklist = None
-        self.priority = None
-
         super().__init__(config=config, base_data_path=base_data_path)
 
     def configure_commands(self, mdrun_args) -> Dict:
