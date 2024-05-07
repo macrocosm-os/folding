@@ -48,6 +48,8 @@ class Protein:
         self.config = config
         self.md_inputs = {}
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
+        
+        bt.logging.info(f"Launching {pdb_id} Protein Job with the following configuration\nff : {ff}\nbox : {box}\nwater : {water}")
 
     @staticmethod
     def from_job(job: Job, config: Dict):
