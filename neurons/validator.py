@@ -41,12 +41,8 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        bt.logging.warning(
-            "VALIDATOR LOAD_STATE DOES NOT WORK... SKIPPING BaseValidatorNeuron.load_state()"
-        )
-
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
-        self.store = PandasJobStore(db_path=self.config.neuron.db_path_location)
+        self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
 
     def parse_mdrun_args(self) -> str:
@@ -73,8 +69,8 @@ class Validator(BaseValidatorNeuron):
         """
 
         # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
-        bt.logging.warning("INSIDE OF THE VALIDATOR ASYNC FORWARD")
-        protein = Protein.from_pdb(pdb_id=job.pdb)
+        protein = Protein.from_job(job)
+        
         uids = [self.metagaph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
@@ -109,7 +105,7 @@ class Validator(BaseValidatorNeuron):
             active_hotkeys = [j.hotkeys for j in active_jobs]
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = [
-                self.metagaph.hotkeys.index(hotkey) for hotkey in active_hotkeys
+                self.metagraph.hotkeys.index(hotkey) for hotkey in active_hotkeys
             ]
 
             uids = get_random_uids(
