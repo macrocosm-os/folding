@@ -72,6 +72,13 @@ When the simulations finally converge, they produce the form of the proteins as 
 </div>
 
 # Running the Subnet
+## Requirements 
+Protein folding utilizes a standardized package called [GROMACS](https://manual.gromacs.org/2023.2/install-guide/index.htm). To run, you will need:
+1. A Linux-based machine 
+2. Multiple CPU cores. 
+
+Out of the box, we do not require miners to run GPU compatible GROMACS packages.
+
 ## Installation
 This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
 ```bash
@@ -82,12 +89,7 @@ pip install -r requirements.txt
 bash install.sh
 ```
 
-### GROMACS
-You will need two packages to run either a miner or a validator. GROMACS itself, and then a GROMACS wrapper to make the base functions more python friendly. You can find the install process and requirements for the latest version of GROMACS here:
-- `https://manual.gromacs.org/2023.2/install-guide/index.html`
-
-
-## Description
+## How does the Subnet Work?
 
 In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. 
 
@@ -96,26 +98,22 @@ In this subnet, validators create protein folding challenges for miners, who in 
 Each round of validation consists of the following steps:
 1. Validator randomly select a protein ID (aka. `pdb_id`) from a large database of options.
 2. Validator downloads the `.pdb` file for the selected `pdb_id`, which contains the initial coordinates of the protein.
-3. Validator runs some validation and preprocessing scripts to ensure that the problem is well posed.
-4. Validator sends input files to miners and waits until `timeout` is reached before optimized coordinates are returned.
-5. Validator scores miner responses based on optimality of protein coordinates.
+3. Validator runs some validation and preprocessing scripts to ensure that the problem is well posed. This includes a brute-force search over a specified space of hyperparameters to effectively search over a wide range of simulation configurations. 
+4. The validator choses an N number of miners on the network to complete the folding job for this particular pdb_id. Once submitted, the validator keeps track of which miners are running a submitted pdb_id, and continues to submit jobs to the network until miners are at full capacity. 
+5. The validator periodically checks up on the miners for **each** pdb_id job it has submitted, evaluating the state of each miners intermediate/final response during the query.
+6. Validators confirm that miners are running the correct protein through some GROMACS commands, and miners are graded by their protein configuration (energy). The miner with the lowest energy on each step will be rewarded. 
 
-__Reward__:
-After verifying that miners performed the required computation, the free energy of the protein is calculated based on the output file. The free energy will converge to a minimum value when the optimal protein configuration is obtained, and so each miner's rank is based on the optimality of their coordinates.
 
 ## Mining
 Each round of mining consists of the following steps:
-1. Miner receives the input files for a `pdb_id`.
+1. Miner receives the input files to run a simulation for a `pdb_id`.
 2. Miner runs **first** (_low_ fidelity) `mdrun` simulation using GROMACS which we call the temperature run.
 3. Miner runs **second** (_medium_ fidelity) `mdrun` simulation based on temperature run results, which we call the temperature + pressure run.
 4. Miner runs **third** (_high_ fidelity) `mdrun` simulation based on temperature + pressure run results, which we call the production run. This run lasts the longest.
-5. Miner responds with optimized protein coordinates from last run (or earlier run if not available).
+5. Miners are expected to be queried by the validator at a frequency unknown to them. They are expected to respond with the files necessary for the validator to confirm that they are running the correct protein and for their energy-based calculations. 
+6. Importantly, miners run an N number of **processes**. Therefore, miners are expected to handle running multiple pdb simulations concurrently. 
 
 ## Notes
-Several key inputs such as the `forcefield` and simulation `box` shape are kept fixed in the present version, but will likely become additional variables in a future version.
-- Forcefield: "Charmm27"
-- Box: "Rhombic dodecahedron"
-
 
 **Miner** simulations will output a projected time. The first two runs will be about the same length, with the third taking about an order of magnitude longer using a default number of steps = 50,000. The number of steps (`steps`) and the maximum allowed runtime (`maxh`) are easily configurable and should be employed by miners to prevent timing out. We also encourage miners to take advantage of 'early stopping' techniques so that simulations do not run past convergence.
 
@@ -126,10 +124,6 @@ GROMACS itself is a rather robust package and is widely used within the research
 
 
 ## License
-
-[INSERT GROMACS LICENSING INFORMATION HERE]
-
-
 
 This repository is licensed under the MIT License.
 ```text
