@@ -28,15 +28,6 @@
 This repository is the official codebase for Bittensor Subnet Folding (SNX), which is to be released May 2024. To learn more about the Bittensor project and the underlying mechanics, [read here.](https://docs.bittensor.com/)
 
 ---
-<!-- - [Introduction](#introduction)
-- [Installation](#installation)
-  - [Before you proceed](#before-you-proceed)
-- [Background: What is protein folding?](#background)
-- [Description](#description)
-- [Notes](#notes)
-
-- [License](#license) -->
-
 
 <div align="center">
     <img src="./assets/protein_tao.png" alt="Alt generative-folding-tao">
@@ -62,13 +53,16 @@ Protein folding is also a research topic that is of incredibly high value. Resea
 # Reward Mechanism
 Protein folding is a textbook example of this kind of asymmetry; the molecular dynamics simulation involves long and arduous calculations which apply the laws of physics to the system over and over again until an optimized configuration is obtained. There are no reasonable shortcuts. 
 
-While the process of simulation is exceedingly compute-intensive, the evaluation process is actually straightforward. **The reward given to the miners is based on the ‘energy’ of their protein configuration (or shape)**. The energy value compactly represents the overall quality of their result, and this value is precisely what is decreased over the course of a molecular dynamics simulation. 
-
-
-When the simulations finally converge, they produce the form of the proteins as they are observed in real physical contexts, and this form gives rise to their biological function. Thus, the miners provide utility by preparing ready-for-study proteins on demand. An example of such a protein is shown below. 
+While the process of simulation is exceedingly compute-intensive, the evaluation process is actually straightforward. **The reward given to the miners is based on the ‘energy’ of their protein configuration (or shape)**. The energy value compactly represents the overall quality of their result, and this value is precisely what is decreased over the course of a molecular dynamics simulation. The energy directly corresponds to the configuration of the structure, and can be computed in closed-form. The gif below illustrates the energy minimization over a short simulation procedure.
 
 <div align="center">
-    <img src="./assets/8emf_pdb_1.gif" alt="Alt Folded-protein" width="600" height="500">
+    <img src="./assets/8emf_pdb_loss.gif" alt="Alt Folded-protein" width="500" height="350">
+</div>
+
+When the simulations finally converge (ΔE/t < threshold), they produce the form of the proteins as they are observed in real physical contexts, and this form gives rise to their biological function. Thus, the miners provide utility by preparing ready-for-study proteins on demand. An example of such a protein is shown below. 
+
+<div align="center">
+    <img src="./assets/8emf_pdb_protein.gif" alt="Alt Folded-protein" width="600" height="500">
 </div>
 
 # Running the Subnet
@@ -87,6 +81,7 @@ cd folding
 <OPTIONAL CREATE VIRTUAL ENVIRONMENT (RECOMMENDED)>
 pip install -r requirements.txt
 bash install.sh
+pip install -e .
 ```
 
 ## How does the Subnet Work?
