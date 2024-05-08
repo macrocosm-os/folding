@@ -1,6 +1,7 @@
 import os
 from typing import Dict
 from folding.miners.folding_miner import FoldingMiner
+import random
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "data")
@@ -16,13 +17,14 @@ class MockFoldingMiner(FoldingMiner):
         self.mock = True
         super().__init__(config=config, base_data_path=base_data_path)
 
-    def configure_commands(self, mdrun_args:str) -> Dict:
+    def configure_commands(self, mdrun_args: str) -> Dict:
         """The set of commands that will run for each state of the simulation.
 
         Args:
             mdrun_args: Empty, but needed since it is referred in base class
         """
-        sleep_time = 2
+        sleep_time = int(random.uniform(2, 3))
+
         commands = [
             'echo "command 0"',
             f"sleep {sleep_time}",

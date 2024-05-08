@@ -13,7 +13,11 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
-from folding.utils.ops import run_cmd_commands, check_if_directory_exists, delete_directory
+from folding.utils.ops import (
+    run_cmd_commands,
+    check_if_directory_exists,
+    delete_directory,
+)
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -66,15 +70,19 @@ def attach_files_to_synapse(
         files_to_attach: List = (
             all_state_files + latest_cpt_file
         )  # combine the state files and the latest checkpoint file
-        
+
         if len(files_to_attach) == 0:
-            raise FileNotFoundError(f"No files found for {state}") #if this happens, goes to except block
+            raise FileNotFoundError(
+                f"No files found for {state}"
+            )  # if this happens, goes to except block
 
         bt.logging.info(f"Sending files to validator: {files_to_attach}")
         for filename in files_to_attach:
             try:
                 with open(filename, "rb") as f:
-                    filename = filename.split('/')[-1] # remove the directory from the filename
+                    filename = filename.split("/")[
+                        -1
+                    ]  # remove the directory from the filename
                     synapse.md_output[filename] = base64.b64encode(f.read())
             except Exception as e:
                 bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
@@ -114,13 +122,15 @@ class FoldingMiner(BaseMinerNeuron):
         self.max_workers = (
             self.max_num_processes - 1
         )  # subtract one to ensure that we are not using all the processors.
-        
-        bt.logging.success(f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀")
+
+        bt.logging.success(
+            f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
+        )
 
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=self.max_workers
         )  # remove one for safety
-        
+
         self.mock = None
 
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
@@ -155,7 +165,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         Returns:
             FoldingSynapse: synapse with md_output attached
-        """        
+        """
 
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.info(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
@@ -171,6 +181,9 @@ class FoldingMiner(BaseMinerNeuron):
                 )
 
                 # This will run if final_synapse exists.
+                bt.logging.info(
+                    f"✅ Simulation finished for protein: {synapse.pdb_id} ✅"
+                )
                 del self.simulations[
                     synapse.pdb_id
                 ]  # Remove the simulation from the list
@@ -192,7 +205,7 @@ class FoldingMiner(BaseMinerNeuron):
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the files from the last simulation. This only works if you have kept the data.
             output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
-            
+
             bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
             return attach_files_to_synapse(
                 synapse=synapse, data_directory=output_dir, state="md_0_1"
@@ -216,14 +229,16 @@ class FoldingMiner(BaseMinerNeuron):
             synapse.md_inputs,
             state_commands,
             self.config.neuron.suppress_cmd_output,
-            self.config.mock or self.mock, #self.mock is inside of MockFoldingMiner
+            self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
         )
 
         self.simulations[synapse.pdb_id]["executor"] = simulation_manager
         self.simulations[synapse.pdb_id]["future"] = future
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
-        
-        bt.logging.success(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
+
+        bt.logging.success(
+            f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ "
+        )
 
     async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
@@ -250,8 +265,7 @@ class FoldingMiner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse:FoldingSynapse) -> float:
-        # TODO(developer): Define how miners should prioritize requests.
+    async def priority(self, synapse: FoldingSynapse) -> float:
         caller_uid = self.metagraph.hotkeys.index(
             synapse.dendrite.hotkey
         )  # Get the caller index.
@@ -263,6 +277,7 @@ class FoldingMiner(BaseMinerNeuron):
         )
         return priority
 
+
 class SimulationManager:
     def __init__(self, pdb_id: str, output_dir: str) -> None:
         self.pdb_id = pdb_id
@@ -270,9 +285,9 @@ class SimulationManager:
         self.state_file_name = f"{pdb_id}_state.txt"
 
         self.output_dir = output_dir
-        
+
     def create_empty_file(self, file_path: str):
-        #For mocking
+        # For mocking
         with open(file_path, "w") as f:
             pass
 
@@ -317,7 +332,9 @@ class SimulationManager:
             if mock:
                 bt.logging.warning("Running in mock mode, creating fake files...")
                 for ext in ["tpr", "xtc", "edr", "cpt"]:
-                    self.create_empty_file(os.path.join(self.output_dir, f"{state}.{ext}"))
+                    self.create_empty_file(
+                        os.path.join(self.output_dir, f"{state}.{ext}")
+                    )
 
         bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
 
