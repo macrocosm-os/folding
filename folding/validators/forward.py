@@ -1,7 +1,7 @@
 import os
 import time
 import torch
-import pickle
+from tqdm import tqdm
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
@@ -18,6 +18,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(
     root_dir=ROOT_DIR, filename="pdb_ids.pkl"
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
+
 
 def run_step(
     self,
@@ -122,21 +123,17 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     """
 
     exclude_in_hp_search = parse_config(config)
-
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-    bt.logging.info(f"Total parameter space: {hp_sampler.parameter_set}")
-
-    for iteration_num in range(hp_sampler.TOTAL_COMBINATIONS):
+    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    for _ in tqdm(
+        range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
+    ):
         hp_sampler_time = time.time()
 
         event = {}
         try:
             sampled_combination: Dict = hp_sampler.sample_hyperparameters()
-            bt.logging.info(
-                f"pdb_id: {pdb_id}, Selected hyperparameters: {sampled_combination}, iteration {iteration_num}"
-            )
-
             hps = {
                 "ff": config.protein.ff or sampled_combination["FF"],
                 "water": config.protein.water or sampled_combination["WATER"],
@@ -145,15 +142,9 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             }
 
             protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
-
-            bt.logging.info(f"Attempting to generate challenge: {protein}")
             protein.forward()
 
         except Exception as E:
-            bt.logging.error(
-                f"❌❌ Error running hyperparameters {sampled_combination} for pdb_id {pdb_id} ❌❌"
-            )
-            bt.logging.warning(E)
             event["validator_search_status"] = False
 
         finally:
