@@ -12,4 +12,16 @@ make
 make check
 make install
 source /usr/local/gromacs/bin/GMXRC
-# TODO: copy the last command into the bashrc file so it runs on every startup
+
+# Command to be added to .bashrc
+COMMAND="source /usr/local/gromacs/bin/GMXRC"
+
+# Check if the command is already in the .bashrc to avoid duplication
+if ! grep -Fxq "$COMMAND" ~/.bashrc
+then
+    # Append the command to .bashrc if it's not already there
+    echo "$COMMAND" >> ~/.bashrc
+    echo "Added GROMACS initialization to .bashrc"
+else
+    echo "GROMACS initialization already in .bashrc"
+fi

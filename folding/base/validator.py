@@ -1,7 +1,6 @@
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
+# Copyright © 2024 Yuma Rao
+# Copyright © 2024 Macrocosmos AI
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -152,7 +151,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 # TODO: maybe concurrency for the loop below
                 for job in self.store.get_queue(ready=False).queue:
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
-                    event = self.forward(job = job)
+                    event = self.forward(job=job)
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
                     self.update_job(job, event)
