@@ -4,7 +4,7 @@ import glob
 import base64
 import psutil
 import concurrent.futures
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -223,6 +223,43 @@ class FoldingMiner(BaseMinerNeuron):
         
         bt.logging.success(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
 
+    async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
+        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        if (
+            not self.config.blacklist.allow_non_registered
+            and synapse.dendrite.hotkey not in self.metagraph.hotkeys
+        ):
+            # Ignore requests from un-registered entities.
+            bt.logging.trace(
+                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
+            )
+            return True, "Unrecognized hotkey"
+
+        if self.config.blacklist.force_validator_permit:
+            # If the config is set to force validator permit, then we should only allow requests from validators.
+            if not self.metagraph.validator_permit[uid]:
+                bt.logging.warning(
+                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
+                )
+                return True, "Non-validator hotkey"
+
+        bt.logging.trace(
+            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
+        )
+        return False, "Hotkey recognized!"
+
+    async def priority(self, synapse:FoldingSynapse) -> float:
+        # TODO(developer): Define how miners should prioritize requests.
+        caller_uid = self.metagraph.hotkeys.index(
+            synapse.dendrite.hotkey
+        )  # Get the caller index.
+        priority = float(
+            self.metagraph.S[caller_uid]
+        )  # Return the stake as the priority.
+        bt.logging.trace(
+            f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority
+        )
+        return priority
 
 class SimulationManager:
     def __init__(self, pdb_id: str, output_dir: str) -> None:
@@ -308,7 +345,7 @@ class MockSimulationManager(SimulationManager):
         store = os.path.join(self.output_dir, self.state_file_name)
         states = ["init", "wait", "finished"]
 
-        itermediate_interval = total_wait_time / len(states)
+        intermediate_interval = total_wait_time / len(states)
 
         for state in states:
             bt.logging.info(f"Running state: {state}")
@@ -316,7 +353,7 @@ class MockSimulationManager(SimulationManager):
             with open(store, "w") as f:
                 f.write(f"{state}\n")
 
-            time.sleep(itermediate_interval)
+            time.sleep(intermediate_interval)
             bt.logging.info(f"Total state_time: {time.time() - state_time}")
 
         bt.logging.warning(f"Total run method time: {time.time() - start_time}")
