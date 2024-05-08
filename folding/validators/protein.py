@@ -1,12 +1,9 @@
 import os
 import re
-import requests
 from typing import List, Dict
 from pathlib import Path
 
 import bittensor as bt
-
-from types import SimpleNamespace
 from dataclasses import dataclass
 
 from folding.utils.ops import (
@@ -31,9 +28,13 @@ class Protein:
         return self.protein_pdb.split(".")[0]
 
     def __init__(
-        self, ff: str, box: str, config: Dict, pdb_id: str = None, water: str = None
+        self, ff: str, box: str, config: Dict, pdb_id: str = None, water: str = None, load_md_inputs:bool = False,
     ):
-        self.pdb_id = pdb_id
+        self.base_directory = os.path.join(str(ROOT_DIR), "data")
+        
+        self.pdb_id = pdb_id.lower()
+        self.setup_filepaths()
+        
         self.ff = ff
         self.box = box
 
@@ -46,15 +47,36 @@ class Protein:
             self.water = FF_WATER_PAIRS[self.ff]
 
         self.config = config
-        self.md_inputs = {}
-        self.base_directory = os.path.join(str(ROOT_DIR), "data")
+            
+        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
+        self.other_files = [
+            "em.gro",
+            "topol.top",
+            "posre.itp",
+            "posre_Protein_chain_A.itp",
+            "posre_Protein_chain_L.itp",
+            "topol_Protein_chain_A.itp",
+            "topol_Protein_chain_L.itp",
+        ]   
         
-        bt.logging.info(f"Launching {pdb_id} Protein Job with the following configuration\nff : {ff}\nbox : {box}\nwater : {water}")
+        self.md_inputs = self.read_and_return_files(filenames = self.other_files) if load_md_inputs else {}
+        a = 10
+
+    def setup_filepaths(self):
+        self.pdb_file = f"{self.pdb_id}.pdb"
+        self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
+        self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
+        
+        self.validator_directory = os.path.join(self.pdb_directory, "validator")
+        self.gro_path = os.path.join(self.validator_directory, "em.gro")
+        self.topol_path = os.path.join(self.validator_directory, "topol.top") 
 
     @staticmethod
     def from_job(job: Job, config: Dict):
+        # A nuance of the job loader: only load the md_inputs if the job has not been updated.
+        load_md_inputs = True if job.updated_count == 0 else False
         return Protein(
-            pdb_id=job.pdb, ff=job.ff, box=job.box, water=job.water, config=config
+            pdb_id=job.pdb, ff=job.ff, box=job.box, water=job.water, config=config, load_md_inputs=load_md_inputs
         )
 
     def gather_pdb_id(self):
@@ -65,10 +87,6 @@ class Protein:
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
 
-        # pdb_id is insensitive to capitalization so we convert to lowercase
-        self.pdb_id = self.pdb_id.lower()
-
-        self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
         self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
 
@@ -100,6 +118,24 @@ class Protein:
         if len(missing_files) > 0:
             return missing_files
         return None
+    
+    def read_and_return_files(self, filenames: List) -> Dict:
+        """Read the files and return them as a dictionary.
+        """
+        files_to_return = {}
+        for file in filenames:
+            try:
+                files_to_return[file] = open(
+                    os.path.join(self.validator_directory, file), "r"
+                ).read()
+            except Exception as E:
+                bt.logging.warning(
+                    f"Attempted to put file {file} in md_inputs.\nError: {E}"
+                )
+                continue
+        
+        return files_to_return
+        
 
     def forward(self):
         """forward method defines the following:
@@ -109,31 +145,15 @@ class Protein:
         4. edit the necessary config files and add them to the synapse object self.md_inputs[file] = content
         4. save the files to the validator directory for record keeping.
         """
+        bt.logging.info(f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}")
+        
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
-
-        self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
-        self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
-
         self.setup_pdb_directory()
 
-        self.validator_directory = os.path.join(self.pdb_directory, "validator")
-        self.gro_path = os.path.join(self.validator_directory, "em.gro")
-        self.topol_path = os.path.join(self.validator_directory, "topol.top")
-
         # TODO: Enable this to send checkpoints rather than only the initial set of files
-        mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
-        other_files = [
-            "em.gro",
-            "topol.top",
-            "posre.itp",
-            "posre_Protein_chain_A.itp",
-            "posre_Protein_chain_L.itp",
-            "topol_Protein_chain_A.itp",
-            "topol_Protein_chain_L.itp",
-        ]
 
-        required_files = mdp_files + other_files
+        required_files = self.mdp_files + self.other_files
         missing_files = self.check_for_missing_files(required_files=required_files)
 
         if missing_files is not None:
@@ -142,16 +162,8 @@ class Protein:
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
 
-        for file in other_files:
-            try:
-                self.md_inputs[file] = open(
-                    os.path.join(self.validator_directory, file), "r"
-                ).read()
-            except Exception as E:
-                bt.logging.warning(
-                    f"Attempted to put file {file} in md_inputs.\nError: {E}"
-                )
-                continue
+        #Read the files that should exist now based on generate_input_files. 
+        self.md_inputs = self.read_and_return_files(filenames = self.other_files)
 
         params_to_change = [
             "nstvout",  # Save velocities every 0 steps
@@ -163,7 +175,7 @@ class Protein:
 
         # Check if the files need to be changed based on the config, and then save.
         self.edit_files(
-            mdp_files=mdp_files, params_to_change=params_to_change
+            mdp_files=self.mdp_files, params_to_change=params_to_change
         )  # TODO: Verifiy the validity of this saving condition.
         self.save_files(
             files=self.md_inputs,
@@ -245,7 +257,6 @@ class Protein:
         )
 
         commands = self.check_configuration_file_commands()
-        bt.logging.warning(f"New commands: {commands}")
 
         # Commands to generate GROMACS input files
         commands += [

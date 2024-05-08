@@ -146,8 +146,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
                 # "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"], #TODO: Add this to the downstream logic.
             }
 
-            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps
-            )
+            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
 
             bt.logging.info(f"Attempting to generate challenge: {protein}")
             protein.forward()

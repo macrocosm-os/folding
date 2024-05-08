@@ -121,6 +121,8 @@ class FoldingMiner(BaseMinerNeuron):
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=self.max_workers
         )  # remove one for safety
+        
+        self.mock = None
 
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
         commands = [
