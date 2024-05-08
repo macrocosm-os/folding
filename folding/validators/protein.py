@@ -59,8 +59,7 @@ class Protein:
             "topol_Protein_chain_L.itp",
         ]   
         
-        self.md_inputs = self.read_and_return_files(filenames = self.other_files) if load_md_inputs else {}
-        a = 10
+        self.md_inputs = self.read_and_return_files(filenames = self.other_files + self.mdp_files) if load_md_inputs else {}
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -282,12 +281,11 @@ class Protein:
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
-        output_directory = os.path.join(self.pdb_directory, "validator")
-        check_if_directory_exists(output_directory=output_directory)
+        check_if_directory_exists(output_directory=self.validator_directory)
 
         # Move all files
-        cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {output_directory}/ \;'
-        bt.logging.info(f"Moving all files except pdb to {output_directory}")
+        cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
+        bt.logging.info(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
 
         # We want to catch any errors that occur in the above steps and then return the error to the user

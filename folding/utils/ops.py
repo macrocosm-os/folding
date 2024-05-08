@@ -1,6 +1,7 @@
 import os
 import re
 import tqdm
+import shutil
 import random
 import subprocess
 import hashlib
@@ -31,6 +32,11 @@ FF_WATER_PAIRS = {
     "oplsaa": "tip4p",  # OPLS all-atom force field
 }
 
+def delete_directory(directory:str):
+    """We create a lot of files in the process of tracking pdb files.
+    Therefore, we want to delete the directory after we are done with the tests.
+    """
+    shutil.rmtree(directory)
 
 def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
     """If you want to randomly sample pdb_ids, you need to load in

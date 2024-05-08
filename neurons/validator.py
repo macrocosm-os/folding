@@ -15,7 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-
+import re
 import time
 import numpy as np
 from typing import Dict
@@ -49,8 +49,11 @@ class Validator(BaseValidatorNeuron):
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
+        
+        #There are unwanted keys in mdrun_args, like __is_set. Remove all of these
+        filtered_args = {key: value for key, value in self.config.mdrun_args.items() if not re.match(r'^[^a-zA-Z0-9]', key)}
 
-        for arg, value in self.config.mdrun_args.items():
+        for arg, value in filtered_args.items():
             if value is not None:
                 mdrun_args += f"-{arg} {value} "
 
@@ -76,7 +79,7 @@ class Validator(BaseValidatorNeuron):
         uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
-        bt.logging.info("⏰ Waiting for miner responses ⏰")
+        bt.logging.info("⏰ Waiting for miner responses ⏰")            
         return run_step(
             self,
             protein=protein,

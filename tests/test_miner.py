@@ -2,7 +2,6 @@ import pytest
 
 import os
 import time
-import shutil
 import random, string
 from typing import Dict
 from pathlib import Path
@@ -11,18 +10,12 @@ import bittensor as bt
 from folding.protocol import FoldingSynapse
 from folding.miners.folding_miner import FoldingMiner
 from folding.utils.config import add_miner_args, add_args
+from folding.utils.ops import delete_directory
 
 from tests.fixtures.gro_files.default_config import get_test_config
 
 ROOT_PATH = Path(__file__).parent
 OUTPUT_PATH = os.path.join(ROOT_PATH, "mock_data", "test_miner")
-
-
-def delete_output_dir():
-    """We create a lot of files in the process of tracking pdb files.
-    Therefore, we want to delete the output directory after we are done with the tests.
-    """
-    shutil.rmtree(OUTPUT_PATH)
 
 
 # create a testfoldingminer to not run anything gromacs, just some waits.
@@ -102,4 +95,4 @@ def test_miner(num_requests: int):
         len(miner.simulations.keys()) == num_requests
     ), f"The number of simulations {len(miner.simulations.keys())} should be equal to the number of requests {num_requests}"
 
-    delete_output_dir()
+    delete_directory(directory = OUTPUT_PATH)

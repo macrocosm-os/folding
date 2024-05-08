@@ -13,7 +13,7 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
-from folding.utils.ops import run_cmd_commands, check_if_directory_exists
+from folding.utils.ops import run_cmd_commands, check_if_directory_exists, delete_directory
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -66,10 +66,12 @@ def attach_files_to_synapse(
         files_to_attach: List = (
             all_state_files + latest_cpt_file
         )  # combine the state files and the latest checkpoint file
+        
+        if len(files_to_attach) == 0:
+            raise FileNotFoundError(f"No files found for {state}") #if this happens, goes to except block
 
         bt.logging.info(f"Sending files to validator: {files_to_attach}")
         for filename in files_to_attach:
-            bt.logging.info(f"Attaching file: {filename!r} to synapse.md_output")
             try:
                 with open(filename, "rb") as f:
                     filename = filename.split('/')[-1] # remove the directory from the filename
@@ -86,11 +88,6 @@ def attach_files_to_synapse(
 
     finally:
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
-
-
-def create_empty_file(file_path: str):
-    with open(file_path, "w") as f:
-        pass
 
 
 class FoldingMiner(BaseMinerNeuron):
@@ -117,6 +114,8 @@ class FoldingMiner(BaseMinerNeuron):
         self.max_workers = (
             self.max_num_processes - 1
         )  # subtract one to ensure that we are not using all the processors.
+        
+        bt.logging.success(f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀")
 
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=self.max_workers
@@ -156,7 +155,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         Returns:
             FoldingSynapse: synapse with md_output attached
-        """
+        """        
 
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.info(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
@@ -193,14 +192,15 @@ class FoldingMiner(BaseMinerNeuron):
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the files from the last simulation. This only works if you have kept the data.
             output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
-
+            
+            bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
             return attach_files_to_synapse(
                 synapse=synapse, data_directory=output_dir, state="md_0_1"
             )
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
-            bt.logging.warning("Cannot start new process: CPU limit reached.")
+            bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
             return synapse  # Return the synapse as is
 
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
@@ -270,6 +270,11 @@ class SimulationManager:
         self.state_file_name = f"{pdb_id}_state.txt"
 
         self.output_dir = output_dir
+        
+    def create_empty_file(self, file_path: str):
+        #For mocking
+        with open(file_path, "w") as f:
+            pass
 
     def run(
         self,
@@ -312,7 +317,7 @@ class SimulationManager:
             if mock:
                 bt.logging.warning("Running in mock mode, creating fake files...")
                 for ext in ["tpr", "xtc", "edr", "cpt"]:
-                    create_empty_file(os.path.join(self.output_dir, f"{state}.{ext}"))
+                    self.create_empty_file(os.path.join(self.output_dir, f"{state}.{ext}"))
 
         bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
 
