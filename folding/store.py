@@ -141,15 +141,7 @@ class Job:
     event:dict = None
 
     def to_dict(self):
-        job_dict = asdict(self)
-        
-        # #unpack dict to same level as all other attributes. 
-        # if self.event is not None:
-        #     job_dict.update(self.event) 
-        #     del job_dict['event']
-            
-        return job_dict
-            
+        return asdict(self)
 
     def to_series(self):
         data = asdict(self)
