@@ -87,7 +87,13 @@ class Validator(BaseValidatorNeuron):
             timeout=self.config.neuron.timeout,
             mdrun_args=self.mdrun_args,
         )
-
+        
+    def get_pdbs_to_exclude(self) -> List[str]:
+        # Set of pdbs that are currently in the process of running.
+        return [
+            queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue
+        ]
+        
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
         Each "job" is an individual protein folding challenge that is distributed to the miners.
@@ -95,13 +101,14 @@ class Validator(BaseValidatorNeuron):
         Args:
             k (int): The number of jobs create and distribute to miners.
         """
-        # Set of pdbs that are currently in the process of running.
-        exclude_pdbs = [
-            queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue
-        ]
+
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
             bt.logging.info(f"Adding job: {ii+1}/{k}")
+            
+            #This will change on each loop since we are submitting a new pdb to the batch of miners
+            exclude_pdbs = self.get_pdbs_to_exclude()
+        
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 

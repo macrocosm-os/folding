@@ -138,7 +138,7 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
 
 
 def check_and_download_pdbs(
-    pdb_directory: str, pdb_id: str, download: bool = True
+    pdb_directory: str, pdb_id: str, download: bool = True, force: bool = False
 ) -> bool:
     """Check the status and optionally download a PDB file from the RCSB PDB database.
 
@@ -158,18 +158,19 @@ def check_and_download_pdbs(
 
     r = requests.get(url)
     if r.status_code == 200:
-        if is_pdb_complete(r.text):
+        is_complete = is_pdb_complete(r.text)
+        if is_complete or force:
             if download:
                 check_if_directory_exists(output_directory=pdb_directory)
                 with open(path, "w") as file:
                     file.write(r.text)
 
-            bt.logging.success(f"PDB file {pdb_id} is complete.")
+            message = " but contains missing values." if not is_complete else ""
+            bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+            
             return True
         else:
-            bt.logging.error(
-                f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
-            )
+            bt.logging.warning(f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫")
             return False
     else:
         bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")

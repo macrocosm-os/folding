@@ -96,7 +96,7 @@ class Protein:
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
             if not check_and_download_pdbs(
-                pdb_directory=self.pdb_directory, pdb_id=self.pdb_file, download=True
+                pdb_directory=self.pdb_directory, pdb_id=self.pdb_file, download=True, force = self.config.force_use_pdb
             ):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"

@@ -164,6 +164,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
+                bt.logging.warning(f"Sleeping for {self.config.neuron.update_interval} before resampling...")
                 time.sleep(self.config.neuron.update_interval)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.

@@ -142,6 +142,13 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.force_use_pdb",
+        action="store_true",
+        help="If True, we will attempt to fold a protein that has missing atoms.",
+        default=True,
+    )
+
+    parser.add_argument(
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",
