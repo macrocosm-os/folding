@@ -54,7 +54,7 @@ def run_step(
         "block": self.block,
         "step_length": time.time() - start_time,
         "uids": uids,
-        "energies": energies,
+        "energies": energies.tolist(),
         **response_info,
     }
 
