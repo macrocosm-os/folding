@@ -151,10 +151,11 @@ class BaseValidatorNeuron(BaseNeuron):
                 # TODO: maybe concurrency for the loop below
                 for job in self.store.get_queue(ready=False).queue:
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
-                    event = self.forward(job=job)
+                    job_event = self.forward(job=job)
+                    job.event.update(job_event)
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
-                    self.update_job(job, event)
+                    self.update_job(job)
 
                 # Check if we should exit.
                 if self.should_exit:
