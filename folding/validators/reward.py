@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import torch
+import numpy as np 
 import bittensor as bt
 from typing import List, Dict
 
@@ -27,9 +27,8 @@ def parsing_miner_data(miner_data_directory: str, validator_data_directory: str)
         validator_data_directory=validator_data_directory,
     )
 
-    data_extractor.prod_energy(data_type="Potential")
-
-    return data_extractor.data['prod_energy']
+    data_extractor.energy(data_type="Potential")
+    return data_extractor.data['energy']
 
 
 def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
@@ -40,7 +39,7 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
         torch.FloatTensor: A tensor of rewards for each miner.
     """
 
-    energies = torch.zeros(len(uids))
+    energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
 
         # Ensures that the md_outputs from the miners are parsed correctly
@@ -59,6 +58,6 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
             validator_data_directory=protein.validator_directory,
         )
-        energies[i] = output_data.iloc[-1]['prod_energy']
+        energies[i] = output_data.iloc[-1]['energy']
 
     return energies
