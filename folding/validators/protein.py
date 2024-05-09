@@ -1,4 +1,5 @@
 import os
+import time
 import re
 from typing import List, Dict
 from pathlib import Path
@@ -381,9 +382,10 @@ class Protein:
         xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
 
         command = [
-            f"gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -dump -1"
+            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -dump -1"
         ]  # TODO: Could have an internal counter to show how many times we have been queried.
 
+        bt.logging.warning(f"Computing an intermediate gro...")
         run_cmd_commands(
             commands=command, suppress_cmd_output=self.config.suppress_cmd_output
         )
@@ -403,13 +405,13 @@ class Protein:
             self.base_directory, "rerun.mdp"
         )  # rerun file is a base config that we never change.
         topol_path = os.path.join(
-            self.pdb_directory, "topol.top"
+            self.validator_directory, "topol.top"
         )  # all miners get the same topol file.
         tpr_path = os.path.join(output_directory, "rerun.tpr")
 
         commands = [
             f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -deffnm {tpr_path} -rerun {gro_file_location}",
+            f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy", #-s specifies the file. 
         ]
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
@@ -454,8 +456,7 @@ class Protein:
         )
 
         # Check that the md_output contains the right protein through gro_hash
-        gro_path = os.path.join(output_directory, md_outputs_exts["gro"])
-        if gro_hash(self.gro_path) != gro_hash(gro_path):
+        if gro_hash(gro_path = self.gro_path) != gro_hash(gro_path = gro_file_location):
             bt.logging.warning(
                 f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
             )
