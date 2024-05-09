@@ -115,14 +115,14 @@ class Validator(BaseValidatorNeuron):
 
             # assign workers to the job (hotkeys)
             active_jobs = self.store.get_queue(ready=False).queue
-            active_hotkeys = [j.hotkeys for j in active_jobs]
+            active_hotkeys = [j.hotkeys for j in active_jobs] #list of lists
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = [
                 self.metagraph.hotkeys.index(hotkey) for hotkey in active_hotkeys
             ]
 
             uids = get_random_uids(
-                self, self.config.neuron.sample_size, exclude=[]
+                self, self.config.neuron.sample_size, exclude=[] #TODO add exclude_uids
             )
 
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]

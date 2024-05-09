@@ -111,7 +111,7 @@ class FoldingMiner(BaseMinerNeuron):
             )  # allows us to set the desired attribute to anything.
 
         self.base_data_path = (
-            base_data_path if base_data_path is not None else BASE_DATA_PATH
+            base_data_path if base_data_path is not None else os.path.join(BASE_DATA_PATH, self.wallet.hotkey.ss58_address[:8])
         )
         self.simulations = defaultdict(
             nested_dict
