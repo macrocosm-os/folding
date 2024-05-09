@@ -29,6 +29,7 @@ class PandasJobStore:
         "update_interval": "timedelta64[s]",
         "updated_count": "int",
         "max_time_no_improvement": "timedelta64[s]",
+        "event": "object",
     }
 
     def __init__(self, db_path=DB_DIR, table_name="protein_jobs", force_create=False):
@@ -137,9 +138,18 @@ class Job:
     updated_count: int = 0
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(hours=6)
     min_updates: int = 10
+    event:dict = None
 
     def to_dict(self):
-        return asdict(self)
+        job_dict = asdict(self)
+        
+        # #unpack dict to same level as all other attributes. 
+        # if self.event is not None:
+        #     job_dict.update(self.event) 
+        #     del job_dict['event']
+            
+        return job_dict
+            
 
     def to_series(self):
         data = asdict(self)
