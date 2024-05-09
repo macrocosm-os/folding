@@ -365,9 +365,8 @@ class Protein:
 
     def compute_intermediate_gro(
         self,
-        md_output: Dict,
         output_directory: str,
-        file_extensions: str = ["tpr", "xtc"],
+        md_outputs_exts:Dict, #mapping from file extension to filename in md_output
     ) -> str:
         """
         Compute the intermediate gro file from the xtc and tpr file from the miner.
@@ -375,21 +374,18 @@ class Protein:
 
         Args:
             md_output (Dict): dictionary of information from the miner.
-            file_extensions (str, optional): Files that we need for computing. Defaults to ["tpr", "xtc"].
         """
 
-        files = {ext: md_output[ext] for ext in file_extensions if ext in md_output}
-
         gro_file_location = os.path.join(output_directory, "intermediate.gro")
-        tpr_file = os.path.join(output_directory, files["tpr"])
-        xtc_file = os.path.join(output_directory, files["xtc"])
+        tpr_file = os.path.join(output_directory, md_outputs_exts["tpr"])
+        xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
 
         command = [
             f"gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -dump -1"
         ]  # TODO: Could have an internal counter to show how many times we have been queried.
 
         run_cmd_commands(
-            commands=command, suppress_cmd_output=self.config.neuron.suppress_cmd_output
+            commands=command, suppress_cmd_output=self.config.suppress_cmd_output
         )
 
         return gro_file_location
@@ -427,7 +423,7 @@ class Protein:
         4.
         """
 
-        required_files_extensions = ["edr", "xtc", "tpr"]
+        required_files_extensions = ["xtc", "tpr"]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         md_outputs_exts = {
@@ -435,7 +431,8 @@ class Protein:
         }
 
         if len(md_output.keys()) == 0:
-            bt.logging.warning(f"Miner {hotkey[:8]} returned empty md_output...")
+            bt.logging.warning(f"Miner {hotkey[:8]} returned empty md_output... Skipping!")
+            return False
 
         for ext in required_files_extensions:
             if ext not in md_outputs_exts:
@@ -443,16 +440,17 @@ class Protein:
                 return False
 
         output_directory = self.get_miner_data_directory(hotkey=hotkey)
-
-        # We need to generate the gro file from the miner to ensure they are not cheating.
-        gro_file_location = self.compute_intermediate_gro(
-            md_output=md_output, output_directory=output_directory
-        )
-
+        
         # Save files so we can check the hash later.
         self.save_files(
             files=md_output,
             output_directory=output_directory,
+        )
+
+        # We need to generate the gro file from the miner to ensure they are not cheating.
+        gro_file_location = self.compute_intermediate_gro(
+            output_directory=output_directory, 
+            md_outputs_exts=md_outputs_exts
         )
 
         # Check that the md_output contains the right protein through gro_hash

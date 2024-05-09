@@ -57,6 +57,8 @@ def attach_files_to_synapse(
     """
 
     synapse.md_output = {}  # ensure that the initial state is empty
+    #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
+    #and a simulation is not running.
 
     try:
         state_files = os.path.join(

@@ -121,7 +121,7 @@ class Validator(BaseValidatorNeuron):
             ]
 
             uids = get_random_uids(
-                self, self.config.neuron.sample_size, exclude=exclude_uids
+                self, self.config.neuron.sample_size, exclude=[]
             )
 
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
