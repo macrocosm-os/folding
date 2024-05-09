@@ -48,8 +48,7 @@ def attach_files_to_synapse(
     The files that the miner needs to return are:
         1. .tpr (created during grompp commands)
         2. .xtc (created during mdrun commands, logged every nstxout-compressed steps)
-        3. .edr (created during mdrun commands, logged every nstenergy steps) # TODO: remove (we can regen outselves on vali side)
-        4. .cpt (created during mdrun commands, logged every nstcheckpoint steps) # TODO: remove (re create .gro file from .tpr and .xtc)
+        3. .cpt (created during mdrun commands, logged every nstcheckpoint steps) # TODO: remove (re create .gro file from .tpr and .xtc)
 
 
     Returns:
@@ -57,8 +56,6 @@ def attach_files_to_synapse(
     """
 
     synapse.md_output = {}  # ensure that the initial state is empty
-    #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
-    #and a simulation is not running.
 
     try:
         state_files = os.path.join(
@@ -204,6 +201,9 @@ class FoldingMiner(BaseMinerNeuron):
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
         ):
+                #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
+                #and a simulation is not running.
+                
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the files from the last simulation. This only works if you have kept the data.
             output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
