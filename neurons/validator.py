@@ -33,6 +33,7 @@ from folding.validators.protein import Protein
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
+from folding.utils.logging import log_event
 
 
 class Validator(BaseValidatorNeuron):
@@ -101,7 +102,7 @@ class Validator(BaseValidatorNeuron):
         Args:
             k (int): The number of jobs create and distribute to miners.
         """
-
+        
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
             bt.logging.info(f"Adding job: {ii+1}/{k}")
@@ -136,16 +137,19 @@ class Validator(BaseValidatorNeuron):
                 ff = job_event["ff"],
                 water = job_event["water"],
                 box = job_event["box"],
-                hotkeys=selected_hotkeys)
+                hotkeys=selected_hotkeys,
+                event=job_event,
+                )
+            
 
-    def update_job(self, job: Job, event: Dict):
+    def update_job(self, job: Job):
         """Updates the job status based on the event information
 
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
-        energies: List = event["energies"]
-        rewards = torch.zeros_like(energies) #one-hot per update step
+        energies: List = job.event["energies"]
+        rewards = torch.zeros_like(torch.Tensor(energies)) #one-hot per update step
         
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
@@ -181,6 +185,7 @@ class Validator(BaseValidatorNeuron):
 
             # Finally, we update the job in the store
             self.store.update(job=job)
+            log_event(self, event = job.event)
 
 
 # The main function parses the configuration and runs the validator.
