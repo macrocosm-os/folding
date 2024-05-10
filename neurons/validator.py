@@ -122,7 +122,7 @@ class Validator(BaseValidatorNeuron):
             ]
 
             uids = get_random_uids(
-                self, self.config.neuron.sample_size, exclude=[] #TODO add exclude_uids
+                self, self.config.neuron.sample_size, exclude=exclude_uids
             )
 
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
@@ -156,7 +156,7 @@ class Validator(BaseValidatorNeuron):
         gro_hash = ""  # For next time
         
         #If no miners respond appropriately, the energies will be all zeros
-        if torch.all(energies == 0):
+        if torch.all(rewards) == 0:
             bt.logging.warning(f"Received all zero energies for {job.pdb}... Not updating.")
         else:
             best_index = np.argmin(energies)
