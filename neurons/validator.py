@@ -23,6 +23,7 @@ from itertools import chain
 from typing import List
 
 import torch 
+import pandas as pd 
 import bittensor as bt
 
 from folding.store import PandasJobStore
@@ -185,7 +186,18 @@ class Validator(BaseValidatorNeuron):
 
             # Finally, we update the job in the store
             self.store.update(job=job)
-            log_event(self, event = job.event)
+            
+            def prepare_event_for_logging(event:Dict):
+                for key, value in event.items():
+                    if isinstance(value, pd.Timedelta):
+                        event[key] = value.total_seconds()
+                return event
+            
+            event = job.to_dict()
+            simulation_event = event.pop('event') #contains information from hp search
+            merged_events = simulation_event | event #careful: this overwrites.
+            
+            log_event(self, event = prepare_event_for_logging(merged_events))
 
 
 # The main function parses the configuration and runs the validator.
