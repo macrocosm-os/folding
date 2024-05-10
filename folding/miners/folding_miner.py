@@ -23,6 +23,72 @@ from folding.utils.ops import (
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
+def count_subprocesses(parent_pid=None):
+    if parent_pid is None:
+        parent_pid = psutil.Process().pid  # get current process id if no pid is provided
+    parent = psutil.Process(parent_pid)
+    subprocesses = parent.children(recursive=True)  # Get all subprocesses
+    return len(subprocesses)
+
+def compute_intermediate_gro(
+    output_directory: str,
+    md_outputs_exts:Dict, #mapping from file extension to filename in md_output
+    suppress_cmd_output:bool = True,
+    state:str = None, 
+) -> bool:
+    """
+    Compute the intermediate gro file from the xtc and tpr file from the miner.
+    We do this because we need to ensure that the miners are running the correct protein.
+
+    Args:
+        md_output (Dict): dictionary of information from the miner.
+    """
+
+    gro_file_location = os.path.join(output_directory, f"{state}_intermediate.gro")
+    tpr_file = os.path.join(output_directory, md_outputs_exts["tpr"])
+    xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
+
+    command = [
+        f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -dump -1"
+    ]
+
+    bt.logging.warning(f"Computing an intermediate gro...")
+    
+    try:
+        run_cmd_commands(
+            commands=command, suppress_cmd_output=suppress_cmd_output
+        )
+        return True
+    except Exception as E:
+        bt.logging.error(f"Error running intermediate gro: {E}")
+        return False
+    
+def attach_files(files_to_attach:List, synapse:FoldingSynapse) -> FoldingSynapse:
+    """function that parses a list of files and attaches them to the synapse object
+    """
+    bt.logging.info(f"Sending files to validator: {files_to_attach}")
+    for filename in files_to_attach:
+        try:
+            with open(filename, "rb") as f:
+                filename = filename.split("/")[
+                    -1
+                ]  # remove the directory from the filename
+                synapse.md_output[filename] = base64.b64encode(f.read())
+        except Exception as e:
+            bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
+            
+    return synapse
+    
+def check_if_intermediate_gro_is_computable(md_output:Dict, data_directory:str, state:str = None) -> bool:
+    md_outputs_exts = {
+        k.split(".")[-1]: k for k, v in md_output.items() if 'center' not in k #center files are invalid. 
+    }
+    is_complete = compute_intermediate_gro(
+        output_directory=data_directory,
+        md_outputs_exts=md_outputs_exts,
+        state = state, 
+    )
+    return is_complete
 
 def attach_files_to_synapse(
     synapse: FoldingSynapse,
@@ -74,22 +140,13 @@ def attach_files_to_synapse(
             raise FileNotFoundError(
                 f"No files found for {state}"
             )  # if this happens, goes to except block
-
-        bt.logging.info(f"Sending files to validator: {files_to_attach}")
-        for filename in files_to_attach:
-            try:
-                with open(filename, "rb") as f:
-                    filename = filename.split("/")[
-                        -1
-                    ]  # remove the directory from the filename
-                    synapse.md_output[filename] = base64.b64encode(f.read())
-            except Exception as e:
-                bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
-
-        bt.logging.success(
-            f"✅ Attached {len(synapse.md_output)} files to synapse.md_output for protein: {synapse.pdb_id} ✅"
-        )
-
+        
+        synapse = attach_files(files_to_attach=files_to_attach, synapse = synapse)
+            
+        if not check_if_intermediate_gro_is_computable(md_output=synapse.md_output, data_directory=data_directory, state = state):
+            bt.logging.error(f"Intermediate gro file cannot be generated...")
+            synapse.md_output = {} #remove anything that is attached because it is invalid. 
+              
     except Exception as e:
         bt.logging.error(f"Failed to attach files with error: {e}")
 
@@ -170,6 +227,9 @@ class FoldingMiner(BaseMinerNeuron):
         Returns:
             FoldingSynapse: synapse with md_output attached
         """
+        
+        num_processes = count_subprocesses()
+        bt.logging.info(f"Number of subprocesses: {num_processes}. Number of Simulations: {len(self.simulations)}")
 
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.info(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
@@ -191,8 +251,8 @@ class FoldingMiner(BaseMinerNeuron):
                 del self.simulations[
                     synapse.pdb_id
                 ]  # Remove the simulation from the list
-
-                # TODO: Here, place some type of delete method to remove some files?
+                
+                delete_directory(directory=simulation["output_dir"])
                 return check_synapse(synapse = final_synapse)
 
             else:
@@ -207,11 +267,11 @@ class FoldingMiner(BaseMinerNeuron):
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
         ):
-                #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
-                #and a simulation is not running.
-                
+            #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
+            #and a simulation is not running.
+            
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
-            # and we can return the files from the last simulation. This only works if you have kept the data.
+            # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
             output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
             bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
@@ -225,6 +285,7 @@ class FoldingMiner(BaseMinerNeuron):
             bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
             return synapse  # Return the synapse as is
 
+        #TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         # Create the job and submit it to the executor
