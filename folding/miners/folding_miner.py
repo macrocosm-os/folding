@@ -96,7 +96,12 @@ def attach_files_to_synapse(
     finally:
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
 
-
+def return_synapse(synapse:FoldingSynapse): 
+    """Utility function to remove md_inputs if they exist"""
+    if len(synapse.md_inputs) > 0:
+        synapse.md_inputs = {}
+    return synapse
+        
 class FoldingMiner(BaseMinerNeuron):
     def __init__(self, config=None, base_data_path: str = None):
         super().__init__(config=config)
@@ -188,15 +193,16 @@ class FoldingMiner(BaseMinerNeuron):
                 ]  # Remove the simulation from the list
 
                 # TODO: Here, place some type of delete method to remove some files?
-                return final_synapse
+                return return_synapse(synapse = final_synapse)
 
             else:
                 # Don't delete the simulation if it's not finished
-                return attach_files_to_synapse(
+                synapse = attach_files_to_synapse(
                     synapse=synapse,
                     data_directory=simulation["output_dir"],
                     state=current_executor_state,
                 )
+                return return_synapse(synapse = synapse)
 
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
@@ -209,9 +215,10 @@ class FoldingMiner(BaseMinerNeuron):
             output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
             bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
-            return attach_files_to_synapse(
+            synapse = attach_files_to_synapse(
                 synapse=synapse, data_directory=output_dir, state="md_0_1"
             )
+            return return_synapse(synapse = synapse)
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
