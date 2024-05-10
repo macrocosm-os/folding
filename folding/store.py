@@ -1,6 +1,5 @@
 import os
 import random
-import sqlite3
 import string
 
 from typing import List
@@ -161,7 +160,7 @@ class Job:
         self.updated_count += 1
 
         # TODO: make epsilon a param, or a class attrib
-        epsilon = 0.001
+        epsilon = 1e2
         if loss < self.best_loss - epsilon:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor('s')
