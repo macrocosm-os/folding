@@ -429,7 +429,7 @@ class Protein:
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         md_outputs_exts = {
-            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0 and 'center' not in k
         }
 
         if len(md_output.keys()) == 0:
