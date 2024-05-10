@@ -26,6 +26,9 @@ tc-grps                 = system   ; coupling groups
 tau_t                   = 1.0      ; time constant, in ps
 ref_t                   = 300      ; reference temperature, one for each group, in K
 
+; Output frequency and precision for .xtc file
+nstxout-compressed       = 2500    ; for writing coords (x) 
+
 ; Settings that make sure we run with parameters in harmony with the selected force-field
 constraints             = h-bonds   ; bonds involving H are constrained
 rcoulomb                = 1.2       ; short-range electrostatic cutoff (in nm)
