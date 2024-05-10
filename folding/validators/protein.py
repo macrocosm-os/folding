@@ -382,7 +382,7 @@ class Protein:
         xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
 
         command = [
-            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -dump -1"
+            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -dump -1"
         ]  # TODO: Could have an internal counter to show how many times we have been queried.
 
         bt.logging.warning(f"Computing an intermediate gro...")
