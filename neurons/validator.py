@@ -148,15 +148,15 @@ class Validator(BaseValidatorNeuron):
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
-        energies: List = job.event["energies"]
-        rewards = torch.zeros_like(torch.Tensor(energies)) #one-hot per update step
+        energies = torch.Tensor(job.event["energies"])
+        rewards = torch.zeros_like(energies) #one-hot per update step
         
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
         gro_hash = ""  # For next time
         
         #If no miners respond appropriately, the energies will be all zeros
-        if torch.all(rewards) == 0:
+        if torch.all(energies) == 0:
             bt.logging.warning(f"Received all zero energies for {job.pdb}... Not updating.")
         else:
             best_index = np.argmin(energies)
