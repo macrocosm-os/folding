@@ -133,14 +133,15 @@ class Validator(BaseValidatorNeuron):
             # min_updates = 10
             # max_time_no_improvement = min_updates * update_interval
 
-            self.store.insert(
-                pdb=job_event["pdb_id"], 
-                ff = job_event["ff"],
-                water = job_event["water"],
-                box = job_event["box"],
-                hotkeys=selected_hotkeys,
-                event=job_event,
-                )
+            if len(selected_hotkeys) > 0:
+                self.store.insert(
+                    pdb=job_event["pdb_id"], 
+                    ff = job_event["ff"],
+                    water = job_event["water"],
+                    box = job_event["box"],
+                    hotkeys=selected_hotkeys,
+                    event=job_event,
+                    )
             
 
     def update_job(self, job: Job):
