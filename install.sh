@@ -1,6 +1,6 @@
 # Create a venv
-python3 -m venv .venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
 # Install auxiliary packages
@@ -26,7 +26,7 @@ COMMAND="source /usr/local/gromacs/bin/GMXRC"
 if ! grep -Fxq "$COMMAND" .venv/bin/activate
 then
     # Append the command to venv/bin/activate if it's not already there
-    echo "$COMMAND" >> venv/bin/activate
+    echo "$COMMAND" >> .venv/bin/activate
     echo "Added GROMACS initialization to .venv/bin/activate"
 else
     echo "GROMACS initialization already in .venv/bin/activate"
@@ -34,3 +34,5 @@ fi
 
 # Install folding
 pip install -e .
+
+deactivate
