@@ -16,7 +16,6 @@ from folding.protocol import FoldingSynapse
 from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
-    delete_directory,
 )
 
 # root level directory for the project (I HATE THIS)
@@ -148,7 +147,8 @@ def attach_files_to_synapse(
             synapse.md_output = {} #remove anything that is attached because it is invalid. 
               
     except Exception as e:
-        bt.logging.error(f"Failed to attach files with error: {e}")
+        bt.logging.error(f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}")
+        #TODO Maybe in this point in the logic it makes sense to try and restart the sim. 
 
     finally:
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
@@ -229,7 +229,9 @@ class FoldingMiner(BaseMinerNeuron):
         """
         
         num_processes = count_subprocesses()
-        bt.logging.info(f"Number of subprocesses: {num_processes}. Number of Simulations: {len(self.simulations)}")
+        
+        if len(self.simulations) > 0:
+            bt.logging.warning(f"Simulations Running: {self.simulations}")
 
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.info(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
@@ -252,7 +254,6 @@ class FoldingMiner(BaseMinerNeuron):
                     synapse.pdb_id
                 ]  # Remove the simulation from the list
                 
-                delete_directory(directory=simulation["output_dir"])
                 return check_synapse(synapse = final_synapse)
 
             else:
@@ -263,22 +264,6 @@ class FoldingMiner(BaseMinerNeuron):
                     state=current_executor_state,
                 )
                 return check_synapse(synapse = synapse)
-
-        if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
-            self.base_data_path
-        ):
-            #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
-            #and a simulation is not running.
-            
-            # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
-            # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
-            output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
-
-            bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
-            synapse = attach_files_to_synapse(
-                synapse=synapse, data_directory=output_dir, state="md_0_1"
-            )
-            return check_synapse(synapse = synapse)
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
