@@ -1,4 +1,4 @@
-bittensor
+bittensor==6.12
 torch
 loguru
 gromacs
@@ -7,13 +7,3 @@ beautifulsoup4
 python-dotenv
 wandb==0.15.10
 eth-utils==2.1.1
-
-## Lots of instructions to install GROMACS correctly https://manual.gromacs.org/current/gmxapi/userguide/install.html#install-dependencies
-
-# GROMACS dependencies
-# cmake
-# pybind11
-# mpi4py
-
-# # GROMACS
-# gmxapi

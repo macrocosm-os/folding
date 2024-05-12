@@ -90,6 +90,49 @@ The above commands will install the necessary requirements, as well as download 
 
 If not, there is a problem with your installation, or with your `.bashrc`
 
+## Launch Commands
+### Validator
+There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the validator are below. 
+```bash
+python neurons/validator.py
+    --netuid 141 
+    --subtensor.network test
+    --wallet.name <your wallet> # Must be created using the bittensor-cli
+    --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
+    --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+For additional configuration, the following params are useful:
+```bash
+python neurons/validator.py
+    --netuid 141 
+    --subtensor.network test
+    --wallet.name <your wallet> # Must be created using the bittensor-cli
+    --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
+    --neuron.queue_size <number of pdb_ids to submit>
+    --neuron.sample_size <number of miners per pdb_id>
+    --protein.max_steps <number of steps for the simulation>
+    --logging.debug # Run in debug mode, alternatively --logging.trace for trace mode
+    --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+
+### Miner
+There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the miner are below. 
+```bash
+python neurons/miner.py
+    --netuid 141 
+    --subtensor.network test
+    --wallet.name <your wallet> # Must be created using the bittensor-cli
+    --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
+    --neuron.max_workers <number of processes to run on your machine>
+    --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+
+Optionally, pm2 can be run for both the validator and the miner. As an example: 
+```bash
+pm2 start neurons/validator.py --interpreter python3 --name my_vali -- --netuid 141 --subtensor.network test --wallet.name <your wallet> --protein.max_steps 10000 --axon.port <your axon port>
+```
+
+
 ## How does the Subnet Work?
 
 In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
@@ -101,14 +144,12 @@ In this subnet, validators create protein folding challenges for miners, who in 
 3. Validator is responsible for keeping track of `sample_size * queue_size` number of individual tasks it has distributed out. 
 4. Validator queries and logs results for all jobs based on a timer, `neuron.update_interval`. 
 
-## Mining
-Each round of mining consists of the following steps:
-1. Miner receives the input files to run a simulation for a `pdb_id`.
-2. Miner runs **first** (_low_ fidelity) `mdrun` simulation using GROMACS which we call the temperature run.
-3. Miner runs **second** (_medium_ fidelity) `mdrun` simulation based on temperature run results, which we call the temperature + pressure run.
-4. Miner runs **third** (_high_ fidelity) `mdrun` simulation based on temperature + pressure run results, which we call the production run. This run lasts the longest.
-5. Miners are expected to be queried by the validator at a frequency unknown to them. They are expected to respond with the files necessary for the validator to confirm that they are running the correct protein and for their energy-based calculations. 
-6. Importantly, miners run an N number of **processes**. Therefore, miners are expected to handle running multiple pdb simulations concurrently. 
+For more detailed information, look at [validation.md](./documentation/validation.md)
+
+### Mining
+Miners are expected to run many parallel processes, each executing an energy minimization routine for a particular `pdb_id`. The number of protein jobs a miner can handle is determined via the `config.neuron.max_workers` parameter. 
+
+For detailed information, read [mining.md](./documentation/mining.md).
 
 ## Notes
 
