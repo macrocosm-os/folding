@@ -36,6 +36,7 @@ def run_step(
     )
 
     # Make calls to the network with the prompt - this is synchronous.
+    bt.logging.warning("waiting for responses....")
     responses: List[FoldingSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
