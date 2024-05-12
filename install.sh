@@ -1,3 +1,4 @@
+pip install -r requirements.txt
 apt-get update
 apt-get install build-essential cmake libfftw3-dev vim npm
 npm install pm2
@@ -25,3 +26,4 @@ then
 else
     echo "GROMACS initialization already in .bashrc"
 fi
+pip install -e .
