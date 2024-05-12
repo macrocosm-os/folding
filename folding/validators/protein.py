@@ -40,9 +40,6 @@ class Protein:
         self.box = box
 
         if water is not None:
-            bt.logging.warning(
-                "config.protein.water is not None... Potentially deviating away from recomended GROMACS FF+Water pairing"
-            )
             self.water = water
         else:
             self.water = FF_WATER_PAIRS[self.ff]
@@ -74,6 +71,7 @@ class Protein:
     @staticmethod
     def from_job(job: Job, config: Dict):
         # A nuance of the job loader: only load the md_inputs if the job has not been updated.
+        bt.logging.warning(f"sampling pdb job {job.pdb}")
         load_md_inputs = True if job.updated_count == 0 else False
         return Protein(
             pdb_id=job.pdb, ff=job.ff, box=job.box, water=job.water, config=config, load_md_inputs=load_md_inputs
