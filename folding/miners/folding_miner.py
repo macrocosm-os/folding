@@ -22,12 +22,6 @@ from folding.utils.ops import (
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
-def count_subprocesses(parent_pid=None):
-    if parent_pid is None:
-        parent_pid = psutil.Process().pid  # get current process id if no pid is provided
-    parent = psutil.Process(parent_pid)
-    subprocesses = parent.children(recursive=True)  # Get all subprocesses
-    return len(subprocesses)
 
 def compute_intermediate_gro(
     output_directory: str,
@@ -224,9 +218,7 @@ class FoldingMiner(BaseMinerNeuron):
         Returns:
             FoldingSynapse: synapse with md_output attached
         """
-        
-        num_processes = count_subprocesses()
-        
+                
         if len(self.simulations) > 0:
             bt.logging.warning(f"Simulations Running: {self.simulations}")
 
