@@ -1,7 +1,7 @@
 pip install -r requirements.txt
 apt-get update
 apt-get install build-essential cmake libfftw3-dev vim npm
-npm install pm2
+npm install -g pm2
 # download and unpack gromacs
 wget ftp://ftp.gromacs.org/gromacs/gromacs-2024.1.tar.gz
 tar xfz gromacs-2024.1.tar.gz
