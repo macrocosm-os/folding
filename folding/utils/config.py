@@ -209,6 +209,13 @@ def add_miner_args(cls, parser):
     )
 
     parser.add_argument(
+        "--neuron.max_workers",
+        type=int,
+        help="Total number of subprocess that the miner is designed to run.",
+        default=4,
+    )
+
+    parser.add_argument(
         "--blacklist.force_validator_permit",
         action="store_true",
         help="If set, we will force incoming requests to have a permit.",
@@ -251,7 +258,7 @@ def add_validator_args(cls, parser):
         "--neuron.timeout",
         type=float,
         help="The timeout for each forward call. (seconds)",
-        default=15,
+        default=20,
     )
 
     parser.add_argument(

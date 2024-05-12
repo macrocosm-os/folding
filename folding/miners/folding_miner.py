@@ -148,6 +148,7 @@ def attach_files_to_synapse(
               
     except Exception as e:
         bt.logging.error(f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}")
+        synapse.md_output = {}
         #TODO Maybe in this point in the logic it makes sense to try and restart the sim. 
 
     finally:
@@ -179,11 +180,7 @@ class FoldingMiner(BaseMinerNeuron):
             nested_dict
         )  # Maps pdb_ids to the current state of the simulation
 
-        self.max_num_processes = psutil.cpu_count(logical=False)  # Only physical cores
-        self.max_workers = (
-            self.max_num_processes - 1
-        )  # subtract one to ensure that we are not using all the processors.
-
+        self.max_workers = self.config.neuron.max_workers
         bt.logging.success(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
@@ -264,6 +261,25 @@ class FoldingMiner(BaseMinerNeuron):
                     state=current_executor_state,
                 )
                 return check_synapse(synapse = synapse)
+
+        if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
+            self.base_data_path
+        ):
+            #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
+            #and a simulation is not running.
+
+            # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
+            # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
+            output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
+
+            bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
+            synapse = attach_files_to_synapse(
+                synapse=synapse, data_directory=output_dir, state="md_0_1"
+            )
+            
+            if len(synapse.md_output) == 0:
+                return synapse
+            return check_synapse(synapse = synapse) #remove md_inputs, they will be there in this stage. 
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:

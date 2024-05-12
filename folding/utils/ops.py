@@ -132,8 +132,8 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
 
         except subprocess.CalledProcessError as e:
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            bt.logging.error(f"Output: {e.stdout.decode()}")
-            bt.logging.error(f"Error: {e.stderr.decode()}")
+            # bt.logging.error(f"Output: {e.stdout.decode()}")
+            # bt.logging.error(f"Error: {e.stderr.decode()}")
             raise
 
 
