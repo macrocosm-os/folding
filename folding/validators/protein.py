@@ -129,9 +129,9 @@ class Protein:
                     os.path.join(self.validator_directory, file), "r"
                 ).read()
             except Exception as E:
-                bt.logging.warning(
-                    f"Attempted to put file {file} in md_inputs.\nError: {E}"
-                )
+                # bt.logging.warning(
+                #     f"Attempted to put file {file} in md_inputs.\nError: {E}"
+                # )
                 continue
         
         return files_to_return
@@ -241,9 +241,6 @@ class Protein:
                 # If the file with the _ff suffix doesn't exist, remove it from the base filepath.
                 path = re.sub(r"_" + re.escape(ff_base), "", file_path)
                 commands.append(f"cp {path} {self.pdb_directory}/{config_name}.mdp")
-                bt.logging.warning(
-                    f"{config_name}_{ff_base}.mdp does not exist... Defaulting to {config_name}.mdp"
-                )
 
         return commands
 
