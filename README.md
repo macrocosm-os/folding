@@ -69,35 +69,37 @@ When the simulations finally converge (ΔE/t < threshold), they produce the form
 ## Requirements 
 Protein folding utilizes a standardized package called [GROMACS](https://manual.gromacs.org/2023.2/install-guide/index.htm). To run, you will need:
 1. A Linux-based machine 
-2. Multiple CPU cores. 
+2. Multiple high-performance CPU cores. 
 
-Out of the box, we do not require miners to run GPU compatible GROMACS packages.
+Out of the box, **we do not require miners to run GPU compatible GROMACS packages**. For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
 
 ## Installation
 This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
 ```bash
 git clone https://github.com/macrocosm-os/folding.git
 cd folding
-<OPTIONAL CREATE VIRTUAL ENVIRONMENT (RECOMMENDED)>
 pip install -r requirements.txt
 bash install.sh
 pip install -e .
 ```
 
+The above commands will install the necessary requirements, as well as download GROMACS and add it to your `.bashrc`. To ensure that installation is complete, running `gmx` in the terminal should print
+```
+:-) GROMACS - gmx, 2023.1-Ubuntu_2023.1_2ubuntu1 (-:
+```
+
+If not, there is a problem with your installation, or with your `.bashrc`
+
 ## How does the Subnet Work?
 
-In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. 
+In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
 
 ### Validation
 
-Each round of validation consists of the following steps:
-1. Validator randomly select a protein ID (aka. `pdb_id`) from a large database of options.
-2. Validator downloads the `.pdb` file for the selected `pdb_id`, which contains the initial coordinates of the protein.
-3. Validator runs some validation and preprocessing scripts to ensure that the problem is well posed. This includes a brute-force search over a specified space of hyperparameters to effectively search over a wide range of simulation configurations. 
-4. The validator choses an N number of miners on the network to complete the folding job for this particular pdb_id. Once submitted, the validator keeps track of which miners are running a submitted pdb_id, and continues to submit jobs to the network until miners are at full capacity. 
-5. The validator periodically checks up on the miners for **each** pdb_id job it has submitted, evaluating the state of each miners intermediate/final response during the query.
-6. Validators confirm that miners are running the correct protein through some GROMACS commands, and miners are graded by their protein configuration (energy). The miner with the lowest energy on each step will be rewarded. 
-
+1. Validator creates a `neuron.queue_size` number of proteins to fold.
+2. These proteins get distributed to a `neuron.sample_size` number of miners (ie: 1 PDB --> sample_size batch of miners).
+3. Validator is responsible for keeping track of `sample_size * queue_size` number of individual tasks it has distributed out. 
+4. Validator queries and logs results for all jobs based on a timer, `neuron.update_interval`. 
 
 ## Mining
 Each round of mining consists of the following steps:
