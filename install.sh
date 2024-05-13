@@ -18,9 +18,14 @@ cmake .. -DGMX_BUILD_OWN_FFTW=ON -DREGRESSIONTEST_DOWNLOAD=ON
 make
 make check
 make install
+current_dir=$(pwd)
+echo "Current directory: $current_dir"
 
 # Add GROMACS initialization to venv/bin/activate
 COMMAND="source /usr/local/gromacs/bin/GMXRC"
+cd ../..
+current_dir=$(pwd)
+echo "Current directory: $current_dir"
 
 # Check if the command is already in the venv/bin/activate to avoid duplication
 if ! grep -Fxq "$COMMAND" .venv/bin/activate
