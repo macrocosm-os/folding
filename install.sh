@@ -25,7 +25,7 @@ cd ../..
 # Check if the command is already in the venv/bin/activate to avoid duplication
 if ! grep -Fxq "$COMMAND" .venv/bin/activate
 then
-    # Append the command to venv/bin/activate if it's not already there
+    # Append the command to .venv/bin/activate if it's not already there
     echo "$COMMAND" >> .venv/bin/activate
     echo "Added GROMACS initialization to .venv/bin/activate"
 else
