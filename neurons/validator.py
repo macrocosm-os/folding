@@ -185,20 +185,20 @@ class Validator(BaseValidatorNeuron):
                 uids=uids,  # pretty confident these are in the correct order.
             )
 
-            # Finally, we update the job in the store
-            self.store.update(job=job)
-            
-            def prepare_event_for_logging(event:Dict):
-                for key, value in event.items():
-                    if isinstance(value, pd.Timedelta):
-                        event[key] = value.total_seconds()
-                return event
-            
-            event = job.to_dict()
-            simulation_event = event.pop('event') #contains information from hp search
-            merged_events = simulation_event | event #careful: this overwrites.
-            
-            log_event(self, event = prepare_event_for_logging(merged_events))
+        # Finally, we update the job in the store regardless of what happened.
+        self.store.update(job=job)
+        
+        def prepare_event_for_logging(event:Dict):
+            for key, value in event.items():
+                if isinstance(value, pd.Timedelta):
+                    event[key] = value.total_seconds()
+            return event
+        
+        event = job.to_dict()
+        simulation_event = event.pop('event') #contains information from hp search
+        merged_events = simulation_event | event #careful: this overwrites.
+        
+        log_event(self, event = prepare_event_for_logging(merged_events))
 
 
 # The main function parses the configuration and runs the validator.
