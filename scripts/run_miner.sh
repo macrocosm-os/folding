@@ -7,6 +7,7 @@ source .venv/bin/activate
 python ../neurons/miner.py \
     --netuid 141 \
     --subtensor.network test \
-    --wallet.name test_wallet \
-    --wallet.hotkey test_hotkey \
-    --axon.port 8091
+    --wallet.name <your_coldkey> \
+    --wallet.hotkey <your_hotkey> \
+    --neuron.max_workers <number of processes to run on your machine> \
+    --axon.port <your_port>

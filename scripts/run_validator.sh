@@ -7,6 +7,9 @@ source .venv/bin/activate
 python ../neurons/validator.py \
     --netuid 141 \
     --subtensor.network test \
-    --wallet.name test_wallet \
-    --wallet.hotkey test_hotkey \
-    --axon.port 8091
+    --wallet.name <test_coldkey> \
+    --wallet.hotkey <test_hotkey> \
+    --axon.port <your_port> \
+    --neuron.queue_size <number of pdb_ids to submit> \
+    --neuron.sample_size <number of miners per pdb_id> \
+    --protein.max_steps <number of steps for the simulation> \

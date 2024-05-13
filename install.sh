@@ -34,5 +34,3 @@ fi
 
 # Install folding
 pip install -e .
-
-deactivate
