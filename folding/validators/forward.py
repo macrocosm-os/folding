@@ -127,12 +127,12 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
     bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
-    for _ in tqdm(
+    for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
     ):
         hp_sampler_time = time.time()
 
-        event = {}
+        event = {"hp_tries": tries}
         try:
             sampled_combination: Dict = hp_sampler.sample_hyperparameters()
             hps = {
