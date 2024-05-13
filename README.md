@@ -95,6 +95,12 @@ The above commands will install the necessary requirements, as well as download 
 
 If not, there is a problem with your installation, or with your `.bashrc`
 
+## Registering on Testnet
+Netuids that are larger than 99 must be set explicity when registering your hotkey. Use the following command:
+```
+btcli subnet register --netuid 141 --wallet.name <YOUR_COLDKEY> --wallet.hotkey <YOUR_HOTKEY>
+```
+
 ## Launch Commands
 ### Validator
 There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the validator are below. 
