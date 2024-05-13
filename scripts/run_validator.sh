@@ -12,4 +12,3 @@ python ../neurons/validator.py \
     --axon.port <your_port> \
     --neuron.queue_size <number of pdb_ids to submit> \
     --neuron.sample_size <number of miners per pdb_id> \
-    --protein.max_steps <number of steps for the simulation> \
