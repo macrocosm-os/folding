@@ -27,6 +27,8 @@
 
 This repository is the official codebase for Bittensor Subnet Folding (SNX), which is to be released May 2024. To learn more about the Bittensor project and the underlying mechanics, [read here.](https://docs.bittensor.com/)
 
+**IMPORTANT**: This repo is a **testnet 141 only repo** as of May 13th. It is expected to be launched on Mainnet in the coming days. 
+
 ---
 
 <div align="center">
@@ -73,6 +75,8 @@ Protein folding utilizes a standardized package called [GROMACS](https://manual.
 
 Out of the box, **we do not require miners to run GPU compatible GROMACS packages**. For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
 
+**IMPORTANT**: GROMACS is a large package, and take anywhere between 1h to 1.5h to download. 
+
 ## Installation
 This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
 ```bash
@@ -82,6 +86,7 @@ pip install -r requirements.txt
 bash install.sh
 pip install -e .
 ```
+This will also create a virtual environment in which the repo can be run inside of. 
 
 The above commands will install the necessary requirements, as well as download GROMACS and add it to your `.bashrc`. To ensure that installation is complete, running `gmx` in the terminal should print
 ```
@@ -127,11 +132,15 @@ python neurons/miner.py
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
 ```
 
-Optionally, pm2 can be run for both the validator and the miner. As an example: 
-```bash
-pm2 start neurons/validator.py --interpreter python3 --name my_vali -- --netuid 141 --subtensor.network test --wallet.name <your wallet> --protein.max_steps 10000 --axon.port <your axon port>
+Optionally, pm2 can be run for both the validator and the miner using our utility scripts found in pm2_configs. 
+```bash 
+pm2 start pm2_configs/miner.config.js
 ```
-
+or 
+```bash 
+pm2 start pm2_configs/validator.config.js
+```
+Keep in mind that you will need to change the default parameters for either the [miner](./scripts/run_miner.sh) or the [validator](./scripts/run_validator.sh). 
 
 ## How does the Subnet Work?
 
