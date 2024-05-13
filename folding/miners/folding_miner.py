@@ -220,7 +220,7 @@ class FoldingMiner(BaseMinerNeuron):
         """
                 
         if len(self.simulations) > 0:
-            bt.logging.warning(f"Simulations Running: {self.simulations}")
+            bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.info(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
