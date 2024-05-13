@@ -19,7 +19,7 @@ Once the above procedure is done, the flow chart below outlines the rest of the 
     <img src="../assets/validator_flow.png" alt="Validator-flow">
 </div>
 
-Once the miner has recieved the protein, the validator can query the miner at any frequency to obtain intermediate results from the miner. The is important for the following reasons:
+Once the miner has recieved the protein, the validator can query the miner at any frequency to obtain intermediate results from the miner. This is important for the following reasons:
 
 1. Miners are graded periodically. This means that if 10 miners were given this job, every miner has the opportunity to obtain rewards for their work, rather than the best final step being rewarded. 
 2. On each step, the validator **MUST** log the progress of their jobs over time for the set of hotkeys they have queried. Validators will record this information in a database called `protein_jobs.csv`, which is created automatically. Below is an example of the first few elements of the db. 

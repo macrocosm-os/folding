@@ -1,5 +1,5 @@
 # Mining Procedure
-Unlike other subnets, miners are not required to run GPU-intensive jobs, but rather use high-performing CPUs to perform energy minimization routines for protein folding. Protein folding is a computationally intensive task. There are no shortcuts, and as such miners are rewarded truly on their ability ot find the best configuration for their protein. 
+Unlike other subnets, miners are not required to run GPU-intensive jobs, but rather use high-performing CPUs to perform energy minimization routines for protein folding. Protein folding is a computationally intensive task. There are no shortcuts, and as such miners are rewarded truly on their ability to find the best configuration for their protein. 
 
 Due to the fact we ask miners to run CPU-bound tasks, it allows validators to submit many jobs to miners with the anticipation that they will run these jobs in parallel *processes*. 
 
