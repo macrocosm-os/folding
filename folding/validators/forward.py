@@ -102,6 +102,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
         )
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
+        bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
 
         if event.get("validator_search_status") == True:
@@ -154,7 +155,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["hp_sample_time"] = time.time() - hp_sampler_time
 
             if "validator_search_status" not in event:
-                bt.logging.info("✅✅ Simulation ran successfully! ✅✅")
+                bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break
