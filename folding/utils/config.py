@@ -43,17 +43,18 @@ def check_config(cls, config: "bt.Config"):
 
     if not config.neuron.dont_save_events:
         # Add custom event logger for the events.
-        logger.level("EVENTS", no=38, icon="📝")
-        logger.add(
-            os.path.join(config.neuron.full_path, "events.log"),
-            rotation=config.neuron.events_retention_size,
-            serialize=True,
-            enqueue=True,
-            backtrace=False,
-            diagnose=False,
-            level="EVENTS",
-            format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
-        )
+        if "EVENTS" not in logger._core.levels:
+            logger.level("EVENTS", no=38, icon="📝")
+            logger.add(
+                os.path.join(config.neuron.full_path, "events.log"),
+                rotation=config.neuron.events_retention_size,
+                serialize=True,
+                enqueue=True,
+                backtrace=False,
+                diagnose=False,
+                level="EVENTS",
+                format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
+            )
 
 
 def add_args(cls, parser):
@@ -141,6 +142,13 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.force_use_pdb",
+        action="store_true",
+        help="If True, we will attempt to fold a protein that has missing atoms.",
+        default=True,
+    )
+
+    parser.add_argument(
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",
@@ -175,6 +183,13 @@ def add_args(cls, parser):
         default="",
     )
 
+    parser.add_argument(
+        "--mdrun_args.maxh",
+        type=str,
+        help="Timeout for the mdrun simulation in seconds (each step).",
+        default=3600,  # default is 1h.
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
@@ -191,6 +206,13 @@ def add_miner_args(cls, parser):
         action="store_true",
         help="If set, we suppress the text output of terminal commands to reduce terminal clutter.",
         default=True,
+    )
+
+    parser.add_argument(
+        "--neuron.max_workers",
+        type=int,
+        help="Total number of subprocess that the miner is designed to run.",
+        default=4,
     )
 
     parser.add_argument(
@@ -235,8 +257,15 @@ def add_validator_args(cls, parser):
     parser.add_argument(
         "--neuron.timeout",
         type=float,
-        help="The timeout for each forward call in seconds.",
-        default=3600,
+        help="The timeout for each forward call. (seconds)",
+        default=20,
+    )
+
+    parser.add_argument(
+        "--neuron.update_interval",
+        type=float,
+        help="The interval in which the validators query the miners for updates. (seconds)",
+        default=120,
     )
 
     parser.add_argument(
@@ -244,6 +273,13 @@ def add_validator_args(cls, parser):
         type=int,
         help="The number of concurrent forwards running at any time.",
         default=1,
+    )
+
+    parser.add_argument(
+        "--neuron.queue_size",
+        type=int,
+        help="The number of jobs to keep in the queue.",
+        default=4,
     )
 
     parser.add_argument(
@@ -310,3 +346,4 @@ def config(cls):
     bt.axon.add_args(parser)
     cls.add_args(parser)
     return bt.config(parser)
+

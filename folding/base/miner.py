@@ -16,12 +16,12 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import torch
 import asyncio
 import threading
 import argparse
 import traceback
 
+from typing import Tuple
 import bittensor as bt
 
 from folding.base.neuron import BaseNeuron

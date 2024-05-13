@@ -11,19 +11,19 @@
 # the Software.
 
 # THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF ME3CHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE WARRANTIES OF MECHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 import time
 import bittensor as bt
-from folding.miners.folding_miner import FoldingMiner
+from folding.miners.mock_miner import MockFoldingMiner
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
-    with FoldingMiner() as m:
+    with MockFoldingMiner() as m:
         while True:
             bt.logging.info(
-                f"Miner running:: network: {m.subtensor.network} | step: {m.step} | uid: {m.uid} | trust: {m.metagraph.trust[m.uid]:.3f} | emission {m.metagraph.emission[m.uid]:.3f}"
+                f"Miner running:: network: {m.subtensor.network} | step: {m.step} | uid: {m.uid}"
             )
-            time.sleep(30)
+            time.sleep(15)

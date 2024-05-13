@@ -32,25 +32,25 @@ class DataExtractor:
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
 
-    def energy(
-        self,
-        data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
-        xvg_command: str = "-xvg none",
-    ):
-        if output_path is None:
-            output_path = self.miner_data_directory
+    # def energy(
+    #     self,
+    #     data_type: str,
+    #     output_path: str = None,
+    #     base_command: str = "gmx energy",
+    #     xvg_command: str = "-xvg none",
+    # ):
+    #     if output_path is None:
+    #         output_path = self.miner_data_directory
 
-        output_data_location = os.path.join(output_path, f"{data_type}.xvg")
-        command = [
-            f"echo '{data_type}' | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command}"
-        ]
-        run_cmd_commands(command)
+    #     output_data_location = os.path.join(output_path, f"{data_type}.xvg")
+    #     command = [
+    #         f"echo '{data_type}' | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command}"
+    #     ]
+    #     run_cmd_commands(command)
 
-        self.data["energy"] = self.extract(
-            filepath=output_data_location, names=["step", "energy"]
-        )
+    #     self.data["energy"] = self.extract(
+    #         filepath=output_data_location, names=["step", "energy"]
+    #     )
 
     def temperature(
         self,
@@ -112,7 +112,7 @@ class DataExtractor:
             filepath=output_data_location, names=["step", "density"]
         )
 
-    def prod_energy(
+    def energy(
         self,
         data_type: str,
         output_path: str = None,
@@ -122,15 +122,15 @@ class DataExtractor:
         if output_path is None:
             output_path = self.miner_data_directory
 
-        xvg_name = "potential_production_run.xvg"
+        xvg_name = "rerun_energy_extracted.xvg"
         output_data_location = os.path.join(output_path, xvg_name)
         command = [
-            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/md_0_1.edr -o {output_data_location} {xvg_command}"
+            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/rerun_energy.edr -o {output_data_location} {xvg_command}"
         ]
         run_cmd_commands(command)
 
-        self.data["prod_energy"] = self.extract(
-            filepath=output_data_location, names=["step", "prod_energy"]
+        self.data["energy"] = self.extract(
+            filepath=output_data_location, names=["step", "energy"]
         )
 
     def rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
@@ -146,4 +146,20 @@ class DataExtractor:
 
         self.data["rmsd"] = self.extract(
             filepath=output_data_location, names=["step", "rmsd"]
+        )
+
+    def rerun_potential(self, output_path: str = None):
+        if output_path is None:
+            output_path = self.validator_data_directory
+
+        xvg_name = "potential_rerun.xvg"
+        output_data_location = os.path.join(output_path, xvg_name)
+        command = [
+            f"! echo 'Potential' | gmx energy -f {output_path}/rerun_calculation.edr -o {output_path}/{xvg_name}"
+        ]
+
+        run_cmd_commands(command)
+
+        self.data["potential_rerun"] = self.extract(
+            filepath=output_data_location, names=["step", "rerun_potential_energy"]
         )

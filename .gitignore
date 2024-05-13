@@ -25,6 +25,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+node_modules/
+package.json
+package-lock.json
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -182,3 +185,5 @@ scripts/incomplete_pdbs/
 *.csv
 
 /charmm36-jul2022.ff
+
+tests/mock_data

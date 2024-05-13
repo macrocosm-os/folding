@@ -1,6 +1,7 @@
 import os
 import re
 import tqdm
+import shutil
 import random
 import subprocess
 import hashlib
@@ -31,6 +32,11 @@ FF_WATER_PAIRS = {
     "oplsaa": "tip4p",  # OPLS all-atom force field
 }
 
+def delete_directory(directory:str):
+    """We create a lot of files in the process of tracking pdb files.
+    Therefore, we want to delete the directory after we are done with the tests.
+    """
+    shutil.rmtree(directory)
 
 def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
     """If you want to randomly sample pdb_ids, you need to load in
@@ -52,13 +58,16 @@ def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List
     return PDB_IDS
 
 
-def select_random_pdb_id(PDB_IDS: Dict) -> str:
+def select_random_pdb_id(PDB_IDS: Dict, exclude: list = None) -> str:
     """This function is really important as its where you select the protein you want to fold"""
     while True:
         family = random.choice(list(PDB_IDS.keys()))
         choices = PDB_IDS[family]
-        if len(choices):
-            return random.choice(choices)
+        if not len(choices):
+            continue
+        selected_pdb_id = random.choice(choices)
+        if exclude is not None and selected_pdb_id not in exclude:
+            return selected_pdb_id
 
 
 def gro_hash(gro_path: str):
@@ -83,6 +92,9 @@ def gro_hash(gro_path: str):
 
     with open(gro_path, "rb") as f:
         name, length, *lines, _ = f.readlines()
+        name = (
+            name.decode().split(" t=")[0].strip("\n").encode()
+        )  # if we are rerunning the gro file using trajectory, we need to include this
         length = int(length)
         bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
 
@@ -120,13 +132,13 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
 
         except subprocess.CalledProcessError as e:
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            bt.logging.error(f"Output: {e.stdout.decode()}")
-            bt.logging.error(f"Error: {e.stderr.decode()}")
+            # bt.logging.error(f"Output: {e.stdout.decode()}")
+            # bt.logging.error(f"Error: {e.stderr.decode()}")
             raise
 
 
 def check_and_download_pdbs(
-    pdb_directory: str, pdb_id: str, download: bool = True
+    pdb_directory: str, pdb_id: str, download: bool = True, force: bool = False
 ) -> bool:
     """Check the status and optionally download a PDB file from the RCSB PDB database.
 
@@ -146,22 +158,19 @@ def check_and_download_pdbs(
 
     r = requests.get(url)
     if r.status_code == 200:
-        if is_pdb_complete(r.text):
+        is_complete = is_pdb_complete(r.text)
+        if is_complete or force:
             if download:
                 check_if_directory_exists(output_directory=pdb_directory)
                 with open(path, "w") as file:
                     file.write(r.text)
 
-                bt.logging.info(
-                    f"PDB file {pdb_id} downloaded and saved successfully from {url} to path {path!r}."
-                )
-
-            bt.logging.success(f"PDB file {pdb_id} is complete.")
+            message = " but contains missing values." if not is_complete else ""
+            bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+            
             return True
         else:
-            bt.logging.error(
-                f"PDB file {pdb_id} downloaded successfully but contains missing values."
-            )
+            bt.logging.warning(f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫")
             return False
     else:
         bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")

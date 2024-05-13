@@ -27,6 +27,8 @@
 
 This repository is the official codebase for Bittensor Subnet Folding (SNX), which is to be released May 2024. To learn more about the Bittensor project and the underlying mechanics, [read here.](https://docs.bittensor.com/)
 
+**IMPORTANT**: This repo is a **testnet 141 only repo** as of May 13th. It is expected to be launched on Mainnet in the coming days. 
+
 ---
 
 <div align="center">
@@ -69,44 +71,94 @@ When the simulations finally converge (ΔE/t < threshold), they produce the form
 ## Requirements 
 Protein folding utilizes a standardized package called [GROMACS](https://manual.gromacs.org/2023.2/install-guide/index.htm). To run, you will need:
 1. A Linux-based machine 
-2. Multiple CPU cores. 
+2. Multiple high-performance CPU cores. 
 
-Out of the box, we do not require miners to run GPU compatible GROMACS packages.
+Out of the box, **we do not require miners to run GPU compatible GROMACS packages**. For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
+
+**IMPORTANT**: GROMACS is a large package, and take anywhere between 1h to 1.5h to download. 
 
 ## Installation
 This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
 ```bash
 git clone https://github.com/macrocosm-os/folding.git
 cd folding
-<OPTIONAL CREATE VIRTUAL ENVIRONMENT (RECOMMENDED)>
 pip install -r requirements.txt
 bash install.sh
 pip install -e .
 ```
+This will also create a virtual environment in which the repo can be run inside of. 
+
+The above commands will install the necessary requirements, as well as download GROMACS and add it to your `.bashrc`. To ensure that installation is complete, running `gmx` in the terminal should print
+```
+:-) GROMACS - gmx, 2023.1-Ubuntu_2023.1_2ubuntu1 (-:
+```
+
+If not, there is a problem with your installation, or with your `.bashrc`
+
+## Launch Commands
+### Validator
+There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the validator are below. 
+```bash
+python neurons/validator.py
+    --netuid 141 
+    --subtensor.network test
+    --wallet.name <your wallet> # Must be created using the bittensor-cli
+    --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
+    --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+For additional configuration, the following params are useful:
+```bash
+python neurons/validator.py
+    --netuid 141 
+    --subtensor.network test
+    --wallet.name <your wallet> # Must be created using the bittensor-cli
+    --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
+    --neuron.queue_size <number of pdb_ids to submit>
+    --neuron.sample_size <number of miners per pdb_id>
+    --protein.max_steps <number of steps for the simulation>
+    --logging.debug # Run in debug mode, alternatively --logging.trace for trace mode
+    --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+
+### Miner
+There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the miner are below. 
+```bash
+python neurons/miner.py
+    --netuid 141 
+    --subtensor.network test
+    --wallet.name <your wallet> # Must be created using the bittensor-cli
+    --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
+    --neuron.max_workers <number of processes to run on your machine>
+    --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+
+Optionally, pm2 can be run for both the validator and the miner using our utility scripts found in pm2_configs. 
+```bash 
+pm2 start pm2_configs/miner.config.js
+```
+or 
+```bash 
+pm2 start pm2_configs/validator.config.js
+```
+Keep in mind that you will need to change the default parameters for either the [miner](./scripts/run_miner.sh) or the [validator](./scripts/run_validator.sh). 
 
 ## How does the Subnet Work?
 
-In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. 
+In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
 
 ### Validation
 
-Each round of validation consists of the following steps:
-1. Validator randomly select a protein ID (aka. `pdb_id`) from a large database of options.
-2. Validator downloads the `.pdb` file for the selected `pdb_id`, which contains the initial coordinates of the protein.
-3. Validator runs some validation and preprocessing scripts to ensure that the problem is well posed. This includes a brute-force search over a specified space of hyperparameters to effectively search over a wide range of simulation configurations. 
-4. The validator choses an N number of miners on the network to complete the folding job for this particular pdb_id. Once submitted, the validator keeps track of which miners are running a submitted pdb_id, and continues to submit jobs to the network until miners are at full capacity. 
-5. The validator periodically checks up on the miners for **each** pdb_id job it has submitted, evaluating the state of each miners intermediate/final response during the query.
-6. Validators confirm that miners are running the correct protein through some GROMACS commands, and miners are graded by their protein configuration (energy). The miner with the lowest energy on each step will be rewarded. 
+1. Validator creates a `neuron.queue_size` number of proteins to fold.
+2. These proteins get distributed to a `neuron.sample_size` number of miners (ie: 1 PDB --> sample_size batch of miners).
+3. Validator is responsible for keeping track of `sample_size * queue_size` number of individual tasks it has distributed out. 
+4. Validator queries and logs results for all jobs based on a timer, `neuron.update_interval`. 
 
+For more detailed information, look at [validation.md](./documentation/validation.md)
 
-## Mining
-Each round of mining consists of the following steps:
-1. Miner receives the input files to run a simulation for a `pdb_id`.
-2. Miner runs **first** (_low_ fidelity) `mdrun` simulation using GROMACS which we call the temperature run.
-3. Miner runs **second** (_medium_ fidelity) `mdrun` simulation based on temperature run results, which we call the temperature + pressure run.
-4. Miner runs **third** (_high_ fidelity) `mdrun` simulation based on temperature + pressure run results, which we call the production run. This run lasts the longest.
-5. Miners are expected to be queried by the validator at a frequency unknown to them. They are expected to respond with the files necessary for the validator to confirm that they are running the correct protein and for their energy-based calculations. 
-6. Importantly, miners run an N number of **processes**. Therefore, miners are expected to handle running multiple pdb simulations concurrently. 
+### Mining
+Miners are expected to run many parallel processes, each executing an energy minimization routine for a particular `pdb_id`. The number of protein jobs a miner can handle is determined via the `config.neuron.max_workers` parameter. 
+
+For detailed information, read [mining.md](./documentation/mining.md).
 
 ## Notes
 

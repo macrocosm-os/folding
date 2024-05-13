@@ -1,0 +1,44 @@
+; Run parameters
+integrator               = md        ; Algorithm (Leap-frog integrator for rerun)
+nsteps                   = 0         ; 0 steps for rerun
+
+; Output control
+nstxout                  = 0         ; suppress output of coordinates
+nstvout                  = 0         ; suppress output of velocities
+nstfout                  = 0         ; suppress output of forces
+nstlog                   = 500       ; frequency to write logs
+nstenergy                = 100       ; frequency to write energies
+
+; Bond parameters
+continuation             = yes       ; Initial simulation done, continuing
+constraint_algorithm     = lincs     ; holonomic constraints 
+constraints              = all-bonds ; all bonds (even heavy atom-H bonds) constrained
+lincs_iter               = 1         ; accuracy of LINCS
+lincs_order              = 4         ; also related to accuracy
+
+; Neighbor searching
+ns_type                  = grid      ; search neighboring grid cels
+nstlist                  = 20        ; 20 fs, frequency to update neighbor list
+rlist                    = 1.0       ; cut-off for making neighbor list (nm)
+
+; Electrostatics and VdW
+coulombtype              = PME       ; Particle Mesh Ewald for long-range electrostatics
+rcoulomb                 = 1.0       ; nm for electrostatic cut-off
+rvdw                     = 1.0       ; nm for van der Waals cut-off
+pme_order                = 4         ; cubic interpolation
+fourierspacing           = 0.16      ; grid spacing for FFT
+
+; Temperature coupling is off
+tcoupl                   = no        ; No temperature coupling
+
+; Pressure coupling is off
+pcoupl                   = no        ; No pressure coupling
+
+; Periodic boundary conditions
+pbc                      = xyz       ; 3-D PBC
+
+; Dispersion correction
+DispCorr                 = EnerPres  ; Energy and pressure corrections
+
+; Velocity generation
+gen_vel                  = no        ; Velocity generation is off
