@@ -32,11 +32,13 @@ FF_WATER_PAIRS = {
     "oplsaa": "tip4p",  # OPLS all-atom force field
 }
 
-def delete_directory(directory:str):
+
+def delete_directory(directory: str):
     """We create a lot of files in the process of tracking pdb files.
     Therefore, we want to delete the directory after we are done with the tests.
     """
     shutil.rmtree(directory)
+
 
 def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
     """If you want to randomly sample pdb_ids, you need to load in
@@ -115,7 +117,9 @@ def check_if_directory_exists(output_directory):
         bt.logging.debug(f"Created directory {output_directory!r}")
 
 
-def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
+def run_cmd_commands(
+    commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
+):
     for cmd in tqdm.tqdm(commands):
         bt.logging.info(f"Running command: {cmd}")
 
@@ -132,8 +136,9 @@ def run_cmd_commands(commands: List[str], suppress_cmd_output: bool = True):
 
         except subprocess.CalledProcessError as e:
             bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            # bt.logging.error(f"Output: {e.stdout.decode()}")
-            # bt.logging.error(f"Error: {e.stderr.decode()}")
+            if verbose:
+                bt.logging.error(f"Output: {e.stdout.decode()}")
+                bt.logging.error(f"Error: {e.stderr.decode()}")
             raise
 
 
@@ -167,10 +172,12 @@ def check_and_download_pdbs(
 
             message = " but contains missing values." if not is_complete else ""
             bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
-            
+
             return True
         else:
-            bt.logging.warning(f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫")
+            bt.logging.warning(
+                f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+            )
             return False
     else:
         bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
