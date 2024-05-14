@@ -7,7 +7,7 @@ import concurrent.futures
 from typing import Dict, List, Tuple
 from collections import defaultdict
 from dataclasses import dataclass
-
+import traceback
 import bittensor as bt
 
 # import base miner class which takes care of most of the boilerplate
@@ -25,9 +25,9 @@ BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
 def compute_intermediate_gro(
     output_directory: str,
-    md_outputs_exts:Dict, #mapping from file extension to filename in md_output
-    suppress_cmd_output:bool = True,
-    state:str = None, 
+    md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
+    suppress_cmd_output: bool = True,
+    state: str = None,
 ) -> bool:
     """
     Compute the intermediate gro file from the xtc and tpr file from the miner.
@@ -46,19 +46,21 @@ def compute_intermediate_gro(
     ]
 
     bt.logging.warning(f"Computing an intermediate gro...")
-    
+
     try:
         run_cmd_commands(
-            commands=command, suppress_cmd_output=suppress_cmd_output
+            commands=command,
+            suppress_cmd_output=suppress_cmd_output,
+            verbose=True,
         )
         return True
     except Exception as E:
         bt.logging.error(f"Error running intermediate gro: {E}")
         return False
-    
-def attach_files(files_to_attach:List, synapse:FoldingSynapse) -> FoldingSynapse:
-    """function that parses a list of files and attaches them to the synapse object
-    """
+
+
+def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynapse:
+    """function that parses a list of files and attaches them to the synapse object"""
     bt.logging.info(f"Sending files to validator: {files_to_attach}")
     for filename in files_to_attach:
         try:
@@ -69,19 +71,25 @@ def attach_files(files_to_attach:List, synapse:FoldingSynapse) -> FoldingSynapse
                 synapse.md_output[filename] = base64.b64encode(f.read())
         except Exception as e:
             bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
-            
+
     return synapse
-    
-def check_if_intermediate_gro_is_computable(md_output:Dict, data_directory:str, state:str = None) -> bool:
+
+
+def check_if_intermediate_gro_is_computable(
+    md_output: Dict, data_directory: str, state: str = None
+) -> bool:
     md_outputs_exts = {
-        k.split(".")[-1]: k for k, v in md_output.items() if 'center' not in k #center files are invalid. 
+        k.split(".")[-1]: k
+        for k, v in md_output.items()
+        if "center" not in k  # center files are invalid.
     }
     is_complete = compute_intermediate_gro(
         output_directory=data_directory,
         md_outputs_exts=md_outputs_exts,
-        state = state, 
+        state=state,
     )
     return is_complete
+
 
 def attach_files_to_synapse(
     synapse: FoldingSynapse,
@@ -133,27 +141,35 @@ def attach_files_to_synapse(
             raise FileNotFoundError(
                 f"No files found for {state}"
             )  # if this happens, goes to except block
-        
-        synapse = attach_files(files_to_attach=files_to_attach, synapse = synapse)
-            
-        if not check_if_intermediate_gro_is_computable(md_output=synapse.md_output, data_directory=data_directory, state = state):
+
+        synapse = attach_files(files_to_attach=files_to_attach, synapse=synapse)
+
+        if not check_if_intermediate_gro_is_computable(
+            md_output=synapse.md_output, data_directory=data_directory, state=state
+        ):
             bt.logging.error(f"Intermediate gro file cannot be generated...")
-            synapse.md_output = {} #remove anything that is attached because it is invalid. 
-              
+            synapse.md_output = (
+                {}
+            )  # remove anything that is attached because it is invalid.
+
     except Exception as e:
-        bt.logging.error(f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}")
+        bt.logging.error(
+            f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}"
+        )
         synapse.md_output = {}
-        #TODO Maybe in this point in the logic it makes sense to try and restart the sim. 
+        # TODO Maybe in this point in the logic it makes sense to try and restart the sim.
 
     finally:
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
 
-def check_synapse(synapse:FoldingSynapse): 
+
+def check_synapse(synapse: FoldingSynapse):
     """Utility function to remove md_inputs if they exist"""
     if len(synapse.md_inputs) > 0:
         synapse.md_inputs = {}
     return synapse
-        
+
+
 class FoldingMiner(BaseMinerNeuron):
     def __init__(self, config=None, base_data_path: str = None):
         super().__init__(config=config)
@@ -168,14 +184,16 @@ class FoldingMiner(BaseMinerNeuron):
             )  # allows us to set the desired attribute to anything.
 
         self.base_data_path = (
-            base_data_path if base_data_path is not None else os.path.join(BASE_DATA_PATH, self.wallet.hotkey.ss58_address[:8])
+            base_data_path
+            if base_data_path is not None
+            else os.path.join(BASE_DATA_PATH, self.wallet.hotkey.ss58_address[:8])
         )
         self.simulations = defaultdict(
             nested_dict
         )  # Maps pdb_ids to the current state of the simulation
 
         self.max_workers = self.config.neuron.max_workers
-        bt.logging.success(
+        bt.logging.debug(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
 
@@ -218,12 +236,12 @@ class FoldingMiner(BaseMinerNeuron):
         Returns:
             FoldingSynapse: synapse with md_output attached
         """
-                
+
         if len(self.simulations) > 0:
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
         # If we are already running a process with the same identifier, return intermediate information
-        bt.logging.info(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
+        bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
@@ -242,8 +260,8 @@ class FoldingMiner(BaseMinerNeuron):
                 del self.simulations[
                     synapse.pdb_id
                 ]  # Remove the simulation from the list
-                
-                return check_synapse(synapse = final_synapse)
+
+                return check_synapse(synapse=final_synapse)
 
             else:
                 # Don't delete the simulation if it's not finished
@@ -252,13 +270,13 @@ class FoldingMiner(BaseMinerNeuron):
                     data_directory=simulation["output_dir"],
                     state=current_executor_state,
                 )
-                return check_synapse(synapse = synapse)
+                return check_synapse(synapse=synapse)
 
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
         ):
-            #TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
-            #and a simulation is not running.
+            # TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
+            # and a simulation is not running.
 
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
@@ -268,17 +286,19 @@ class FoldingMiner(BaseMinerNeuron):
             synapse = attach_files_to_synapse(
                 synapse=synapse, data_directory=output_dir, state="md_0_1"
             )
-            
+
             if len(synapse.md_output) == 0:
                 return synapse
-            return check_synapse(synapse = synapse) #remove md_inputs, they will be there in this stage. 
+            return check_synapse(
+                synapse=synapse
+            )  # remove md_inputs, they will be there in this stage.
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
             bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
             return synapse  # Return the synapse as is
 
-        #TODO: also check if the md_inputs is empty here. If so, then the validator is broken
+        # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         # Create the job and submit it to the executor
@@ -299,9 +319,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["future"] = future
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
 
-        bt.logging.success(
-            f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ "
-        )
+        bt.logging.debug(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
 
     async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
@@ -390,7 +408,9 @@ class SimulationManager:
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
 
-            run_cmd_commands(commands=commands, suppress_cmd_output=suppress_cmd_output)
+            run_cmd_commands(
+                commands=commands, suppress_cmd_output=suppress_cmd_output, verbose=True
+            )
 
             if mock:
                 bt.logging.warning("Running in mock mode, creating fake files...")
@@ -399,7 +419,7 @@ class SimulationManager:
                         os.path.join(self.output_dir, f"{state}.{ext}")
                     )
 
-        bt.logging.success(f"✅Finished simulation for protein: {self.pdb_id}✅")
+        bt.logging.debug(f"✅Finished simulation for protein: {self.pdb_id}✅")
 
         state = "finished"
         with open(self.state_file_name, "w") as f:
@@ -426,7 +446,7 @@ class MockSimulationManager(SimulationManager):
     def run(self, total_wait_time: int = 1):
         start_time = time.time()
 
-        bt.logging.success(f"✅ MockSimulationManager.run is running ✅")
+        bt.logging.debug(f"✅ MockSimulationManager.run is running ✅")
         check_if_directory_exists(output_directory=self.output_dir)
 
         store = os.path.join(self.output_dir, self.state_file_name)
