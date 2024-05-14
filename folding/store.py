@@ -11,6 +11,7 @@ from dataclasses import dataclass, asdict
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "db")
 
+
 class PandasJobStore:
     """Basic csv-based job store using pandas."""
 
@@ -43,8 +44,7 @@ class PandasJobStore:
         return f"{self.__class__.__name__}\n{self._db.__repr__()}"
 
     def write(self):
-        """The write method writes the current state of the database to a csv file.
-        """
+        """The write method writes the current state of the database to a csv file."""
         self._db.to_csv(self.file_path, index=True, index_label="pdb")
 
     def load_table(self, force_create=False) -> pd.DataFrame:
@@ -54,13 +54,12 @@ class PandasJobStore:
             os.makedirs(self.db_path, exist_ok=True)
 
             self._db = pd.DataFrame(
-                columns=self.columns.keys(),
-                index=pd.Index([],name='pdb')
+                columns=self.columns.keys(), index=pd.Index([], name="pdb")
             )
             self.write()
 
         df = pd.read_csv(self.file_path).astype(self.columns).set_index("pdb")
-        df['hotkeys'] = df['hotkeys'].apply(eval)
+        df["hotkeys"] = df["hotkeys"].apply(eval)
         return df
 
     def get_queue(self, ready=True) -> Queue:
@@ -89,20 +88,31 @@ class PandasJobStore:
 
         return queue
 
-    def insert(self, pdb: str, ff: str, box: str, water: str, hotkeys: List[str], **kwargs):
+    def insert(
+        self, pdb: str, ff: str, box: str, water: str, hotkeys: List[str], **kwargs
+    ):
         """Adds a new job to the database."""
 
         if pdb in self._db.index.tolist():
             raise ValueError(f"pdb {pdb!r} is already in the store")
 
-        job = Job(pdb=pdb, ff=ff, box=box, water=water, hotkeys=hotkeys, **kwargs).to_frame()
+        job = Job(
+            pdb=pdb,
+            ff=ff,
+            box=box,
+            water=water,
+            hotkeys=hotkeys,
+            created_at=pd.Timestamp.now().floor("s"),
+            updated_at=pd.Timestamp.now().floor("s"),
+            **kwargs,
+        ).to_frame()
 
         if len(self._db) == 0:
             self._db = job  # .astype(self.columns)
         else:
             self._db = pd.concat([self._db, job], ignore_index=False, axis=0)
 
-        self._db.index.name = 'pdb'
+        self._db.index.name = "pdb"
         self._db = self._db.astype(self.columns)
 
         self.write()
@@ -125,9 +135,9 @@ class Job:
     box: str
     water: str
     hotkeys: list
+    created_at: pd.Timestamp
+    updated_at: pd.Timestamp
     active: bool = True
-    created_at: pd.Timestamp = pd.Timestamp.now().floor("s")
-    updated_at: pd.Timestamp = pd.Timestamp.now().floor("s")
     best_loss: float = np.inf
     best_loss_at: pd.Timestamp = pd.NaT
     best_hotkey: str = None
@@ -135,9 +145,9 @@ class Job:
     gro_hash: str = None
     update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
     updated_count: int = 0
-    max_time_no_improvement: pd.Timedelta = pd.Timedelta(hours=6)
+    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=10)
     min_updates: int = 10
-    event:dict = None
+    event: dict = None
 
     def to_dict(self):
         return asdict(self)
@@ -151,24 +161,25 @@ class Job:
         return pd.DataFrame([self.to_series()])
 
     def update(self, loss: float, hotkey: str, commit_hash: str, gro_hash: str):
-        """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""            
+        """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
 
         if hotkey not in self.hotkeys:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
-        self.updated_at = pd.Timestamp.now().floor('s')
+        self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
         # TODO: make epsilon a param, or a class attrib
         epsilon = 1e2
         if loss < self.best_loss - epsilon:
             self.best_loss = loss
-            self.best_loss_at = pd.Timestamp.now().floor('s')
+            self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
             self.commit_hash = commit_hash
             self.gro_hash = gro_hash
         elif (
-            pd.Timestamp.now().floor('s') - self.best_loss_at > self.max_time_no_improvement
+            pd.Timestamp.now().floor("s") - self.best_loss_at
+            > self.max_time_no_improvement
             and self.updated_count >= self.min_updates
         ):
             self.active = False
@@ -182,7 +193,8 @@ class MockJob(Job):
         self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
         self.created_at = (
-            pd.Timestamp.now().floor('s') - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
+            pd.Timestamp.now().floor("s")
+            - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
         ).floor("s")
         self.best_loss = random.random()
         self.best_hotkey = random.choice(self.hotkeys)
