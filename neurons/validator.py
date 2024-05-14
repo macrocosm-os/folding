@@ -22,8 +22,8 @@ from typing import Dict
 from itertools import chain
 from typing import List
 
-import torch 
-import pandas as pd 
+import torch
+import pandas as pd
 import bittensor as bt
 
 from folding.store import PandasJobStore
@@ -51,9 +51,13 @@ class Validator(BaseValidatorNeuron):
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
-        
-        #There are unwanted keys in mdrun_args, like __is_set. Remove all of these
-        filtered_args = {key: value for key, value in self.config.mdrun_args.items() if not re.match(r'^[^a-zA-Z0-9]', key)}
+
+        # There are unwanted keys in mdrun_args, like __is_set. Remove all of these
+        filtered_args = {
+            key: value
+            for key, value in self.config.mdrun_args.items()
+            if not re.match(r"^[^a-zA-Z0-9]", key)
+        }
 
         for arg, value in filtered_args.items():
             if value is not None:
@@ -81,7 +85,7 @@ class Validator(BaseValidatorNeuron):
         uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
-        bt.logging.info("⏰ Waiting for miner responses ⏰")            
+        bt.logging.info("⏰ Waiting for miner responses ⏰")
         return run_step(
             self,
             protein=protein,
@@ -89,13 +93,13 @@ class Validator(BaseValidatorNeuron):
             timeout=self.config.neuron.timeout,
             mdrun_args=self.mdrun_args,
         )
-        
+
     def get_pdbs_to_exclude(self) -> List[str]:
         # Set of pdbs that are currently in the process of running.
         return [
             queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue
         ]
-        
+
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
         Each "job" is an individual protein folding challenge that is distributed to the miners.
@@ -103,20 +107,20 @@ class Validator(BaseValidatorNeuron):
         Args:
             k (int): The number of jobs create and distribute to miners.
         """
-        
+
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
             bt.logging.info(f"Adding job: {ii+1}/{k}")
-            
-            #This will change on each loop since we are submitting a new pdb to the batch of miners
+
+            # This will change on each loop since we are submitting a new pdb to the batch of miners
             exclude_pdbs = self.get_pdbs_to_exclude()
-        
+
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 
             # assign workers to the job (hotkeys)
             active_jobs = self.store.get_queue(ready=False).queue
-            active_hotkeys = [j.hotkeys for j in active_jobs] #list of lists
+            active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = [
                 self.metagraph.hotkeys.index(hotkey) for hotkey in active_hotkeys
@@ -135,14 +139,13 @@ class Validator(BaseValidatorNeuron):
 
             if len(selected_hotkeys) > 0:
                 self.store.insert(
-                    pdb=job_event["pdb_id"], 
-                    ff = job_event["ff"],
-                    water = job_event["water"],
-                    box = job_event["box"],
+                    pdb=job_event["pdb_id"],
+                    ff=job_event["ff"],
+                    water=job_event["water"],
+                    box=job_event["box"],
                     hotkeys=selected_hotkeys,
                     event=job_event,
-                    )
-            
+                )
 
     def update_job(self, job: Job):
         """Updates the job status based on the event information
@@ -151,18 +154,31 @@ class Validator(BaseValidatorNeuron):
         """
 
         energies = torch.Tensor(job.event["energies"])
-        rewards = torch.zeros_like(energies) #one-hot per update step
-        
+        rewards = torch.zeros_like(energies)  # one-hot per update step
+
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
         gro_hash = ""  # For next time
-        
-        #If no miners respond appropriately, the energies will be all zeros
+
+        # If no miners respond appropriately, the energies will be all zeros
         if torch.all(energies) == 0:
-            bt.logging.warning(f"Received all zero energies for {job.pdb}... Not updating.")
+            if (
+                pd.Timestamp.now().floor("s") - job.created_at
+                > job.max_time_no_improvement
+            ):
+                if isinstance(job.best_loss_at, pd._libs.tslibs.nattype.NaTType):
+                    bt.logging.warning(
+                        f"Job {job.pdb} has not been updated since creation. Removing from queue."
+                    )
+                    job.active = False  # means that nothing has been sampled from any miners and not updated.
+
+            bt.logging.warning(
+                f"Received all zero energies for {job.pdb}... Not updating."
+            )
+
         else:
             best_index = np.argmin(energies)
-            best_loss = energies[best_index].item() #item because it's a torch.tensor
+            best_loss = energies[best_index].item()  # item because it's a torch.tensor
             best_hotkey = job.hotkeys[best_index]
 
             # This does a bunch of important things:
@@ -175,9 +191,9 @@ class Validator(BaseValidatorNeuron):
                 commit_hash=commit_hash,
                 gro_hash=gro_hash,
             )
-            
+
             # note that the reward goes to current leader (even if they didn't do well this round)
-            rewards[best_index] = job.hotkeys.index(job.best_hotkey)
+            rewards[job.hotkeys.index(job.best_hotkey)] = 1
 
             uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
             self.update_scores(
@@ -187,18 +203,22 @@ class Validator(BaseValidatorNeuron):
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
-        
-        def prepare_event_for_logging(event:Dict):
+
+        def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
                 if isinstance(value, pd.Timedelta):
                     event[key] = value.total_seconds()
             return event
-        
+
         event = job.to_dict()
-        simulation_event = event.pop('event') #contains information from hp search
-        merged_events = simulation_event | event #careful: this overwrites.
-        
-        log_event(self, event = prepare_event_for_logging(merged_events))
+        simulation_event = event.pop("event")  # contains information from hp search
+        merged_events = simulation_event | event  # careful: this overwrites.
+
+        merged_events["rewards"] = list(
+            rewards.numpy()
+        )  # add the rewards to the logging event.
+
+        log_event(self, event=prepare_event_for_logging(merged_events))
 
 
 # The main function parses the configuration and runs the validator.
