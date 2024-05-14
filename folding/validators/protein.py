@@ -1,5 +1,5 @@
 import os
-import time
+import glob
 import re
 from typing import List, Dict
 from pathlib import Path
@@ -29,13 +29,19 @@ class Protein:
         return self.protein_pdb.split(".")[0]
 
     def __init__(
-        self, ff: str, box: str, config: Dict, pdb_id: str = None, water: str = None, load_md_inputs:bool = False,
+        self,
+        ff: str,
+        box: str,
+        config: Dict,
+        pdb_id: str = None,
+        water: str = None,
+        load_md_inputs: bool = False,
     ):
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
-        
+
         self.pdb_id = pdb_id.lower()
         self.setup_filepaths()
-        
+
         self.ff = ff
         self.box = box
 
@@ -45,28 +51,26 @@ class Protein:
             self.water = FF_WATER_PAIRS[self.ff]
 
         self.config = config
-            
+
         self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
-        self.other_files = [
-            "em.gro",
-            "topol.top",
-            "posre.itp",
-            "posre_Protein_chain_A.itp",
-            "posre_Protein_chain_L.itp",
-            "topol_Protein_chain_A.itp",
-            "topol_Protein_chain_L.itp",
-        ]   
-        
-        self.md_inputs = self.read_and_return_files(filenames = self.other_files + self.mdp_files) if load_md_inputs else {}
+        self.other_files = (
+            glob.glob("posre*") + glob.glob("topol*") + ["em.gro"]
+        )  # capture all possible topol or posre chains
+
+        self.md_inputs = (
+            self.read_and_return_files(filenames=self.other_files + self.mdp_files)
+            if load_md_inputs
+            else {}
+        )
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
-        
+
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
         self.gro_path = os.path.join(self.validator_directory, "em.gro")
-        self.topol_path = os.path.join(self.validator_directory, "topol.top") 
+        self.topol_path = os.path.join(self.validator_directory, "topol.top")
 
     @staticmethod
     def from_job(job: Job, config: Dict):
@@ -74,7 +78,12 @@ class Protein:
         bt.logging.warning(f"sampling pdb job {job.pdb}")
         load_md_inputs = True if job.updated_count == 0 else False
         return Protein(
-            pdb_id=job.pdb, ff=job.ff, box=job.box, water=job.water, config=config, load_md_inputs=load_md_inputs
+            pdb_id=job.pdb,
+            ff=job.ff,
+            box=job.box,
+            water=job.water,
+            config=config,
+            load_md_inputs=load_md_inputs,
         )
 
     def gather_pdb_id(self):
@@ -95,7 +104,10 @@ class Protein:
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
             if not check_and_download_pdbs(
-                pdb_directory=self.pdb_directory, pdb_id=self.pdb_file, download=True, force = self.config.force_use_pdb
+                pdb_directory=self.pdb_directory,
+                pdb_id=self.pdb_file,
+                download=True,
+                force=self.config.force_use_pdb,
             ):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
@@ -116,10 +128,9 @@ class Protein:
         if len(missing_files) > 0:
             return missing_files
         return None
-    
+
     def read_and_return_files(self, filenames: List) -> Dict:
-        """Read the files and return them as a dictionary.
-        """
+        """Read the files and return them as a dictionary."""
         files_to_return = {}
         for file in filenames:
             try:
@@ -131,9 +142,8 @@ class Protein:
                 #     f"Attempted to put file {file} in md_inputs.\nError: {E}"
                 # )
                 continue
-        
+
         return files_to_return
-        
 
     def forward(self):
         """forward method defines the following:
@@ -143,8 +153,10 @@ class Protein:
         4. edit the necessary config files and add them to the synapse object self.md_inputs[file] = content
         4. save the files to the validator directory for record keeping.
         """
-        bt.logging.info(f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}")
-        
+        bt.logging.info(
+            f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
+        )
+
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
         self.setup_pdb_directory()
@@ -160,8 +172,8 @@ class Protein:
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
 
-        #Read the files that should exist now based on generate_input_files. 
-        self.md_inputs = self.read_and_return_files(filenames = self.other_files)
+        # Read the files that should exist now based on generate_input_files.
+        self.md_inputs = self.read_and_return_files(filenames=self.other_files)
 
         params_to_change = [
             "nstvout",  # Save velocities every 0 steps
@@ -362,7 +374,7 @@ class Protein:
     def compute_intermediate_gro(
         self,
         output_directory: str,
-        md_outputs_exts:Dict, #mapping from file extension to filename in md_output
+        md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
     ) -> str:
         """
         Compute the intermediate gro file from the xtc and tpr file from the miner.
@@ -406,7 +418,7 @@ class Protein:
 
         commands = [
             f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy", #-s specifies the file. 
+            f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
         ]
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
@@ -424,11 +436,15 @@ class Protein:
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         md_outputs_exts = {
-            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0 and 'center' not in k
+            k.split(".")[-1]: k
+            for k, v in md_output.items()
+            if len(v) > 0 and "center" not in k
         }
 
         if len(md_output.keys()) == 0:
-            bt.logging.warning(f"Miner {hotkey[:8]} returned empty md_output... Skipping!")
+            bt.logging.warning(
+                f"Miner {hotkey[:8]} returned empty md_output... Skipping!"
+            )
             return False
 
         for ext in required_files_extensions:
@@ -437,7 +453,7 @@ class Protein:
                 return False
 
         output_directory = self.get_miner_data_directory(hotkey=hotkey)
-        
+
         # Save files so we can check the hash later.
         self.save_files(
             files=md_output,
@@ -446,12 +462,11 @@ class Protein:
 
         # We need to generate the gro file from the miner to ensure they are not cheating.
         gro_file_location = self.compute_intermediate_gro(
-            output_directory=output_directory, 
-            md_outputs_exts=md_outputs_exts
+            output_directory=output_directory, md_outputs_exts=md_outputs_exts
         )
 
         # Check that the md_output contains the right protein through gro_hash
-        if gro_hash(gro_path = self.gro_path) != gro_hash(gro_path = gro_file_location):
+        if gro_hash(gro_path=self.gro_path) != gro_hash(gro_path=gro_file_location):
             bt.logging.warning(
                 f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
             )
