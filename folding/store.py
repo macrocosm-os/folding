@@ -145,7 +145,7 @@ class Job:
     gro_hash: str = None
     update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
     updated_count: int = 0
-    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=10)
+    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
     min_updates: int = 10
     event: dict = None
 
