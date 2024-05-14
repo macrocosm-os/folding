@@ -53,9 +53,11 @@ class Protein:
         self.config = config
 
         self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
-        self.other_files = (
-            glob.glob("posre*") + glob.glob("topol*") + ["em.gro"]
-        )  # capture all possible topol or posre chains
+        self.other_files = [
+            "em.gro",
+            "posre*",
+            "topol*",
+        ]  # capture all possible topol or posre chains
 
         self.md_inputs = (
             self.read_and_return_files(filenames=self.other_files + self.mdp_files)
@@ -133,15 +135,14 @@ class Protein:
         """Read the files and return them as a dictionary."""
         files_to_return = {}
         for file in filenames:
-            try:
-                files_to_return[file] = open(
-                    os.path.join(self.validator_directory, file), "r"
-                ).read()
-            except Exception as E:
-                # bt.logging.warning(
-                #     f"Attempted to put file {file} in md_inputs.\nError: {E}"
-                # )
-                continue
+            for f in glob.glob(os.path.join(self.validator_directory, file)):
+                try:
+                    files_to_return[f.split("/")[-1]] = open(f, "r").read()
+                except Exception as E:
+                    # bt.logging.warning(
+                    #     f"Attempted to put file {file} in md_inputs.\nError: {E}"
+                    # )
+                    continue
 
         return files_to_return
 
