@@ -94,7 +94,7 @@ class Protein:
                 root_dir=ROOT_DIR, filename="pdb_ids.pkl"
             )  # TODO: This should be a class variable via config
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
-            bt.logging.success(f"Selected random pdb id: {self.pdb_id!r}")
+            bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
         self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
         self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
@@ -116,7 +116,7 @@ class Protein:
                 )
 
         else:
-            bt.logging.success(
+            bt.logging.debug(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
@@ -473,7 +473,7 @@ class Protein:
             )
             self.delete_files(directory=output_directory)
             return False
-        bt.logging.success(f"The hash for .gro file is correct!")
+        bt.logging.debug(f"The hash for .gro file is correct!")
 
         # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
         # .gro -> .edr
