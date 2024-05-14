@@ -143,12 +143,16 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Check if we need to add more jobs to the queue
                 queue = self.store.get_queue(ready=False)
                 if queue.qsize() < self.config.neuron.queue_size:
-                    #Potential situation where (sample_size * queue_size) > available uids on the metagraph. 
-                    #Therefore, this product must be less than the number of uids on the metagraph.
-                    if (self.config.neuron.sample_size * self.config.neuron.queue_size) > self.metagraph.n:
-                        raise ValueError(f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n}).")
-                    
-                    bt.logging.success(f"✅ Creating jobs! ✅")
+                    # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
+                    # Therefore, this product must be less than the number of uids on the metagraph.
+                    if (
+                        self.config.neuron.sample_size * self.config.neuron.queue_size
+                    ) > self.metagraph.n:
+                        raise ValueError(
+                            f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
+                        )
+
+                    bt.logging.debug(f"✅ Creating jobs! ✅")
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
                     self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
@@ -157,15 +161,14 @@ class BaseValidatorNeuron(BaseNeuron):
                 for job in self.store.get_queue(ready=False).queue:
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = self.forward(job=job)
-                    
-                    if isinstance(job.event,str):
-                        job.event = eval(job.event) #if str, convert to dict.
-                    
+
+                    if isinstance(job.event, str):
+                        job.event = eval(job.event)  # if str, convert to dict.
+
                     job.event.update(job_event)
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
                     self.update_job(job)
-                    bt.logging.success(f"✅ {job.pdb} submitted! ✅")
 
                 # Check if we should exit.
                 if self.should_exit:
@@ -175,13 +178,15 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                bt.logging.warning(f"Sleeping for {self.config.neuron.update_interval} before resampling...")
+                bt.logging.warning(
+                    f"Sleeping for {self.config.neuron.update_interval} before resampling..."
+                )
                 time.sleep(self.config.neuron.update_interval)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
-            bt.logging.success("Validator killed by keyboard interrupt.")
+            bt.logging.debug("Validator killed by keyboard interrupt.")
             exit()
 
         # In case of unforeseen errors, the validator will log the error and continue operations.
