@@ -275,20 +275,27 @@ class FoldingMiner(BaseMinerNeuron):
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
         ):
-            # TODO: Implement a "find_state" function to get the most advanced portion of the simulation if we have existing data
-            # and a simulation is not running.
-
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
             output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
+            # We will attempt to read the state of the simulation from the state file
+            state_file = os.path.join(output_dir, f"{synapse.pdb_id}_state.txt")
+            if os.path.exists(state_file):
+                with open(state_file, "r") as f:
+                    lines = f.readlines()
+                    state = (
+                        lines[-1].strip() if lines else "md_0_1"
+                    )  # if no lines then we will try to find md_0_1 files
+
             bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
             synapse = attach_files_to_synapse(
-                synapse=synapse, data_directory=output_dir, state="md_0_1"
+                synapse=synapse, data_directory=output_dir, state=state
             )
 
             if len(synapse.md_output) == 0:
                 return synapse
+
             return check_synapse(
                 synapse=synapse
             )  # remove md_inputs, they will be there in this stage.
@@ -431,10 +438,9 @@ class SimulationManager:
         """get_state reads a txt file that contains the current state of the simulation"""
         with open(os.path.join(self.output_dir, self.state_file_name), "r") as f:
             lines = f.readlines()
-
-            if lines:
-                return lines[-1].strip()  # return the last line of the file
-            return None
+            return (
+                lines[-1].strip() if lines else None
+            )  # return the last line of the file
 
 
 class MockSimulationManager(SimulationManager):
