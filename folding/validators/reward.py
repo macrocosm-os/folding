@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import numpy as np 
+import numpy as np
 import bittensor as bt
 from typing import List, Dict
 
@@ -12,7 +12,9 @@ from folding.rewards.energy import EnergyRewardModel
 from folding.rewards.rmsd import RMSDRewardModel
 
 
-def parsing_miner_data(miner_data_directory: str, validator_data_directory: str) -> pd.DataFrame:
+def parsing_miner_data(
+    miner_data_directory: str, validator_data_directory: str
+) -> pd.DataFrame:
     """Runs specific GROMACS commands to extract physical properties from the simulation data. Each command produces a tabular file which is loaded as a pandas DataFrame.
 
     Args:
@@ -28,7 +30,7 @@ def parsing_miner_data(miner_data_directory: str, validator_data_directory: str)
     )
 
     data_extractor.energy(data_type="Potential")
-    return data_extractor.data['energy']
+    return data_extractor.data["energy"]
 
 
 def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
@@ -41,23 +43,30 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
 
     energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
-
         # Ensures that the md_outputs from the miners are parsed correctly
-        if not protein.process_md_output(
-            md_output=resp.md_output, hotkey=resp.axon.hotkey
-        ):
-            continue
+        try:
+            if not protein.process_md_output(
+                md_output=resp.md_output, hotkey=resp.axon.hotkey
+            ):
+                continue
 
-        if resp.dendrite.status_code != 200:
-            bt.logging.info(
-                f"uid {uid} responded with status code {resp.dendrite.status_code}"
+            if resp.dendrite.status_code != 200:
+                bt.logging.info(
+                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
+                )
+                continue
+
+            output_data = parsing_miner_data(
+                miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
+                validator_data_directory=protein.validator_directory,
+            )
+            energies[i] = output_data.iloc[-1]["energy"]
+
+        except Exception as E:
+            # If any of the above methods have an error, we will catch here.
+            bt.logging.error(
+                f"Failed to parse miner data for uid {uid} with error: {E}"
             )
             continue
-
-        output_data = parsing_miner_data(
-            miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
-            validator_data_directory=protein.validator_directory,
-        )
-        energies[i] = output_data.iloc[-1]['energy']
 
     return energies
