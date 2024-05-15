@@ -161,7 +161,7 @@ class Validator(BaseValidatorNeuron):
         gro_hash = ""  # For next time
 
         # If no miners respond appropriately, the energies will be all zeros
-        if torch.all(energies) == 0:
+        if (energies == 0).all():
             if (
                 pd.Timestamp.now().floor("s") - job.created_at
                 > job.max_time_no_improvement
