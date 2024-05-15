@@ -59,6 +59,9 @@ def run_step(
         **response_info,
     }
 
+    if len(protein.md_inputs) > 0:
+        event["md_inputs"] = list(protein.md_inputs.keys())
+
     bt.logging.warning(f"Event information: {event}")
     return event
 
