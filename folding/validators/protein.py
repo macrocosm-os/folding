@@ -8,13 +8,14 @@ import bittensor as bt
 from dataclasses import dataclass
 
 from folding.utils.ops import (
+    FF_WATER_PAIRS,
     run_cmd_commands,
     check_if_directory_exists,
     gro_hash,
     load_pdb_ids,
     select_random_pdb_id,
     check_and_download_pdbs,
-    FF_WATER_PAIRS,
+    get_last_step,
 )
 from folding.store import Job
 
@@ -216,9 +217,11 @@ class Protein:
         bt.logging.success(
             f"Setting save_interval to {save_interval}, from max_steps = {max_steps}"
         )
-        if save_interval == 0:  # only happens when max_steps is < num_steps
-            return 1
-        return save_interval
+        return 1
+
+        # if save_interval == 0:  # only happens when max_steps is < num_steps
+        #     return 1
+        # return save_interval
 
     def check_configuration_file_commands(self) -> List[str]:
         """
@@ -376,6 +379,7 @@ class Protein:
         self,
         output_directory: str,
         md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
+        simulation_step: int,  # A step (frame) of the simulation that you want to compute the gro file on.
     ) -> str:
         """
         Compute the intermediate gro file from the xtc and tpr file from the miner.
@@ -390,8 +394,8 @@ class Protein:
         xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
 
         command = [
-            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -dump -1"
-        ]  # TODO: Could have an internal counter to show how many times we have been queried.
+            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -b {simulation_step} -e {simulation_step}"
+        ]
 
         bt.logging.warning(f"Computing an intermediate gro...")
         run_cmd_commands(
@@ -433,7 +437,7 @@ class Protein:
         4.
         """
 
-        required_files_extensions = ["xtc", "tpr"]
+        required_files_extensions = ["xtc", "tpr", "log"]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         md_outputs_exts = {
@@ -461,9 +465,15 @@ class Protein:
             output_directory=output_directory,
         )
 
+        last_miner_simulation_step = get_last_step(
+            os.path.join(output_directory, md_outputs_exts["log"])
+        )
+
         # We need to generate the gro file from the miner to ensure they are not cheating.
         gro_file_location = self.compute_intermediate_gro(
-            output_directory=output_directory, md_outputs_exts=md_outputs_exts
+            output_directory=output_directory,
+            md_outputs_exts=md_outputs_exts,
+            simulation_step=last_miner_simulation_step,
         )
 
         # Check that the md_output contains the right protein through gro_hash

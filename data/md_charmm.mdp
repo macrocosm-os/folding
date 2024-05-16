@@ -5,6 +5,8 @@ integrator              = md        ; leap-frog integrator
 dt                      = 0.002     ; 2 fs
 nsteps                  = 500000     ;  1000 ps = 1 ns
 
+nstlog                  = 1
+
 ; periodic boundary condition
 pbc                     = xyz       ;
 

@@ -7,6 +7,8 @@ dt                      = 0.002     ; 2 fs
 nsteps                  = 50000     ; 2 * 50000 = 100 ps
 nstenergy               = 500       ; save energy and temperature every 1.0 ps
 
+nstlog                  = 1
+
 ; periodic boundary condition
 pbc                     = xyz       ;
 
