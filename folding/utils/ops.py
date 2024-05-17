@@ -228,7 +228,7 @@ def get_response_info(responses: List[FoldingSynapse]) -> Dict:
 def get_last_step_time(log_file: str) -> float:
     """Validators need to know where miners are in the simulation procedure to ensure that
     the gro file that is computed is done on the most recent step of the simulation. The easiest
-    way to do this is by checking a log file and parsing it such that it fines the Step Time header.
+    way to do this is by checking a log file and parsing it such that it finds the Step Time header.
 
     args:
         log_file (str): location of the log file that contains the step time header
