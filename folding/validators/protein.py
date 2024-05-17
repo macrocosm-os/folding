@@ -15,7 +15,7 @@ from folding.utils.ops import (
     load_pdb_ids,
     select_random_pdb_id,
     check_and_download_pdbs,
-    get_last_step,
+    get_last_step_time,
 )
 from folding.store import Job
 
@@ -186,9 +186,7 @@ class Protein:
         ]
 
         # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(
-            mdp_files=self.mdp_files, params_to_change=params_to_change
-        )  # TODO: Verifiy the validity of this saving condition.
+        self.edit_files(mdp_files=self.mdp_files, params_to_change=params_to_change)
         self.save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
@@ -379,7 +377,7 @@ class Protein:
         self,
         output_directory: str,
         md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
-        simulation_step: int,  # A step (frame) of the simulation that you want to compute the gro file on.
+        simulation_step_time: str,  # A step (frame) of the simulation that you want to compute the gro file on.
     ) -> str:
         """
         Compute the intermediate gro file from the xtc and tpr file from the miner.
@@ -394,7 +392,7 @@ class Protein:
         xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
 
         command = [
-            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -b {simulation_step} -e {simulation_step}"
+            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -b {simulation_step_time} -e {simulation_step_time}"
         ]
 
         bt.logging.warning(f"Computing an intermediate gro...")
@@ -465,7 +463,7 @@ class Protein:
             output_directory=output_directory,
         )
 
-        last_miner_simulation_step = get_last_step(
+        last_miner_simulation_step_time = get_last_step_time(
             os.path.join(output_directory, md_outputs_exts["log"])
         )
 
@@ -473,7 +471,7 @@ class Protein:
         gro_file_location = self.compute_intermediate_gro(
             output_directory=output_directory,
             md_outputs_exts=md_outputs_exts,
-            simulation_step=last_miner_simulation_step,
+            simulation_step_time=last_miner_simulation_step_time,
         )
 
         # Check that the md_output contains the right protein through gro_hash

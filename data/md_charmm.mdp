@@ -5,8 +5,6 @@ integrator              = md        ; leap-frog integrator
 dt                      = 0.002     ; 2 fs
 nsteps                  = 500000     ;  1000 ps = 1 ns
 
-nstlog                  = 1
-
 ; periodic boundary condition
 pbc                     = xyz       ;
 
@@ -18,7 +16,7 @@ nstxout                  = 0       ; for writing coords (x)
 nstvout                  = 0       ; for writing velocities (v) 
 nstfout                  = 0       ; for writing forces (f) 
 ; Output frequency for energies to log file and energy file
-nstlog                   = 1000    ; for writing energies to log file
+nstlog                   = 50    ; for writing energies to log file
 nstenergy                = 500     ; for writing energies to edr file 
 ; Output frequency and precision for .xtc file
 nstxout-compressed       = 2500    ; for writing coords (x) 
