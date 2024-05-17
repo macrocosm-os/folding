@@ -223,3 +223,35 @@ def get_response_info(responses: List[FoldingSynapse]) -> Dict:
         "response_status_codes": response_status_codes,
         "response_returned_files": response_returned_files,
     }
+
+
+def get_last_step_time(log_file: str) -> float:
+    """Validators need to know where miners are in the simulation procedure to ensure that
+    the gro file that is computed is done on the most recent step of the simulation. The easiest
+    way to do this is by checking a log file and parsing it such that it finds the Step Time header.
+
+    args:
+        log_file (str): location of the log file that contains the step time header
+    """
+    step_pattern = re.compile(r"^\s*Step\s+Time$")
+    step_value_pattern = re.compile(r"^\s*(\d+)\s+([\d.]+)$")
+
+    last_step = None
+
+    # Open and read the log file
+    with open(log_file, "r") as file:
+        lines = file.readlines()
+
+    # Reverse iterate over the lines for efficiency
+    for i, line in enumerate(reversed(lines)):
+        if step_pattern.match(line.strip()):  # Check for "Step Time" header
+            # Check the previous line in the original order for step value
+            value_line = lines[-1 + (-i + 1)]
+            match = step_value_pattern.match(value_line.strip())
+            if match:
+                last_step_time = float(
+                    match.group(2)
+                )  # group looks like:   191   0.3200
+                break
+
+    return last_step_time
