@@ -317,11 +317,7 @@ class Protein:
                     else self.config.max_steps // 10
                 )
             elif file == "md.mdp":
-                value = (
-                    self.config.md
-                    if self.config.max_steps is not None
-                    else self.config.max_steps
-                )
+                value = self.config.max_steps
 
             content = mapper(content=content, param_name="nsteps", value=value)
             save_interval = self.calculate_params_save_interval()
