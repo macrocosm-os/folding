@@ -124,6 +124,20 @@ def add_args(cls, parser):
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
+        default=100000,
+    )
+
+    parser.add_argument(
+        "--protein.npt_steps",
+        type=int,
+        help="Number of steps run in npt stage of protein simulation. If None, it is calculated via max_steps.",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.nvt_steps",
+        type=int,
+        help="Number of steps run in nvt stage of protein simulation. If None, it is calculated via max_steps.",
         default=None,
     )
 
@@ -346,4 +360,3 @@ def config(cls):
     bt.axon.add_args(parser)
     cls.add_args(parser)
     return bt.config(parser)
-
