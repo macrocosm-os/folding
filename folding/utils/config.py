@@ -128,6 +128,20 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.npt_steps",
+        type=int,
+        help="Number of steps run in npt stage of protein simulation. If None, it is calculated via max_steps.",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.nvt_steps",
+        type=int,
+        help="Number of steps run in nvt stage of protein simulation. If None, it is calculated via max_steps.",
+        default=None,
+    )
+
+    parser.add_argument(
         "--protein.num_steps_to_save",
         type=int,
         help="Maximum number of steps to save during the energy minimization routine (set by validators for miners).",

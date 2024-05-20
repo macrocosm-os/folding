@@ -201,25 +201,9 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
-    def calculate_params_save_interval(
-        self, max_steps: int, num_steps_to_save: int = 5
-    ) -> float:
-        """determining the save_frequency to step
-
-        Args:
-            num_steps_to_save (int, optional): How many steps to save during the simulation.
-                This is to reduce the amount of data that gets saved during simulation.
-        """
-        save_interval = max_steps // num_steps_to_save
-
-        bt.logging.success(
-            f"Setting save_interval to {save_interval}, from max_steps = {max_steps}"
-        )
-        return 100
-
-        # if save_interval == 0:  # only happens when max_steps is < num_steps
-        #     return 1
-        # return save_interval
+    def calculate_params_save_interval(self):
+        # TODO Define what this function should do. Placeholder for now.
+        return 100  # save every 100 steps
 
     def check_configuration_file_commands(self) -> List[str]:
         """
@@ -278,9 +262,8 @@ class Protein:
             "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
             'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
         ]
-        # Run the first step of the simulation
-        bt.logging.info("Run the first step of the simulation")
-        # TODO: Move this to the miner side, but make sure that this runs!
+
+        # Validator does the first step of the energy minimization
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",
@@ -309,33 +292,42 @@ class Protein:
             params_to_change (List): List of parameters to change in the desired file(s)
         """
 
-        save_interval = None
+        def mapper(content: str, param_name: str, value: int) -> str:
+            """change the parameter value to the desired value in the content of the file."""
+            content = re.sub(
+                f"{param_name}\\s+=\\s+\\d+", f"{param_name} = {value}", content
+            )
+            return content
 
         for file in mdp_files:
             filepath = os.path.join(self.validator_directory, file)
             content = open(filepath, "r").read()
 
-            if self.config.max_steps is not None:
-                content = re.sub(
-                    "nsteps\\s+=\\s+\\d+", f"nsteps = {self.config.max_steps}", content
+            # Set the value of nsteps based on the config, orders of magnitude smaller than max_steps
+            if file == "nvt.mdp":
+                value = (
+                    self.config.nvt
+                    if self.config.nvt is not None
+                    else self.config.max_steps // 100
                 )
-
-                save_interval = self.calculate_params_save_interval(
-                    max_steps=self.config.max_steps,
-                    num_steps_to_save=self.config.num_steps_to_save,
+            elif file == "npt.mdp":
+                value = (
+                    self.config.npt
+                    if self.config.npt is not None
+                    else self.config.max_steps // 10
                 )
+            elif file == "md.mdp":
+                value = self.config.max_steps
 
-            if save_interval is not None:
-                for param in params_to_change:
-                    if param in content:
-                        bt.logging.info(
-                            f"Changing {param} in {file} to {save_interval}..."
-                        )
-                        content = re.sub(
-                            f"{param}\\s+=\\s+\\d+",
-                            f"{param} = {save_interval}",
-                            content,
-                        )
+            content = mapper(content=content, param_name="nsteps", value=value)
+            save_interval = self.calculate_params_save_interval()
+
+            for param in params_to_change:
+                if param in content:
+                    bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
+                    content = mapper(
+                        content=content, param_name=param, value=save_interval
+                    )
 
             self.md_inputs[file] = content
 

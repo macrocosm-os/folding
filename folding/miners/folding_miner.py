@@ -285,7 +285,7 @@ class FoldingMiner(BaseMinerNeuron):
                 with open(state_file, "r") as f:
                     lines = f.readlines()
                     state = (
-                        lines[-1].strip() if lines else "md_0_1"
+                        lines[-1].strip() if lines != "md_0_1" else "md_0_1"
                     )  # if no lines then we will try to find md_0_1 files
 
             bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
