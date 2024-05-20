@@ -4,9 +4,9 @@
 source .venv/bin/activate
 
 # Execute the Python script
-python ../neurons/validator.py \
-    --netuid 141 \
-    --subtensor.network test \
+python ./neurons/validator.py \
+    --netuid 25 \
+    --subtensor.network finney \
     --wallet.name <test_coldkey> \
     --wallet.hotkey <test_hotkey> \
     --axon.port <your_port> \
