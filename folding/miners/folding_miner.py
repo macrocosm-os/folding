@@ -284,8 +284,9 @@ class FoldingMiner(BaseMinerNeuron):
             if os.path.exists(state_file):
                 with open(state_file, "r") as f:
                     lines = f.readlines()
+                    state = lines[-1].strip()
                     state = (
-                        "md_0_1" if lines == "finished" else lines[-1].strip()
+                        "md_0_1" if state == "finished" else state
                     )  # if no lines then we will try to find md_0_1 files
 
             bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
