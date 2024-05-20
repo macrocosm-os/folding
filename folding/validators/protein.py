@@ -215,7 +215,7 @@ class Protein:
         bt.logging.success(
             f"Setting save_interval to {save_interval}, from max_steps = {max_steps}"
         )
-        return 50
+        return 100
 
         # if save_interval == 0:  # only happens when max_steps is < num_steps
         #     return 1
