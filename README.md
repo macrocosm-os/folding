@@ -14,7 +14,7 @@
 
 <div align="center">
 
-# **Protein Folding Subnet** <!-- omit in toc -->
+# **Protein Folding Subnet 25** <!-- omit in toc -->
 [![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
@@ -25,9 +25,9 @@
 [Discord](https://discord.gg/bittensor) • [Network](https://taostats.io/) • [Research](https://bittensor.com/whitepaper)
 </div>
 
-This repository is the official codebase for Bittensor Subnet Folding (SNX), which is to be released May 2024. To learn more about the Bittensor project and the underlying mechanics, [read here.](https://docs.bittensor.com/)
+This repository is the official codebase for Bittensor Subnet Folding (SN25), which was registered on May 20th, 2024. To learn more about the Bittensor project and the underlying mechanics, [read here.](https://docs.bittensor.com/)
 
-**IMPORTANT**: This repo is a **testnet 141 only repo** as of May 13th. It is expected to be launched on Mainnet in the coming days. 
+**IMPORTANT**: This repo has a functional **testnet 141** as of May 13th. You should be testing your miners here before launching on main.
 
 ---
 
@@ -95,6 +95,11 @@ The above commands will install the necessary requirements, as well as download 
 
 If not, there is a problem with your installation, or with your `.bashrc`
 
+## Registering on Mainnet
+```
+btcli subnet register --netuid 25 --wallet.name <YOUR_COLDKEY> --wallet.hotkey <YOUR_HOTKEY>
+```
+
 ## Registering on Testnet
 Netuids that are larger than 99 must be set explicity when registering your hotkey. Use the following command:
 ```
@@ -106,8 +111,8 @@ btcli subnet register --netuid 141 --wallet.name <YOUR_COLDKEY> --wallet.hotkey 
 There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the validator are below. 
 ```bash
 python neurons/validator.py
-    --netuid 141 
-    --subtensor.network test
+    --netuid <25/141>
+    --subtensor.network <finney/test>
     --wallet.name <your wallet> # Must be created using the bittensor-cli
     --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
@@ -115,8 +120,8 @@ python neurons/validator.py
 For additional configuration, the following params are useful:
 ```bash
 python neurons/validator.py
-    --netuid 141 
-    --subtensor.network test
+    --netuid <25/141>
+    --subtensor.network <finney/test>
     --wallet.name <your wallet> # Must be created using the bittensor-cli
     --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
     --neuron.queue_size <number of pdb_ids to submit>
@@ -130,8 +135,8 @@ python neurons/validator.py
 There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the miner are below. 
 ```bash
 python neurons/miner.py
-    --netuid 141 
-    --subtensor.network test
+    --netuid <25/141>
+    --subtensor.network <finney/test>
     --wallet.name <your wallet> # Must be created using the bittensor-cli
     --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
     --neuron.max_workers <number of processes to run on your machine>
@@ -181,7 +186,7 @@ GROMACS itself is a rather robust package and is widely used within the research
 This repository is licensed under the MIT License.
 ```text
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
+# Copyright © 2024 Yuma Rao
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
