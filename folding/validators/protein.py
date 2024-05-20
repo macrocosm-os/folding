@@ -215,7 +215,7 @@ class Protein:
         bt.logging.success(
             f"Setting save_interval to {save_interval}, from max_steps = {max_steps}"
         )
-        return 1
+        return 50
 
         # if save_interval == 0:  # only happens when max_steps is < num_steps
         #     return 1
@@ -377,7 +377,7 @@ class Protein:
         self,
         output_directory: str,
         md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
-        simulation_step_time: str,  # A step (frame) of the simulation that you want to compute the gro file on.
+        simulation_step_time: float,  # A step (frame) of the simulation that you want to compute the gro file on.
     ) -> str:
         """
         Compute the intermediate gro file from the xtc and tpr file from the miner.
