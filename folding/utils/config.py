@@ -124,7 +124,7 @@ def add_args(cls, parser):
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
-        default=None,
+        default=500000,
     )
 
     parser.add_argument(
@@ -187,7 +187,7 @@ def add_args(cls, parser):
         "--mdrun_args.maxh",
         type=str,
         help="Timeout for the mdrun simulation in seconds (each step).",
-        default=3600,  # default is 1h.
+        default=7200,  # default is 2h.
     )
 
 
@@ -258,14 +258,14 @@ def add_validator_args(cls, parser):
         "--neuron.timeout",
         type=float,
         help="The timeout for each forward call. (seconds)",
-        default=20,
+        default=120,
     )
 
     parser.add_argument(
         "--neuron.update_interval",
         type=float,
         help="The interval in which the validators query the miners for updates. (seconds)",
-        default=120,
+        default=180,  # samples every 3-minutes in the simulation.
     )
 
     parser.add_argument(
@@ -346,4 +346,3 @@ def config(cls):
     bt.axon.add_args(parser)
     cls.add_args(parser)
     return bt.config(parser)
-
