@@ -69,7 +69,7 @@ When the simulations finally converge (ΔE/t < threshold), they produce the form
 
 # Running the Subnet
 ## Requirements 
-Protein folding utilizes a standardized package called [GROMACS](https://manual.gromacs.org/2023.2/install-guide/index.htm). To run, you will need:
+Protein folding utilizes a standardized package called [GROMACS](https://www.gromacs.org). To run, you will need:
 1. A Linux-based machine 
 2. Multiple high-performance CPU cores. 
 
