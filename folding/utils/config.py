@@ -201,7 +201,7 @@ def add_args(cls, parser):
         "--mdrun_args.maxh",
         type=str,
         help="Timeout for the mdrun simulation in seconds (each step).",
-        default=7200,  # default is 2h.
+        default=21600,  # default is 6h.
     )
 
 
