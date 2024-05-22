@@ -281,25 +281,26 @@ class FoldingMiner(BaseMinerNeuron):
 
             # We will attempt to read the state of the simulation from the state file
             state_file = os.path.join(output_dir, f"{synapse.pdb_id}_state.txt")
-            if os.path.exists(state_file):
+
+            # Open the state file that should be generated during the simulation.
+            try:
                 with open(state_file, "r") as f:
                     lines = f.readlines()
                     state = lines[-1].strip()
-                    state = (
-                        "md_0_1" if state == "finished" else state
-                    )  # if no lines then we will try to find md_0_1 files
+                    state = "md_0_1" if state == "finished" else state
 
-            bt.logging.warning(f"❗ Found existing data for protein: {synapse.pdb_id} ❗")
-            synapse = attach_files_to_synapse(
-                synapse=synapse, data_directory=output_dir, state=state
-            )
+                bt.logging.warning(
+                    f"❗ Found existing data for protein: {synapse.pdb_id} ❗"
+                )
+                synapse = attach_files_to_synapse(
+                    synapse=synapse, data_directory=output_dir, state=state
+                )
+            except Exception as e:
+                bt.logging.error(
+                    f"Failed to read state file for protein {synapse.pdb_id} with error: {e}"
+                )
 
-            if len(synapse.md_output) == 0:
-                return synapse
-
-            return check_synapse(
-                synapse=synapse
-            )  # remove md_inputs, they will be there in this stage.
+            return check_synapse(synapse=synapse)
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:

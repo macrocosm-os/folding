@@ -77,16 +77,15 @@ class Protein:
 
     @staticmethod
     def from_job(job: Job, config: Dict):
-        # A nuance of the job loader: only load the md_inputs if the job has not been updated.
         bt.logging.warning(f"sampling pdb job {job.pdb}")
-        load_md_inputs = True if job.updated_count == 0 else False
+        # Load_md_inputs is set to True to ensure that miners get files every query.
         return Protein(
             pdb_id=job.pdb,
             ff=job.ff,
             box=job.box,
             water=job.water,
             config=config,
-            load_md_inputs=load_md_inputs,
+            load_md_inputs=True,
         )
 
     def gather_pdb_id(self):
