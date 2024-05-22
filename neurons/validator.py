@@ -79,7 +79,6 @@ class Validator(BaseValidatorNeuron):
             job (Job): Job object containing the pdb and hotkeys
         """
 
-        # TODO: the command below should correctly prepare the md_inputs to point at the current best gro files (+ others)
         protein = Protein.from_job(job=job, config=self.config.protein)
 
         uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
