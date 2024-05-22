@@ -119,11 +119,10 @@ class BaseNeuron(ABC):
             self.resync_metagraph()
 
         if self.should_set_weights():
-            pass
-            # self.set_weights()
+            self.set_weights()
 
         # Always save state.
-        # self.save_state()
+        self.save_state()
 
     def check_registered(self):
         # --- Check for registration.
