@@ -21,6 +21,7 @@ nstlog                   = 50    ; for writing energies to log file
 nstenergy                = 500     ; for writing energies to edr file 
 ; Output frequency and precision for .xtc file
 nstxout-compressed       = 2500    ; for writing coords (x) 
+ld-seed     = -1;
 
 ; Pressure coupling is on
 pcoupl                  = C-rescale               ; Pressure coupling on in NPT

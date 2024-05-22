@@ -6,6 +6,9 @@ emtol       = 1000.0 ; Stop minimization when the maximum force < 1000.0 kJ/mol/
 emstep      = 0.01   ; Minimization step size
 nstenergy   = 500    ; save energies every 1.0 ps, so we can observe if we are successful
 nsteps      = 100     ; run as long as we need
+ld-seed     = -1;
+continuation = no ;
+
 ; Settings that make sure we run with parameters in harmony with the selected force-field
 constraints             = h-bonds   ; bonds involving H are constrained
 rcoulomb                = 1.2       ; short-range electrostatic cutoff (in nm)
