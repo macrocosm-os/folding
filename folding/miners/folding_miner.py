@@ -237,6 +237,9 @@ class FoldingMiner(BaseMinerNeuron):
             FoldingSynapse: synapse with md_output attached
         """
 
+        # increment step counter everytime miner receives a query.
+        self.step += 1
+
         if len(self.simulations) > 0:
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
