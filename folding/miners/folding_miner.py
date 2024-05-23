@@ -21,47 +21,14 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
 
-def compute_intermediate_gro(
-    output_directory: str,
-    md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
-    suppress_cmd_output: bool = True,
-    state: str = None,
-) -> bool:
-    """
-    Compute the intermediate gro file from the xtc and tpr file from the miner.
-    We do this because we need to ensure that the miners are running the correct protein.
-
-    Args:
-        md_output (Dict): dictionary of information from the miner.
-    """
-
-    gro_file_location = os.path.join(output_directory, f"{state}_intermediate.gro")
-    tpr_file = os.path.join(output_directory, md_outputs_exts["tpr"])
-    xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
-
-    command = [
-        f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -dump -1"
-    ]
-
-    bt.logging.warning(f"Computing an intermediate gro...")
-
-    try:
-        run_cmd_commands(
-            commands=command,
-            suppress_cmd_output=suppress_cmd_output,
-            verbose=True,
-        )
-        return True
-    except Exception as E:
-        bt.logging.error(f"Error running intermediate gro: {E}")
-        get_tracebacks()
-        return False
-
-
 def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynapse:
     """function that parses a list of files and attaches them to the synapse object"""
     bt.logging.info(f"Sending files to validator: {files_to_attach}")
     for filename in files_to_attach:
+        # trrs are large, and validators don't need them.
+        if filename.endswith(".trr"):
+            continue
+
         try:
             with open(filename, "rb") as f:
                 filename = filename.split("/")[
@@ -73,22 +40,6 @@ def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynap
             get_tracebacks()
 
     return synapse
-
-
-def check_if_intermediate_gro_is_computable(
-    md_output: Dict, data_directory: str, state: str = None
-) -> bool:
-    md_outputs_exts = {
-        k.split(".")[-1]: k
-        for k, v in md_output.items()
-        if "center" not in k  # center files are invalid.
-    }
-    is_complete = compute_intermediate_gro(
-        output_directory=data_directory,
-        md_outputs_exts=md_outputs_exts,
-        state=state,
-    )
-    return is_complete
 
 
 def attach_files_to_synapse(
@@ -143,14 +94,6 @@ def attach_files_to_synapse(
             )  # if this happens, goes to except block
 
         synapse = attach_files(files_to_attach=files_to_attach, synapse=synapse)
-
-        if not check_if_intermediate_gro_is_computable(
-            md_output=synapse.md_output, data_directory=data_directory, state=state
-        ):
-            bt.logging.error(f"Intermediate gro file cannot be generated...")
-            synapse.md_output = (
-                {}
-            )  # remove anything that is attached because it is invalid.
 
     except Exception as e:
         bt.logging.error(
@@ -229,9 +172,10 @@ class FoldingMiner(BaseMinerNeuron):
         The main async function that is called by the dendrite to run the simulation.
         There are a set of default behaviours the miner should carry out based on the form the synapse comes in as:
 
-            1. If the synapse has a pdb_id that is already being processed, return the intermediate gro file
-            2. If the synapse md_inputs contains a ckpt file, then we are expected to either accept/reject a simulation rebase.
-            3. If none of the above conditions are met, we start a new simulation.
+            1. Check to see if the pdb is in the set of simulations that are running
+            2. If the synapse md_inputs contains a ckpt file, then we are expected to either accept/reject a simulation rebase. (not implemented yet)
+            3. Check if simulation has been run before, and if so, return the files from the last simulation
+            4. If none of the above conditions are met, we start a new simulation.
                 - If the number of active processes is less than the number of CPUs and the pdb_id is unique, start a new process
 
         Returns:
