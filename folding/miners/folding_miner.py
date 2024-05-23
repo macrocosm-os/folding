@@ -2,12 +2,9 @@ import os
 import time
 import glob
 import base64
-import psutil
 import concurrent.futures
 from typing import Dict, List, Tuple
 from collections import defaultdict
-from dataclasses import dataclass
-import traceback
 import bittensor as bt
 
 # import base miner class which takes care of most of the boilerplate
@@ -16,6 +13,7 @@ from folding.protocol import FoldingSynapse
 from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
+    get_tracebacks,
 )
 
 # root level directory for the project (I HATE THIS)
@@ -56,6 +54,7 @@ def compute_intermediate_gro(
         return True
     except Exception as E:
         bt.logging.error(f"Error running intermediate gro: {E}")
+        get_tracebacks()
         return False
 
 
@@ -71,6 +70,7 @@ def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynap
                 synapse.md_output[filename] = base64.b64encode(f.read())
         except Exception as e:
             bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
+            get_tracebacks()
 
     return synapse
 
@@ -156,6 +156,7 @@ def attach_files_to_synapse(
         bt.logging.error(
             f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}"
         )
+        get_tracebacks()
         synapse.md_output = {}
         # TODO Maybe in this point in the logic it makes sense to try and restart the sim.
 
@@ -193,7 +194,7 @@ class FoldingMiner(BaseMinerNeuron):
         )  # Maps pdb_ids to the current state of the simulation
 
         self.max_workers = self.config.neuron.max_workers
-        bt.logging.debug(
+        bt.logging.warning(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
 
