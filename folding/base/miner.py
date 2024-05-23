@@ -111,10 +111,7 @@ class BaseMinerNeuron(BaseNeuron):
         try:
             while not self.should_exit:
                 time.sleep(10)
-
-                # Sync metagraph and potentially set weights.
                 self.sync()
-                self.step += 1
 
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -179,3 +176,6 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
+
+    def set_weights(self):
+        pass
