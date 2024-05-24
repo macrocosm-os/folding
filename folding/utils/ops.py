@@ -1,10 +1,12 @@
 import os
 import re
+import sys
 import tqdm
 import shutil
 import random
-import subprocess
 import hashlib
+import subprocess
+import traceback
 import pickle as pkl
 
 from typing import List, Dict
@@ -117,6 +119,16 @@ def check_if_directory_exists(output_directory):
         bt.logging.debug(f"Created directory {output_directory!r}")
 
 
+def get_tracebacks():
+    """A generic traceback function obtain the traceback details of an exception."""
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    formatted_traceback = traceback.format_exception(exc_type, exc_value, exc_traceback)
+
+    bt.logging.error(" ---------------- Traceback details ---------------- ")
+    bt.logging.warning("".join(formatted_traceback))
+    bt.logging.warning(" ---------------- End of Traceback ----------------\n")
+
+
 def run_cmd_commands(
     commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
 ):
@@ -139,6 +151,7 @@ def run_cmd_commands(
             if verbose:
                 bt.logging.error(f"Output: {e.stdout.decode()}")
                 bt.logging.error(f"Error: {e.stderr.decode()}")
+                get_tracebacks()
             raise
 
 

@@ -82,9 +82,7 @@ This repository requires python3.8 or higher. To install it, simply clone this r
 ```bash
 git clone https://github.com/macrocosm-os/folding.git
 cd folding
-pip install -r requirements.txt
 bash install.sh
-pip install -e .
 ```
 This will also create a virtual environment in which the repo can be run inside of. 
 
