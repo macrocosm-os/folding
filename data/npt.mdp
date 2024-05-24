@@ -13,6 +13,7 @@ nstlog                  = 50
 pbc                     = xyz       ;
 
 continuation            = yes      
+ld-seed                 = -1        ;
 
 ; Pressure coupling is on
 pcoupl                  = C-rescale             ; Pressure coupling on in NPT
