@@ -54,7 +54,7 @@ class Protein:
 
         self.config = config
 
-        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
+        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "emin.mdp"]
         self.other_files = [
             "em.gro",
             "posre*",
@@ -271,7 +271,7 @@ class Protein:
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",
         ]
-
+        
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
         )
