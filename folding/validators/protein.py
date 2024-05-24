@@ -396,6 +396,9 @@ class Protein:
             md_output (Dict): dictionary of information from the miner.
         """
 
+        # Make times to 1 decimal place for gromacs stability.
+        simulation_step_time = round(simulation_step_time, 1)
+
         gro_file_location = os.path.join(output_directory, "intermediate.gro")
         tpr_file = os.path.join(output_directory, md_outputs_exts["tpr"])
         xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
