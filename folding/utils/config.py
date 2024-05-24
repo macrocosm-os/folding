@@ -233,7 +233,7 @@ def add_miner_args(cls, parser):
         "--neuron.max_workers",
         type=int,
         help="Total number of subprocess that the miner is designed to run.",
-        default=4,
+        default=8,
     )
 
     parser.add_argument(
