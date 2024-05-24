@@ -3,7 +3,7 @@ import glob
 import re
 from typing import List, Dict
 from pathlib import Path
-import random 
+import random
 
 import bittensor as bt
 from dataclasses import dataclass
@@ -54,7 +54,7 @@ class Protein:
 
         self.config = config
 
-        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "nvt_charmm.mdp", "npt_charmm.mdp", "md_charmm.mdp", "emin.mdp", "emin_charmm.mdp"]
+        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp"]
         self.other_files = [
             "em.gro",
             "posre*",
@@ -181,16 +181,14 @@ class Protein:
             "nstxout-compressed",  # Save coordinates to trajectory every 50,000 steps
             "nstenergy",  # Save energies every 50,000 steps
             "nstlog",  # Update log file every 50,000 steps
-            "gen_seed",
-            "ld-seed"
         ]
 
-        seed = self.gen_seed()
-
         # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(mdp_files=self.mdp_files, params_to_change=params_to_change, param_name ="nsteps", seed = seed)
-        self.edit_files(mdp_files=self.mdp_files, params_to_change=params_to_change, param_name="gen_seed", seed = seed)
-        self.edit_files(mdp_files=self.mdp_files, params_to_change=params_to_change, param_name="ld-seed", seed = seed)
+        self.edit_files(
+            mdp_files=self.mdp_files,
+            params_to_change=params_to_change,
+            seed=self.config.seed,
+        )
 
         self.save_files(
             files=self.md_inputs,
@@ -287,19 +285,21 @@ class Protein:
 
         # We want to catch any errors that occur in the above steps and then return the error to the user
         return True
-    
+
     def gen_seed(self):
-            """Generate a random seed"""
-            self.seed = random.randint(1000, 999999)
-            return self.seed
-    
-    def edit_files(self, mdp_files: List, params_to_change: List, param_name: str, seed: int):
-        """Edit the files that are needed for simulation.
+        """Generate a random seed"""
+        return random.randint(1000, 999999)
+
+    def edit_files(self, mdp_files: List, params_to_change: List, seed: int = None):
+        """Edit the files that are needed for simulation and attach them to md_inputs.
 
         Args:
             mdp_files (List): Files that contain parameters to change.
             params_to_change (List): List of parameters to change in the desired file(s)
+            seed (int): Seed to use for the simulation. Defaults to None.
         """
+
+        seed = self.gen_seed() if seed is None else seed
 
         def mapper(content: str, param_name: str, value: int) -> str:
             """change the parameter value to the desired value in the content of the file."""
@@ -307,61 +307,43 @@ class Protein:
                 f"{param_name}\\s+=\\s+-?\\d+", f"{param_name} = {value}", content
             )
             return content
+
         for file in mdp_files:
             filepath = os.path.join(self.validator_directory, file)
             content = open(filepath, "r").read()
 
             # Set the value of nsteps based on the config, orders of magnitude smaller than max_steps.
-                # Set the value of gen_seed, ld-seed based on the current instance.
+            # Set the value of gen_seed, ld-seed based on the current instance.
             if file == "emin.mdp":
-                params_values = {
-                    "nsteps": self.config.max_steps // 1000 if self.config.max_steps // 1000 is not None else 1000,
-                    "ld-seed": seed
-                }
-            elif file == "emin_charmm.mdp":
-                params_values = {
-                    "nsteps": self.config.max_steps // 1000 if self.config.max_steps // 1000 is not None else 1000,
-                    "ld-seed": seed
-                }
+                params_values = {"ld-seed": seed}
             elif file == "nvt.mdp":
                 params_values = {
-                    "nsteps": self.config.nvt_steps if self.config.nvt_steps is not None else self.config.max_steps // 100,
+                    "nsteps": self.config.nvt_steps
+                    if self.config.nvt_steps is not None
+                    else self.config.max_steps // 100,
                     "gen_seed": seed,
-                    "ld-seed": seed
-                }
-            elif file == "nvt_charmm.mdp":
-                params_values = {
-                    "nsteps": self.config.nvt_steps if self.config.nvt_steps is not None else self.config.max_steps // 100,
-                    "gen_seed": seed,
-                    "ld-seed": seed
+                    "ld-seed": seed,
                 }
             elif file == "npt.mdp":
                 params_values = {
-                    "nsteps": self.config.npt_steps if self.config.npt_steps is not None else self.config.max_steps // 10,
-                    "ld-seed": seed
-                }
-            elif file == "npt_charmm.mdp":
-                params_values = {
-                "nsteps": self.config.npt_steps if self.config.npt_steps is not None else self.config.max_steps // 10,
-                "ld-seed": seed
+                    "nsteps": self.config.npt_steps
+                    if self.config.npt_steps is not None
+                    else self.config.max_steps // 10,
+                    "ld-seed": seed,
                 }
             elif file == "md.mdp":
-                params_values = {
-                    "nsteps": self.config.max_steps,
-                    "ld-seed": seed
-                }
-            elif file == "md_charmm.mdp":
-                params_values = {
-                "nsteps": self.config.max_steps,
-                "ld-seed": seed
-            }
+                params_values = {"nsteps": self.config.max_steps, "ld-seed": seed}
 
-
+            # Specific implementation for each file
             for param_name, value in params_values.items():
-                if param_name in params_to_change:
-                    bt.logging.info(f"Changing {param_name} in {file} to {value}...")
+                content = mapper(content=content, param_name=param_name, value=value)
+
+            save_interval = self.calculate_params_save_interval()
+            for param in params_to_change:
+                if param in content:
+                    bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
                     content = mapper(
-                        content=content, param_name=param_name, value=value
+                        content=content, param_name=param, value=save_interval
                     )
 
             self.md_inputs[file] = content
