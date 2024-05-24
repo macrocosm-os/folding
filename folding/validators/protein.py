@@ -206,7 +206,7 @@ class Protein:
 
     def calculate_params_save_interval(self):
         # TODO Define what this function should do. Placeholder for now.
-        return 100  # save every 100 steps
+        return 500  # save every 100 steps
 
     def check_configuration_file_commands(self) -> List[str]:
         """
@@ -271,7 +271,7 @@ class Protein:
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",
         ]
-        
+
         run_cmd_commands(
             commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
         )
