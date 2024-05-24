@@ -291,7 +291,8 @@ class FoldingMiner(BaseMinerNeuron):
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if self.config.blacklist.force_validator_permit:
             # If the config is set to force validator permit, then we should only allow requests from validators.
-            if not self.metagraph.validator_permit[uid]:
+            # We also check if the stake is greater than 10_000, which is the minimum stake to not be blacklisted.
+            if not self.metagraph.validator_permit[uid] or self.metagraph.stake[uid] < 10_000:
                 bt.logging.warning(
                     f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
