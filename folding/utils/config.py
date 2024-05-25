@@ -233,7 +233,7 @@ def add_miner_args(cls, parser):
         "--neuron.max_workers",
         type=int,
         help="Total number of subprocess that the miner is designed to run.",
-        default=4,
+        default=8,
     )
 
     parser.add_argument(
@@ -279,14 +279,14 @@ def add_validator_args(cls, parser):
         "--neuron.timeout",
         type=float,
         help="The timeout for each forward call. (seconds)",
-        default=120,
+        default=30,
     )
 
     parser.add_argument(
         "--neuron.update_interval",
         type=float,
         help="The interval in which the validators query the miners for updates. (seconds)",
-        default=180,  # samples every 3-minutes in the simulation.
+        default=300,  # samples every 5-minutes in the simulation.
     )
 
     parser.add_argument(
@@ -300,7 +300,7 @@ def add_validator_args(cls, parser):
         "--neuron.queue_size",
         type=int,
         help="The number of jobs to keep in the queue.",
-        default=4,
+        default=10,
     )
 
     parser.add_argument(
