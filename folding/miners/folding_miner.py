@@ -111,16 +111,15 @@ def attach_files_to_synapse(
 def check_synapse(synapse: FoldingSynapse, event: Dict = None) -> FoldingSynapse:
     """Utility function to remove md_inputs if they exist"""
     if len(synapse.md_inputs) > 0:
-        synapse.md_inputs = {}
+        event["md_inputs_sizes"] = list(map(len, synapse.md_inputs.values()))
+        event["md_inputs_filenames"] = list(synapse.md_inputs.keys())
+        synapse.md_inputs = {}  # remove from synapse
 
-    if event is not None:
-        if synapse.md_output is not None:
-            event["md_output_sizes"] = [
-                len(content) for content in synapse.md_output.values()
-            ]
-            event["md_output_filenames"] = list(synapse.md_output.keys())
+    if synapse.md_output is not None:
+        event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
+        event["md_output_filenames"] = list(synapse.md_output.keys())
 
-        log_event(event)
+    log_event(event)
 
     return synapse
 
@@ -198,10 +197,10 @@ class FoldingMiner(BaseMinerNeuron):
 
         # increment step counter everytime miner receives a query.
         self.step += 1
-        
+
         event = self.create_default_dict()
-        event["query"] = synapse.pdb_id         
-           
+        event["query"] = synapse.pdb_id
+
         output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
         if len(self.simulations) > 0:
@@ -211,7 +210,7 @@ class FoldingMiner(BaseMinerNeuron):
                 if current_executor_state == "finished":
                     bt.logging.debug(f"✅ Removing {pdb_id} from execution stack ✅")
                     del self.simulations[pdb_id]
-                    
+
             event["running_simulations"] = list(self.simulations.keys())
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
@@ -292,7 +291,6 @@ class FoldingMiner(BaseMinerNeuron):
             return check_synapse(
                 synapse=synapse, event=event
             )  # Return the synapse as is
-
 
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
