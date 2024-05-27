@@ -124,7 +124,7 @@ def add_args(cls, parser):
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
-        default=500000,
+        default=2000000,
     )
 
     parser.add_argument(
@@ -279,7 +279,7 @@ def add_validator_args(cls, parser):
         "--neuron.timeout",
         type=float,
         help="The timeout for each forward call. (seconds)",
-        default=30,
+        default=45,
     )
 
     parser.add_argument(
