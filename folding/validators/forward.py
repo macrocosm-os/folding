@@ -147,7 +147,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             }
 
             protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
-            protein.forward()
+            protein.setup_simulation()
 
         except Exception as E:
             event["validator_search_status"] = False
@@ -156,6 +156,8 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["pdb_id"] = pdb_id
             event.update(hps)  # add the dictionary of hyperparameters to the event
             event["hp_sample_time"] = time.time() - hp_sampler_time
+            event['pdb_complexity'] = dict(protein.pdb_complexity)
+            event['init_energy'] = protein.init_energy
 
             if "validator_search_status" not in event:
                 bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
