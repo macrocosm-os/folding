@@ -84,11 +84,18 @@ git clone https://github.com/macrocosm-os/folding.git
 cd folding
 bash install.sh
 ```
-This will also create a virtual environment in which the repo can be run inside of. 
+
+This will also create a virtual environment in which the repo can be run inside of.
+
+Sometimes, there can be problems with the install so to ensure that gromacs is installed correctly, please check the .bashrc. Importantly, these lines MUST be run:
+```bash
+echo "source /usr/local/gromacs/bin/GMXRC" >> ~/.bashrc
+source ~/.bashrc
+``` 
 
 The above commands will install the necessary requirements, as well as download GROMACS and add it to your `.bashrc`. To ensure that installation is complete, running `gmx` in the terminal should print
 ```
-:-) GROMACS - gmx, 2023.1-Ubuntu_2023.1_2ubuntu1 (-:
+ :-) GROMACS - gmx, 2024.1 (-:
 ```
 
 If not, there is a problem with your installation, or with your `.bashrc`

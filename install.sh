@@ -20,6 +20,7 @@ make check
 make install
 
 echo "source /usr/local/gromacs/bin/GMXRC" >> ~/.bashrc
+source ~/.bashrc
 
 # Add GROMACS initialization to venv/bin/activate
 COMMAND="source /usr/local/gromacs/bin/GMXRC"
