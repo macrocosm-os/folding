@@ -277,6 +277,9 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
 
         bt.logging.debug(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
+        return check_synapse(
+            synapse=synapse
+        )  # return the synapse for quick turn around.
 
     async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
         if (
@@ -292,7 +295,10 @@ class FoldingMiner(BaseMinerNeuron):
         if self.config.blacklist.force_validator_permit:
             # If the config is set to force validator permit, then we should only allow requests from validators.
             # We also check if the stake is greater than 10_000, which is the minimum stake to not be blacklisted.
-            if not self.metagraph.validator_permit[uid] or self.metagraph.stake[uid] < 10_000:
+            if (
+                not self.metagraph.validator_permit[uid]
+                or self.metagraph.stake[uid] < 10_000
+            ):
                 bt.logging.warning(
                     f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
