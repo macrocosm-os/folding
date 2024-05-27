@@ -112,6 +112,28 @@ def gro_hash(gro_path: str):
 
     return hashlib.md5(name + buf.encode()).hexdigest()
 
+def calc_potential_from_edr(output_dir: str = None, edr_name: str = 'em.edr', xvg_name: str = "_tmp.xvg"):
+        """Calculate the potential energy from an edr file using gmx energy.
+        Args:
+            output_dir (str): directory containing the edr file
+            edr_name (str): name of the edr file
+            xvg_name (str): name of the xvg file
+
+        Returns:
+            float: potential energy
+        """
+        edr_file = os.path.join(output_dir, edr_name)
+        xvg_file = os.path.join(output_dir, xvg_name)
+        command = [
+            f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file}"
+        ]
+
+        run_cmd_commands(command, verbose=True)
+
+        # Just take the last line of the 2 column xvg file (step, energy) and report the energy
+        with open(xvg_file, "r") as f:
+            lines = [line.strip('\n') for line in f.readlines()]
+            return float(lines[-1].split()[-1])
 
 def check_if_directory_exists(output_directory):
     if not os.path.exists(output_directory):
