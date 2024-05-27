@@ -61,6 +61,7 @@ def run_step(
 
     if len(protein.md_inputs) > 0:
         event["md_inputs"] = list(protein.md_inputs.keys())
+        event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
 
     bt.logging.warning(f"Event information: {event}")
     return event
