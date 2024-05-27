@@ -113,6 +113,30 @@ def gro_hash(gro_path: str):
     return hashlib.md5(name + buf.encode()).hexdigest()
 
 
+def calc_potential_from_edr(
+    output_dir: str = None, edr_name: str = "em.edr", xvg_name: str = "_tmp.xvg"
+):
+    """Calculate the potential energy from an edr file using gmx energy.
+    Args:
+        output_dir (str): directory containing the edr file
+        edr_name (str): name of the edr file
+        xvg_name (str): name of the xvg file
+
+    Returns:
+        float: potential energy
+    """
+    edr_file = os.path.join(output_dir, edr_name)
+    xvg_file = os.path.join(output_dir, xvg_name)
+    command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file}"]
+
+    run_cmd_commands(command, verbose=True)
+
+    # Just take the last line of the 2 column xvg file (step, energy) and report the energy
+    with open(xvg_file, "r") as f:
+        lines = [line.strip("\n") for line in f.readlines()]
+        return float(lines[-1].split()[-1])
+
+
 def check_if_directory_exists(output_directory):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -133,7 +157,7 @@ def run_cmd_commands(
     commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
 ):
     for cmd in tqdm.tqdm(commands):
-        bt.logging.info(f"Running command: {cmd}")
+        bt.logging.debug(f"Running command: {cmd}")
 
         try:
             result = subprocess.run(
@@ -219,6 +243,7 @@ def get_response_info(responses: List[FoldingSynapse]) -> Dict:
     response_status_messages = []
     response_status_codes = []
     response_returned_files = []
+    response_returned_files_sizes = []
 
     for resp in responses:
         if resp.dendrite.process_time != None:
@@ -229,12 +254,14 @@ def get_response_info(responses: List[FoldingSynapse]) -> Dict:
         response_status_messages.append(str(resp.dendrite.status_message))
         response_status_codes.append(str(resp.dendrite.status_code))
         response_returned_files.append(list(resp.md_output.keys()))
+        response_returned_files_sizes.append(list(map(len, resp.md_output.values())))
 
     return {
         "response_times": response_times,
         "response_status_messages": response_status_messages,
         "response_status_codes": response_status_codes,
         "response_returned_files": response_returned_files,
+        "response_returned_files_sizes": response_returned_files_sizes,
     }
 
 

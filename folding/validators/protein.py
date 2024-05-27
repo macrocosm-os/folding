@@ -4,6 +4,7 @@ import re
 from typing import List, Dict
 from pathlib import Path
 import random
+from collections import defaultdict
 
 import bittensor as bt
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from folding.utils.ops import (
     check_if_directory_exists,
     gro_hash,
     load_pdb_ids,
+    calc_potential_from_edr,
     select_random_pdb_id,
     check_and_download_pdbs,
     get_last_step_time,
@@ -67,6 +69,10 @@ class Protein:
             else {}
         )
 
+        # set to an arbitrarilly high number to ensure that the first miner is always accepted.
+        self.init_energy = 0
+        self.pdb_complexity = defaultdict(int)
+
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
@@ -78,9 +84,10 @@ class Protein:
 
     @staticmethod
     def from_job(job: Job, config: Dict):
+        # TODO: This must be called after the protein has already been downloaded etc.
         bt.logging.warning(f"sampling pdb job {job.pdb}")
         # Load_md_inputs is set to True to ensure that miners get files every query.
-        return Protein(
+        protein = Protein(
             pdb_id=job.pdb,
             ff=job.ff,
             box=job.box,
@@ -88,6 +95,28 @@ class Protein:
             config=config,
             load_md_inputs=True,
         )
+
+        try:
+            protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
+            protein.init_energy = calc_potential_from_edr(
+                output_dir=protein.validator_directory, edr_name="em.edr"
+            )
+        except:
+            bt.logging.error(
+                f"pdb_complexity or init_energy failed for {protein.pdb_id}."
+            )
+        finally:
+            return protein
+
+    @staticmethod
+    def _get_pdb_complexity(pdb_path):
+        """Get the complexity of the pdb file by counting the number of atoms, residues, etc."""
+        pdb_complexity = defaultdict(int)
+        with open(pdb_path, "r") as f:
+            for line in f.readlines():
+                key = line.split()[0].strip()
+                pdb_complexity[key] += 1
+        return pdb_complexity
 
     def gather_pdb_id(self):
         if self.pdb_id is None:
@@ -117,7 +146,7 @@ class Protein:
                 )
 
         else:
-            bt.logging.debug(
+            bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
@@ -146,7 +175,7 @@ class Protein:
                     continue
         return files_to_return
 
-    def forward(self):
+    def setup_simulation(self):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
         2. setup the pdb directory and download the pdb file if it doesn't exist.
@@ -197,6 +226,10 @@ class Protein:
         )
 
         self.remaining_steps = []
+        self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
+        self.init_energy = calc_potential_from_edr(
+            output_dir=self.validator_directory, edr_name="em.edr"
+        )
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
@@ -206,7 +239,7 @@ class Protein:
 
     def calculate_params_save_interval(self):
         # TODO Define what this function should do. Placeholder for now.
-        return 500  # save every 100 steps
+        return 10000
 
     def check_configuration_file_commands(self) -> List[str]:
         """
@@ -273,14 +306,16 @@ class Protein:
         ]
 
         run_cmd_commands(
-            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
+            commands=commands,
+            suppress_cmd_output=self.config.suppress_cmd_output,
+            verbose=True,
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
         # Move all files
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
-        bt.logging.info(f"Moving all files except pdb to {self.validator_directory}")
+        bt.logging.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
 
         # We want to catch any errors that occur in the above steps and then return the error to the user
@@ -341,7 +376,9 @@ class Protein:
             save_interval = self.calculate_params_save_interval()
             for param in params_to_change:
                 if param in content:
-                    bt.logging.info(f"Changing {param} in {file} to {save_interval}...")
+                    bt.logging.debug(
+                        f"Changing {param} in {file} to {save_interval}..."
+                    )
                     content = mapper(
                         content=content, param_name=param, value=save_interval
                     )
