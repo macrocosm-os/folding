@@ -4,6 +4,7 @@ import re
 from typing import List, Dict
 from pathlib import Path
 import random
+from collections import defaultdict
 
 import bittensor as bt
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from folding.utils.ops import (
     check_if_directory_exists,
     gro_hash,
     load_pdb_ids,
+    calc_potential_from_edr,
     select_random_pdb_id,
     check_and_download_pdbs,
     get_last_step_time,
@@ -66,6 +68,10 @@ class Protein:
             if load_md_inputs
             else {}
         )
+        self.pdb_complexity = defaultdict(int)
+        # set to an arbitrarilly high number to ensure that the first miner is always accepted.
+        self.init_energy = 0
+
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -78,9 +84,10 @@ class Protein:
 
     @staticmethod
     def from_job(job: Job, config: Dict):
+        # TODO: This must be called after the protein has already been downloaded etc.
         bt.logging.warning(f"sampling pdb job {job.pdb}")
         # Load_md_inputs is set to True to ensure that miners get files every query.
-        return Protein(
+        protein = Protein(
             pdb_id=job.pdb,
             ff=job.ff,
             box=job.box,
@@ -88,6 +95,20 @@ class Protein:
             config=config,
             load_md_inputs=True,
         )
+        protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
+        protein.init_energy = calc_potential_from_edr(output_directory=protein.validator_directory, edr_name="em.edr")
+        return protein
+
+    @staticmethod
+    def _get_pdb_complexity(pdb_path):
+        """Get the complexity of the pdb file by counting the number of atoms, residues, etc.
+        """
+        pdb_complexity = defaultdict(int)
+        with open(pdb_path, "r") as f:
+            for line in f.readlines():
+                key = line.split()[0].strip()
+                pdb_complexity[key] += 1
+        return pdb_complexity
 
     def gather_pdb_id(self):
         if self.pdb_id is None:
@@ -146,7 +167,7 @@ class Protein:
                     continue
         return files_to_return
 
-    def forward(self):
+    def setup_simulation(self):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
         2. setup the pdb directory and download the pdb file if it doesn't exist.
@@ -197,6 +218,8 @@ class Protein:
         )
 
         self.remaining_steps = []
+        self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
+        self.init_energy = calc_potential_from_edr(output_directory=self.validator_directory, edr_name="em.edr")
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
