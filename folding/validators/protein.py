@@ -239,7 +239,7 @@ class Protein:
 
     def calculate_params_save_interval(self):
         # TODO Define what this function should do. Placeholder for now.
-        return 500  # save every 100 steps
+        return 10000
 
     def check_configuration_file_commands(self) -> List[str]:
         """
