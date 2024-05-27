@@ -10,6 +10,7 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
+from folding.utils.logging import log_event
 from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
@@ -107,10 +108,20 @@ def attach_files_to_synapse(
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
 
 
-def check_synapse(synapse: FoldingSynapse):
+def check_synapse(synapse: FoldingSynapse, event: Dict = None) -> FoldingSynapse:
     """Utility function to remove md_inputs if they exist"""
     if len(synapse.md_inputs) > 0:
         synapse.md_inputs = {}
+
+    if event is not None:
+        if synapse.md_output is not None:
+            event["md_output_sizes"] = [
+                len(content) for content in synapse.md_output.values()
+            ]
+            event["md_output_filenames"] = list(synapse.md_output.keys())
+
+        log_event(event)
+
     return synapse
 
 
@@ -122,19 +133,12 @@ class FoldingMiner(BaseMinerNeuron):
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
 
-        def nested_dict():
-            return defaultdict(
-                lambda: None
-            )  # allows us to set the desired attribute to anything.
-
         self.base_data_path = (
             base_data_path
             if base_data_path is not None
             else os.path.join(BASE_DATA_PATH, self.wallet.hotkey.ss58_address[:8])
         )
-        self.simulations = defaultdict(
-            nested_dict
-        )  # Maps pdb_ids to the current state of the simulation
+        self.simulations = self.create_default_dict()
 
         self.max_workers = self.config.neuron.max_workers
         bt.logging.warning(
@@ -146,6 +150,14 @@ class FoldingMiner(BaseMinerNeuron):
         )  # remove one for safety
 
         self.mock = None
+
+    def create_default_dict(self):
+        def nested_dict():
+            return defaultdict(
+                lambda: None
+            )  # allows us to set the desired attribute to anything.
+
+        return defaultdict(nested_dict)
 
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
         commands = [
@@ -184,8 +196,12 @@ class FoldingMiner(BaseMinerNeuron):
 
         # increment step counter everytime miner receives a query.
         self.step += 1
+        event = self.create_default_dict()
+
+        event["query"] = synapse.pdb_id
 
         if len(self.simulations) > 0:
+            event["running_simulations"] = list(self.simulations.keys())
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
         # If we are already running a process with the same identifier, return intermediate information
@@ -195,7 +211,7 @@ class FoldingMiner(BaseMinerNeuron):
             current_executor_state = simulation["executor"].get_state()
 
             if current_executor_state == "finished":
-                final_synapse = attach_files_to_synapse(
+                synapse = attach_files_to_synapse(
                     synapse=synapse,
                     data_directory=simulation["output_dir"],
                     state="md_0_1",  # attach the last state of the simulation as not files are labelled as 'finished'
@@ -209,8 +225,6 @@ class FoldingMiner(BaseMinerNeuron):
                     synapse.pdb_id
                 ]  # Remove the simulation from the list
 
-                return check_synapse(synapse=final_synapse)
-
             else:
                 # Don't delete the simulation if it's not finished
                 synapse = attach_files_to_synapse(
@@ -218,7 +232,11 @@ class FoldingMiner(BaseMinerNeuron):
                     data_directory=simulation["output_dir"],
                     state=current_executor_state,
                 )
-                return check_synapse(synapse=synapse)
+
+            event["condition"] = "running_simulation"
+            event["state"] = current_executor_state
+
+            return check_synapse(synapse=synapse, event=event)
 
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
@@ -248,12 +266,19 @@ class FoldingMiner(BaseMinerNeuron):
                     f"Failed to read state file for protein {synapse.pdb_id} with error: {e}"
                 )
 
-            return check_synapse(synapse=synapse)
+            event["condition"] = "found_existing_data"
+            event["state"] = state
+
+            return check_synapse(synapse=synapse, event=event)
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
             bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
-            return synapse  # Return the synapse as is
+
+            event["condition"] = "cpu_limit_reached"
+            return check_synapse(
+                synapse=synapse, event=event
+            )  # Return the synapse as is
 
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
@@ -277,9 +302,10 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
 
         bt.logging.debug(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
-        return check_synapse(
-            synapse=synapse
-        )  # return the synapse for quick turn around.
+
+        event["condition"] = "new_simulation"
+
+        return check_synapse(synapse=synapse, event=event)
 
     async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
         if (
