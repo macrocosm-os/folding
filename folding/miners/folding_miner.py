@@ -181,51 +181,43 @@ class FoldingMiner(BaseMinerNeuron):
         Returns:
             FoldingSynapse: synapse with md_output attached
         """
+        # If we are already running a process with the same identifier, return intermediate information
+        bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
 
         # increment step counter everytime miner receives a query.
         self.step += 1
+        output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
         if len(self.simulations) > 0:
+            # check if any of the simulations have finished
+            for pdb_id, simulation in self.simulations.items():
+                current_executor_state = simulation["executor"].get_state()
+                if state == "finished":
+                    bt.logging.debug(f"✅ Removing {pdb_id} from execution stack ✅")
+                    del self.simulations[pdb_id]
+
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
-        # If we are already running a process with the same identifier, return intermediate information
-        bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
+        # Check if the number of active processes is less than the number of CPUs
+        if len(self.simulations) >= self.max_workers:
+            bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
+            return check_synapse(synapse=synapse)  # return empty synapse.
+
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
 
-            if current_executor_state == "finished":
-                final_synapse = attach_files_to_synapse(
-                    synapse=synapse,
-                    data_directory=simulation["output_dir"],
-                    state="md_0_1",  # attach the last state of the simulation as not files are labelled as 'finished'
-                )
-
-                # This will run if final_synapse exists.
-                bt.logging.info(
-                    f"✅ Simulation finished for protein: {synapse.pdb_id} ✅"
-                )
-                del self.simulations[
-                    synapse.pdb_id
-                ]  # Remove the simulation from the list
-
-                return check_synapse(synapse=final_synapse)
-
-            else:
-                # Don't delete the simulation if it's not finished
-                synapse = attach_files_to_synapse(
-                    synapse=synapse,
-                    data_directory=simulation["output_dir"],
-                    state=current_executor_state,
-                )
-                return check_synapse(synapse=synapse)
+            synapse = attach_files_to_synapse(
+                synapse=synapse,
+                data_directory=simulation["output_dir"],
+                state=current_executor_state,
+            )
 
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
         ):
             # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
             # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
-            output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
             # We will attempt to read the state of the simulation from the state file
             state_file = os.path.join(output_dir, f"{synapse.pdb_id}_state.txt")
@@ -250,18 +242,13 @@ class FoldingMiner(BaseMinerNeuron):
 
             return check_synapse(synapse=synapse)
 
-        # Check if the number of active processes is less than the number of CPUs
-        if len(self.simulations) >= self.max_workers:
-            bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
-            return synapse  # Return the synapse as is
-
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
             pdb_id=synapse.pdb_id,
-            output_dir=os.path.join(self.base_data_path, synapse.pdb_id),
+            output_dir=output_dir,
         )
 
         future = self.executor.submit(
@@ -292,7 +279,10 @@ class FoldingMiner(BaseMinerNeuron):
         if self.config.blacklist.force_validator_permit:
             # If the config is set to force validator permit, then we should only allow requests from validators.
             # We also check if the stake is greater than 10_000, which is the minimum stake to not be blacklisted.
-            if not self.metagraph.validator_permit[uid] or self.metagraph.stake[uid] < 10_000:
+            if (
+                not self.metagraph.validator_permit[uid]
+                or self.metagraph.stake[uid] < 10_000
+            ):
                 bt.logging.warning(
                     f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
@@ -339,9 +329,10 @@ class SimulationManager:
         """run method to handle the processing of generic simulations.
 
         Args:
-            synapse (FoldingSynapse): synapse object that contains the information for the simulation
-            commands (Dict): Dict of lists of commands that we are meant to run in the executor
-            config (Dict): configuration file for the miner
+            md_inputs (Dict): input files from the validator
+            commands (Dict): dictionary where state as the key and the commands as the value
+            suppress_cmd_output (bool, optional): Defaults to True.
+            mock (bool, optional): mock for debugging. Defaults to False.
         """
         bt.logging.info(
             f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
@@ -382,7 +373,7 @@ class SimulationManager:
         with open(self.state_file_name, "w") as f:
             f.write(f"{state}\n")
 
-        total_run_rime = time.time() - start_time
+        total_run_time = time.time() - start_time
 
     def get_state(self) -> str:
         """get_state reads a txt file that contains the current state of the simulation"""
