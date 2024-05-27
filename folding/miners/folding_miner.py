@@ -192,7 +192,7 @@ class FoldingMiner(BaseMinerNeuron):
             # check if any of the simulations have finished
             for pdb_id, simulation in self.simulations.items():
                 current_executor_state = simulation["executor"].get_state()
-                if state == "finished":
+                if current_executor_state == "finished":
                     bt.logging.debug(f"✅ Removing {pdb_id} from execution stack ✅")
                     del self.simulations[pdb_id]
 
