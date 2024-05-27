@@ -156,6 +156,13 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.verbose",
+        action="store_true",
+        help="If set, any errors on terminal commands will be reported in logs.",
+        default=True,
+    )
+
+    parser.add_argument(
         "--protein.force_use_pdb",
         action="store_true",
         help="If True, we will attempt to fold a protein that has missing atoms.",

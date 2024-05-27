@@ -308,7 +308,7 @@ class Protein:
         run_cmd_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=True,
+            verbose=self.config.verbose,
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
@@ -446,7 +446,9 @@ class Protein:
 
         bt.logging.warning(f"Computing an intermediate gro...")
         run_cmd_commands(
-            commands=command, suppress_cmd_output=self.config.suppress_cmd_output
+            commands=command,
+            suppress_cmd_output=self.config.suppress_cmd_output,
+            verbose=self.config.verbose,
         )
 
         return gro_file_location
@@ -473,7 +475,9 @@ class Protein:
             f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
         ]
         run_cmd_commands(
-            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
+            commands=commands,
+            suppress_cmd_output=self.config.suppress_cmd_output,
+            verbose=self.config.verbose,
         )
 
     def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
