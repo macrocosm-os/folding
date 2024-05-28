@@ -122,6 +122,9 @@ python neurons/validator.py
     --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
 ```
+
+As a validator, you should change these base parameters in `scripts/run_validator.py`. 
+
 For additional configuration, the following params are useful:
 ```bash
 python neurons/validator.py
@@ -134,6 +137,11 @@ python neurons/validator.py
     --protein.max_steps <number of steps for the simulation>
     --logging.debug # Run in debug mode, alternatively --logging.trace for trace mode
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+
+Validators are heavily recommended to run the autoprocess script to ensure that they are always up to date with the most recent version of folding. We have version tagging that will disable validators from setting weights if they are not on the correct version.
+```bash
+bash run_autoprocess.sh
 ```
 
 ### Miner
