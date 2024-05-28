@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Initialize variables
-script="./neurons/validator.py"
-validator_pm2_config="./pm2_configs/validator.config.js"
+script="./scripts/run_validator.sh"
+validator_pm2_config="./validator.config.js"
 autoRunLoc=$(readlink -f "$0")
 proc_name="s1_validator_main_process" 
 args=()
@@ -213,7 +213,6 @@ echo "module.exports = {
   apps : [{
     name   : '$proc_name',
     script : '$script',
-    interpreter: 'python3',
     min_uptime: '5m',
     max_restarts: '5',
     args: [$joined_args]
@@ -292,7 +291,8 @@ if [ "$?" -eq 1 ]; then
         # Wait about 30 minutes
         # This should be plenty of time for validators to catch up
         # and should prevent any rate limitations by GitHub.
-        sleep 1800
+        echo "Sleeping for 1800 seconds before checking update..."
+        sleep 10
     done
 else
     echo "Missing package 'jq'. Please install it for your system first."
