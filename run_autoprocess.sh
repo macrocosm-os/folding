@@ -292,7 +292,7 @@ if [ "$?" -eq 1 ]; then
         # This should be plenty of time for validators to catch up
         # and should prevent any rate limitations by GitHub.
         echo "Sleeping for 1800 seconds before checking update..."
-        sleep 10
+        sleep 1800
     done
 else
     echo "Missing package 'jq'. Please install it for your system first."
