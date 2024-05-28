@@ -15,9 +15,9 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import re
 import copy
-import typing
-
+import subprocess
 import bittensor as bt
 
 from abc import ABC, abstractmethod
@@ -26,6 +26,8 @@ from abc import ABC, abstractmethod
 from folding.utils.config import check_config, add_args, config
 from folding.utils.misc import ttl_get_block
 from folding import __spec_version__ as spec_version
+from folding import __GROMACS_VERSION_TAG__
+from folding.utils.ops import GromacsException
 from folding.mock import MockSubtensor, MockMetagraph
 
 
@@ -99,6 +101,35 @@ class BaseNeuron(ABC):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
+
+        self.check_gromacs_version()
+
+    def check_gromacs_version(self):
+        """
+        A method that enforces that the gromacs version that is running the version specified in the __GROMACS_VERSION_TAG__.
+        """
+        try:
+            result = subprocess.run(
+                ["gmx", "--version"], capture_output=True, text=True
+            )
+            version_output = result.stdout.strip()
+
+            version_pattern = r"GROMACS version:\s+(\d{4}\.\d+)"
+            match = re.search(version_pattern, version_output)
+
+            self.gromacs_version = match.group(1) if match else None
+
+            if (self.gromacs_version is None) or (
+                __GROMACS_VERSION_TAG__ not in self.gromacs_version
+            ):
+                raise GromacsException(
+                    f"GROMACS version mismatch. Installed == {self.gromacs_version}. Please install GROMACS {__GROMACS_VERSION_TAG__}.*"
+                )
+
+        except Exception as e:
+            raise e
+
+        bt.logging.info(f"Running GROMACS version: {self.gromacs_version}")
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:

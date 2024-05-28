@@ -21,13 +21,11 @@ import numpy as np
 from typing import Dict
 from itertools import chain
 from typing import List
-import subprocess
 
 import torch
 import pandas as pd
 import bittensor as bt
 
-from folding import __GROMACS_VERSION_TAG__
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
 from folding.validators.forward import create_new_challenge, run_step
@@ -37,14 +35,6 @@ from folding.validators.protein import Protein
 from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
-
-
-class GromacsException(Exception):
-    """Exception raised for errors in the versioning."""
-
-    def __init__(self, message="Version error occurred"):
-        self.message = message
-        super().__init__(self.message)
 
 
 class Validator(BaseValidatorNeuron):
@@ -60,28 +50,6 @@ class Validator(BaseValidatorNeuron):
         self.mdrun_args = self.parse_mdrun_args()
 
         self.check_gromacs_version()
-
-    def check_gromacs_version(self):
-        try:
-            result = subprocess.run(
-                ["gmx", "--version"], capture_output=True, text=True
-            )
-            version_output = result.stdout.strip()
-
-            version_pattern = r"GROMACS version:\s+(\d{4}\.\d+)"
-            match = re.search(version_pattern, version_output)
-
-            self.gromacs_version = match.group(1) if match else None
-
-            if (self.gromacs_version is None) or (
-                __GROMACS_VERSION_TAG__ not in self.gromacs_version
-            ):
-                raise GromacsException(
-                    f"GROMACS version mismatch. Installed == {self.gromacs_version}. Please install GROMACS {__GROMACS_VERSION_TAG__}.*"
-                )
-
-        except Exception as e:
-            raise e
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
