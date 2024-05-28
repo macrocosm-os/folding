@@ -49,6 +49,8 @@ class Validator(BaseValidatorNeuron):
         self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
 
+        self.check_gromacs_version()
+
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
 
