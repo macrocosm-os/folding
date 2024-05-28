@@ -127,7 +127,7 @@ def calc_potential_from_edr(
     """
     edr_file = os.path.join(output_dir, edr_name)
     xvg_file = os.path.join(output_dir, xvg_name)
-    command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file}"]
+    command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file} -nobackup"]
 
     run_cmd_commands(command, verbose=True)
 
