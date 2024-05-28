@@ -15,6 +15,7 @@ from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
     get_tracebacks,
+    calc_potential_from_edr
 )
 
 # root level directory for the project (I HATE THIS)
@@ -108,7 +109,7 @@ def attach_files_to_synapse(
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
 
 
-def check_synapse(synapse: FoldingSynapse, event: Dict = None) -> FoldingSynapse:
+def check_synapse(self, synapse: FoldingSynapse, output_dir: str, event: Dict = None) -> FoldingSynapse:
     """Utility function to remove md_inputs if they exist"""
     if len(synapse.md_inputs) > 0:
         event["md_inputs_sizes"] = list(map(len, synapse.md_inputs.values()))
@@ -119,7 +120,13 @@ def check_synapse(synapse: FoldingSynapse, event: Dict = None) -> FoldingSynapse
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
         event["md_output_filenames"] = list(synapse.md_output.keys())
 
-    log_event(event)
+    if not self.config.wandb.off:
+        energy_event = self.get_state_energies(output_dir=output_dir)
+        event.update(energy_event)
+
+    event['query_time'] = time.time() - self.start_time
+    
+    log_event(self=self, event=event)
 
     return synapse
 
@@ -157,6 +164,25 @@ class FoldingMiner(BaseMinerNeuron):
             )  # allows us to set the desired attribute to anything.
 
         return defaultdict(nested_dict)
+
+    def get_state_energies(self, output_dir: str) -> Dict:
+        all_edr_files = glob.glob(os.path.join(output_dir, '*.edr'))
+        state_potentials = []
+        edr_files = []
+        event = {}
+        
+        for file in all_edr_files:
+            edr_name = file.split('/')[-1]
+            try:
+                state_potentials.append(calc_potential_from_edr(output_dir=output_dir, edr_name=edr_name))
+                edr_files.append(edr_name)
+            except Exception as e:
+                bt.logging.debug(f"Failed to calculate potential from edr file with error: {e}")
+
+        event['edr_files'] = edr_files
+        event['state_energies'] = state_potentials
+        return event 
+
 
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
         commands = [
@@ -197,6 +223,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         # increment step counter everytime miner receives a query.
         self.step += 1
+        self.start_time = time.time()
 
         event = self.create_default_dict()
         event["query"] = synapse.pdb_id
@@ -217,7 +244,7 @@ class FoldingMiner(BaseMinerNeuron):
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
             bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
-            return check_synapse(synapse=synapse)  # return empty synapse.
+            return check_synapse(self=self, synapse=synapse, event=event, output_dir=output_dir)  # return empty synapse.
 
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
@@ -249,7 +276,7 @@ class FoldingMiner(BaseMinerNeuron):
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
 
-            return check_synapse(synapse=synapse, event=event)
+            return check_synapse(self=self, synapse=synapse, event=event, output_dir=output_dir)
 
         if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
             self.base_data_path
@@ -281,16 +308,14 @@ class FoldingMiner(BaseMinerNeuron):
             event["condition"] = "found_existing_data"
             event["state"] = state
 
-            return check_synapse(synapse=synapse, event=event)
+            return check_synapse(self=self, synapse=synapse, event=event, output_dir=output_dir)
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
             bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
 
             event["condition"] = "cpu_limit_reached"
-            return check_synapse(
-                synapse=synapse, event=event
-            )  # Return the synapse as is
+            return check_synapse(self=self, synapse=synapse, event=event, output_dir=output_dir)  # Return the synapse as is
 
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
@@ -316,7 +341,7 @@ class FoldingMiner(BaseMinerNeuron):
         bt.logging.debug(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
 
         event["condition"] = "new_simulation"
-        return check_synapse(synapse=synapse, event=event)
+        return check_synapse(self=self, synapse=synapse, event=event, output_dir=output_dir)
 
     async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
         if (
