@@ -88,6 +88,9 @@ class BaseNeuron(ABC):
             self.subtensor = bt.subtensor(config=self.config)
             self.metagraph = self.subtensor.metagraph(self.config.netuid)
 
+            # Check gromacs version if we are not in mock mode.
+            self.check_gromacs_version()
+
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
         bt.logging.info(f"Metagraph: {self.metagraph}")
@@ -101,8 +104,6 @@ class BaseNeuron(ABC):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
-
-        self.check_gromacs_version()
 
     def check_gromacs_version(self):
         """
@@ -129,7 +130,7 @@ class BaseNeuron(ABC):
         except Exception as e:
             raise e
 
-        bt.logging.info(f"Running GROMACS version: {self.gromacs_version}")
+        bt.logging.success(f"Running GROMACS version: {self.gromacs_version}")
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
