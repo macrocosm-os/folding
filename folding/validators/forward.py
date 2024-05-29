@@ -115,7 +115,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
             return event
         else:
             # forward time if validator step fails
-            event["forward_time"] = time.time() - forward_start_time
+            event["hp_search_time"] = time.time() - forward_start_time
 
             # only log the event if the simulation was not successful
             log_event(self, event)

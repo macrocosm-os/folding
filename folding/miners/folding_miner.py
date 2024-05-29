@@ -222,12 +222,11 @@ class FoldingMiner(BaseMinerNeuron):
         from the simulation store
         """
         if len(self.simulations) > 0:
-
             sims_to_delete = []
             for pdb_id, simulation in self.simulations.items():
-                time_since_last_query = time.time() - simulation['queried_at']
+                time_since_last_query = time.time() - simulation["queried_at"]
                 current_executor_state = simulation["executor"].get_state()
-                
+
                 if current_executor_state == "finished":
                     bt.logging.warning(f"✅ Removing {pdb_id} from execution stack ✅")
                     sims_to_delete.append(pdb_id)
@@ -288,13 +287,11 @@ class FoldingMiner(BaseMinerNeuron):
 
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
-            event["runtime_at_query"] = simulation["executor"].get_runtime()
             event["queried_at"] = simulation["queried_at"]
 
             return check_synapse(
                 self=self, synapse=synapse, event=event, output_dir=output_dir
             )
-
 
         else:
             if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
@@ -489,9 +486,6 @@ class SimulationManager:
             return (
                 lines[-1].strip() if lines else None
             )  # return the last line of the file
-
-    def get_runtime(self):
-        return time.time() - self.start_time
 
 
 class MockSimulationManager(SimulationManager):
