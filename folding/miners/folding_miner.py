@@ -251,42 +251,20 @@ class FoldingMiner(BaseMinerNeuron):
             event["running_simulations"] = list(self.simulations.keys())
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
-        # Check if the number of active processes is less than the number of CPUs
-        if len(self.simulations) >= self.max_workers:
-            bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
-            return check_synapse(
-                self=self, synapse=synapse, event=event, output_dir=output_dir
-            )  # return empty synapse.
-
+        # The set of RUNNING simulations.
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
 
-            if current_executor_state == "finished":
-                synapse = attach_files_to_synapse(
-                    synapse=synapse,
-                    data_directory=simulation["output_dir"],
-                    state="md_0_1",  # attach the last state of the simulation as not files are labelled as 'finished'
-                )
-
-                # This will run if final_synapse exists.
-                bt.logging.info(
-                    f"✅ Simulation finished for protein: {synapse.pdb_id} ✅"
-                )
-                del self.simulations[
-                    synapse.pdb_id
-                ]  # Remove the simulation from the list
-
-            else:
-                # Don't delete the simulation if it's not finished
-                synapse = attach_files_to_synapse(
-                    synapse=synapse,
-                    data_directory=simulation["output_dir"],
-                    state=current_executor_state,
-                )
+            synapse = attach_files_to_synapse(
+                synapse=synapse,
+                data_directory=simulation["output_dir"],
+                state=current_executor_state,
+            )
 
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
+            event["runtime_at_query"] = simulation["executor"].get_runtime()
 
             return check_synapse(
                 self=self, synapse=synapse, event=event, output_dir=output_dir
@@ -309,7 +287,7 @@ class FoldingMiner(BaseMinerNeuron):
                     state = "md_0_1" if state == "finished" else state
 
                 bt.logging.warning(
-                    f"❗ Found existing data for protein: {synapse.pdb_id} ❗"
+                    f"❗ Found existing data for protein: {synapse.pdb_id}... Sending previously computed, most advanced simulation state ❗"
                 )
                 synapse = attach_files_to_synapse(
                     synapse=synapse, data_directory=output_dir, state=state
@@ -318,6 +296,7 @@ class FoldingMiner(BaseMinerNeuron):
                 bt.logging.error(
                     f"Failed to read state file for protein {synapse.pdb_id} with error: {e}"
                 )
+                state = None
 
             event["condition"] = "found_existing_data"
             event["state"] = state
@@ -359,6 +338,7 @@ class FoldingMiner(BaseMinerNeuron):
         bt.logging.debug(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
 
         event["condition"] = "new_simulation"
+        event["start_time"] = time.time()
         return check_synapse(
             self=self, synapse=synapse, event=event, output_dir=output_dir
         )
@@ -411,6 +391,7 @@ class SimulationManager:
         self.state_file_name = f"{pdb_id}_state.txt"
 
         self.output_dir = output_dir
+        self.start_time = time.time()
 
     def create_empty_file(self, file_path: str):
         # For mocking
@@ -435,8 +416,6 @@ class SimulationManager:
         bt.logging.info(
             f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
-
-        start_time = time.time()
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
@@ -465,13 +444,11 @@ class SimulationManager:
                         os.path.join(self.output_dir, f"{state}.{ext}")
                     )
 
-        bt.logging.debug(f"✅Finished simulation for protein: {self.pdb_id}✅")
+        bt.logging.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
 
         state = "finished"
         with open(self.state_file_name, "w") as f:
             f.write(f"{state}\n")
-
-        total_run_time = time.time() - start_time
 
     def get_state(self) -> str:
         """get_state reads a txt file that contains the current state of the simulation"""
@@ -480,6 +457,9 @@ class SimulationManager:
             return (
                 lines[-1].strip() if lines else None
             )  # return the last line of the file
+
+    def get_runtime(self):
+        return time.time() - self.start_time
 
 
 class MockSimulationManager(SimulationManager):
