@@ -126,7 +126,7 @@ def check_synapse(
         energy_event = self.get_state_energies(output_dir=output_dir)
         event.update(energy_event)
 
-    event["query_time"] = time.time() - self.start_time
+    event["miner_forward_time"] = time.time() - self.start_time
 
     log_event(self=self, event=event)
 
@@ -223,16 +223,19 @@ class FoldingMiner(BaseMinerNeuron):
         """
         if len(self.simulations) > 0:
             sims_to_delete = []
+
             for pdb_id, simulation in self.simulations.items():
                 time_since_last_query = time.time() - simulation["queried_at"]
                 current_executor_state = simulation["executor"].get_state()
 
                 if current_executor_state == "finished":
-                    bt.logging.warning(f"✅ Removing {pdb_id} from execution stack ✅")
+                    bt.logging.warning(
+                        f"✅ {pdb_id} finished simulation... Removing from execution stack ✅"
+                    )
                     sims_to_delete.append(pdb_id)
                 elif time_since_last_query > self.config.neuron.query_timeout:
                     bt.logging.warning(
-                        f"⏰ Query timeout of {self.config.neuron.query_timeout} reached for {pdb_id}. Removing from execution stack ⏰"
+                        f"⏰ Query timeout of {self.config.neuron.query_timeout} reached for {pdb_id}... Removing from execution stack ⏰"
                     )
                     sims_to_delete.append(pdb_id)
 
