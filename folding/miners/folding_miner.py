@@ -217,6 +217,26 @@ class FoldingMiner(BaseMinerNeuron):
 
         return state_commands
 
+    def check_and_remove_simulations(self, event: Dict) -> Dict:
+        """Check to see if any simulations have finished, and remove them
+        from the simulatino store
+        """
+        if len(self.simulations) > 0:
+            sims_to_delete = []
+            for pdb_id, simulation in self.simulations.items():
+                current_executor_state = simulation["executor"].get_state()
+                if current_executor_state == "finished":
+                    bt.logging.debug(f"✅ Removing {pdb_id} from execution stack ✅")
+                    sims_to_delete.append(pdb_id)
+
+            for pdb_id in sims_to_delete:
+                del self.simulations[pdb_id]
+
+            event["running_simulations"] = list(self.simulations.keys())
+            bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
+
+        return event
+
     def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
@@ -243,21 +263,8 @@ class FoldingMiner(BaseMinerNeuron):
 
         output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
-        if len(self.simulations) > 0:
-            # check if any of the simulations have finished
-
-            sims_to_delete = []
-            for pdb_id, simulation in self.simulations.items():
-                current_executor_state = simulation["executor"].get_state()
-                if current_executor_state == "finished":
-                    bt.logging.debug(f"✅ Removing {pdb_id} from execution stack ✅")
-                    sims_to_delete.append(pdb_id)
-
-            for pdb_id in sims_to_delete:
-                del self.simulations[pdb_id]
-
-            event["running_simulations"] = list(self.simulations.keys())
-            bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
+        # check if any of the simulations have finished
+        event = self.check_and_remove_simulations()
 
         # The set of RUNNING simulations.
         if synapse.pdb_id in self.simulations:
@@ -278,51 +285,53 @@ class FoldingMiner(BaseMinerNeuron):
                 self=self, synapse=synapse, event=event, output_dir=output_dir
             )
 
-        if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
-            self.base_data_path
-        ):
-            # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
-            # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
-
-            # We will attempt to read the state of the simulation from the state file
-            state_file = os.path.join(output_dir, f"{synapse.pdb_id}_state.txt")
-
-            # Open the state file that should be generated during the simulation.
-            try:
-                with open(state_file, "r") as f:
-                    lines = f.readlines()
-                    state = lines[-1].strip()
-                    state = "md_0_1" if state == "finished" else state
-
-                bt.logging.warning(
-                    f"❗ Found existing data for protein: {synapse.pdb_id}... Sending previously computed, most advanced simulation state ❗"
-                )
-                synapse = attach_files_to_synapse(
-                    synapse=synapse, data_directory=output_dir, state=state
-                )
-            except Exception as e:
-                bt.logging.error(
-                    f"Failed to read state file for protein {synapse.pdb_id} with error: {e}"
-                )
-                state = None
-
-            event["condition"] = "found_existing_data"
-            event["state"] = state
-
-            return check_synapse(
-                self=self, synapse=synapse, event=event, output_dir=output_dir
-            )
-
         # Check if the number of active processes is less than the number of CPUs
-        if len(self.simulations) >= self.max_workers:
-            bt.logging.warning(
-                f"❗ Cannot start new process: CPU limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
-            )
+        else:
+            if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
+                self.base_data_path
+            ):
+                # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
+                # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
 
-            event["condition"] = "cpu_limit_reached"
-            return check_synapse(
-                self=self, synapse=synapse, event=event, output_dir=output_dir
-            )  # Return the synapse as is
+                # We will attempt to read the state of the simulation from the state file
+                state_file = os.path.join(output_dir, f"{synapse.pdb_id}_state.txt")
+
+                # Open the state file that should be generated during the simulation.
+                try:
+                    with open(state_file, "r") as f:
+                        lines = f.readlines()
+                        state = lines[-1].strip()
+                        state = "md_0_1" if state == "finished" else state
+
+                    bt.logging.warning(
+                        f"❗ Found existing data for protein: {synapse.pdb_id}... Sending previously computed, most advanced simulation state ❗"
+                    )
+                    synapse = attach_files_to_synapse(
+                        synapse=synapse, data_directory=output_dir, state=state
+                    )
+                except Exception as e:
+                    bt.logging.error(
+                        f"Failed to read state file for protein {synapse.pdb_id} with error: {e}"
+                    )
+                    state = None
+
+                event["condition"] = "found_existing_data"
+                event["state"] = state
+
+                return check_synapse(
+                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                )
+
+            elif len(self.simulations) >= self.max_workers:
+                bt.logging.warning(
+                    f"❗ Cannot start new process: CPU limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
+                )
+
+                event["condition"] = "cpu_limit_reached"
+
+                return check_synapse(
+                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                )
 
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
@@ -345,7 +354,9 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["future"] = future
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
 
-        bt.logging.debug(f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ ")
+        bt.logging.success(
+            f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ "
+        )
 
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
