@@ -219,14 +219,22 @@ class FoldingMiner(BaseMinerNeuron):
 
     def check_and_remove_simulations(self, event: Dict) -> Dict:
         """Check to see if any simulations have finished, and remove them
-        from the simulatino store
+        from the simulation store
         """
         if len(self.simulations) > 0:
+
             sims_to_delete = []
             for pdb_id, simulation in self.simulations.items():
+                time_since_last_query = time.time() - simulation['queried_at']
                 current_executor_state = simulation["executor"].get_state()
+                
                 if current_executor_state == "finished":
-                    bt.logging.debug(f"✅ Removing {pdb_id} from execution stack ✅")
+                    bt.logging.warning(f"✅ Removing {pdb_id} from execution stack ✅")
+                    sims_to_delete.append(pdb_id)
+                elif time_since_last_query > self.config.neuron.query_timeout:
+                    bt.logging.warning(
+                        f"⏰ Query timeout of {self.config.neuron.query_timeout} reached for {pdb_id}. Removing from execution stack ⏰"
+                    )
                     sims_to_delete.append(pdb_id)
 
             for pdb_id in sims_to_delete:
@@ -264,10 +272,11 @@ class FoldingMiner(BaseMinerNeuron):
         output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
         # check if any of the simulations have finished
-        event = self.check_and_remove_simulations()
+        event = self.check_and_remove_simulations(event=event)
 
         # The set of RUNNING simulations.
         if synapse.pdb_id in self.simulations:
+            self.simulations[synapse.pdb_id]["queried_at"] = time.time()
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
 
@@ -280,12 +289,13 @@ class FoldingMiner(BaseMinerNeuron):
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
             event["runtime_at_query"] = simulation["executor"].get_runtime()
+            event["queried_at"] = simulation["queried_at"]
 
             return check_synapse(
                 self=self, synapse=synapse, event=event, output_dir=output_dir
             )
 
-        # Check if the number of active processes is less than the number of CPUs
+
         else:
             if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
                 self.base_data_path
@@ -353,6 +363,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["executor"] = simulation_manager
         self.simulations[synapse.pdb_id]["future"] = future
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
+        self.simulations[synapse.pdb_id]["queried_at"] = time.time()
 
         bt.logging.success(
             f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ "
