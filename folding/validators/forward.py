@@ -14,6 +14,9 @@ from folding.protocol import FoldingSynapse
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
 
+
+from bittensor import dendrite
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(
     root_dir=ROOT_DIR, filename="pdb_ids.pkl"
@@ -63,7 +66,6 @@ def run_step(
         event["md_inputs"] = list(protein.md_inputs.keys())
         event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
 
-    bt.logging.warning(f"Event information: {event}")
     return event
 
 

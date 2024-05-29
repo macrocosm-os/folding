@@ -155,7 +155,7 @@ class Validator(BaseValidatorNeuron):
         """
 
         energies = torch.Tensor(job.event["energies"])
-        rewards = torch.zeros_like(energies)  # one-hot per update step
+        rewards = torch.zeros(len(energies))  # one-hot per update step
 
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
@@ -219,6 +219,7 @@ class Validator(BaseValidatorNeuron):
             rewards.numpy()
         )  # add the rewards to the logging event.
 
+        bt.logging.success(f"Event information: {merged_events}")
         log_event(self, event=prepare_event_for_logging(merged_events))
 
 
