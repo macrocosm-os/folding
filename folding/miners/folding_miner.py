@@ -179,9 +179,17 @@ class FoldingMiner(BaseMinerNeuron):
                 state_potentials.append(
                     calc_potential_from_edr(output_dir=output_dir, edr_name=edr_name)
                 )
-                edr_files.append(edr_name)
+                stats = os.stat(file)
+                edr_files.append(
+                    {
+                        "name": edr_name,
+                        "created_at": stats.st_ctime,
+                        "modified_at": stats.st_ctime,
+                        "size_bytes": stats.st_size,
+                    }
+                )
             except Exception as e:
-                bt.logging.debug(
+                bt.logging.error(
                     f"Failed to calculate potential from edr file with error: {e}"
                 )
 
@@ -231,7 +239,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.start_time = time.time()
 
         event = self.create_default_dict()
-        event["query"] = synapse.pdb_id
+        event["pdb_id"] = synapse.pdb_id
 
         output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
 
@@ -307,7 +315,9 @@ class FoldingMiner(BaseMinerNeuron):
 
         # Check if the number of active processes is less than the number of CPUs
         if len(self.simulations) >= self.max_workers:
-            bt.logging.warning("❗ Cannot start new process: CPU limit reached. ❗")
+            bt.logging.warning(
+                f"❗ Cannot start new process: CPU limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
+            )
 
             event["condition"] = "cpu_limit_reached"
             return check_synapse(
