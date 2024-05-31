@@ -28,6 +28,7 @@ import bittensor as bt
 
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
+from folding.rewards.linear_reward import divide_decreasing
 from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 
@@ -152,6 +153,7 @@ class Validator(BaseValidatorNeuron):
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
+        top_reward = 0.80
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
@@ -191,8 +193,37 @@ class Validator(BaseValidatorNeuron):
                 gro_hash=gro_hash,
             )
 
-            # note that the reward goes to current leader (even if they didn't do well this round)
-            rewards[job.hotkeys.index(job.best_hotkey)] = 1
+            rewards[job.hotkeys.index(job.best_hotkey)] = top_reward
+
+            # Find if there are any indicies that are the same as the best value
+            remaining_miners = {}
+            for index in torch.nonzero(energies):
+                # There could be multiple max energies.
+                # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
+                if (energies[index] == job.best_loss) or (
+                    index == job.hotkeys.index(job.best_hotkey)
+                ):
+                    rewards[index] = top_reward
+                else:
+                    remaining_miners[index] = energies[index]
+
+            # The amount of reward that is distributed to the remaining miners MUST be less than the reward given to the top miners.
+            num_reminaing_miners = len(remaining_miners)
+            if num_reminaing_miners > 1:
+                sorted_remaining_miners = dict(
+                    sorted(remaining_miners.items(), key=lambda item: item[1])
+                )  # sort smallest to largest
+
+                # Apply a fixed decrease in reward on the remaining non-zero miners.
+                rewards_per_miner = divide_decreasing(
+                    amount_to_distribute=1 - top_reward,
+                    number_of_elements=num_reminaing_miners,
+                )
+                for index, r in zip(sorted_remaining_miners.keys(), rewards_per_miner):
+                    rewards[index] = r
+            else:
+                for index in remaining_miners.keys():
+                    rewards[index] = 1 - top_reward
 
             uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
             self.update_scores(
