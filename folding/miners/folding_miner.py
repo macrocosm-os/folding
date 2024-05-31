@@ -343,6 +343,11 @@ class FoldingMiner(BaseMinerNeuron):
                     self=self, synapse=synapse, event=event, output_dir=output_dir
                 )
 
+            elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
+                return check_synapse(
+                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                )
+
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
         state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
