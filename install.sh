@@ -27,10 +27,15 @@ else
     exit 1
 fi
 
+# Install pm2
+npm install -g pm2 -y
+
 # Create a venv
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+
 
 # Install GROMACS
 if [[ "$OSTYPE" == "darwin"* ]]; then
