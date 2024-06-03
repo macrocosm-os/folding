@@ -1,20 +1,18 @@
-import os
-import time
-import glob
 import base64
 import concurrent.futures
-from typing import Dict, List, Tuple
+import glob
+import os
+import time
 from collections import defaultdict
+from typing import Dict, List, Tuple
+
 import bittensor as bt
 
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
-from folding.utils.ops import (
-    run_cmd_commands,
-    check_if_directory_exists,
-    get_tracebacks,
-)
+from folding.utils.ops import (check_if_directory_exists, get_tracebacks,
+                               run_cmd_commands)
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -153,9 +151,9 @@ class FoldingMiner(BaseMinerNeuron):
             "gmx mdrun -deffnm nvt " + mdrun_args,
             "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
             "gmx mdrun -deffnm npt " + mdrun_args,
-            f"gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
-            f"gmx mdrun -deffnm md_0_1 " + mdrun_args,
-            f"echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
+            "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
+            "gmx mdrun -deffnm md_0_1 " + mdrun_args,
+            "echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
         ]
 
         # These are rough identifiers for the different states of the simulation
@@ -187,9 +185,15 @@ class FoldingMiner(BaseMinerNeuron):
 
         if len(self.simulations) > 0:
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
-
+            
+        # Check if there are any files passed to the miner
+        if not synapse.md_inputs:
+            bt.logging.warning(f"❗ No input files detected for protein: {synapse.pdb_id}")
+            return check_synapse(synapse=synapse)
+        
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
+        
         if synapse.pdb_id in self.simulations:
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
@@ -408,7 +412,7 @@ class MockSimulationManager(SimulationManager):
     def run(self, total_wait_time: int = 1):
         start_time = time.time()
 
-        bt.logging.debug(f"✅ MockSimulationManager.run is running ✅")
+        bt.logging.debug("✅ MockSimulationManager.run is running ✅")
         check_if_directory_exists(output_directory=self.output_dir)
 
         store = os.path.join(self.output_dir, self.state_file_name)
