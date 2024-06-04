@@ -140,7 +140,7 @@ class DataExtractor:
         xvg_name = "rmsd_xray.xvg"
         output_data_location = os.path.join(output_path, xvg_name)
         command = [
-            f"echo '4 4' | gmx rms -s {output_path}/md_0_1.tpr -f {output_path}/md_0_1_center.xtc -o {output_data_location} -tu ns {xvg_command}"
+            f"printf 'Backbone\nBackbone\n' | gmx rms -s {output_path}/md_0_1.tpr -f {output_path}/md_0_1_center.xtc -o {output_data_location} -tu ns {xvg_command}"
         ]
         run_cmd_commands(command)
 
@@ -155,7 +155,7 @@ class DataExtractor:
         xvg_name = "potential_rerun.xvg"
         output_data_location = os.path.join(output_path, xvg_name)
         command = [
-            f"! echo 'Potential' | gmx energy -f {output_path}/rerun_calculation.edr -o {output_path}/{xvg_name}"
+            f"! printf 'Potential' | gmx energy -f {output_path}/rerun_calculation.edr -o {output_path}/{xvg_name}"
         ]
 
         run_cmd_commands(command)
