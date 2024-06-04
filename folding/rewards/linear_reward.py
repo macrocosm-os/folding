@@ -1,7 +1,9 @@
 from typing import List
 
 
-def divide_decreasing(amount_to_distribute: float, number_of_elements: int):
+def divide_decreasing(
+    amount_to_distribute: float, number_of_elements: int
+) -> List[float]:
     # Calculate the fixed decrease amount d
     d = 2 * amount_to_distribute / ((number_of_elements - 1) * number_of_elements)
 

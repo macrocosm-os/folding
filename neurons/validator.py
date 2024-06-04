@@ -147,6 +147,49 @@ class Validator(BaseValidatorNeuron):
                     event=job_event,
                 )
 
+    def reward_pipeline(
+        self, energies: torch.Tensor, rewards: torch.Tensor, top_reward: float, job: Job
+    ):
+        """A reward pipeline that determines how to place rewards onto the miners sampled within the batch.
+        Currently applies a linearly decreasing reward on all miners that are not the current best / previously
+        best loss using the function "divide_decreasing".
+
+        Args:
+            energies (torch.Tensor): tensor of returned energies
+            rewards (torch.Tensor): tensor of rewards, floats.
+            top_reward (float): upper bound reward.
+            job (Job)
+        """
+        # Find if there are any indicies that are the same as the best value
+        remaining_miners = {}
+        for index in torch.nonzero(energies):
+            # There could be multiple max energies.
+            # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
+            if (energies[index] == job.best_loss) or (
+                index == job.hotkeys.index(job.best_hotkey)
+            ):
+                rewards[index] = top_reward
+            else:
+                remaining_miners[index] = energies[index]
+
+        # The amount of reward that is distributed to the remaining miners MUST be less than the reward given to the top miners.
+        num_reminaing_miners = len(remaining_miners)
+        if num_reminaing_miners > 1:
+            sorted_remaining_miners = dict(
+                sorted(remaining_miners.items(), key=lambda item: item[1])
+            )  # sort smallest to largest
+
+            # Apply a fixed decrease in reward on the remaining non-zero miners.
+            rewards_per_miner = divide_decreasing(
+                amount_to_distribute=1 - top_reward,
+                number_of_elements=num_reminaing_miners,
+            )
+            for index, r in zip(sorted_remaining_miners.keys(), rewards_per_miner):
+                rewards[index] = r
+        else:
+            for index in remaining_miners.keys():
+                rewards[index] = 1 - top_reward
+
     def update_job(self, job: Job):
         """Updates the job status based on the event information
 
@@ -193,37 +236,9 @@ class Validator(BaseValidatorNeuron):
                 gro_hash=gro_hash,
             )
 
-            rewards[job.hotkeys.index(job.best_hotkey)] = top_reward
-
-            # Find if there are any indicies that are the same as the best value
-            remaining_miners = {}
-            for index in torch.nonzero(energies):
-                # There could be multiple max energies.
-                # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
-                if (energies[index] == job.best_loss) or (
-                    index == job.hotkeys.index(job.best_hotkey)
-                ):
-                    rewards[index] = top_reward
-                else:
-                    remaining_miners[index] = energies[index]
-
-            # The amount of reward that is distributed to the remaining miners MUST be less than the reward given to the top miners.
-            num_reminaing_miners = len(remaining_miners)
-            if num_reminaing_miners > 1:
-                sorted_remaining_miners = dict(
-                    sorted(remaining_miners.items(), key=lambda item: item[1])
-                )  # sort smallest to largest
-
-                # Apply a fixed decrease in reward on the remaining non-zero miners.
-                rewards_per_miner = divide_decreasing(
-                    amount_to_distribute=1 - top_reward,
-                    number_of_elements=num_reminaing_miners,
-                )
-                for index, r in zip(sorted_remaining_miners.keys(), rewards_per_miner):
-                    rewards[index] = r
-            else:
-                for index in remaining_miners.keys():
-                    rewards[index] = 1 - top_reward
+            rewards: torch.Tensor = self.reward_pipeline(
+                energies=energies, rewards=rewards, top_reward=top_reward, job=job
+            )
 
             uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
             self.update_scores(
