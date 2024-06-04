@@ -148,6 +148,7 @@ class Job:
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
     min_updates: int = 10
     event: dict = None
+    epsilon: float = 1e2
 
     def to_dict(self):
         return asdict(self)
@@ -170,8 +171,8 @@ class Job:
         self.updated_count += 1
 
         # TODO: make epsilon a param, or a class attrib
-        epsilon = 1e2
-        if loss < self.best_loss - epsilon:
+        # epsilon = 1e2
+        if loss < self.best_loss - self.epsilon:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
