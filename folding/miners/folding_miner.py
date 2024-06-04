@@ -204,7 +204,7 @@ class FoldingMiner(BaseMinerNeuron):
             "gmx mdrun -deffnm npt " + mdrun_args,
             f"gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
             f"gmx mdrun -deffnm md_0_1 " + mdrun_args,
-            f"echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
+            f"printf 'Protein\nSystem\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
         ]
 
         # These are rough identifiers for the different states of the simulation
