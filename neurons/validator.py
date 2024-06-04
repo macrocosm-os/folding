@@ -189,6 +189,8 @@ class Validator(BaseValidatorNeuron):
             for index in remaining_miners.keys():
                 rewards[index] = 1 - top_reward
 
+        return rewards
+
     def update_job(self, job: Job):
         """Updates the job status based on the event information
 
