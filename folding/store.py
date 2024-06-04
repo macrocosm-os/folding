@@ -111,7 +111,8 @@ class PandasJobStore:
             hotkeys=hotkeys,
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
-            epsilon=epsilon**kwargs,
+            epsilon=epsilon,
+            **kwargs,
         ).to_frame()
 
         if len(self._db) == 0:
