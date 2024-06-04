@@ -14,6 +14,9 @@ from folding.protocol import FoldingSynapse
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
 
+
+from bittensor import dendrite
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(
     root_dir=ROOT_DIR, filename="pdb_ids.pkl"
@@ -63,7 +66,6 @@ def run_step(
         event["md_inputs"] = list(protein.md_inputs.keys())
         event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
 
-    bt.logging.warning(f"Event information: {event}")
     return event
 
 
@@ -113,7 +115,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
             return event
         else:
             # forward time if validator step fails
-            event["forward_time"] = time.time() - forward_start_time
+            event["hp_search_time"] = time.time() - forward_start_time
 
             # only log the event if the simulation was not successful
             log_event(self, event)
@@ -159,6 +161,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["hp_sample_time"] = time.time() - hp_sampler_time
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
             event["init_energy"] = protein.init_energy
+            event["epsilon"] = protein.epsilon
 
             if "validator_search_status" not in event:
                 bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")

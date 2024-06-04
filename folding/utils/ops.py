@@ -35,6 +35,14 @@ FF_WATER_PAIRS = {
 }
 
 
+class GromacsException(Exception):
+    """Exception raised for errors in the versioning."""
+
+    def __init__(self, message="Version error occurred"):
+        self.message = message
+        super().__init__(self.message)
+
+
 def delete_directory(directory: str):
     """We create a lot of files in the process of tracking pdb files.
     Therefore, we want to delete the directory after we are done with the tests.
@@ -127,7 +135,7 @@ def calc_potential_from_edr(
     """
     edr_file = os.path.join(output_dir, edr_name)
     xvg_file = os.path.join(output_dir, xvg_name)
-    command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file}"]
+    command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file} -nobackup"]
 
     run_cmd_commands(command, verbose=True)
 
@@ -276,7 +284,8 @@ def get_last_step_time(log_file: str) -> float:
     step_pattern = re.compile(r"^\s*Step\s+Time$")
     step_value_pattern = re.compile(r"^\s*(\d+)\s+([\d.]+)$")
 
-    last_step = None
+    num_matches = 0
+    last_step_time = 0  # default incase we don't have more than 1 log.
 
     # Open and read the log file
     with open(log_file, "r") as file:
@@ -289,9 +298,11 @@ def get_last_step_time(log_file: str) -> float:
             value_line = lines[-1 + (-i + 1)]
             match = step_value_pattern.match(value_line.strip())
             if match:
-                last_step_time = float(
-                    match.group(2)
-                )  # group looks like:   191   0.3200
-                break
+                num_matches += 1
+                if num_matches > 1:  # get second last line. Most stable.
+                    last_step_time = float(
+                        match.group(2)
+                    )  # group looks like:   191   0.3200
+                    break
 
     return last_step_time

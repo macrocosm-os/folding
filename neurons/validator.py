@@ -28,6 +28,7 @@ import bittensor as bt
 
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
+from folding.rewards.linear_reward import divide_decreasing
 from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 
@@ -94,10 +95,8 @@ class Validator(BaseValidatorNeuron):
         )
 
     def get_pdbs_to_exclude(self) -> List[str]:
-        # Set of pdbs that are currently in the process of running.
-        return [
-            queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue
-        ]
+        # Set of pdbs that are currently in the process of running + old submitted simulations.
+        return list(self.store._db.index)
 
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
@@ -143,8 +142,54 @@ class Validator(BaseValidatorNeuron):
                     water=job_event["water"],
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
+                    epsilon=job_event["epsilon"],
                     event=job_event,
                 )
+
+    def reward_pipeline(
+        self, energies: torch.Tensor, rewards: torch.Tensor, top_reward: float, job: Job
+    ):
+        """A reward pipeline that determines how to place rewards onto the miners sampled within the batch.
+        Currently applies a linearly decreasing reward on all miners that are not the current best / previously
+        best loss using the function "divide_decreasing".
+
+        Args:
+            energies (torch.Tensor): tensor of returned energies
+            rewards (torch.Tensor): tensor of rewards, floats.
+            top_reward (float): upper bound reward.
+            job (Job)
+        """
+        # Find if there are any indicies that are the same as the best value
+        remaining_miners = {}
+        for index in torch.nonzero(energies):
+            # There could be multiple max energies.
+            # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
+            if (energies[index] == job.best_loss) or (
+                index == job.hotkeys.index(job.best_hotkey)
+            ):
+                rewards[index] = top_reward
+            else:
+                remaining_miners[index] = energies[index]
+
+        # The amount of reward that is distributed to the remaining miners MUST be less than the reward given to the top miners.
+        num_reminaing_miners = len(remaining_miners)
+        if num_reminaing_miners > 1:
+            sorted_remaining_miners = dict(
+                sorted(remaining_miners.items(), key=lambda item: item[1])
+            )  # sort smallest to largest
+
+            # Apply a fixed decrease in reward on the remaining non-zero miners.
+            rewards_per_miner = divide_decreasing(
+                amount_to_distribute=1 - top_reward,
+                number_of_elements=num_reminaing_miners,
+            )
+            for index, r in zip(sorted_remaining_miners.keys(), rewards_per_miner):
+                rewards[index] = r
+        else:
+            for index in remaining_miners.keys():
+                rewards[index] = 1 - top_reward
+
+        return rewards
 
     def update_job(self, job: Job):
         """Updates the job status based on the event information
@@ -152,8 +197,9 @@ class Validator(BaseValidatorNeuron):
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
+        top_reward = 0.80
         energies = torch.Tensor(job.event["energies"])
-        rewards = torch.zeros_like(energies)  # one-hot per update step
+        rewards = torch.zeros(len(energies))  # one-hot per update step
 
         # TODO: we need to get the commit and gro hashes from the best hotkey
         commit_hash = ""  # For next time
@@ -191,8 +237,9 @@ class Validator(BaseValidatorNeuron):
                 gro_hash=gro_hash,
             )
 
-            # note that the reward goes to current leader (even if they didn't do well this round)
-            rewards[job.hotkeys.index(job.best_hotkey)] = 1
+            rewards: torch.Tensor = self.reward_pipeline(
+                energies=energies, rewards=rewards, top_reward=top_reward, job=job
+            )
 
             uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
             self.update_scores(
@@ -217,6 +264,7 @@ class Validator(BaseValidatorNeuron):
             rewards.numpy()
         )  # add the rewards to the logging event.
 
+        bt.logging.success(f"Event information: {merged_events}")
         log_event(self, event=prepare_event_for_logging(merged_events))
 
 

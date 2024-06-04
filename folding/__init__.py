@@ -8,3 +8,5 @@ __spec_version__ = (
     + (100 * int(version_split[1]))
     + (1 * int(version_split[2]))
 )
+
+__GROMACS_VERSION_TAG__ = "2024"

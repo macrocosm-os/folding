@@ -84,11 +84,18 @@ git clone https://github.com/macrocosm-os/folding.git
 cd folding
 bash install.sh
 ```
-This will also create a virtual environment in which the repo can be run inside of. 
+
+This will also create a virtual environment in which the repo can be run inside of.
+
+Sometimes, there can be problems with the install so to ensure that gromacs is installed correctly, please check the .bashrc. Importantly, these lines MUST be run:
+```bash
+echo "source /usr/local/gromacs/bin/GMXRC" >> ~/.bashrc
+source ~/.bashrc
+``` 
 
 The above commands will install the necessary requirements, as well as download GROMACS and add it to your `.bashrc`. To ensure that installation is complete, running `gmx` in the terminal should print
 ```
-:-) GROMACS - gmx, 2023.1-Ubuntu_2023.1_2ubuntu1 (-:
+ :-) GROMACS - gmx, 2024.1 (-:
 ```
 
 If not, there is a problem with your installation, or with your `.bashrc`
@@ -115,6 +122,9 @@ python neurons/validator.py
     --wallet.hotkey <your hotkey> # Must be created using the bittensor-cli
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
 ```
+
+As a validator, you should change these base parameters in `scripts/run_validator.py`. 
+
 For additional configuration, the following params are useful:
 ```bash
 python neurons/validator.py
@@ -127,6 +137,11 @@ python neurons/validator.py
     --protein.max_steps <number of steps for the simulation>
     --logging.debug # Run in debug mode, alternatively --logging.trace for trace mode
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
+```
+
+Validators are heavily recommended to run the autoprocess script to ensure that they are always up to date with the most recent version of folding. We have version tagging that will disable validators from setting weights if they are not on the correct version.
+```bash
+bash run_autoprocess.sh
 ```
 
 ### Miner

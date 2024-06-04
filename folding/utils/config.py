@@ -75,7 +75,7 @@ def add_args(cls, parser):
         "--neuron.epoch_length",
         type=int,
         help="The default epoch length (how often we set weights, measured in 12 second blocks).",
-        default=100,
+        default=500,
     )
 
     parser.add_argument(
@@ -121,10 +121,17 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.save_interval",
+        type=int,
+        help="How many steps before saving values to files.",
+        default=2000,
+    )
+
+    parser.add_argument(
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
-        default=2000000,
+        default=750000,
     )
 
     parser.add_argument(
@@ -144,7 +151,7 @@ def add_args(cls, parser):
     parser.add_argument(
         "--protein.num_steps_to_save",
         type=int,
-        help="Maximum number of steps to save during the energy minimization routine (set by validators for miners).",
+        help="NOT IN USE: Maximum number of steps to save during the energy minimization routine (set by validators for miners).",
         default=100,
     )
 
@@ -152,6 +159,13 @@ def add_args(cls, parser):
         "--protein.suppress_cmd_output",
         action="store_true",
         help="If set, we suppress the text output of terminal commands to reduce terminal clutter.",
+        default=True,
+    )
+
+    parser.add_argument(
+        "--protein.verbose",
+        action="store_true",
+        help="If set, any errors on terminal commands will be reported in logs.",
         default=True,
     )
 

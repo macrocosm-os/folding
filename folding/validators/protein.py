@@ -40,6 +40,7 @@ class Protein:
         pdb_id: str = None,
         water: str = None,
         load_md_inputs: bool = False,
+        epsilon: float = 5e3,
     ):
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
@@ -72,6 +73,7 @@ class Protein:
         # set to an arbitrarilly high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
+        self.epsilon = epsilon
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -94,6 +96,7 @@ class Protein:
             water=job.water,
             config=config,
             load_md_inputs=True,
+            epsilon=job.epsilon,
         )
 
         try:
@@ -230,6 +233,7 @@ class Protein:
         self.init_energy = calc_potential_from_edr(
             output_dir=self.validator_directory, edr_name="em.edr"
         )
+        self._calculate_epsilon()
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
@@ -239,7 +243,7 @@ class Protein:
 
     def calculate_params_save_interval(self):
         # TODO Define what this function should do. Placeholder for now.
-        return 10000
+        return self.config.save_interval
 
     def check_configuration_file_commands(self) -> List[str]:
         """
@@ -308,7 +312,7 @@ class Protein:
         run_cmd_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=True,
+            verbose=self.config.verbose,
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
@@ -446,7 +450,9 @@ class Protein:
 
         bt.logging.warning(f"Computing an intermediate gro...")
         run_cmd_commands(
-            commands=command, suppress_cmd_output=self.config.suppress_cmd_output
+            commands=command,
+            suppress_cmd_output=self.config.suppress_cmd_output,
+            verbose=self.config.verbose,
         )
 
         return gro_file_location
@@ -473,7 +479,9 @@ class Protein:
             f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
         ]
         run_cmd_commands(
-            commands=commands, suppress_cmd_output=self.config.suppress_cmd_output
+            commands=commands,
+            suppress_cmd_output=self.config.suppress_cmd_output,
+            verbose=self.config.verbose,
         )
 
     def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
@@ -538,3 +546,10 @@ class Protein:
             output_directory=output_directory, gro_file_location=gro_file_location
         )
         return True
+
+    def _calculate_epsilon(self):
+        if "ATOM" in self.pdb_complexity.keys():
+            num_atoms = self.pdb_complexity["ATOM"]
+
+            if num_atoms > 100:
+                self.epsilon = 7.14819473 * num_atoms + 1.68442317e04
