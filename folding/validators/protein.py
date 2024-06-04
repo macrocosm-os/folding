@@ -72,6 +72,7 @@ class Protein:
         # set to an arbitrarilly high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
+        self.epsilon = 1e2
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -94,6 +95,7 @@ class Protein:
             water=job.water,
             config=config,
             load_md_inputs=True,
+            epsilon=job.epsilon
         )
 
         try:
@@ -230,6 +232,7 @@ class Protein:
         self.init_energy = calc_potential_from_edr(
             output_dir=self.validator_directory, edr_name="em.edr"
         )
+        self.epsilon = self._calculate_epsilon()
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
@@ -538,3 +541,11 @@ class Protein:
             output_directory=output_directory, gro_file_location=gro_file_location
         )
         return True
+    
+    def _calculate_epsilon(self):
+        num_atoms = self.pdb_complexity["ATOM"]
+        if num_atoms>100:
+            return 7.14819473*num_atoms+1.68442317e04
+        else: 
+            return 5000
+        

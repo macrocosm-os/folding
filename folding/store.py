@@ -171,7 +171,6 @@ class Job:
         self.updated_count += 1
 
         # TODO: make epsilon a param, or a class attrib
-        # epsilon = 1e2
         if loss < self.best_loss - self.epsilon:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
