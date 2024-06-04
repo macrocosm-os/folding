@@ -89,7 +89,14 @@ class PandasJobStore:
         return queue
 
     def insert(
-        self, pdb: str, ff: str, box: str, water: str, hotkeys: List[str], epsilon: float, **kwargs
+        self,
+        pdb: str,
+        ff: str,
+        box: str,
+        water: str,
+        hotkeys: List[str],
+        epsilon: float,
+        **kwargs,
     ):
         """Adds a new job to the database."""
 
@@ -104,8 +111,7 @@ class PandasJobStore:
             hotkeys=hotkeys,
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
-            epsilon=epsilon
-            **kwargs,
+            epsilon=epsilon**kwargs,
         ).to_frame()
 
         if len(self._db) == 0:
@@ -148,7 +154,7 @@ class Job:
     updated_count: int = 0
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
     min_updates: int = 10
-    epsilon: float = 1e2
+    epsilon: float = 5e3
     event: dict = None
 
     def to_dict(self):
