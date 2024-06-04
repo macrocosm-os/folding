@@ -4,7 +4,7 @@
 source .venv/bin/activate
 
 # Execute the Python script
-python ./neurons/validator.py \
+python3 ./neurons/validator.py \
     --netuid 25 \
     --subtensor.network finney \
     --wallet.name <test_coldkey> \

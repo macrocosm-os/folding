@@ -4,7 +4,7 @@
 source .venv/bin/activate
 
 # Execute the Python script
-python ./neurons/miner.py \
+python3 ./neurons/miner.py \
     --netuid 25 \
     --subtensor.network finney \
     --wallet.name <your_coldkey> \
