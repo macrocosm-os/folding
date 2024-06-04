@@ -40,6 +40,7 @@ class Protein:
         pdb_id: str = None,
         water: str = None,
         load_md_inputs: bool = False,
+        epsilon: float = 5e3,
     ):
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
@@ -72,7 +73,7 @@ class Protein:
         # set to an arbitrarilly high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
-        self.epsilon = 5e3
+        self.epsilon = epsilon
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
