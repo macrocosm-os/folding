@@ -159,6 +159,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["hp_sample_time"] = time.time() - hp_sampler_time
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
             event["init_energy"] = protein.init_energy
+            event["epsilon"] = protein.epsilon
 
             if "validator_search_status" not in event:
                 bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")

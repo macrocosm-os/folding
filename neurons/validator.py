@@ -143,6 +143,7 @@ class Validator(BaseValidatorNeuron):
                     water=job_event["water"],
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
+                    epsilon=job_event.epsilon,
                     event=job_event,
                 )
 
