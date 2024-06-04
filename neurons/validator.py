@@ -95,10 +95,8 @@ class Validator(BaseValidatorNeuron):
         )
 
     def get_pdbs_to_exclude(self) -> List[str]:
-        # Set of pdbs that are currently in the process of running.
-        return [
-            queued_job.pdb for queued_job in self.store.get_queue(ready=False).queue
-        ]
+        # Set of pdbs that are currently in the process of running + old submitted simulations.
+        return list(self.store._db.index)
 
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
