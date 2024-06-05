@@ -7,8 +7,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from folding.store import PandasJobStore, Job
-from folding.rewards.linear_reward import divide_decreasing
-
+from folding.rewards.reward_pipeline import reward_pipeline as pipeline
 
 ROOT_PATH = Path(__file__).parent
 DB_PATH = os.path.join(ROOT_PATH, "mock_data")
@@ -16,53 +15,6 @@ PDB = "ab12"
 FF = "charmm27"
 BOX = "cubic"
 WATER = "tip3p"
-
-
-def pipeline(
-    top_reward: float,
-    energies: torch.Tensor,
-    rewards: torch.Tensor,
-    job: Job,
-    fn: Callable = divide_decreasing,
-) -> torch.Tensor:
-    # Find if there are any indicies that are the same as the best value
-
-    nonzero_energies = torch.nonzero(energies)
-
-    if len(nonzero_energies) <= 1:
-        rewards[job.hotkeys.index(job.best_hotkey)] = 1
-        return rewards
-
-    remaining_miners = {}
-    for index in nonzero_energies:
-        # There could be multiple max energies.
-        # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
-        if (energies[index] == job.best_loss) or (
-            index == job.hotkeys.index(job.best_hotkey)
-        ):
-            rewards[index] = top_reward
-        else:
-            remaining_miners[index] = energies[index]
-
-    # The amount of reward that is distributed to the remaining miners MUST be less than the reward given to the top miners.
-    num_reminaing_miners = len(remaining_miners)
-    if num_reminaing_miners > 1:
-        sorted_remaining_miners = dict(
-            sorted(remaining_miners.items(), key=lambda item: item[1])
-        )  # sort smallest to largest
-
-        # Apply a fixed decrease in reward on the remaining non-zero miners.
-        rewards_per_miner = fn(
-            amount_to_distribute=1 - top_reward,
-            number_of_elements=num_reminaing_miners,
-        )
-        for index, r in zip(sorted_remaining_miners.keys(), rewards_per_miner):
-            rewards[index] = r
-    else:
-        for index in remaining_miners.keys():
-            rewards[index] = 1 - top_reward
-
-    return rewards
 
 
 def insert_single_job_in_store():
@@ -124,7 +76,6 @@ def test_linear_decrease(top_reward: float):
         energies=energies,
         rewards=rewards,
         job=job,
-        fn=divide_decreasing,
     )
 
     assert torch.equal(rewards, torch.Tensor([0, 0, 0, 1]))
@@ -148,7 +99,6 @@ def test_linear_decrease(top_reward: float):
         energies=energies,
         rewards=rewards,
         job=job,
-        fn=divide_decreasing,
     )
 
     assert rewards[2] == 0
@@ -173,7 +123,6 @@ def test_linear_decrease(top_reward: float):
         energies=energies,
         rewards=rewards,
         job=job,
-        fn=divide_decreasing,
     )
 
     assert rewards[0] == top_reward
@@ -197,7 +146,6 @@ def test_linear_decrease(top_reward: float):
         energies=energies,
         rewards=rewards,
         job=job,
-        fn=divide_decreasing,
     )
 
     assert rewards[0] == top_reward
@@ -222,10 +170,33 @@ def test_linear_decrease(top_reward: float):
         energies=energies,
         rewards=rewards,
         job=job,
-        fn=divide_decreasing,
     )
 
     assert rewards[job.hotkeys.index(job.best_hotkey)] == 1
+
+    energies = torch.Tensor([0, -9800, 0, 0])
+    rewards = torch.zeros(len(energies))
+    best_index, best_loss, best_hotkey = determine_bests(job=job, energies=energies)
+
+    job.update(
+        loss=best_loss,
+        hotkey=best_hotkey,
+        commit_hash="",
+        gro_hash="",
+    )
+
+    assert job.best_loss == -11000
+    assert job.best_hotkey == "a"
+
+    rewards = pipeline(
+        top_reward=top_reward,
+        energies=energies,
+        rewards=rewards,
+        job=job,
+    )
+
+    assert rewards[job.hotkeys.index(job.best_hotkey)] == top_reward
+    assert rewards[1] == 1 - top_reward
 
 
 if __name__ == "__main__":
