@@ -35,7 +35,7 @@ from folding.validators.protein import Protein
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
-from folding.utils.logging import log_event
+from folding.utils.folding_log import log_event
 
 
 class Validator(BaseValidatorNeuron):

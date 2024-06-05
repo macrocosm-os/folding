@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Dict
 
 from folding.validators.protein import Protein
-from folding.utils.logging import log_event
+from folding.utils.folding_log import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import FoldingSynapse
 

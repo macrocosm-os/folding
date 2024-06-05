@@ -10,7 +10,7 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
-from folding.utils.logging import log_event
+from folding.utils.folding_log import log_event
 from folding.utils.ops import (
     run_cmd_commands,
     check_if_directory_exists,
