@@ -219,10 +219,10 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
-        "--mdrun_args.maxh",
+        "--mdrun_args.ntmpi",
         type=str,
-        help="Timeout for the mdrun simulation in seconds (each step).",
-        default=21600,  # default is 6h.
+        help="Controls the number of processes that are used to run the simulation",
+        default=1,
     )
 
 
