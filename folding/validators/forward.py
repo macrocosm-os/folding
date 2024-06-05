@@ -50,7 +50,7 @@ def run_step(
     # For now we just want to get the losses, we are not rewarding yet
     # TODO: reframe the rewarding classes to just return the loss (e.g energy) for each response
     # We need to be super careful that the shape of losses is the same as the shape of the uids (becuase re refer to things downstream by index and assign rewards to the hotkey at that index)
-    energies = get_energies(protein=protein, responses=responses, uids=uids)
+    energies, rmsds = get_energies(protein=protein, responses=responses, uids=uids)
     response_info = get_response_info(responses=responses)
 
     # # Log the step event.
@@ -59,7 +59,7 @@ def run_step(
         "step_length": time.time() - start_time,
         "uids": uids,
         "energies": energies.tolist(),
-        **response_info,
+        "rmsds": rmsds.tolist() ** response_info,
     }
 
     if len(protein.md_inputs) > 0:
