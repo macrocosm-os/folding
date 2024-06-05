@@ -30,18 +30,22 @@ def parsing_miner_data(
     )
 
     data_extractor.energy(data_type="Potential")
-    return data_extractor.data["energy"]
+    data_extractor.rmsd()
+    return data_extractor.data["energy"], data_extractor.data["rmsd"]
 
 
 def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
     """Takes all the data from reponse synapses, applies the reward pipeline, and aggregates the rewards
-    into a single torch.FloatTensor.
+    into a single torch.FloatTensor. Also aggregates the RMSDs for logging.
 
     Returns:
-        torch.FloatTensor: A tensor of rewards for each miner.
+        tuple:
+            torch.FloatTensor: A tensor of rewards for each miner.
+            torch.FloatTensor: A tensor of RMSDs for each miner.
     """
 
     energies = np.zeros(len(uids))
+    rmsds = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         # Ensures that the md_outputs from the miners are parsed correctly
         try:
@@ -60,7 +64,9 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
                 miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
                 validator_data_directory=protein.validator_directory,
             )
-            energies[i] = output_data.iloc[-1]["energy"]
+
+            energies[i] = output_data[0].iloc[-1]["energy"]
+            rmsds[i] = output_data[1].iloc[-1]["rmsd"]
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
@@ -69,4 +75,4 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             )
             continue
 
-    return energies
+    return energies, rmsds
