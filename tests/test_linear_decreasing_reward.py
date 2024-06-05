@@ -26,8 +26,15 @@ def pipeline(
     fn: Callable = divide_decreasing,
 ) -> torch.Tensor:
     # Find if there are any indicies that are the same as the best value
+
+    nonzero_energies = torch.nonzero(energies)
+
+    if len(nonzero_energies) <= 1:
+        rewards[job.hotkeys.index(job.best_hotkey)] = 1
+        return rewards
+
     remaining_miners = {}
-    for index in torch.nonzero(energies):
+    for index in nonzero_energies:
         # There could be multiple max energies.
         # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
         if (energies[index] == job.best_loss) or (
@@ -59,6 +66,8 @@ def pipeline(
 
 
 def insert_single_job_in_store():
+    epsilon = 1e-5
+
     store = PandasJobStore(db_path=DB_PATH, force_create=True)
     info = {
         "pdb": PDB,
@@ -68,11 +77,17 @@ def insert_single_job_in_store():
         "hotkeys": ["a", "b", "c", "d"],
         "created_at": pd.Timestamp.now().floor("s"),
         "updated_at": pd.Timestamp.now().floor("s"),
+        "epsilon": epsilon,
     }
 
     job = Job(**info)
     store.insert(
-        pdb=job.pdb, ff=job.ff, box=job.box, water=job.water, hotkeys=job.hotkeys
+        pdb=job.pdb,
+        ff=job.ff,
+        box=job.box,
+        water=job.water,
+        hotkeys=job.hotkeys,
+        epsilon=epsilon,
     )
 
     return store, job
@@ -112,7 +127,7 @@ def test_linear_decrease(top_reward: float):
         fn=divide_decreasing,
     )
 
-    assert torch.equal(rewards, torch.Tensor([0, 0, 0, top_reward]))
+    assert torch.equal(rewards, torch.Tensor([0, 0, 0, 1]))
 
     # Apply a situation where the first returned set of energies is the best.
     energies = torch.Tensor([-9500, -3200, -1000, -9000])
@@ -187,6 +202,30 @@ def test_linear_decrease(top_reward: float):
 
     assert rewards[0] == top_reward
     assert best_hotkey == "a"
+
+    energies = torch.Tensor([0, 0, 0, 0])
+    rewards = torch.zeros(len(energies))
+    best_index, best_loss, best_hotkey = determine_bests(job=job, energies=energies)
+
+    job.update(
+        loss=best_loss,
+        hotkey=best_hotkey,
+        commit_hash="",
+        gro_hash="",
+    )
+
+    assert job.best_loss == -11000
+    assert job.best_hotkey == "a"
+
+    rewards = pipeline(
+        top_reward=top_reward,
+        energies=energies,
+        rewards=rewards,
+        job=job,
+        fn=divide_decreasing,
+    )
+
+    assert rewards[job.hotkeys.index(job.best_hotkey)] == 1
 
 
 if __name__ == "__main__":

@@ -159,9 +159,15 @@ class Validator(BaseValidatorNeuron):
             top_reward (float): upper bound reward.
             job (Job)
         """
+        nonzero_energies = torch.nonzero(energies)
+
+        if len(nonzero_energies) <= 1:
+            rewards[job.hotkeys.index(job.best_hotkey)] = 1
+            return rewards
+
         # Find if there are any indicies that are the same as the best value
         remaining_miners = {}
-        for index in torch.nonzero(energies):
+        for index in nonzero_energies:
             # There could be multiple max energies.
             # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
             if (energies[index] == job.best_loss) or (
@@ -198,6 +204,8 @@ class Validator(BaseValidatorNeuron):
         """
 
         top_reward = 0.80
+        apply_pipeline = False
+
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
@@ -207,21 +215,29 @@ class Validator(BaseValidatorNeuron):
 
         # If no miners respond appropriately, the energies will be all zeros
         if (energies == 0).all():
+            # All miners not responding but there is at least ONE miner that did in the past. Give them rewards.
+            if job.best_loss < np.inf:
+                apply_pipeline = True
+                bt.logging.warning(
+                    f"Received all zero energies for {job.pdb} but stored best_loss < np.inf... Giving rewards."
+                )
+
             if (
                 pd.Timestamp.now().floor("s") - job.created_at
                 > job.max_time_no_improvement
             ):
                 if isinstance(job.best_loss_at, pd._libs.tslibs.nattype.NaTType):
+                    # means that nothing has been sampled from any miners and not updated.
+                    # apply_pipeline could be True here, so we still apply rewards one last time.
                     bt.logging.warning(
                         f"Job {job.pdb} has not been updated since creation. Removing from queue."
                     )
-                    job.active = False  # means that nothing has been sampled from any miners and not updated.
-
-            bt.logging.warning(
-                f"Received all zero energies for {job.pdb}... Not updating."
-            )
-
+                    job.active = False
         else:
+            apply_pipeline = True
+            bt.logging.success("Non-zero energies received. Applying reward pipeline.")
+
+        if apply_pipeline:
             best_index = np.argmin(energies)
             best_loss = energies[best_index].item()  # item because it's a torch.tensor
             best_hotkey = job.hotkeys[best_index]
