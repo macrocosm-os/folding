@@ -59,7 +59,8 @@ def run_step(
         "step_length": time.time() - start_time,
         "uids": uids,
         "energies": energies.tolist(),
-        "rmsds": rmsds.tolist() ** response_info,
+        "rmsds": rmsds.tolist(),
+        **response_info,
     }
 
     if len(protein.md_inputs) > 0:
