@@ -23,63 +23,12 @@ This needs to log to the event dict
 def output_dict():
     return defaultdict(str)
 
-
-class CommandFailedException(Exception):
-    pass
-
-
-class RunAndLog:
+class WandbLogger():
     def __init__(self):
         self.command_dict = defaultdict(output_dict)
 
-    def run_commands(
-        self,
-        commands: List[str],
-        suppress_cmd_output: bool = True,
-        verbose: bool = False,
-    ) -> Dict[str, str]:
-        for cmd in tqdm.tqdm(commands):  # set tuple
-            bt.logging.debug(f"Running command {cmd}")
-
-            try:
-                # result = run the command (cmd), check that it succedded, executed it through the shell, captures its output and error messages.
-                result = subprocess.run(
-                    cmd,
-                    check=True,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                if not suppress_cmd_output:
-                    bt.logging.info(result.stdout.decode())
-
-                    # no need to record and log successful command executions
-
-            except subprocess.CalledProcessError as e:
-                # this will always print to the terminal regardless if verbose.
-                bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-
-                if verbose:
-                    bt.logging.error(f"Output: {e.stdout.decode()}")
-                    bt.logging.error(f"Error: {e.stderr.decode()}")
-
-                # update command_dict
-                self.command_dict[str(cmd = ' '.join(cmd.split(' ', 2)[:2]))]["error"] = e.stderr.decode()
-
-                # call log_event with the command and error message
-                self.log_event(event=self.command_dict[str(cmd)]["error"])
-
-                command_dict = (
-                    self.command_dict
-                )  # we have the option of using the command dict before exception is raised
-
-                # Raise an exception during a failure event
-                raise subprocess.CalledProcessError(
-                    returncode=f"Failed to run command: {cmd}"
-                )
-
     def should_reinit_wandb(self):
-        # Check if wandb run needs to be rolled over.
+    # Check if wandb run needs to be rolled over.
         return (
             not self.config.wandb.off
             and self.step
@@ -130,10 +79,62 @@ class RunAndLog:
             return
 
         if not getattr(self, "wandb", None):
-            init_wandb(self)
+            self.init_wandb()
 
         # Log the event to wandb.
         self.wandb.log(event)
+
+class RunAndLog(WandbLogger):
+    def __init__(self):
+        super(WandbLogger).__init__()
+        # command_dict is in the instructor of the parent class
+        
+    def run_commands(
+        self,
+        commands: List[str],
+        suppress_cmd_output: bool = True,
+        verbose: bool = False,
+    ) -> Dict[str, str]:
+        for cmd in tqdm.tqdm(commands):  # set tuple
+            bt.logging.debug(f"Running command {cmd}")
+
+            try:
+                # result = run the command (cmd), check that it succedded, executed it through the shell, captures its output and error messages.
+                result = subprocess.run(
+                    cmd,
+                    check=True,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                if not suppress_cmd_output:
+                    bt.logging.info(result.stdout.decode())
+
+                    # no need to record and log successful command executions
+
+            except subprocess.CalledProcessError as e:
+                # this will always print to the terminal regardless if verbose.
+                bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
+
+                if verbose:
+                    bt.logging.error(f"Output: {e.stdout.decode()}")
+                    bt.logging.error(f"Error: {e.stderr.decode()}")
+
+                # update command_dict
+                self.command_dict[str(cmd = ' '.join(cmd.split(' ', 2)[:2]))]["error"] = e.stderr.decode()
+
+                # call log_event with the command and error message
+                self.log_event(event=self.command_dict[str(cmd)]["error"])
+
+                command_dict = (
+                    self.command_dict
+                )  # we have the option of using the command dict before exception is raised
+
+                # Raise an exception during a failure event
+                raise subprocess.CalledProcessError(
+                    returncode=f"Failed to run command: {cmd}"
+                )
+
 
 
 current_directory = "/home/spunion/folding/data/8emf/deliverable1/no_seed_1"
