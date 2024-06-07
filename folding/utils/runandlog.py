@@ -63,8 +63,6 @@ class RunAndLog:
                     bt.logging.error(f"Output: {e.stdout.decode()}")
                     bt.logging.error(f"Error: {e.stderr.decode()}")
 
-                # update command_dict
-                self.command_dict[str(cmd)]["status"] = "failed"
                 self.command_dict[str(cmd)]["error"] = e.stderr.decode()
 
                 # call log_event with the command and error message
