@@ -139,7 +139,7 @@ def calc_potential_from_edr(
     xvg_file = os.path.join(output_dir, xvg_name)
     command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file} -nobackup"]
 
-    runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=True)
+    runandlog.run_commands(commands=command, suppress_cmd_output=True, verbose=True)
 
     # Just take the last line of the 2 column xvg file (step, energy) and report the energy
     with open(xvg_file, "r") as f:

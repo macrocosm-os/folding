@@ -463,7 +463,7 @@ class SimulationManager:
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
 
-            self.runandlog.run_cmd_commands(
+            self.runandlog.run_commands(
                 commands=commands, suppress_cmd_output=suppress_cmd_output, verbose=True
             )
 

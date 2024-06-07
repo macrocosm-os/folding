@@ -312,7 +312,7 @@ class Protein:
             "gmx mdrun -v -deffnm em",
         ]
 
-        self.runandlog.run_cmd_commands(
+        self.runandlog.run_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
@@ -452,7 +452,7 @@ class Protein:
         ]
 
         bt.logging.warning(f"Computing an intermediate gro...")
-        self.runandlog.run_cmd_commands(
+        self.runandlog.run_commands(
             commands=command,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
@@ -481,7 +481,7 @@ class Protein:
             f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
             f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
         ]
-        self.runandlog.run_cmd_commands(
+        self.runandlog.run_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,

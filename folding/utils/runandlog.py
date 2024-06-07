@@ -32,7 +32,7 @@ class RunAndLog:
     def __init__(self):
         self.command_dict = defaultdict(output_dict)
 
-    def run_cmd_commands(
+    def run_commands(
         self,
         commands: List[str],
         suppress_cmd_output: bool = True,
@@ -146,6 +146,6 @@ test_commands = [
 ]
 
 RunAndLog_instance = RunAndLog()
-RunAndLog_instance.run_cmd_commands(
+RunAndLog_instance.run_commands(
     commands=test_commands, suppress_cmd_output=True, verbose=False
 )
