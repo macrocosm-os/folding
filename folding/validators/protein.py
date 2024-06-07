@@ -51,7 +51,7 @@ class Protein:
         self.ff = ff
         self.box = box
 
-        self.runandlog=RunAndLog()
+        self.runandlog = RunAndLog()
 
         if water is not None:
             self.water = water
