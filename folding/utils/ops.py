@@ -12,6 +12,7 @@ import pickle as pkl
 from typing import List, Dict
 import requests
 
+from folding.utils.runandlog import RunAndLog
 import bittensor as bt
 from folding.protocol import FoldingSynapse
 
@@ -133,11 +134,12 @@ def calc_potential_from_edr(
     Returns:
         float: potential energy
     """
+    runandlog=RunAndLog()
     edr_file = os.path.join(output_dir, edr_name)
     xvg_file = os.path.join(output_dir, xvg_name)
     command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file} -nobackup"]
 
-    run_cmd_commands(command, verbose=True)
+    runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=True)
 
     # Just take the last line of the 2 column xvg file (step, energy) and report the energy
     with open(xvg_file, "r") as f:
@@ -159,32 +161,6 @@ def get_tracebacks():
     bt.logging.error(" ---------------- Traceback details ---------------- ")
     bt.logging.warning("".join(formatted_traceback))
     bt.logging.warning(" ---------------- End of Traceback ----------------\n")
-
-
-def run_cmd_commands(
-    commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
-):
-    for cmd in tqdm.tqdm(commands):
-        bt.logging.debug(f"Running command: {cmd}")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                check=True,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            if not suppress_cmd_output:
-                bt.logging.info(result.stdout.decode())
-
-        except subprocess.CalledProcessError as e:
-            bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            if verbose:
-                bt.logging.error(f"Output: {e.stdout.decode()}")
-                bt.logging.error(f"Error: {e.stderr.decode()}")
-                get_tracebacks()
-            raise
 
 
 def check_and_download_pdbs(

@@ -10,9 +10,8 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
-from folding.utils.folding_log import log_event
+from folding.utils.runandlog import RunAndLog
 from folding.utils.ops import (
-    run_cmd_commands,
     check_if_directory_exists,
     get_tracebacks,
     calc_potential_from_edr,
@@ -422,6 +421,7 @@ class SimulationManager:
 
         self.output_dir = output_dir
         self.start_time = time.time()
+        self.runandlog = RunAndLog()
 
     def create_empty_file(self, file_path: str):
         # For mocking
@@ -463,7 +463,7 @@ class SimulationManager:
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
 
-            run_cmd_commands(
+            self.runandlog.run_cmd_commands(
                 commands=commands, suppress_cmd_output=suppress_cmd_output, verbose=True
             )
 

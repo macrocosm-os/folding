@@ -9,9 +9,10 @@ from collections import defaultdict
 import bittensor as bt
 from dataclasses import dataclass
 
+from folding.utils.runandlog import RunAndLog
+
 from folding.utils.ops import (
     FF_WATER_PAIRS,
-    run_cmd_commands,
     check_if_directory_exists,
     gro_hash,
     load_pdb_ids,
@@ -49,6 +50,8 @@ class Protein:
 
         self.ff = ff
         self.box = box
+
+        self.runandlog=RunAndLog()
 
         if water is not None:
             self.water = water
@@ -309,7 +312,7 @@ class Protein:
             "gmx mdrun -v -deffnm em",
         ]
 
-        run_cmd_commands(
+        self.runandlog.run_cmd_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
@@ -449,7 +452,7 @@ class Protein:
         ]
 
         bt.logging.warning(f"Computing an intermediate gro...")
-        run_cmd_commands(
+        self.runandlog.run_cmd_commands(
             commands=command,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
@@ -478,7 +481,7 @@ class Protein:
             f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
             f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
         ]
-        run_cmd_commands(
+        self.runandlog.run_cmd_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,

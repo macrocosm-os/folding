@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import bittensor as bt
 
-from folding.utils.ops import run_cmd_commands
+from folding.utils.runandlog import RunAndLog
 
 
 class DataExtractor:
@@ -26,7 +26,7 @@ class DataExtractor:
         """
         self.validator_data_directory = validator_data_directory
         self.miner_data_directory = miner_data_directory
-
+        self.runandlog = RunAndLog()
         self.data = {}
 
     def extract(self, filepath: str, names=["step", "default-name"]):
@@ -46,7 +46,7 @@ class DataExtractor:
     #     command = [
     #         f"echo '{data_type}' | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command}"
     #     ]
-    #     run_cmd_commands(command)
+    #     self.runandlog.run_cmd_commands(commands=command)
 
     #     self.data["energy"] = self.extract(
     #         filepath=output_data_location, names=["step", "energy"]
@@ -66,7 +66,7 @@ class DataExtractor:
         command = [
             f"echo Potential | {base_command} -f {self.validator_data_directory}/em.edr -o {output_data_location} {xvg_command} -b 20"
         ]
-        run_cmd_commands(command)
+        self.runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=False)
 
         self.data["temperature"] = self.extract(
             filepath=output_data_location, names=["step", "temperature"]
@@ -86,7 +86,7 @@ class DataExtractor:
         command = [
             f"echo Potential | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
         ]
-        run_cmd_commands(command)
+        self.runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=False)
 
         self.data["pressure"] = self.extract(
             filepath=output_data_location, names=["step", "pressure"]
@@ -106,7 +106,7 @@ class DataExtractor:
         command = [
             f"echo '{data_type}' | {base_command} -f {output_path}/npt.edr -o {output_data_location} {xvg_command}"
         ]
-        run_cmd_commands(command)
+        self.runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=False)
 
         self.data["density"] = self.extract(
             filepath=output_data_location, names=["step", "density"]
@@ -127,7 +127,7 @@ class DataExtractor:
         command = [
             f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/rerun_energy.edr -o {output_data_location} {xvg_command}"
         ]
-        run_cmd_commands(command)
+        self.runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=False)
 
         self.data["energy"] = self.extract(
             filepath=output_data_location, names=["step", "energy"]
@@ -142,7 +142,7 @@ class DataExtractor:
         command = [
             f"echo '4 4' | gmx rms -s {output_path}/md_0_1.tpr -f {output_path}/md_0_1_center.xtc -o {output_data_location} -tu ns {xvg_command}"
         ]
-        run_cmd_commands(command)
+        self.runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=False)
 
         self.data["rmsd"] = self.extract(
             filepath=output_data_location, names=["step", "rmsd"]
@@ -158,7 +158,7 @@ class DataExtractor:
             f"! echo 'Potential' | gmx energy -f {output_path}/rerun_calculation.edr -o {output_path}/{xvg_name}"
         ]
 
-        run_cmd_commands(command)
+        self.runandlog.run_cmd_commands(commands=command, suppress_cmd_output=True, verbose=False)
 
         self.data["potential_rerun"] = self.extract(
             filepath=output_data_location, names=["step", "rerun_potential_energy"]
