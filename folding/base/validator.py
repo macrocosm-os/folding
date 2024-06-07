@@ -61,6 +61,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = torch.zeros(
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
+        self.set_weights_success: bool = True
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -297,8 +298,10 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         if result is True:
             bt.logging.info("set_weights on chain successfully!")
+            self.set_weights_success = True
         else:
             bt.logging.error("set_weights failed")
+            self.set_weights_success = False
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
