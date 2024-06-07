@@ -28,6 +28,7 @@ def run_step(
     protein: Protein,
     uids: List[int],
     timeout: float,
+    set_weights_success: bool,
     mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
 ):
     start_time = time.time()
@@ -59,6 +60,7 @@ def run_step(
         "step_length": time.time() - start_time,
         "uids": uids,
         "energies": energies.tolist(),
+        "set_weights_success": set_weights_success,
         **response_info,
     }
 

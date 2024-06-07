@@ -91,6 +91,7 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
+            set_weights_success=self.set_weights_success,
             mdrun_args=self.mdrun_args,
         )
 
