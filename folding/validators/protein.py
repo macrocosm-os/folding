@@ -104,6 +104,7 @@ class Protein:
             protein.init_energy = calc_potential_from_edr(
                 output_dir=protein.validator_directory, edr_name="em.edr"
             )
+            protein._calculate_epsilon()
         except:
             bt.logging.error(
                 f"pdb_complexity or init_energy failed for {protein.pdb_id}."

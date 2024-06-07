@@ -28,7 +28,7 @@ import bittensor as bt
 
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
-from folding.rewards.linear_reward import divide_decreasing
+from folding.rewards.reward_pipeline import reward_pipeline
 from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 
@@ -146,51 +146,6 @@ class Validator(BaseValidatorNeuron):
                     event=job_event,
                 )
 
-    def reward_pipeline(
-        self, energies: torch.Tensor, rewards: torch.Tensor, top_reward: float, job: Job
-    ):
-        """A reward pipeline that determines how to place rewards onto the miners sampled within the batch.
-        Currently applies a linearly decreasing reward on all miners that are not the current best / previously
-        best loss using the function "divide_decreasing".
-
-        Args:
-            energies (torch.Tensor): tensor of returned energies
-            rewards (torch.Tensor): tensor of rewards, floats.
-            top_reward (float): upper bound reward.
-            job (Job)
-        """
-        # Find if there are any indicies that are the same as the best value
-        remaining_miners = {}
-        for index in torch.nonzero(energies):
-            # There could be multiple max energies.
-            # The best energy could be the one that is saved in the store. We reward this old miner, as they don't need to reply anymore.
-            if (energies[index] == job.best_loss) or (
-                index == job.hotkeys.index(job.best_hotkey)
-            ):
-                rewards[index] = top_reward
-            else:
-                remaining_miners[index] = energies[index]
-
-        # The amount of reward that is distributed to the remaining miners MUST be less than the reward given to the top miners.
-        num_reminaing_miners = len(remaining_miners)
-        if num_reminaing_miners > 1:
-            sorted_remaining_miners = dict(
-                sorted(remaining_miners.items(), key=lambda item: item[1])
-            )  # sort smallest to largest
-
-            # Apply a fixed decrease in reward on the remaining non-zero miners.
-            rewards_per_miner = divide_decreasing(
-                amount_to_distribute=1 - top_reward,
-                number_of_elements=num_reminaing_miners,
-            )
-            for index, r in zip(sorted_remaining_miners.keys(), rewards_per_miner):
-                rewards[index] = r
-        else:
-            for index in remaining_miners.keys():
-                rewards[index] = 1 - top_reward
-
-        return rewards
-
     def update_job(self, job: Job):
         """Updates the job status based on the event information
 
@@ -198,6 +153,8 @@ class Validator(BaseValidatorNeuron):
         """
 
         top_reward = 0.80
+        apply_pipeline = False
+
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
@@ -207,21 +164,29 @@ class Validator(BaseValidatorNeuron):
 
         # If no miners respond appropriately, the energies will be all zeros
         if (energies == 0).all():
+            # All miners not responding but there is at least ONE miner that did in the past. Give them rewards.
+            if job.best_loss < np.inf:
+                apply_pipeline = True
+                bt.logging.warning(
+                    f"Received all zero energies for {job.pdb} but stored best_loss < np.inf... Giving rewards."
+                )
+
             if (
                 pd.Timestamp.now().floor("s") - job.created_at
                 > job.max_time_no_improvement
             ):
                 if isinstance(job.best_loss_at, pd._libs.tslibs.nattype.NaTType):
+                    # means that nothing has been sampled from any miners and not updated.
+                    # apply_pipeline could be True here, so we still apply rewards one last time.
                     bt.logging.warning(
                         f"Job {job.pdb} has not been updated since creation. Removing from queue."
                     )
-                    job.active = False  # means that nothing has been sampled from any miners and not updated.
-
-            bt.logging.warning(
-                f"Received all zero energies for {job.pdb}... Not updating."
-            )
-
+                    job.active = False
         else:
+            apply_pipeline = True
+            bt.logging.success("Non-zero energies received. Applying reward pipeline.")
+
+        if apply_pipeline:
             best_index = np.argmin(energies)
             best_loss = energies[best_index].item()  # item because it's a torch.tensor
             best_hotkey = job.hotkeys[best_index]
@@ -237,7 +202,7 @@ class Validator(BaseValidatorNeuron):
                 gro_hash=gro_hash,
             )
 
-            rewards: torch.Tensor = self.reward_pipeline(
+            rewards: torch.Tensor = reward_pipeline(
                 energies=energies, rewards=rewards, top_reward=top_reward, job=job
             )
 
@@ -245,6 +210,10 @@ class Validator(BaseValidatorNeuron):
             self.update_scores(
                 rewards=rewards,
                 uids=uids,  # pretty confident these are in the correct order.
+            )
+        else:
+            bt.logging.warning(
+                f"All energies zero for job {job.pdb} and job has never been updated... Skipping"
             )
 
         # Finally, we update the job in the store regardless of what happened.
