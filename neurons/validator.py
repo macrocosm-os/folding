@@ -66,6 +66,23 @@ class Validator(BaseValidatorNeuron):
 
         return mdrun_args
 
+    def get_uids(self, hotkeys: List[str]) -> List[int]:
+        """Returns the uids corresponding to the hotkeys.
+        It is possible that some hotkeys have been dereg'd,
+        so we need to check for them in the metagraph.
+
+        Args:
+            hotkeys (List[str]): List of hotkeys
+
+        Returns:
+            List[int]: List of uids
+        """
+        return [
+            self.metagraph.hotkeys.index(hotkey)
+            for hotkey in hotkeys
+            if hotkey in self.metagraph.hotkeys
+        ]
+
     def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
@@ -82,7 +99,7 @@ class Validator(BaseValidatorNeuron):
 
         protein = Protein.from_job(job=job, config=self.config.protein)
 
-        uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
+        uids = self.get_uids(hotkeys=job.hotkeys)
         # query the miners and get the rewards for their responses
         # Check check_uid_availability to ensure that the hotkeys are valid and active
         bt.logging.info("⏰ Waiting for miner responses ⏰")
@@ -120,11 +137,7 @@ class Validator(BaseValidatorNeuron):
             active_jobs = self.store.get_queue(ready=False).queue
             active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
-            exclude_uids = [
-                self.metagraph.hotkeys.index(hotkey)
-                for hotkey in active_hotkeys
-                if hotkey in self.metagraph.hotkeys
-            ]
+            exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
             uids = get_random_uids(
                 self, self.config.neuron.sample_size, exclude=exclude_uids
@@ -208,7 +221,7 @@ class Validator(BaseValidatorNeuron):
                 energies=energies, rewards=rewards, top_reward=top_reward, job=job
             )
 
-            uids = [self.metagraph.hotkeys.index(hotkey) for hotkey in job.hotkeys]
+            uids = self.get_uids(hotkeys=job.hotkeys)
             self.update_scores(
                 rewards=rewards,
                 uids=uids,  # pretty confident these are in the correct order.
