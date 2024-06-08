@@ -121,7 +121,9 @@ class Validator(BaseValidatorNeuron):
             active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = [
-                self.metagraph.hotkeys.index(hotkey) for hotkey in active_hotkeys
+                self.metagraph.hotkeys.index(hotkey)
+                for hotkey in active_hotkeys
+                if hotkey in self.metagraph.hotkeys
             ]
 
             uids = get_random_uids(
