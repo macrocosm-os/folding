@@ -8,22 +8,6 @@ import folding
 import bittensor as bt
 
 
-@dataclass
-class Log:
-    validator_model_id: str
-    challenge: str
-    challenge_prompt: str
-    reference: str
-    miners_ids: List[str]
-    responses: List[str]
-    miners_time: List[float]
-    challenge_time: float
-    reference_time: float
-    rewards: List[float]
-    task: dict
-    # extra_info: dict
-
-
 def should_reinit_wandb(self):
     # Check if wandb run needs to be rolled over.
     return (

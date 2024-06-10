@@ -10,9 +10,8 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
-from folding.utils.logging import log_event
+from folding.utils.runandlog import RunAndLog, WandbLogger
 from folding.utils.ops import (
-    run_cmd_commands,
     check_if_directory_exists,
     get_tracebacks,
     calc_potential_from_edr,
@@ -128,7 +127,7 @@ def check_synapse(
 
     event["query_forward_time"] = time.time() - self.query_start_time
 
-    log_event(self=self, event=event)
+    self.wandblogger.log_event(self=self, event=event)
     return synapse
 
 
@@ -140,6 +139,7 @@ class FoldingMiner(BaseMinerNeuron):
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
 
+        self.wandblogger = WandbLogger()
         self.base_data_path = (
             base_data_path
             if base_data_path is not None
@@ -356,6 +356,7 @@ class FoldingMiner(BaseMinerNeuron):
             state_commands,
             self.config.neuron.suppress_cmd_output,
             self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
+            event=event,
         )
 
         self.simulations[synapse.pdb_id]["executor"] = simulation_manager
@@ -422,6 +423,7 @@ class SimulationManager:
 
         self.output_dir = output_dir
         self.start_time = time.time()
+        self.runandlog = RunAndLog()
 
     def create_empty_file(self, file_path: str):
         # For mocking
@@ -434,6 +436,7 @@ class SimulationManager:
         commands: Dict,
         suppress_cmd_output: bool = True,
         mock: bool = False,
+        event: Dict = None,
     ):
         """run method to handle the processing of generic simulations.
 
@@ -463,8 +466,11 @@ class SimulationManager:
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
 
-            run_cmd_commands(
-                commands=commands, suppress_cmd_output=suppress_cmd_output, verbose=True
+            self.runandlog.run_commands(
+                commands=commands,
+                suppress_cmd_output=suppress_cmd_output,
+                verbose=True,
+                event=event,
             )
 
             if mock:

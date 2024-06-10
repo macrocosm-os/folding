@@ -9,9 +9,10 @@ from collections import defaultdict
 import bittensor as bt
 from dataclasses import dataclass
 
+from folding.utils.runandlog import RunAndLog
+
 from folding.utils.ops import (
     FF_WATER_PAIRS,
-    run_cmd_commands,
     check_if_directory_exists,
     gro_hash,
     load_pdb_ids,
@@ -41,6 +42,7 @@ class Protein:
         water: str = None,
         load_md_inputs: bool = False,
         epsilon: float = 5e3,
+        event: Dict = None,
     ):
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
@@ -49,6 +51,8 @@ class Protein:
 
         self.ff = ff
         self.box = box
+
+        self.runandlog = RunAndLog()
 
         if water is not None:
             self.water = water
@@ -74,6 +78,7 @@ class Protein:
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
+        self.event = event
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -97,6 +102,7 @@ class Protein:
             config=config,
             load_md_inputs=True,
             epsilon=job.epsilon,
+            event=job.event,
         )
 
         try:
@@ -230,11 +236,17 @@ class Protein:
         )
 
         self.remaining_steps = []
+
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
+        self.event["pdb_complexity"] = [dict(self.pdb_complexity)]
+
         self.init_energy = calc_potential_from_edr(
             output_dir=self.validator_directory, edr_name="em.edr"
         )
+        self.event["init_energy"] = self.init_energy
+
         self._calculate_epsilon()
+        self.event["epsilon"] = self.epsilon
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
@@ -310,10 +322,11 @@ class Protein:
             "gmx mdrun -v -deffnm em",
         ]
 
-        run_cmd_commands(
+        self.runandlog.run_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
+            event=self.event,
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
@@ -450,10 +463,11 @@ class Protein:
         ]
 
         bt.logging.warning(f"Computing an intermediate gro...")
-        run_cmd_commands(
+        self.runandlog.run_commands(
             commands=command,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
+            event=self.event,
         )
 
         return gro_file_location
@@ -479,10 +493,11 @@ class Protein:
             f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
             f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
         ]
-        run_cmd_commands(
+        self.runandlog.run_commands(
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
+            event=self.event,
         )
 
     def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
