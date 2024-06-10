@@ -184,12 +184,34 @@ class Job:
             self.best_hotkey = hotkey
             self.commit_hash = commit_hash
             self.gro_hash = gro_hash
-        elif (
+        elif (  # if loss has been improved but not recently enough, trigger early stopping
             pd.Timestamp.now().floor("s") - self.best_loss_at
             > self.max_time_no_improvement
             and self.updated_count >= self.min_updates
         ):
             self.active = False
+        elif (  # if loss has never been improved and the job has been running a long time, trigger early stopping
+            isinstance(
+                self.best_loss_at, pd._libs.tslibs.nattype.NaTType
+            )  # a best loss has not been assigned
+            and pd.Timestamp.now().floor("s") - self.created_at
+            > self.max_time_no_improvement  # the time since the last best loss is greater than the max allowed time
+        ):
+            self.active = False
+
+    def check_for_available_hotkeys(self, hotkeys: List[str]) -> bool:
+        """Checks the job's hotkeys to only include those that are still valid.
+        if no hotkeys are left, the job is set to inactive."""
+
+        # Get the list of hotkeys that are still valid and set the attribute.
+        self.hotkeys = list(set(self.hotkeys) & set(hotkeys))
+
+        # If no hotkeys are left, set the job to inactive and return False
+        if not self.hotkeys:
+            self.active = False
+            return False
+
+        return True
 
 
 class MockJob(Job):

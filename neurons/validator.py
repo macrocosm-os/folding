@@ -77,6 +77,7 @@ class Validator(BaseValidatorNeuron):
         Returns:
             List[int]: List of uids
         """
+        # TODO: check if uid is active
         return [
             self.metagraph.hotkeys.index(hotkey)
             for hotkey in hotkeys
@@ -185,18 +186,6 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning(
                     f"Received all zero energies for {job.pdb} but stored best_loss < np.inf... Giving rewards."
                 )
-
-            if (
-                pd.Timestamp.now().floor("s") - job.created_at
-                > job.max_time_no_improvement
-            ):
-                if isinstance(job.best_loss_at, pd._libs.tslibs.nattype.NaTType):
-                    # means that nothing has been sampled from any miners and not updated.
-                    # apply_pipeline could be True here, so we still apply rewards one last time.
-                    bt.logging.warning(
-                        f"Job {job.pdb} has not been updated since creation. Removing from queue."
-                    )
-                    job.active = False
         else:
             apply_pipeline = True
             bt.logging.success("Non-zero energies received. Applying reward pipeline.")
