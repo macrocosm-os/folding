@@ -356,6 +356,7 @@ class FoldingMiner(BaseMinerNeuron):
             state_commands,
             self.config.neuron.suppress_cmd_output,
             self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
+            event=event,
         )
 
         self.simulations[synapse.pdb_id]["executor"] = simulation_manager
@@ -435,6 +436,7 @@ class SimulationManager:
         commands: Dict,
         suppress_cmd_output: bool = True,
         mock: bool = False,
+        event: Dict = None,
     ):
         """run method to handle the processing of generic simulations.
 
@@ -465,7 +467,10 @@ class SimulationManager:
                 f.write(f"{state}\n")
 
             self.runandlog.run_commands(
-                commands=commands, suppress_cmd_output=suppress_cmd_output, verbose=True
+                commands=commands,
+                suppress_cmd_output=suppress_cmd_output,
+                verbose=True,
+                event=event,
             )
 
             if mock:

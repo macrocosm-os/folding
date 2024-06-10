@@ -42,6 +42,7 @@ class Protein:
         water: str = None,
         load_md_inputs: bool = False,
         epsilon: float = 5e3,
+        event: Dict = None,
     ):
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
@@ -77,6 +78,7 @@ class Protein:
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
+        self.event = event
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -100,6 +102,7 @@ class Protein:
             config=config,
             load_md_inputs=True,
             epsilon=job.epsilon,
+            event=job.event,
         )
 
         try:
@@ -232,11 +235,17 @@ class Protein:
         )
 
         self.remaining_steps = []
+
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
+        self.event["pdb_complexity"] = [dict(self.pdb_complexity)]
+
         self.init_energy = calc_potential_from_edr(
             output_dir=self.validator_directory, edr_name="em.edr"
         )
+        self.event["init_energy"] = self.init_energy
+
         self._calculate_epsilon()
+        self.event["epsilon"] = self.epsilon
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
@@ -316,6 +325,7 @@ class Protein:
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
+            event=self.event,
         )
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
@@ -456,6 +466,7 @@ class Protein:
             commands=command,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
+            event=self.event,
         )
 
         return gro_file_location
@@ -485,6 +496,7 @@ class Protein:
             commands=commands,
             suppress_cmd_output=self.config.suppress_cmd_output,
             verbose=self.config.verbose,
+            event=self.event,
         )
 
     def process_md_output(self, md_output: Dict, hotkey: str) -> bool:

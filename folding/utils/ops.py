@@ -123,7 +123,10 @@ def gro_hash(gro_path: str):
 
 
 def calc_potential_from_edr(
-    output_dir: str = None, edr_name: str = "em.edr", xvg_name: str = "_tmp.xvg"
+    output_dir: str = None,
+    edr_name: str = "em.edr",
+    xvg_name: str = "_tmp.xvg",
+    event: Dict = None,
 ):
     """Calculate the potential energy from an edr file using gmx energy.
     Args:
@@ -139,7 +142,9 @@ def calc_potential_from_edr(
     xvg_file = os.path.join(output_dir, xvg_name)
     command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file} -nobackup"]
 
-    runandlog.run_commands(commands=command, suppress_cmd_output=True, verbose=True)
+    runandlog.run_commands(
+        commands=command, suppress_cmd_output=True, verbose=True, event=event
+    )
 
     # Just take the last line of the 2 column xvg file (step, energy) and report the energy
     with open(xvg_file, "r") as f:

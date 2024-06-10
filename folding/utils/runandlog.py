@@ -23,12 +23,13 @@ This needs to log to the event dict
 def output_dict():
     return defaultdict(str)
 
-class WandbLogger():
+
+class WandbLogger:
     def __init__(self):
-        self.command_dict = defaultdict(output_dict)
+        self.event = defaultdict(output_dict)
 
     def should_reinit_wandb(self):
-    # Check if wandb run needs to be rolled over.
+        # Check if wandb run needs to be rolled over.
         return (
             not self.config.wandb.off
             and self.step
@@ -84,16 +85,18 @@ class WandbLogger():
         # Log the event to wandb.
         self.wandb.log(event)
 
+
 class RunAndLog(WandbLogger):
     def __init__(self):
         super(WandbLogger).__init__()
         # command_dict is in the instructor of the parent class
-        
+
     def run_commands(
         self,
         commands: List[str],
         suppress_cmd_output: bool = True,
         verbose: bool = False,
+        input_event: Dict[str, str] = None,
     ) -> Dict[str, str]:
         for cmd in tqdm.tqdm(commands):  # set tuple
             bt.logging.debug(f"Running command {cmd}")
@@ -121,20 +124,25 @@ class RunAndLog(WandbLogger):
                     bt.logging.error(f"Error: {e.stderr.decode()}")
 
                 # update command_dict
-                self.command_dict[str(cmd = ' '.join(cmd.split(' ', 2)[:2]))]["error"] = e.stderr.decode()
+                self.event["bash_cmd_failure"][
+                    str(cmd=" ".join(cmd.split(" ", 2)[:2]))
+                ] = e.stderr.decode()
+
+                if input_event is not None:
+                    self.event.update(input_event)
 
                 # call log_event with the command and error message
-                self.log_event(event=self.command_dict[str(cmd)]["error"])
+                self.log_event(event=self.event)
 
-                command_dict = (
-                    self.command_dict
-                )  # we have the option of using the command dict before exception is raised
+                # command_dict = (
+                #     self.command_dict
+                # )  # we have the option of using the command dict before exception is raised
 
                 # Raise an exception during a failure event
+                # TODO: Replace this with a gromacs error, probably inside of the ops.py
                 raise subprocess.CalledProcessError(
                     returncode=f"Failed to run command: {cmd}"
                 )
-
 
 
 current_directory = "/home/spunion/folding/data/8emf/deliverable1/no_seed_1"

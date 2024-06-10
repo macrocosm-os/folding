@@ -147,20 +147,18 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
                 "box": config.protein.box or sampled_combination["BOX"],
                 # "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"], #TODO: Add this to the downstream logic.
             }
+            event["pdb_id"] = pdb_id
+            event.update(hps)  # add the dictionary of hyperparameters to the event
 
-            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
+            protein = Protein(pdb_id=pdb_id, config=config.protein, event=event, **hps)
             protein.setup_simulation()
 
         except Exception as E:
             event["validator_search_status"] = False
 
         finally:
-            event["pdb_id"] = pdb_id
-            event.update(hps)  # add the dictionary of hyperparameters to the event
             event["hp_sample_time"] = time.time() - hp_sampler_time
-            event["pdb_complexity"] = [dict(protein.pdb_complexity)]
-            event["init_energy"] = protein.init_energy
-            event["epsilon"] = protein.epsilon
+            event.update(protein.event)
 
             if "validator_search_status" not in event:
                 bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
