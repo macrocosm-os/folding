@@ -24,7 +24,7 @@ def output_dict():
     return defaultdict(str)
 
 
-class WandbLogger:
+class Logger:
     def __init__(self):
         pass
 
@@ -86,7 +86,7 @@ class WandbLogger:
         self.wandb.log(event)
 
 
-class RunAndLog(WandbLogger):
+class RunAndLog(Logger):
     def __init__(self):
         super().__init__()
         self.command_dict = defaultdict(output_dict)
