@@ -82,6 +82,7 @@ class Validator(BaseValidatorNeuron):
             self.metagraph.hotkeys.index(hotkey)
             for hotkey in hotkeys
             if hotkey in self.metagraph.hotkeys
+            and self.metagraph.axons[self.metagraph.hotkeys.index(hotkey)].is_serving
         ]
 
     def forward(self, job: Job) -> dict:
