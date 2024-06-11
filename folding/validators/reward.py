@@ -12,28 +12,6 @@ from folding.rewards.energy import EnergyRewardModel
 from folding.rewards.rmsd import RMSDRewardModel
 
 
-def parsing_miner_data(
-    miner_data_directory: str, validator_data_directory: str
-) -> pd.DataFrame:
-    """Runs specific GROMACS commands to extract physical properties from the simulation data. Each command produces a tabular file which is loaded as a pandas DataFrame.
-
-    Args:
-        miner_data_directory (str): _description_
-        validator_data_directory (str): _description_
-
-    Returns:
-        pd.DataFrame: Contains the tabular data extracted from the simulation.
-    """
-    data_extractor = DataExtractor(
-        miner_data_directory=miner_data_directory,
-        validator_data_directory=validator_data_directory,
-    )
-
-    data_extractor.energy(data_type="Potential")
-    data_extractor.rmsd()
-    return data_extractor.data["energy"], data_extractor.data["rmsd"]
-
-
 def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
     """Takes all the data from reponse synapses, applies the reward pipeline, and aggregates the rewards
     into a single torch.FloatTensor. Also aggregates the RMSDs for logging.
@@ -59,14 +37,11 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
+            energy = protein.get_energy(data_type="Potential")
+            rmsd = protein.get_rmsd()
 
-            output_data = parsing_miner_data(
-                miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
-                validator_data_directory=protein.validator_directory,
-            )
-
-            energies[i] = output_data[0].iloc[-1]["energy"]
-            rmsds[i] = output_data[1].iloc[-1]["rmsd"]
+            energies[i] = energy.iloc[-1]["energy"]
+            rmsds[i] = rmsd.iloc[-1]["rmsd"]
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
