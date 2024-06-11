@@ -26,11 +26,7 @@ def output_dict():
 
 class WandbLogger:
     def __init__(self):
-<<<<<<< HEAD
-        self.event = defaultdict(output_dict)
-=======
         pass
->>>>>>> 1e7ba36 (create command_dict at the begining of RunAndLog)
 
     def should_reinit_wandb(self):
         # Check if wandb run needs to be rolled over.
@@ -92,15 +88,9 @@ class WandbLogger:
 
 class RunAndLog(WandbLogger):
     def __init__(self):
-<<<<<<< HEAD
-        super(WandbLogger).__init__()
-        # command_dict is in the instructor of the parent class
-
-=======
         super().__init__()
         self.command_dict = defaultdict(output_dict)
         
->>>>>>> 1e7ba36 (create command_dict at the begining of RunAndLog)
     def run_commands(
         self,
         commands: List[str],
