@@ -127,7 +127,7 @@ def check_synapse(
 
     event["query_forward_time"] = time.time() - self.query_start_time
 
-    self.Logger.log_event(self=self, event=event)
+    self.Logger(config=self.config).log_event(event=event)
     return synapse
 
 
@@ -139,7 +139,7 @@ class FoldingMiner(BaseMinerNeuron):
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
 
-        self.Logger = Logger()
+        self.Logger = Logger(config=self.config)
         self.base_data_path = (
             base_data_path
             if base_data_path is not None

@@ -49,7 +49,7 @@ class Validator(BaseValidatorNeuron):
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
-        self.Logger = Logger()
+        self.Logger = Logger(config=self.config)
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
 

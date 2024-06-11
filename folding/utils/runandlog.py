@@ -25,8 +25,8 @@ def output_dict():
 
 
 class Logger:
-    def __init__(self):
-        pass
+    def __init__(self, config=None):
+        self.config=config
 
     def should_reinit_wandb(self):
         # Check if wandb run needs to be rolled over.
@@ -107,6 +107,7 @@ class RunAndLog(Logger):
                     cmd,
                     check=True,
                     shell=True,
+                    timeout=60,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
@@ -145,15 +146,15 @@ class RunAndLog(Logger):
                 )
 
 
-current_directory = "/home/spunion/folding/data/8emf/deliverable1/no_seed_1"
-gmx_command_1 = "gmx grompp -f e.mdp -c 8.gro -p topol.top -o e.tpr -maxwarn 100"
+# current_directory = "/home/spunion/folding/data/8emf/deliverable1/no_seed_1"
+# gmx_command_1 = "gmx grompp -f e.mdp -c 8.gro -p topol.top -o e.tpr -maxwarn 100"
 
-test_commands = [
-    "cd /home/spunion/folding/data/8emf/deliverable1/no_seed_1",
-    gmx_command_1,
-]
+# test_commands = [
+#     "cd /home/spunion/folding/data/8emf/deliverable1/no_seed_1",
+#     gmx_command_1,
+# ]
 
-RunAndLog_instance = RunAndLog()
-RunAndLog_instance.run_commands(
-    commands=test_commands, suppress_cmd_output=True, verbose=False
-)
+# RunAndLog_instance = RunAndLog()
+# RunAndLog_instance.run_commands(
+#     commands=test_commands, suppress_cmd_output=True, verbose=False
+# )
