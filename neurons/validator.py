@@ -77,7 +77,6 @@ class Validator(BaseValidatorNeuron):
         Returns:
             List[int]: List of uids
         """
-        # TODO: check if uid is active
         return [
             self.metagraph.hotkeys.index(hotkey)
             for hotkey in hotkeys
