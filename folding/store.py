@@ -200,8 +200,11 @@ class Job:
             self.active = False
 
     def check_for_available_hotkeys(self, hotkeys: List[str]) -> bool:
-        """Checks the job's hotkeys to only include those that are still valid.
-        if no hotkeys are left, the job is set to inactive."""
+        """Checks the job's hotkeys to only include those that are still valid. This permanently removes hotkeys from a job. If no hotkeys are left, the job is set to inactive.
+        
+        Returns:
+            bool : True if there are remaining hotkeys in the job, and False if there are none.
+        """
 
         # Get the list of hotkeys that are still valid and set the attribute.
         self.hotkeys = list(set(self.hotkeys) & set(hotkeys))
