@@ -1,4 +1,5 @@
 import torch
+import bittensor as bt
 from folding.store import Job
 from folding.rewards.linear_reward import divide_decreasing
 
@@ -17,6 +18,14 @@ def reward_pipeline(
         job (Job)
     """
     nonzero_energies = torch.nonzero(energies)
+
+    # Edge case: previously best miner was deregistered but their loss is still the best.
+    if job.best_hotkey not in job.hotkeys:
+        bt.logging.warning(
+            f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}... {job.best_hotkey} is not registered on the metagraph. Assigning no rewards."
+        )
+        return rewards  # rewards of all 0s.
+
     best_index = job.hotkeys.index(job.best_hotkey)
 
     # There are cases where the top_miner stops replying. ensure to assign reward.
