@@ -10,7 +10,7 @@ import bittensor as bt
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.protocol import FoldingSynapse
-from folding.utils.runandlog import RunAndLog, Logger
+from folding.utils.runandlog import RunAndLog, WandbLogger
 from folding.utils.ops import (
     check_if_directory_exists,
     get_tracebacks,
@@ -123,11 +123,10 @@ def check_synapse(
 
     if not self.config.wandb.off:
         energy_event = self.get_state_energies(output_dir=output_dir)
-        event.update(energy_event)
 
     event["query_forward_time"] = time.time() - self.query_start_time
 
-    self.Logger.log_event(event=event)
+    self.logger.log_event(event=event)
     return synapse
 
 
@@ -139,7 +138,7 @@ class FoldingMiner(BaseMinerNeuron):
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
 
-        self.Logger = Logger(config=config)
+        self.logger = WandbLogger(wallet=self.wallet, config=self.config, metagraph=self.metagraph)
         self.base_data_path = (
             base_data_path
             if base_data_path is not None
