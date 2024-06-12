@@ -117,7 +117,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
             event["hp_search_time"] = time.time() - forward_start_time
 
             # only log the event if the simulation was not successful
-            self.Logger.log_event(self, event)
+            self.WandbLogger.log_event(self, event)
             bt.logging.error(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
