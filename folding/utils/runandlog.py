@@ -5,7 +5,7 @@ from collections import defaultdict
 import bittensor as bt
 import copy
 import wandb
-from loguru import logger
+from loguru import logger as loguru_logger
 from dataclasses import asdict, dataclass
 
 import folding
@@ -23,11 +23,12 @@ This needs to log to the event dict
 def output_dict():
     return defaultdict(str)
 
-
-class Logger:
-    def __init__(self, config=None):
+class WandbLogger:
+    def __init__(self, wallet=None, config=None, metagraph=None):
         self.config=config
-
+        self.wallet=wallet
+        self.metagraph=metagraph
+        
     def should_reinit_wandb(self):
         # Check if wandb run needs to be rolled over.
         return (
@@ -72,9 +73,9 @@ class Logger:
             sufix=f"<blue> {self.wandb.name} </blue>",
         )
 
-    def log_event(self, event):
+    def log_event(self, event=None):
         if not self.config.neuron.dont_save_events:
-            logger.log("EVENTS", "events", **event)
+            loguru_logger.log("EVENTS", "events", **event)
 
         if self.config.wandb.off:
             return
@@ -86,7 +87,7 @@ class Logger:
         self.wandb.log(event)
 
 
-class RunAndLog(Logger):
+class RunAndLog(WandbLogger):
     def __init__(self):
         super().__init__()
         self.command_dict = defaultdict(output_dict)
