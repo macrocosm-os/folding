@@ -2,6 +2,7 @@ import os
 from typing import Dict
 from folding.miners.folding_miner import FoldingMiner
 import random
+from folding.utils.runandlog import Logger
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "data")
@@ -15,7 +16,9 @@ class MockFoldingMiner(FoldingMiner):
     def __init__(self, base_data_path: str = None, config=None):
         # Need to the make the blacklist methods None.
         self.mock = True
+        
         super().__init__(config=config, base_data_path=base_data_path)
+        self.Logger=Logger(config=config)
 
     def configure_commands(self, mdrun_args: str) -> Dict:
         """The set of commands that will run for each state of the simulation.
