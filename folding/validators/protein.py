@@ -237,7 +237,7 @@ class Protein:
         self._calculate_epsilon()
 
     def __str__(self):
-        return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
+        return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}, water={self.water})"
 
     def __repr__(self):
         return self.__str__()
