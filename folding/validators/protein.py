@@ -575,7 +575,7 @@ class Protein:
         xvg_name = "rmsd_xray.xvg"
         output_data_location = os.path.join(output_path, xvg_name)
         command = [
-            f"echo '4 4' | gmx rms -s {output_path}/em.tpr -f {output_path}/rerun_energy.trr -o {output_data_location} -tu ns {xvg_command}"
+            f"echo '4 4' | gmx rms -s {self.validator_directory}/em.tpr -f {output_path}/rerun_energy.trr -o {output_data_location} -tu ns {xvg_command}"
         ]
         run_cmd_commands(command)
 
