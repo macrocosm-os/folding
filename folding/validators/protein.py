@@ -28,6 +28,8 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 @dataclass
 class Protein:
+    
+    PDB_RECORDS = ('ATOM', 'ANISOU', 'REMARK', 'HETATM', 'CONECT')
     @property
     def name(self):
         return self.protein_pdb.split(".")[0]
@@ -118,8 +120,11 @@ class Protein:
         pdb_complexity = defaultdict(int)
         with open(pdb_path, "r") as f:
             for line in f.readlines():
-                key = line.split()[0].strip()
-                pdb_complexity[key] += 1
+                # Check if the line starts with any of the PDB_RECORDS
+                for key in Protein.PDB_RECORDS:
+                    if line.startswith(key):
+                        pdb_complexity[key] += 1
+                        break
         return pdb_complexity
 
     def gather_pdb_id(self):
