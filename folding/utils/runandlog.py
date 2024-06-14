@@ -75,7 +75,7 @@ class WandbLogger:
 
     def log_event(self, event=None):
         if not self.config.neuron.dont_save_events:
-            loguru_logger.log("EVENTS", "events", **event)
+            loguru_logger.log("EVENTS", "events: " + str(event))
 
         if self.config.wandb.off:
             return
@@ -108,7 +108,7 @@ class RunAndLog(WandbLogger):
                     cmd,
                     check=True,
                     shell=True,
-                    timeout=60,
+                    # timeout=60,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
