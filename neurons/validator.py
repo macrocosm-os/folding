@@ -35,7 +35,7 @@ from folding.validators.protein import Protein
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
-from folding.utils.runandlog import Logger
+from folding.utils.runandlog import WandbLogger
 
 
 class Validator(BaseValidatorNeuron):
@@ -49,7 +49,7 @@ class Validator(BaseValidatorNeuron):
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
-        self.Logger = Logger(config=self.config)
+        self.logger = WandbLogger(config=self.config)
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
 
@@ -265,7 +265,7 @@ class Validator(BaseValidatorNeuron):
         )  # add the rewards to the logging event.
 
         bt.logging.success(f"Event information: {merged_events}")
-        self.Logger.log_event(self, event=prepare_event_for_logging(merged_events))
+        self.logger.log_event(self, event=prepare_event_for_logging(merged_events))
 
 
 # The main function parses the configuration and runs the validator.
