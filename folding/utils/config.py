@@ -20,7 +20,7 @@ import os
 import torch
 import argparse
 import bittensor as bt
-from loguru import logger
+from loguru import logger as loguru_logger
 
 
 def check_config(cls, config: "bt.Config"):
@@ -42,10 +42,10 @@ def check_config(cls, config: "bt.Config"):
         os.makedirs(config.neuron.full_path, exist_ok=True)
 
     if not config.neuron.dont_save_events:
-        # Add custom event logger for the events.
-        if "EVENTS" not in logger._core.levels:
-            logger.level("EVENTS", no=38, icon="📝")
-            logger.add(
+        # Add custom event loguru_logger for the events.
+        if "EVENTS" not in loguru_logger._core.levels:
+            loguru_logger.level("EVENTS", no=38, icon="📝")
+            loguru_logger.add(
                 os.path.join(config.neuron.full_path, "events.log"),
                 rotation=config.neuron.events_retention_size,
                 serialize=True,
