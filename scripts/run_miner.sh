@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # Activate the virtual environment
-source .venv/bin/activate
+source /home/spunion/folding/venv/bin/activate
 
 # Execute the Python script
-python3 ./neurons/miner.py \
-    --netuid 25 \
-    --subtensor.network finney \
-    --wallet.name <your_coldkey> \
-    --wallet.hotkey <your_hotkey> \
-    --neuron.max_workers <number of processes to run on your machine> \
-    --axon.port <your_port>
+python ./neurons/miner.py \
+    --netuid 141 \
+    --subtensor.network test \
+    --wallet.name testy_wally \
+    --wallet.hotkey m1 \
+    --neuron.max_workers 2 \
+    --axon.port 3001 \
+    --logging.debug \

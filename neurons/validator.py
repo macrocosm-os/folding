@@ -63,7 +63,7 @@ class Validator(BaseValidatorNeuron):
         for arg, value in filtered_args.items():
             if value is not None:
                 mdrun_args += f"-{arg} {value} "
-
+        bt.logging.info(f"MDRun args: {mdrun_args}")
         return mdrun_args
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
@@ -144,6 +144,7 @@ class Validator(BaseValidatorNeuron):
             )
 
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
+            bt.logging.info(f"Selected hotkeys: {selected_hotkeys}")
 
             # TODO: We can pass other custom stuff like update_interval, max_time_no_improvement and min_updates to control length
             # update_interval = 60 * np.log10(job['pdb_length'])
