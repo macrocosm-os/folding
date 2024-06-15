@@ -122,7 +122,7 @@ class Protein:
             for line in f.readlines():
                 # Check if the line starts with any of the PDB_RECORDS
                 for key in Protein.PDB_RECORDS:
-                    if line.startswith(key):
+                    if line.strip().startswith(key):
                         pdb_complexity[key] += 1
                         break
         return pdb_complexity
