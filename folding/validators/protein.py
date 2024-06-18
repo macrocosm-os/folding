@@ -59,8 +59,8 @@ class Protein:
 
         self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "emin.mdp"]
         self.other_files = [
-            "em.gro",
-            "posre*",
+            "npt.gro",
+            "npt.cpt" "posre*",
             "topol*",
         ]  # capture all possible topol or posre chains
 
@@ -308,6 +308,13 @@ class Protein:
         commands += [
             f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
             "gmx mdrun -v -deffnm em",
+        ]
+
+        commands += [
+            "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
+            "gmx mdrun -deffnm nvt " + self.config.mdrun_args,
+            "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
+            "gmx mdrun -deffnm npt " + self.config.mdrun_args,
         ]
 
         run_cmd_commands(

@@ -198,20 +198,14 @@ class FoldingMiner(BaseMinerNeuron):
 
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
         commands = [
-            "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
-            "gmx mdrun -deffnm nvt " + mdrun_args,
-            "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
-            "gmx mdrun -deffnm npt " + mdrun_args,
-            f"gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
-            f"gmx mdrun -deffnm md_0_1 " + mdrun_args,
-            f"echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
+            "gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
+            "gmx mdrun -deffnm md_0_1 " + mdrun_args,
+            "echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
         ]
 
         # These are rough identifiers for the different states of the simulation
         state_commands = {
-            "nvt": commands[:2],
-            "npt": commands[2:4],
-            "md_0_1": commands[4:],
+            "md_0_1": commands,
         }
 
         return state_commands
