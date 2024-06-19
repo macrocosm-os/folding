@@ -124,7 +124,6 @@ class Protein:
                 for key in Protein.PDB_RECORDS:
                     if line.strip().startswith(key):
                         pdb_complexity[key] += 1
-                        break
         return pdb_complexity
 
     def gather_pdb_id(self):
