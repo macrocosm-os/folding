@@ -28,8 +28,8 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 @dataclass
 class Protein:
-    
-    PDB_RECORDS = ('ATOM', 'ANISOU', 'REMARK', 'HETATM', 'CONECT')
+    PDB_RECORDS = ("ATOM", "ANISOU", "REMARK", "HETATM", "CONECT")
+
     @property
     def name(self):
         return self.protein_pdb.split(".")[0]
@@ -107,9 +107,9 @@ class Protein:
                 output_dir=protein.validator_directory, edr_name="em.edr"
             )
             protein._calculate_epsilon()
-        except:
+        except Exception as E:
             bt.logging.error(
-                f"pdb_complexity or init_energy failed for {protein.pdb_id}."
+                f"pdb_complexity or init_energy failed for {protein.pdb_id} with Exception {E}."
             )
         finally:
             return protein
