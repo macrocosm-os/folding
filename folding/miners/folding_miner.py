@@ -148,7 +148,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations = self.create_default_dict()
 
         self.max_workers = self.config.neuron.max_workers
-        bt.logging.warning(
+        bt.logging.info(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
 
