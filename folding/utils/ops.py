@@ -100,7 +100,7 @@ def gro_hash(gro_path: str):
         gro_path (str): location to the gro file
     """
     bt.logging.info(f"Calculating hash for path {gro_path!r}")
-    pattern = re.compile(r"\s*(\d+\w+)\s+(\w+'?\d*\s*\d+)\s+(\-?\d+\.\d+)")
+    pattern = re.compile(r"\s*(-?\d+\w+)\s+(\w+'?\d*\s*\d+)\s+(\-?\d+\.\d+)")
 
     with open(gro_path, "rb") as f:
         name, length, *lines, _ = f.readlines()
