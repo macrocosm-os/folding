@@ -62,6 +62,9 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             )
             energies[i] = output_data.iloc[-1]["energy"]
 
+            if not protein.is_run_valid(energies[i], resp.axon.hotkey):
+                energies[i] = 0
+
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
             bt.logging.error(
