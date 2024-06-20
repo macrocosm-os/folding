@@ -7,6 +7,7 @@ import random
 from collections import defaultdict
 
 import bittensor as bt
+import pandas as pd
 from dataclasses import dataclass
 
 from folding.utils.ops import (
@@ -422,7 +423,7 @@ class Protein:
         # os.rmdir(output_directory)
 
     def get_miner_data_directory(self, hotkey: str):
-        return os.path.join(self.validator_directory, hotkey[:8])
+        self.miner_data_directory = os.path.join(self.validator_directory, hotkey[:8])
 
     def compute_intermediate_gro(
         self,
@@ -513,21 +514,21 @@ class Protein:
                 bt.logging.error(f"Missing file with extension {ext} in md_output")
                 return False
 
-        output_directory = self.get_miner_data_directory(hotkey=hotkey)
+        self.get_miner_data_directory(hotkey=hotkey)
 
         # Save files so we can check the hash later.
         self.save_files(
             files=md_output,
-            output_directory=output_directory,
+            output_directory=self.miner_data_directory,
         )
 
         last_miner_simulation_step_time = get_last_step_time(
-            os.path.join(output_directory, md_outputs_exts["log"])
+            os.path.join(self.miner_data_directory, md_outputs_exts["log"])
         )
 
         # We need to generate the gro file from the miner to ensure they are not cheating.
         gro_file_location = self.compute_intermediate_gro(
-            output_directory=output_directory,
+            output_directory=self.miner_data_directory,
             md_outputs_exts=md_outputs_exts,
             simulation_step_time=last_miner_simulation_step_time,
         )
@@ -537,16 +538,91 @@ class Protein:
             bt.logging.warning(
                 f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
             )
-            self.delete_files(directory=output_directory)
+            self.delete_files(directory=self.miner_data_directory)
             return False
         bt.logging.debug(f"The hash for .gro file is correct!")
 
         # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
         # .gro -> .edr
         self.rerun(
-            output_directory=output_directory, gro_file_location=gro_file_location
+            output_directory=self.miner_data_directory,
+            gro_file_location=gro_file_location,
         )
         return True
+
+    def is_run_valid(self, energy: float, hotkey: str):
+        output_directory = self.get_miner_data_directory(hotkey=hotkey)
+        gro_file_location = os.path.join(output_directory, "intermediate.gro")
+
+        md_mdp = os.path.join(
+            self.validator_directory, "md.mdp"
+        )  # md.mdp file is a base config that we never change.
+        topol_path = os.path.join(
+            self.validator_directory, "topol.top"
+        )  # all miners get the same topol file.
+        tpr_path = os.path.join(output_directory, "check.tpr")
+
+        # computing 10 steps of the simulation with production parameters
+        commands = [
+            f"gmx grompp -f {md_mdp} -c {gro_file_location} -r {gro_file_location} -p {topol_path} -o {tpr_path}",
+            f"gmx mdrun -s {tpr_path} -deffnm {output_directory}/check -ntmpi 1 -nsteps 10",
+        ]
+
+        # computing the energy after the 10 step production run
+        commands += [
+            f"echo Potential | gmx energy -f {output_directory}/check.edr -o {output_directory}/check.xvg"
+        ]
+
+        run_cmd_commands(
+            commands=commands,
+            suppress_cmd_output=self.config.suppress_cmd_output,
+            verbose=self.config.verbose,
+        )
+        df_check = pd.read_csv(
+            f"{output_directory}/check.xvg",
+            skiprows=24,
+            delim_whitespace=True,
+            names=["Time", "Energy"],
+        )
+
+        check_energy = df_check["Energy"].iloc[-1]
+        percentage_change = abs(((check_energy - energy) / energy))
+        cmd = f"rm {output_directory}/check* "
+        os.system(cmd)
+        if check_energy > energy and percentage_change > 0.01:
+            return False, check_energy
+        return True, check_energy
+
+    def get_energy(
+        self,
+        data_type: str,
+        output_path: str = None,
+        base_command: str = "gmx energy",
+        xvg_command: str = "-xvg none",
+    ):
+        if output_path is None:
+            output_path = self.miner_data_directory
+
+        xvg_name = "rerun_energy_extracted.xvg"
+        output_data_location = os.path.join(output_path, xvg_name)
+        command = [
+            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/rerun_energy.edr -o {output_data_location} {xvg_command}"
+        ]
+        run_cmd_commands(command)
+        return self.extract(filepath=output_data_location, names=["step", "energy"])
+
+    def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
+        if output_path is None:
+            output_path = self.miner_data_directory
+
+        xvg_name = "rmsd_xray.xvg"
+        output_data_location = os.path.join(output_path, xvg_name)
+        command = [
+            f"echo '4 4' | gmx rms -s {self.validator_directory}/em.tpr -f {output_path}/rerun_energy.trr -o {output_data_location} -tu ns {xvg_command}"
+        ]
+        run_cmd_commands(command)
+
+        return self.extract(filepath=output_data_location, names=["step", "rmsd"])
 
     def _calculate_epsilon(self):
         if "ATOM" in self.pdb_complexity.keys():
@@ -554,3 +630,6 @@ class Protein:
 
             if num_atoms > 100:
                 self.epsilon = 7.14819473 * num_atoms + 1.68442317e04
+
+    def extract(self, filepath: str, names=["step", "default-name"]):
+        return pd.read_csv(filepath, sep="\s+", header=None, names=names)
