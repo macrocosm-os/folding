@@ -60,7 +60,8 @@ class Protein:
         self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "emin.mdp"]
         self.other_files = [
             "npt.gro",
-            "npt.cpt" "posre*",
+            "npt.cpt",
+            "posre*",
             "topol*",
         ]  # capture all possible topol or posre chains
 
