@@ -62,13 +62,20 @@ def add_args(cls, parser):
     Adds relevant arguments to the parser for operation.
     """
 
-    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=89)
+    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=25)
 
     parser.add_argument(
         "--neuron.device",
         type=str,
         help="Device to run on.",
         default="cpu",
+    )
+
+    parser.add_argument(
+        "--neuron.metagraph_resync_length",
+        type=int,
+        help="The number of blocks until metagraph is resynced.",
+        default=100,
     )
 
     parser.add_argument(

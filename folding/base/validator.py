@@ -159,6 +159,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
                 # TODO: maybe concurrency for the loop below
                 for job in self.store.get_queue(ready=False).queue:
+                    # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
+                    if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
+                        self.store.update(job=job)
+                        continue
+
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = self.forward(job=job)
 
