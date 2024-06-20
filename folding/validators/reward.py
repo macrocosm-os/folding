@@ -23,9 +23,9 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
     """
     event = {}
     event["is_valid"] = [False] * len(uids)
-    event["checked_energy"] = np.zeros(len(uids))
-    event["reported_energy"] = np.zeros(len(uids))
-    event["rmsds"] = np.zeros(len(uids))
+    event["checked_energy"] = np.zeros(len(uids)).tolist()
+    event["reported_energy"] = np.zeros(len(uids)).tolist()
+    event["rmsds"] = np.zeros(len(uids)).tolist()
     energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         # Ensures that the md_outputs from the miners are parsed correctly
