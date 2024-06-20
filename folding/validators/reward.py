@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import bittensor as bt
 from typing import List, Dict
-from collections import defaultdict
 
 from folding.validators.protein import Protein
 from folding.utils.data import DataExtractor
@@ -22,7 +21,11 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             torch.FloatTensor: A tensor of rewards for each miner.
             torch.FloatTensor: A tensor of RMSDs for each miner.
     """
-    event = defaultdict(list)
+    event = {}
+    event["is_valid"] = [False] * len(uids)
+    event["checked_energy"] = np.zeros(len(uids))
+    event["reported_energy"] = np.zeros(len(uids))
+    event["rmsds"] = np.zeros(len(uids))
     energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         # Ensures that the md_outputs from the miners are parsed correctly
@@ -45,11 +48,10 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             )
             energies[i] = energy if is_valid else 0
 
-            event["is_valid"].append(is_valid)
-            event["checked_energy"].append(checked_energy)
-            event["reported_energy"].append(energy)
-            event["rmsds"].append(rmsd.iloc[-1]["rmsd"])
-            energies[i] = energy.iloc[-1]["energy"]
+            event["is_valid"][i] = is_valid
+            event["checked_energy"][i] = checked_energy
+            event["reported_energy"][i] = energy
+            event["rmsds"][i] = rmsd.iloc[-1]["rmsd"]
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
