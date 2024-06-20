@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import bittensor as bt
 from typing import List, Dict
+from collections import defaultdict
 
 from folding.validators.protein import Protein
 from folding.utils.data import DataExtractor
@@ -40,7 +41,7 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
     Returns:
         torch.FloatTensor: A tensor of rewards for each miner.
     """
-
+    event = defaultdict(list)
     energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         # Ensures that the md_outputs from the miners are parsed correctly
@@ -60,10 +61,15 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
                 miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
                 validator_data_directory=protein.validator_directory,
             )
-            energies[i] = output_data.iloc[-1]["energy"]
+            energy = output_data.iloc[-1]["energy"]
+            is_valid, checked_energy = protein.is_run_valid(
+                energies[i], resp.axon.hotkey
+            )
+            energies[i] = energy if is_valid else 0
 
-            if not protein.is_run_valid(energies[i], resp.axon.hotkey):
-                energies[i] = 0
+            event["is_valid"].append(is_valid)
+            event["checked_energy"].append(checked_energy)
+            event["reported_energy"].append(energy)
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
@@ -72,4 +78,4 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             )
             continue
 
-    return energies
+    return energies, event

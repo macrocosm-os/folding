@@ -554,7 +554,7 @@ class Protein:
         gro_file_location = os.path.join(output_directory, "intermediate.gro")
 
         md_mdp = os.path.join(
-            self.base_directory, "md.mdp"
+            self.validator_directory, "md.mdp"
         )  # md.mdp file is a base config that we never change.
         topol_path = os.path.join(
             self.validator_directory, "topol.top"
@@ -588,8 +588,8 @@ class Protein:
         percentage_change = abs(((check_energy - energy) / energy))
 
         if check_energy > energy and percentage_change > 0.01:
-            return False
-        return True
+            return False, check_energy
+        return True, check_energy
 
     def _calculate_epsilon(self):
         if "ATOM" in self.pdb_complexity.keys():
