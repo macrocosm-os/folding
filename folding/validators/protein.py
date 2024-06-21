@@ -551,8 +551,8 @@ class Protein:
         return True
 
     def is_run_valid(self, energy: float, hotkey: str):
-        output_directory = self.get_miner_data_directory(hotkey=hotkey)
-        gro_file_location = os.path.join(output_directory, "intermediate.gro")
+        self.get_miner_data_directory(hotkey=hotkey)
+        gro_file_location = os.path.join(self.miner_data_directory, "intermediate.gro")
 
         md_mdp = os.path.join(
             self.validator_directory, "md.mdp"
@@ -560,17 +560,17 @@ class Protein:
         topol_path = os.path.join(
             self.validator_directory, "topol.top"
         )  # all miners get the same topol file.
-        tpr_path = os.path.join(output_directory, "check.tpr")
+        tpr_path = os.path.join(self.miner_data_directory, "check.tpr")
 
         # computing 10 steps of the simulation with production parameters
         commands = [
             f"gmx grompp -f {md_mdp} -c {gro_file_location} -r {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -s {tpr_path} -deffnm {output_directory}/check -ntmpi 1 -nsteps 10",
+            f"gmx mdrun -s {tpr_path} -deffnm {self.miner_data_directory}/check -ntmpi 1 -nsteps 10",
         ]
 
         # computing the energy after the 10 step production run
         commands += [
-            f"echo Potential | gmx energy -f {output_directory}/check.edr -o {output_directory}/check.xvg"
+            f"echo Potential | gmx energy -f {self.miner_data_directory}/check.edr -o {self.miner_data_directory}/check.xvg"
         ]
 
         run_cmd_commands(
@@ -579,7 +579,7 @@ class Protein:
             verbose=self.config.verbose,
         )
         df_check = pd.read_csv(
-            f"{output_directory}/check.xvg",
+            f"{self.miner_data_directory}/check.xvg",
             skiprows=24,
             delim_whitespace=True,
             names=["Time", "Energy"],
@@ -587,7 +587,7 @@ class Protein:
 
         check_energy = df_check["Energy"].iloc[-1]
         percentage_change = abs(((check_energy - energy) / energy))
-        cmd = f"rm {output_directory}/check* "
+        cmd = f"rm {self.miner_data_directory}/check* "
         os.system(cmd)
         if check_energy > energy and percentage_change > 0.01:
             return False, check_energy
