@@ -3,7 +3,7 @@ integrator               = md        ; Algorithm (Leap-frog integrator for rerun
 nsteps                   = 0         ; 0 steps for rerun
 
 ; Output control
-nstxout                  = 0         ; suppress output of coordinates
+nstxout                  = 100         ; suppress output of coordinates
 nstvout                  = 0         ; suppress output of velocities
 nstfout                  = 0         ; suppress output of forces
 nstlog                   = 500       ; frequency to write logs

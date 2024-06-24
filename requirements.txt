@@ -5,5 +5,5 @@ gromacs
 pandas 
 beautifulsoup4
 python-dotenv
-wandb==0.15.10
+wandb==0.17.2
 eth-utils==2.1.1

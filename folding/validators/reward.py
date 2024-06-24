@@ -12,35 +12,20 @@ from folding.rewards.energy import EnergyRewardModel
 from folding.rewards.rmsd import RMSDRewardModel
 
 
-def parsing_miner_data(
-    miner_data_directory: str, validator_data_directory: str
-) -> pd.DataFrame:
-    """Runs specific GROMACS commands to extract physical properties from the simulation data. Each command produces a tabular file which is loaded as a pandas DataFrame.
-
-    Args:
-        miner_data_directory (str): _description_
-        validator_data_directory (str): _description_
-
-    Returns:
-        pd.DataFrame: Contains the tabular data extracted from the simulation.
-    """
-    data_extractor = DataExtractor(
-        miner_data_directory=miner_data_directory,
-        validator_data_directory=validator_data_directory,
-    )
-
-    data_extractor.energy(data_type="Potential")
-    return data_extractor.data["energy"]
-
-
 def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
     """Takes all the data from reponse synapses, applies the reward pipeline, and aggregates the rewards
-    into a single torch.FloatTensor.
+    into a single torch.FloatTensor. Also aggregates the RMSDs for logging.
 
     Returns:
-        torch.FloatTensor: A tensor of rewards for each miner.
+        tuple:
+            torch.FloatTensor: A tensor of rewards for each miner.
+            torch.FloatTensor: A tensor of RMSDs for each miner.
     """
-
+    event = {}
+    event["is_valid"] = [False] * len(uids)
+    event["checked_energy"] = [0] * len(uids)
+    event["reported_energy"] = [0] * len(uids)
+    event["rmsds"] = [0] * len(uids)
     energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         # Ensures that the md_outputs from the miners are parsed correctly
@@ -55,12 +40,19 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
+            energy = protein.get_energy(data_type="Potential").iloc[-1]["energy"]
+            rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
 
-            output_data = parsing_miner_data(
-                miner_data_directory=protein.get_miner_data_directory(resp.axon.hotkey),
-                validator_data_directory=protein.validator_directory,
-            )
-            energies[i] = output_data.iloc[-1]["energy"]
+            if energy == 0:
+                continue
+
+            is_valid, checked_energy = protein.is_run_valid(energy, resp.axon.hotkey)
+            energies[i] = energy if is_valid else 0
+
+            event["is_valid"][i] = is_valid
+            event["checked_energy"][i] = checked_energy
+            event["reported_energy"][i] = energy
+            event["rmsds"][i] = rmsd
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
@@ -69,4 +61,4 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             )
             continue
 
-    return energies
+    return energies, event

@@ -116,9 +116,16 @@ class BaseNeuron(ABC):
             version_output = result.stdout.strip()
 
             version_pattern = r"GROMACS version:\s+(\d{4}\.\d+)"
-            match = re.search(version_pattern, version_output)
+            version_match = re.search(version_pattern, version_output)
+            self.gromacs_version = version_match.group(1) if version_match else None
 
-            self.gromacs_version = match.group(1) if match else None
+            is_gpu_pattern = r"GPU support:\s*(.+)"
+            is_gpu_match = re.search(is_gpu_pattern, version_output)
+            
+            try:
+                self.gpu_status = is_gpu_match.group(0).split()[-1]
+            except:
+                self.gpu_status = 'unknown'
 
             if (self.gromacs_version is None) or (
                 __GROMACS_VERSION_TAG__ not in self.gromacs_version
@@ -130,7 +137,7 @@ class BaseNeuron(ABC):
         except Exception as e:
             raise e
 
-        bt.logging.success(f"Running GROMACS version: {self.gromacs_version}")
+        bt.logging.success(f"Running GROMACS version: {self.gromacs_version} with GPU status: {self.gpu_status}")
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
