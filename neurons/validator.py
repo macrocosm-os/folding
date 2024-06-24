@@ -46,6 +46,8 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
+        self.load_state()
+
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
