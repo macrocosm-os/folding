@@ -9,7 +9,7 @@ from typing import List, Dict
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
-from folding.protocol import FoldingSynapse
+from folding.protocol import PostFoldingSynapse, GetFoldingSynapse
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
@@ -34,13 +34,13 @@ def run_step(
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
-    synapse = FoldingSynapse(
+    synapse = PostFoldingSynapse(
         pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
     )
 
     # Make calls to the network with the prompt - this is synchronous.
     bt.logging.warning("waiting for responses....")
-    responses: List[FoldingSynapse] = self.dendrite.query(
+    responses: List[GetFoldingSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
         timeout=timeout,

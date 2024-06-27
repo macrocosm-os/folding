@@ -9,7 +9,7 @@ import bittensor as bt
 
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
-from folding.protocol import FoldingSynapse
+from folding.protocol import PostFoldingSynapse, GetFoldingSynapse
 from folding.utils.logging import log_event
 from folding.utils.ops import (
     run_cmd_commands,
@@ -21,92 +21,6 @@ from folding.utils.ops import (
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
-
-
-def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynapse:
-    """function that parses a list of files and attaches them to the synapse object"""
-    bt.logging.info(f"Sending files to validator: {files_to_attach}")
-    for filename in files_to_attach:
-        # trrs are large, and validators don't need them.
-        if filename.endswith(".trr"):
-            continue
-
-        try:
-            with open(filename, "rb") as f:
-                filename = filename.split("/")[
-                    -1
-                ]  # remove the directory from the filename
-                synapse.md_output[filename] = base64.b64encode(f.read())
-        except Exception as e:
-            bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
-            get_tracebacks()
-
-    return synapse
-
-
-def attach_files_to_synapse(
-    synapse: FoldingSynapse,
-    data_directory: str,
-    state: str,
-) -> FoldingSynapse:
-    """load the output files as bytes and add to synapse.md_output
-
-    Args:
-        synapse (FoldingSynapse): Recently received synapse object
-        data_directory (str): directory where the miner is holding the necessary data for the validator.
-        state (str): the current state of the simulation
-
-    state is either:
-     1. nvt
-     2. npt
-     3. md_0_1
-     4. finished
-
-    State depends on the current state of the simulation (controlled in GromacsExecutor.run() method).
-
-    During the simulation procedure, the validator queries the miner for the current state of the simulation.
-    The files that the miner needs to return are:
-        1. .tpr (created during grompp commands)
-        2. .xtc (created during mdrun commands, logged every nstxout-compressed steps)
-        3. .cpt (created during mdrun commands, logged every nstcheckpoint steps) # TODO: remove (re create .gro file from .tpr and .xtc)
-
-
-    Returns:
-        FoldingSynapse: synapse with md_output attached
-    """
-
-    synapse.md_output = {}  # ensure that the initial state is empty
-
-    try:
-        state_files = os.path.join(
-            data_directory, f"{state}"
-        )  # mdrun commands make the filenames [state.*]
-
-        # applying glob to state_files will get the necessary files we need (e.g. nvt.tpr, nvt.xtc, nvt.cpt, nvt.edr, etc.)
-        all_state_files = glob.glob(f"{state_files}*")  # Grab all the state_files
-        latest_cpt_file = glob.glob("*.cpt")
-
-        files_to_attach: List = (
-            all_state_files + latest_cpt_file
-        )  # combine the state files and the latest checkpoint file
-
-        if len(files_to_attach) == 0:
-            raise FileNotFoundError(
-                f"No files found for {state}"
-            )  # if this happens, goes to except block
-
-        synapse = attach_files(files_to_attach=files_to_attach, synapse=synapse)
-
-    except Exception as e:
-        bt.logging.error(
-            f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}"
-        )
-        get_tracebacks()
-        synapse.md_output = {}
-        # TODO Maybe in this point in the logic it makes sense to try and restart the sim.
-
-    finally:
-        return synapse  # either return the synapse wth the md_output attached or the synapse as is.
 
 
 def check_synapse(
@@ -240,7 +154,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         return event
 
-    def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
+    def forward(self, synapse: PostFoldingSynapse) -> GetFoldingSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
         There are a set of default behaviours the miner should carry out based on the form the synapse comes in as:
@@ -275,8 +189,7 @@ class FoldingMiner(BaseMinerNeuron):
             simulation = self.simulations[synapse.pdb_id]
             current_executor_state = simulation["executor"].get_state()
 
-            synapse = attach_files_to_synapse(
-                synapse=synapse,
+            synapse.attach_files_to_synapse(
                 data_directory=simulation["output_dir"],
                 state=current_executor_state,
             )
@@ -309,8 +222,8 @@ class FoldingMiner(BaseMinerNeuron):
                     bt.logging.warning(
                         f"❗ Found existing data for protein: {synapse.pdb_id}... Sending previously computed, most advanced simulation state ❗"
                     )
-                    synapse = attach_files_to_synapse(
-                        synapse=synapse, data_directory=output_dir, state=state
+                    synapse.attach_files_to_synapse(
+                        data_directory=output_dir, state=state
                     )
                 except Exception as e:
                     bt.logging.error(
