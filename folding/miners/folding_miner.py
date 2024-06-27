@@ -23,14 +23,13 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
 
-def check_synapse(
-    self, synapse: FoldingSynapse, output_dir: str, event: Dict = None
-) -> FoldingSynapse:
+def log_sizes(
+    self, synapse: GetFoldingSynapse, output_dir: str, md_inputs, event: Dict = None
+):
     """Utility function to remove md_inputs if they exist"""
-    if len(synapse.md_inputs) > 0:
-        event["md_inputs_sizes"] = list(map(len, synapse.md_inputs.values()))
-        event["md_inputs_filenames"] = list(synapse.md_inputs.keys())
-        synapse.md_inputs = {}  # remove from synapse
+    if len(md_inputs) > 0:
+        event["md_inputs_sizes"] = list(map(len, md_inputs.values()))
+        event["md_inputs_filenames"] = list(md_inputs.keys())
 
     if synapse.md_output is not None:
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
@@ -43,7 +42,6 @@ def check_synapse(
     event["query_forward_time"] = time.time() - self.query_start_time
 
     log_event(self=self, event=event)
-    return synapse
 
 
 class FoldingMiner(BaseMinerNeuron):
@@ -166,7 +164,7 @@ class FoldingMiner(BaseMinerNeuron):
                 - If the number of active processes is less than the number of CPUs and the pdb_id is unique, start a new process
 
         Returns:
-            FoldingSynapse: synapse with md_output attached
+            GetFoldingSynapse: synapse with md_output attached
         """
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
@@ -182,7 +180,14 @@ class FoldingMiner(BaseMinerNeuron):
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
+        # Unpacking the synapse data
+        pdb_id = synapse.pdb_id
+        md_inputs = synapse.md_inputs
+        mdrun_args = synapse.mdrun_args
+        job_cancelled = synapse.job_cancelled
 
+        # Creating a GetSynapse object to return to the validator
+        synapse = GetFoldingSynapse(pdb_id=pdb_id, md_output={}, serves_job=True)
         # The set of RUNNING simulations.
         if synapse.pdb_id in self.simulations:
             self.simulations[synapse.pdb_id]["queried_at"] = time.time()
@@ -197,10 +202,15 @@ class FoldingMiner(BaseMinerNeuron):
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
             event["queried_at"] = simulation["queried_at"]
-
-            return check_synapse(
-                self=self, synapse=synapse, event=event, output_dir=output_dir
+            log_sizes(
+                self=self,
+                synapse=synapse,
+                md_inputs=md_inputs,
+                event=event,
+                output_dir=output_dir,
             )
+
+            return synapse
 
         else:
             if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
@@ -233,29 +243,46 @@ class FoldingMiner(BaseMinerNeuron):
 
                 event["condition"] = "found_existing_data"
                 event["state"] = state
-
-                return check_synapse(
-                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                log_sizes(
+                    self=self,
+                    synapse=synapse,
+                    md_inputs=md_inputs,
+                    event=event,
+                    output_dir=output_dir,
                 )
+
+                return synapse
 
             elif len(self.simulations) >= self.max_workers:
                 bt.logging.warning(
                     f"❗ Cannot start new process: CPU limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
                 )
+                synapse.serves_job = False
 
                 event["condition"] = "cpu_limit_reached"
-
-                return check_synapse(
-                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                log_sizes(
+                    self=self,
+                    synapse=synapse,
+                    md_inputs=md_inputs,
+                    event=event,
+                    output_dir=output_dir,
                 )
 
-            elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
-                return check_synapse(
-                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                return synapse
+
+            elif len(md_inputs) == 0:  # The vali sends nothing to the miner
+                log_sizes(
+                    self=self,
+                    synapse=synapse,
+                    md_inputs=md_inputs,
+                    event=event,
+                    output_dir=output_dir,
                 )
+
+                return synapse
 
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
-        state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
+        state_commands = self.configure_commands(mdrun_args=mdrun_args)
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
@@ -265,7 +292,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         future = self.executor.submit(
             simulation_manager.run,
-            synapse.md_inputs,
+            md_inputs,
             state_commands,
             self.config.neuron.suppress_cmd_output,
             self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
@@ -282,11 +309,17 @@ class FoldingMiner(BaseMinerNeuron):
 
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
-        return check_synapse(
-            self=self, synapse=synapse, event=event, output_dir=output_dir
+        log_sizes(
+            self=self,
+            synapse=synapse,
+            md_inputs=md_inputs,
+            event=event,
+            output_dir=output_dir,
         )
 
-    async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
+        return synapse
+
+    async def blacklist(self, synapse: PostFoldingSynapse) -> Tuple[bool, str]:
         if (
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
@@ -314,7 +347,7 @@ class FoldingMiner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: FoldingSynapse) -> float:
+    async def priority(self, synapse: PostFoldingSynapse) -> float:
         caller_uid = self.metagraph.hotkeys.index(
             synapse.dendrite.hotkey
         )  # Get the caller index.

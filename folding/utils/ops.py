@@ -13,7 +13,7 @@ from typing import List, Dict
 import requests
 
 import bittensor as bt
-from folding.protocol import FoldingSynapse
+from folding.protocol import GetFoldingSynapse
 
 # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
 FF_WATER_PAIRS = {
@@ -244,7 +244,7 @@ def is_pdb_complete(pdb_text: str) -> bool:
     return True
 
 
-def get_response_info(responses: List[FoldingSynapse]) -> Dict:
+def get_response_info(responses: List[GetFoldingSynapse]) -> Dict:
     """Gather all desired response information from the set of miners."""
 
     response_times = []
@@ -254,7 +254,7 @@ def get_response_info(responses: List[FoldingSynapse]) -> Dict:
     response_returned_files_sizes = []
 
     for resp in responses:
-        if resp.dendrite.process_time != None:
+        if resp.dendrite.process_time is not None:
             response_times.append(resp.dendrite.process_time)
         else:
             response_times.append(0)

@@ -23,8 +23,6 @@ import glob
 import traceback
 import bittensor as bt
 
-from folding.utils.ops import get_tracebacks
-
 
 class FoldingSynapse(bt.Synapse):
     """
@@ -153,10 +151,10 @@ class GetFoldingSynapse(FoldingSynapse):
 
         except Exception as e:
             bt.logging.error(
-                f"Failed to attach files for pdb {self.pdb_id} with error: {e}"
+                f"Failed to attach files for pdb {self.pdb_id} with error: {traceback.format_exc()}"
             )
-            get_tracebacks()
             self.md_output = {}
+            self.serves_job = False
             # TODO Maybe in this point in the logic it makes sense to try and restart the sim.
 
 

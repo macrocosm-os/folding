@@ -6,13 +6,13 @@ from typing import List, Dict
 
 from folding.validators.protein import Protein
 from folding.utils.data import DataExtractor
-from folding.protocol import FoldingSynapse
+from folding.protocol import GetFoldingSynapse
 from folding.rewards.reward import RewardEvent
 from folding.rewards.energy import EnergyRewardModel
 from folding.rewards.rmsd import RMSDRewardModel
 
 
-def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
+def get_energies(protein: Protein, responses: List[GetFoldingSynapse], uids: List[int]):
     """Takes all the data from reponse synapses, applies the reward pipeline, and aggregates the rewards
     into a single torch.FloatTensor. Also aggregates the RMSDs for logging.
 
