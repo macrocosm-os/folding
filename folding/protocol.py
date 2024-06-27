@@ -20,7 +20,7 @@ import typing
 import base64
 import os
 import glob
-
+import traceback
 import bittensor as bt
 
 from folding.utils.ops import get_tracebacks
@@ -54,7 +54,7 @@ class FoldingSynapse(bt.Synapse):
             f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the reponse has expected hash
-        if type(self.md_output) != dict:
+        if not isinstance(self.md_output, dict):
             self.md_output = {}
         else:
             md_output = {}
@@ -97,8 +97,9 @@ class GetFoldingSynapse(FoldingSynapse):
                     ]  # remove the directory from the filename
                     self.md_output[filename] = base64.b64encode(f.read())
             except Exception as e:
-                bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
-                get_tracebacks()
+                bt.logging.error(
+                    f"Failed to read file {filename!r} with error: {traceback.format_exc()}"
+                )
 
     def attach_files_to_synapse(
         self,
