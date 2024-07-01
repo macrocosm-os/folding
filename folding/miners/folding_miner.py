@@ -293,8 +293,9 @@ class FoldingMiner(BaseMinerNeuron):
             "finished_simulations": [],
             "timed_out_simulations": [],
         }
+
         if len(self.simulations) > 0:
-            bt.logging.warning(f"current simulatinos in the stack: {self.simulations}")
+            bt.logging.info(f"current simulations in the stack: {self.simulations}")
             for pdb_id, simulation in self.simulations.items():
                 time_since_last_query = time.time() - simulation["queried_at"]
                 bt.logging.info(
@@ -422,7 +423,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
         self.simulations[synapse.pdb_id]["queried_at"] = time.time()
 
-        bt.logging.warning(f"Running pdb_id {pdb_id} with process_id {process_id}")
+        bt.logging.info(f"Running pdb_id {pdb_id} with process_id {process_id}")
         bt.logging.success(
             f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ "
         )
@@ -513,7 +514,7 @@ class SimulationManager:
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
-        os.chdir(self.output_dir)  # TODO: will this be a problem with many processes?
+        os.chdir(self.output_dir)
 
         # The following files are required for GROMACS simulations and are recieved from the validator
         for filename, content in md_inputs.items():
