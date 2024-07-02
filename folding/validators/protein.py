@@ -633,3 +633,6 @@ class Protein:
 
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
+
+    def remove_pdb_directory(self):
+        os.system(f"rm -rf {self.pdb_directory}")
