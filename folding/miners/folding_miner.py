@@ -331,6 +331,7 @@ class FoldingMiner(BaseMinerNeuron):
                 )
 
                 event["condition"] = "cpu_limit_reached"
+                synapse.miner_serving = False
 
                 return check_synapse(
                     self=self, synapse=synapse, event=event, output_dir=output_dir
