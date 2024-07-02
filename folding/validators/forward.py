@@ -42,13 +42,20 @@ def run_step(
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
 
+    response_info = get_response_info(responses=responses)
+
+    # There are hotkeys that have decided to stop serving. We need to remove them from the store.
+    responses_serving = []
+    for ii, state in enumerate(response_info["response_miners_serving"]):
+        if state:
+            responses_serving.append(responses[ii])
+
     # For now we just want to get the losses, we are not rewarding yet
     # TODO: reframe the rewarding classes to just return the loss (e.g energy) for each response
     # We need to be super careful that the shape of losses is the same as the shape of the uids (becuase re refer to things downstream by index and assign rewards to the hotkey at that index)
     energies, energy_event = get_energies(
-        protein=protein, responses=responses, uids=uids
+        protein=protein, responses=responses_serving, uids=uids
     )
-    response_info = get_response_info(responses=responses)
 
     # Log the step event.
     event = {
