@@ -180,6 +180,7 @@ class Job:
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
 
         if hotkeys is not None:
+            assert len(hotkeys) > 0, "hotkeys must be a non-empty list"
             self.hotkeys = hotkeys
 
         if hotkey not in self.hotkeys:
