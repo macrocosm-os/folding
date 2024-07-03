@@ -173,7 +173,7 @@ class Validator(BaseValidatorNeuron):
         top_reward = 0.80
         apply_pipeline = False
 
-        # There are hotkeys that have decided to stop serving. We need to remove them from the store.
+        # There could be hotkeys that have decided to stop serving. We need to remove them from the store.
         serving_hotkeys = []
         for ii, state in enumerate(job.event["response_miners_serving"]):
             if state:
