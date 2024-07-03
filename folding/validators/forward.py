@@ -49,23 +49,30 @@ def run_step(
     for ii, state in enumerate(response_info["response_miners_serving"]):
         if state:
             responses_serving.append(responses[ii])
+    
+    event = {
+        "block": self.block,
+        "step_length": time.time() - start_time,
+        "uids": uids,
+        "energies": [],
+        **response_info,
+    }
 
-    # For now we just want to get the losses, we are not rewarding yet
-    # TODO: reframe the rewarding classes to just return the loss (e.g energy) for each response
-    # We need to be super careful that the shape of losses is the same as the shape of the uids (becuase re refer to things downstream by index and assign rewards to the hotkey at that index)
+    if len(responses_serving) == 0:
+        bt.logging.warning(f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗")
+        return event
+
     energies, energy_event = get_energies(
         protein=protein, responses=responses_serving, uids=uids
     )
 
     # Log the step event.
-    event = {
-        "block": self.block,
-        "step_length": time.time() - start_time,
-        "uids": uids,
-        "energies": energies.tolist(),
-        **response_info,
-        **energy_event,
-    }
+    event.update(
+        {
+            "energies": energies.tolist(),
+            **energy_event
+        }
+    )
 
     if len(protein.md_inputs) > 0:
         event["md_inputs"] = list(protein.md_inputs.keys())
