@@ -1,9 +1,10 @@
 import os
 import glob
 import re
+import random
+import shutil
 from typing import List, Dict
 from pathlib import Path
-import random
 from collections import defaultdict
 
 import bittensor as bt
@@ -633,3 +634,9 @@ class Protein:
 
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
+
+    def remove_pdb_directory(self):
+        """Method to remove the pdb directory after the simulation is complete.
+        Temp. method before we know what we want to keep.
+        """
+        shutil.rmtree(self.pdb_directory)
