@@ -43,7 +43,7 @@ class FoldingSynapse(bt.Synapse):
     md_output: typing.Optional[dict] = None
 
     # Miner can decide if they are serving the request or not.
-    miner_serving: bool = True
+    miner_serving: typing.Optional[bool] = True
 
     def deserialize(self) -> int:
         """
