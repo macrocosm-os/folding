@@ -46,14 +46,16 @@ def run_step(
 
     # There are hotkeys that have decided to stop serving. We need to remove them from the store.
     responses_serving = []
+    active_uids = []
     for ii, state in enumerate(response_info["response_miners_serving"]):
         if state:
             responses_serving.append(responses[ii])
+            active_uids.append(uids[ii])
     
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
-        "uids": uids,
+        "uids": active_uids,
         "energies": [],
         **response_info,
     }
@@ -63,7 +65,7 @@ def run_step(
         return event
 
     energies, energy_event = get_energies(
-        protein=protein, responses=responses_serving, uids=uids
+        protein=protein, responses=responses_serving, uids=active_uids
     )
 
     # Log the step event.
