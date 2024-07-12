@@ -19,10 +19,10 @@ def reward_pipeline(
     """
     nonzero_energies = torch.nonzero(energies)
 
-    # Edge case: previously best miner was deregistered but their loss is still the best.
+    # If the best hotkey is not in the set of hotkeys in the job, this means that the top miner has stopped replying.
     if job.best_hotkey not in job.hotkeys:
         bt.logging.warning(
-            f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}... {job.best_hotkey} is not registered on the metagraph. Assigning no rewards."
+            f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}. Assigning no reward."
         )
         return rewards  # rewards of all 0s.
 

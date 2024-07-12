@@ -327,10 +327,11 @@ class FoldingMiner(BaseMinerNeuron):
 
             elif len(self.simulations) >= self.max_workers:
                 bt.logging.warning(
-                    f"❗ Cannot start new process: CPU limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
+                    f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
                 )
 
                 event["condition"] = "cpu_limit_reached"
+                synapse.miner_serving = False
 
                 return check_synapse(
                     self=self, synapse=synapse, event=event, output_dir=output_dir
