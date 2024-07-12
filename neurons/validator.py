@@ -204,7 +204,7 @@ class Validator(BaseValidatorNeuron):
             if job.best_loss < 0:
                 apply_pipeline = True
                 bt.logging.warning(
-                    f"Received all zero energies for {job.pdb} but stored best_loss < np.inf... Giving rewards."
+                    f"Received all zero energies for {job.pdb} but stored best_loss < 0... Applying reward pipeline."
                 )
         else:
             apply_pipeline = True
