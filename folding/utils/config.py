@@ -373,7 +373,7 @@ def add_validator_args(cls, parser):
         "--wandb.entity",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="opentensor-dev",
+        default="macrocosmos",
     )
 
 
