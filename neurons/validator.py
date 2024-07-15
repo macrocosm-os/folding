@@ -15,6 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import os
 import re
 import time
 import numpy as np
@@ -37,6 +38,7 @@ from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
 
+os.environ['GMX_MAXBACKUP'] = '-1'
 
 class Validator(BaseValidatorNeuron):
     """
