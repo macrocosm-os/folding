@@ -50,9 +50,9 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
             energies[i] = energy if is_valid else 0
 
             event["is_valid"][i] = is_valid
-            event["checked_energy"][i] = checked_energy
-            event["reported_energy"][i] = energy
-            event["rmsds"][i] = rmsd
+            event["checked_energy"][i] = float(checked_energy)
+            event["reported_energy"][i] = float(energy)
+            event["rmsds"][i] = float(rmsd)
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
