@@ -19,13 +19,27 @@ else
     NUM_PHYSICAL_CORES=10
 fi
 
-# download and unpack gromacs
+# Check for CUDA availability
+if command -v nvidia-smi &> /dev/null; then
+    CUDA_AVAILABLE=true
+else
+    CUDA_AVAILABLE=false
+fi
+
+# Download and unpack GROMACS
 wget ftp://ftp.gromacs.org/gromacs/gromacs-2024.1.tar.gz
 tar xfz gromacs-2024.1.tar.gz
 cd gromacs-2024.1
 mkdir build
 cd build
-cmake .. -DGMX_BUILD_OWN_FFTW=ON -DREGRESSIONTEST_DOWNLOAD=ON -DGMX_GPU=CUDA -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda
+
+# Configure GROMACS with or without CUDA support based on availability
+if [ "$CUDA_AVAILABLE" = true ]; then
+    cmake .. -DGMX_BUILD_OWN_FFTW=ON -DREGRESSIONTEST_DOWNLOAD=ON -DGMX_GPU=CUDA -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda
+else
+    cmake .. -DGMX_BUILD_OWN_FFTW=ON -DREGRESSIONTEST_DOWNLOAD=ON
+fi
+
 make -j$NUM_PHYSICAL_CORES
 make check
 make install

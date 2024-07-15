@@ -169,8 +169,19 @@ class Job:
     def to_frame(self):
         return pd.DataFrame([self.to_series()])
 
-    def update(self, loss: float, hotkey: str, commit_hash: str, gro_hash: str):
+    def update(
+        self,
+        loss: float,
+        hotkey: str,
+        commit_hash: str,
+        gro_hash: str,
+        hotkeys: List[str] = None,
+    ):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
+
+        if hotkeys is not None:
+            assert len(hotkeys) > 0, "hotkeys must be a non-empty list"
+            self.hotkeys = hotkeys
 
         if hotkey not in self.hotkeys:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
@@ -201,7 +212,7 @@ class Job:
 
     def check_for_available_hotkeys(self, hotkeys: List[str]) -> bool:
         """Checks the job's hotkeys to only include those that are still valid. This permanently removes hotkeys from a job. If no hotkeys are left, the job is set to inactive.
-        
+
         Returns:
             bool : True if there are remaining hotkeys in the job, and False if there are none.
         """

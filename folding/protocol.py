@@ -39,6 +39,10 @@ class FoldingSynapse(bt.Synapse):
 
     # Optional runtime args for gromacs
     mdrun_args: str = ""
+    
+    # Miner can decide if they are serving the request or not.
+    miner_serving: bool = True
+
     # Optional request output, filled by recieving axon.
     md_output: typing.Optional[dict] = None
 

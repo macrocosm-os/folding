@@ -167,6 +167,12 @@ class BaseValidatorNeuron(BaseNeuron):
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = self.forward(job=job)
 
+                    # If we don't have any miners reply to the query, we will make it inactive. 
+                    if len(job_event["energies"]) == 0: 
+                        job.active = False
+                        self.store.update(job=job)
+                        continue 
+
                     if isinstance(job.event, str):
                         job.event = eval(job.event)  # if str, convert to dict.
 

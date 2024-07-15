@@ -15,6 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import os
 import re
 import time
 import numpy as np
@@ -37,6 +38,7 @@ from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
 
+os.environ['GMX_MAXBACKUP'] = '-1'
 
 class Validator(BaseValidatorNeuron):
     """
@@ -173,6 +175,12 @@ class Validator(BaseValidatorNeuron):
         top_reward = 0.80
         apply_pipeline = False
 
+        # There could be hotkeys that have decided to stop serving. We need to remove them from the store.
+        serving_hotkeys = []
+        for ii, state in enumerate(job.event["response_miners_serving"]):
+            if state:
+                serving_hotkeys.append(job.hotkeys[ii])
+
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
@@ -180,36 +188,37 @@ class Validator(BaseValidatorNeuron):
         commit_hash = ""  # For next time
         gro_hash = ""  # For next time
 
+        best_index = np.argmin(energies)
+        best_loss = energies[best_index].item()  # item because it's a torch.tensor
+        best_hotkey = serving_hotkeys[best_index]
+
+        job.update(
+            hotkeys=serving_hotkeys,
+            loss=best_loss,
+            hotkey=best_hotkey,
+            commit_hash=commit_hash,
+            gro_hash=gro_hash,
+        )
+
         # If no miners respond appropriately, the energies will be all zeros
         if (energies == 0).all():
             # All miners not responding but there is at least ONE miner that did in the past. Give them rewards.
-            if job.best_loss < np.inf:
+            if job.best_loss < 0:
                 apply_pipeline = True
                 bt.logging.warning(
-                    f"Received all zero energies for {job.pdb} but stored best_loss < np.inf... Giving rewards."
+                    f"Received all zero energies for {job.pdb} but stored best_loss < 0... Applying reward pipeline."
                 )
         else:
             apply_pipeline = True
             bt.logging.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            best_index = np.argmin(energies)
-            best_loss = energies[best_index].item()  # item because it's a torch.tensor
-            best_hotkey = job.hotkeys[best_index]
-
-            # This does a bunch of important things:
-            # 1. checks if best loss in this round is the best loss overall and updates the best_hotkey and hashes accordingly
-            # 2. Potentially applies early stopping criteria
-            # 3. Ensures that all timestamps and counters are updated correctly
-            job.update(
-                loss=best_loss,
-                hotkey=best_hotkey,
-                commit_hash=commit_hash,
-                gro_hash=gro_hash,
-            )
-
             rewards: torch.Tensor = reward_pipeline(
-                energies=energies, rewards=rewards, top_reward=top_reward, job=job
+                energies=energies,
+                rewards=rewards,
+                top_reward=top_reward,
+                job=job,
+                metagraph=self.metagraph,
             )
 
             uids = self.get_uids(hotkeys=job.hotkeys)
@@ -224,6 +233,11 @@ class Validator(BaseValidatorNeuron):
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
+
+        # If the job is finished, remove the pdb directory
+        if job.active is False:
+            protein = Protein.from_job(job=job, config=self.config.protein)
+            protein.remove_pdb_directory()
 
         def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
