@@ -30,6 +30,8 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 @dataclass
 class Protein:
+    PDB_RECORDS = ("ATOM", "ANISOU", "REMARK", "HETATM", "CONECT")
+
     @property
     def name(self):
         return self.protein_pdb.split(".")[0]
@@ -107,9 +109,9 @@ class Protein:
                 output_dir=protein.validator_directory, edr_name="em.edr"
             )
             protein._calculate_epsilon()
-        except:
+        except Exception as E:
             bt.logging.error(
-                f"pdb_complexity or init_energy failed for {protein.pdb_id}."
+                f"pdb_complexity or init_energy failed for {protein.pdb_id} with Exception {E}."
             )
         finally:
             return protein
@@ -120,8 +122,10 @@ class Protein:
         pdb_complexity = defaultdict(int)
         with open(pdb_path, "r") as f:
             for line in f.readlines():
-                key = line.split()[0].strip()
-                pdb_complexity[key] += 1
+                # Check if the line starts with any of the PDB_RECORDS
+                for key in Protein.PDB_RECORDS:
+                    if line.strip().startswith(key):
+                        pdb_complexity[key] += 1
         return pdb_complexity
 
     def gather_pdb_id(self):
@@ -239,7 +243,7 @@ class Protein:
         self._calculate_epsilon()
 
     def __str__(self):
-        return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}"
+        return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}, water={self.water})"
 
     def __repr__(self):
         return self.__str__()
