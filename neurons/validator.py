@@ -38,7 +38,8 @@ from folding.store import Job
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
 
-os.environ['GMX_MAXBACKUP'] = '-1'
+os.environ["GMX_MAXBACKUP"] = "-1"
+
 
 class Validator(BaseValidatorNeuron):
     """
@@ -218,7 +219,6 @@ class Validator(BaseValidatorNeuron):
                 rewards=rewards,
                 top_reward=top_reward,
                 job=job,
-                metagraph=self.metagraph,
             )
 
             uids = self.get_uids(hotkeys=job.hotkeys)
