@@ -17,15 +17,16 @@ from folding.utils.ops import (
     get_tracebacks,
     calc_potential_from_edr,
 )
+from folding.utils.logger import btlogger
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
-
+print(bt.__version__)
 def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynapse:
     """function that parses a list of files and attaches them to the synapse object"""
-    bt.logging.info(f"Sending files to validator: {files_to_attach}")
+    btlogger.info(f"Sending files to validator: {files_to_attach}")
     for filename in files_to_attach:
         # trrs are large, and validators don't need them.
         if filename.endswith(".trr"):
@@ -38,7 +39,7 @@ def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynap
                 ]  # remove the directory from the filename
                 synapse.md_output[filename] = base64.b64encode(f.read())
         except Exception as e:
-            bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
+            btlogger.error(f"Failed to read file {filename!r} with error: {e}")
             get_tracebacks()
 
     return synapse
@@ -98,7 +99,7 @@ def attach_files_to_synapse(
         synapse = attach_files(files_to_attach=files_to_attach, synapse=synapse)
 
     except Exception as e:
-        bt.logging.error(
+        btlogger.error(
             f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}"
         )
         get_tracebacks()
@@ -148,7 +149,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations = self.create_default_dict()
 
         self.max_workers = self.config.neuron.max_workers
-        bt.logging.info(
+        btlogger.info(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
 
@@ -188,7 +189,7 @@ class FoldingMiner(BaseMinerNeuron):
                     }
                 )
             except Exception as e:
-                bt.logging.error(
+                btlogger.error(
                     f"Failed to calculate potential from edr file with error: {e}"
                 )
 
@@ -227,7 +228,7 @@ class FoldingMiner(BaseMinerNeuron):
                 current_executor_state = simulation["executor"].get_state()
 
                 if current_executor_state == "finished":
-                    bt.logging.warning(
+                    btlogger.warning(
                         f"✅ {pdb_id} finished simulation... Removing from execution stack ✅"
                     )
                     sims_to_delete.append(pdb_id)
@@ -236,7 +237,7 @@ class FoldingMiner(BaseMinerNeuron):
                 del self.simulations[pdb_id]
 
             event["running_simulations"] = list(self.simulations.keys())
-            bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
+            btlogger.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
         return event
 
@@ -255,7 +256,7 @@ class FoldingMiner(BaseMinerNeuron):
             FoldingSynapse: synapse with md_output attached
         """
         # If we are already running a process with the same identifier, return intermediate information
-        bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
+        btlogger.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
 
         # increment step counter everytime miner receives a query.
         self.step += 1
@@ -306,14 +307,14 @@ class FoldingMiner(BaseMinerNeuron):
                         state = lines[-1].strip()
                         state = "md_0_1" if state == "finished" else state
 
-                    bt.logging.warning(
+                    btlogger.warning(
                         f"❗ Found existing data for protein: {synapse.pdb_id}... Sending previously computed, most advanced simulation state ❗"
                     )
                     synapse = attach_files_to_synapse(
                         synapse=synapse, data_directory=output_dir, state=state
                     )
                 except Exception as e:
-                    bt.logging.error(
+                    btlogger.error(
                         f"Failed to read state file for protein {synapse.pdb_id} with error: {e}"
                     )
                     state = None
@@ -326,7 +327,7 @@ class FoldingMiner(BaseMinerNeuron):
                 )
 
             elif len(self.simulations) >= self.max_workers:
-                bt.logging.warning(
+                btlogger.warning(
                     f"❗ Cannot start new process: CPU limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
                 )
 
@@ -363,7 +364,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
         self.simulations[synapse.pdb_id]["queried_at"] = time.time()
 
-        bt.logging.success(
+        btlogger.success(
             f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ "
         )
 
@@ -379,7 +380,7 @@ class FoldingMiner(BaseMinerNeuron):
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
             # Ignore requests from un-registered entities.
-            bt.logging.trace(
+            btlogger.trace(
                 f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
@@ -391,12 +392,12 @@ class FoldingMiner(BaseMinerNeuron):
                 not self.metagraph.validator_permit[uid]
                 or self.metagraph.stake[uid] < 10_000
             ):
-                bt.logging.warning(
+                btlogger.warning(
                     f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
                 return True, "Non-validator hotkey"
 
-        bt.logging.trace(
+        btlogger.trace(
             f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
         )
         return False, "Hotkey recognized!"
@@ -408,7 +409,7 @@ class FoldingMiner(BaseMinerNeuron):
         priority = float(
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
-        bt.logging.trace(
+        btlogger.trace(
             f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority
         )
         return priority
@@ -443,7 +444,7 @@ class SimulationManager:
             suppress_cmd_output (bool, optional): Defaults to True.
             mock (bool, optional): mock for debugging. Defaults to False.
         """
-        bt.logging.info(
+        btlogger.info(
             f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
 
@@ -455,11 +456,11 @@ class SimulationManager:
         for filename, content in md_inputs.items():
             # Write the file to the output directory
             with open(filename, "w") as file:
-                bt.logging.info(f"\nWriting {filename} to {self.output_dir}")
+                btlogger.info(f"\nWriting {filename} to {self.output_dir}")
                 file.write(content)
 
         for state, commands in commands.items():
-            bt.logging.info(f"Running {state} commands")
+            btlogger.info(f"Running {state} commands")
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
 
@@ -468,13 +469,13 @@ class SimulationManager:
             )
 
             if mock:
-                bt.logging.warning("Running in mock mode, creating fake files...")
+                btlogger.warning("Running in mock mode, creating fake files...")
                 for ext in ["tpr", "xtc", "edr", "cpt"]:
                     self.create_empty_file(
                         os.path.join(self.output_dir, f"{state}.{ext}")
                     )
 
-        bt.logging.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
+        btlogger.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
 
         state = "finished"
         with open(self.state_file_name, "w") as f:
@@ -498,7 +499,7 @@ class MockSimulationManager(SimulationManager):
     def run(self, total_wait_time: int = 1):
         start_time = time.time()
 
-        bt.logging.debug(f"✅ MockSimulationManager.run is running ✅")
+        btlogger.debug(f"✅ MockSimulationManager.run is running ✅")
         check_if_directory_exists(output_directory=self.output_dir)
 
         store = os.path.join(self.output_dir, self.state_file_name)
@@ -507,12 +508,12 @@ class MockSimulationManager(SimulationManager):
         intermediate_interval = total_wait_time / len(states)
 
         for state in states:
-            bt.logging.info(f"Running state: {state}")
+            btlogger.info(f"Running state: {state}")
             state_time = time.time()
             with open(store, "w") as f:
                 f.write(f"{state}\n")
 
             time.sleep(intermediate_interval)
-            bt.logging.info(f"Total state_time: {time.time() - state_time}")
+            btlogger.info(f"Total state_time: {time.time() - state_time}")
 
-        bt.logging.warning(f"Total run method time: {time.time() - start_time}")
+        btlogger.warning(f"Total run method time: {time.time() - start_time}")

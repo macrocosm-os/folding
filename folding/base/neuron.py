@@ -29,6 +29,7 @@ from folding import __spec_version__ as spec_version
 from folding import __GROMACS_VERSION_TAG__
 from folding.utils.ops import GromacsException
 from folding.mock import MockSubtensor, MockMetagraph
+from folding.utils.logger import btlogger
 
 
 class BaseNeuron(ABC):
@@ -66,17 +67,17 @@ class BaseNeuron(ABC):
         self.check_config(self.config)
 
         # Set up logging with the provided configuration and directory.
-        bt.logging(config=self.config, logging_dir=self.config.full_path)
+        btlogger(config=self.config, logging_dir=self.config.full_path)
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 
         # Log the configuration for reference.
-        bt.logging.info(self.config)
+        btlogger.info(self.config)
 
         # Build Bittensor objects
         # These are core Bittensor classes to interact with the network.
-        bt.logging.info("Setting up bittensor objects.")
+        btlogger.info("Setting up bittensor objects.")
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
@@ -91,16 +92,16 @@ class BaseNeuron(ABC):
             # Check gromacs version if we are not in mock mode.
             self.check_gromacs_version()
 
-        bt.logging.info(f"Wallet: {self.wallet}")
-        bt.logging.info(f"Subtensor: {self.subtensor}")
-        bt.logging.info(f"Metagraph: {self.metagraph}")
+        btlogger.info(f"Wallet: {self.wallet}")
+        btlogger.info(f"Subtensor: {self.subtensor}")
+        btlogger.info(f"Metagraph: {self.metagraph}")
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
         self.check_registered()
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-        bt.logging.info(
+        btlogger.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
@@ -137,7 +138,7 @@ class BaseNeuron(ABC):
         except Exception as e:
             raise e
 
-        bt.logging.success(f"Running GROMACS version: {self.gromacs_version} with GPU status: {self.gpu_status}")
+        btlogger.success(f"Running GROMACS version: {self.gromacs_version} with GPU status: {self.gpu_status}")
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
@@ -169,7 +170,7 @@ class BaseNeuron(ABC):
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
         ):
-            bt.logging.error(
+            btlogger.error(
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli subnets register` before trying again"
             )
@@ -205,6 +206,6 @@ class BaseNeuron(ABC):
         pass
 
     def load_state(self):
-        bt.logging.warning(
+        btlogger.warning(
             "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
         )

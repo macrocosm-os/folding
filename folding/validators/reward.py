@@ -10,6 +10,7 @@ from folding.protocol import FoldingSynapse
 from folding.rewards.reward import RewardEvent
 from folding.rewards.energy import EnergyRewardModel
 from folding.rewards.rmsd import RMSDRewardModel
+from folding.utils.logger import btlogger
 
 
 def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[int]):
@@ -36,7 +37,7 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
                 continue
 
             if resp.dendrite.status_code != 200:
-                bt.logging.info(
+                btlogger.info(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
@@ -56,7 +57,7 @@ def get_energies(protein: Protein, responses: List[FoldingSynapse], uids: List[i
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
-            bt.logging.error(
+            btlogger.error(
                 f"Failed to parse miner data for uid {uid} with error: {E}"
             )
             continue

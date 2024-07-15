@@ -21,11 +21,12 @@ import torch
 import argparse
 import bittensor as bt
 from loguru import logger
+from folding.utils.logger import btlogger
 
 
 def check_config(cls, config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
+    btlogger.check_config(config)
 
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
@@ -384,7 +385,7 @@ def config(cls):
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
+    btlogger.add_args(parser)
     bt.axon.add_args(parser)
     cls.add_args(parser)
     return bt.config(parser)

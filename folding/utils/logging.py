@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 
 import folding
 import bittensor as bt
+from folding.utils.logger import btlogger
 
 
 @dataclass
@@ -64,7 +65,7 @@ def init_wandb(self, reinit=False):
         tags=tags,
         notes=self.config.wandb.notes,
     )
-    bt.logging.success(
+    btlogger.success(
         prefix="Started a new wandb run",
         sufix=f"<blue> {self.wandb.name} </blue>",
     )

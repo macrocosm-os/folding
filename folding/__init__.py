@@ -1,5 +1,5 @@
-from .protocol import FoldingSynapse
-from .validators.protein import Protein
+# from .protocol import FoldingSynapse
+# from .validators.protein import Protein
 
 __version__ = "0.1.0"
 version_split = __version__.split(".")

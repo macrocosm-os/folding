@@ -3,6 +3,7 @@ from typing import List, Dict
 import bittensor as bt
 
 from folding.rewards.reward import BaseRewardModel, BatchRewardOutput
+from folding.utils.logger import btlogger
 
 
 class RMSDRewardModel(BaseRewardModel):
@@ -46,7 +47,7 @@ class RMSDRewardModel(BaseRewardModel):
             )
 
         except Exception as E:
-            bt.logging.error(f"Exception in RMSDRewardModel: {E}")
+            btlogger.error(f"Exception in RMSDRewardModel: {E}")
             extra_info = None
 
         finally:

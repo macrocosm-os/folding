@@ -19,6 +19,7 @@
 import typing
 import base64
 import bittensor as bt
+from folding.utils.logger import btlogger
 
 
 class FoldingSynapse(bt.Synapse):
@@ -51,7 +52,7 @@ class FoldingSynapse(bt.Synapse):
         Returns:
         - dict: The serialized response, which in this case is the value of md_output.
         """
-        bt.logging.info(
+        btlogger.info(
             f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the reponse has expected hash
@@ -63,7 +64,7 @@ class FoldingSynapse(bt.Synapse):
                 try:
                     md_output[k] = base64.b64decode(v)
                 except Exception as e:
-                    bt.logging.error(f"Error decoding {k} from md_output: {e}")
+                    btlogger.error(f"Error decoding {k} from md_output: {e}")
                     md_output[k] = None
 
             self.md_output = md_output

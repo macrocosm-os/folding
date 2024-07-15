@@ -13,6 +13,7 @@ from folding.protocol import FoldingSynapse
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
+from folding.utils.logger import btlogger
 
 
 from bittensor import dendrite
@@ -39,7 +40,7 @@ def run_step(
     )
 
     # Make calls to the network with the prompt - this is synchronous.
-    bt.logging.warning("waiting for responses....")
+    btlogger.warning("waiting for responses....")
     responses: List[FoldingSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
@@ -111,7 +112,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
         )
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
-        bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
+        btlogger.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
 
         if event.get("validator_search_status") == True:
@@ -122,7 +123,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
             # only log the event if the simulation was not successful
             log_event(self, event)
-            bt.logging.error(
+            btlogger.error(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
             exclude.append(pdb_id)
@@ -136,7 +137,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     exclude_in_hp_search = parse_config(config)
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    btlogger.info(f"Searching parameter space for pdb {pdb_id}")
     for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
     ):
@@ -167,7 +168,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["epsilon"] = protein.epsilon
 
             if "validator_search_status" not in event:
-                bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
+                btlogger.warning("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break

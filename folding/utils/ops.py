@@ -14,6 +14,7 @@ import requests
 
 import bittensor as bt
 from folding.protocol import FoldingSynapse
+from folding.utils.logger import btlogger
 
 # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
 FF_WATER_PAIRS = {
@@ -99,7 +100,7 @@ def gro_hash(gro_path: str):
     Args:
         gro_path (str): location to the gro file
     """
-    bt.logging.info(f"Calculating hash for path {gro_path!r}")
+    btlogger.info(f"Calculating hash for path {gro_path!r}")
     pattern = re.compile(r"\s*(-?\d+\w+)\s+(\w+'?\d*\s*\d+)\s+(\-?\d+\.\d+)")
 
     with open(gro_path, "rb") as f:
@@ -108,7 +109,7 @@ def gro_hash(gro_path: str):
             name.decode().split(" t=")[0].strip("\n").encode()
         )  # if we are rerunning the gro file using trajectory, we need to include this
         length = int(length)
-        bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
+        btlogger.info(f"{name=}, {length=}, {len(lines)=}")
 
     buf = ""
     for line in lines:
@@ -148,7 +149,7 @@ def calc_potential_from_edr(
 def check_if_directory_exists(output_directory):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
-        bt.logging.debug(f"Created directory {output_directory!r}")
+        btlogger.debug(f"Created directory {output_directory!r}")
 
 
 def get_tracebacks():
@@ -156,16 +157,16 @@ def get_tracebacks():
     exc_type, exc_value, exc_traceback = sys.exc_info()
     formatted_traceback = traceback.format_exception(exc_type, exc_value, exc_traceback)
 
-    bt.logging.error(" ---------------- Traceback details ---------------- ")
-    bt.logging.warning("".join(formatted_traceback))
-    bt.logging.warning(" ---------------- End of Traceback ----------------\n")
+    btlogger.error(" ---------------- Traceback details ---------------- ")
+    btlogger.warning("".join(formatted_traceback))
+    btlogger.warning(" ---------------- End of Traceback ----------------\n")
 
 
 def run_cmd_commands(
     commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
 ):
     for cmd in tqdm.tqdm(commands):
-        bt.logging.debug(f"Running command: {cmd}")
+        btlogger.debug(f"Running command: {cmd}")
 
         try:
             result = subprocess.run(
@@ -176,13 +177,13 @@ def run_cmd_commands(
                 stderr=subprocess.PIPE,
             )
             if not suppress_cmd_output:
-                bt.logging.info(result.stdout.decode())
+                btlogger.info(result.stdout.decode())
 
         except subprocess.CalledProcessError as e:
-            bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
+            btlogger.error(f"❌ Failed to run command ❌: {cmd}")
             if verbose:
-                bt.logging.error(f"Output: {e.stdout.decode()}")
-                bt.logging.error(f"Error: {e.stderr.decode()}")
+                btlogger.error(f"Output: {e.stdout.decode()}")
+                btlogger.error(f"Error: {e.stderr.decode()}")
                 get_tracebacks()
             raise
 
@@ -216,16 +217,16 @@ def check_and_download_pdbs(
                     file.write(r.text)
 
             message = " but contains missing values." if not is_complete else ""
-            bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+            btlogger.success(f"PDB file {pdb_id} downloaded" + message)
 
             return True
         else:
-            bt.logging.warning(
+            btlogger.warning(
                 f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
             )
             return False
     else:
-        bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+        btlogger.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
         raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
 
 

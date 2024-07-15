@@ -22,6 +22,7 @@ from folding.utils.ops import (
     get_last_step_time,
 )
 from folding.store import Job
+from folding.utils.logger import btlogger
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -88,7 +89,7 @@ class Protein:
     @staticmethod
     def from_job(job: Job, config: Dict):
         # TODO: This must be called after the protein has already been downloaded etc.
-        bt.logging.warning(f"sampling pdb job {job.pdb}")
+        btlogger.warning(f"sampling pdb job {job.pdb}")
         # Load_md_inputs is set to True to ensure that miners get files every query.
         protein = Protein(
             pdb_id=job.pdb,
@@ -107,7 +108,7 @@ class Protein:
             )
             protein._calculate_epsilon()
         except:
-            bt.logging.error(
+            btlogger.error(
                 f"pdb_complexity or init_energy failed for {protein.pdb_id}."
             )
         finally:
@@ -129,7 +130,7 @@ class Protein:
                 root_dir=ROOT_DIR, filename="pdb_ids.pkl"
             )  # TODO: This should be a class variable via config
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
-            bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
+            btlogger.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
         self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
         self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
@@ -151,7 +152,7 @@ class Protein:
                 )
 
         else:
-            bt.logging.info(
+            btlogger.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
@@ -174,7 +175,7 @@ class Protein:
                 try:
                     files_to_return[f.split("/")[-1]] = open(f, "r").read()
                 except Exception as E:
-                    # bt.logging.warning(
+                    # btlogger.warning(
                     #     f"Attempted to put file {file} in md_inputs.\nError: {E}"
                     # )
                     continue
@@ -188,7 +189,7 @@ class Protein:
         4. edit the necessary config files and add them to the synapse object self.md_inputs[file] = content
         4. save the files to the validator directory for record keeping.
         """
-        bt.logging.info(
+        btlogger.info(
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
 
@@ -284,10 +285,10 @@ class Protein:
 
     # Function to generate GROMACS input files
     def generate_input_files(self):
-        bt.logging.info(f"Changing path to {self.pdb_directory}")
+        btlogger.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
-        bt.logging.info(
+        btlogger.info(
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
@@ -321,7 +322,7 @@ class Protein:
         check_if_directory_exists(output_directory=self.validator_directory)
         # Move all files
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
-        bt.logging.debug(f"Moving all files except pdb to {self.validator_directory}")
+        btlogger.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
 
         # We want to catch any errors that occur in the above steps and then return the error to the user
@@ -382,7 +383,7 @@ class Protein:
             save_interval = self.calculate_params_save_interval()
             for param in params_to_change:
                 if param in content:
-                    bt.logging.debug(
+                    btlogger.debug(
                         f"Changing {param} in {file} to {save_interval}..."
                     )
                     content = mapper(
@@ -404,7 +405,7 @@ class Protein:
         Returns:
             _type_: _description_
         """
-        bt.logging.info(f"⏰ Saving files to {output_directory}...")
+        btlogger.info(f"⏰ Saving files to {output_directory}...")
         check_if_directory_exists(output_directory=output_directory)
 
         filetypes = {}
@@ -417,7 +418,7 @@ class Protein:
         return filetypes
 
     def delete_files(self, directory: str):
-        bt.logging.info(f"Deleting files in {directory}")
+        btlogger.info(f"Deleting files in {directory}")
         for file in os.listdir(directory):
             os.remove(os.path.join(directory, file))
         # os.rmdir(output_directory)
@@ -450,7 +451,7 @@ class Protein:
             f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -b {simulation_step_time} -e {simulation_step_time}"
         ]
 
-        bt.logging.warning(f"Computing an intermediate gro...")
+        btlogger.warning(f"Computing an intermediate gro...")
         run_cmd_commands(
             commands=command,
             suppress_cmd_output=self.config.suppress_cmd_output,
@@ -504,14 +505,14 @@ class Protein:
         }
 
         if len(md_output.keys()) == 0:
-            bt.logging.warning(
+            btlogger.warning(
                 f"Miner {hotkey[:8]} returned empty md_output... Skipping!"
             )
             return False
 
         for ext in required_files_extensions:
             if ext not in md_outputs_exts:
-                bt.logging.error(f"Missing file with extension {ext} in md_output")
+                btlogger.error(f"Missing file with extension {ext} in md_output")
                 return False
 
         self.get_miner_data_directory(hotkey=hotkey)
@@ -535,12 +536,12 @@ class Protein:
 
         # Check that the md_output contains the right protein through gro_hash
         if gro_hash(gro_path=self.gro_path) != gro_hash(gro_path=gro_file_location):
-            bt.logging.warning(
+            btlogger.warning(
                 f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
             )
             self.delete_files(directory=self.miner_data_directory)
             return False
-        bt.logging.debug(f"The hash for .gro file is correct!")
+        btlogger.debug(f"The hash for .gro file is correct!")
 
         # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
         # .gro -> .edr

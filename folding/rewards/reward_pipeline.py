@@ -2,6 +2,7 @@ import torch
 import bittensor as bt
 from folding.store import Job
 from folding.rewards.linear_reward import divide_decreasing
+from folding.utils.logger import btlogger
 
 
 def reward_pipeline(
@@ -21,7 +22,7 @@ def reward_pipeline(
 
     # Edge case: previously best miner was deregistered but their loss is still the best.
     if job.best_hotkey not in job.hotkeys:
-        bt.logging.warning(
+        btlogger.warning(
             f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}... {job.best_hotkey} is not registered on the metagraph. Assigning no rewards."
         )
         return rewards  # rewards of all 0s.

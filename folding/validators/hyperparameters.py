@@ -3,6 +3,7 @@ from itertools import product
 from typing import List, Dict, Union
 
 import bittensor as bt
+from folding.utils.logger import btlogger
 
 
 class HyperParameters:
@@ -45,11 +46,11 @@ class HyperParameters:
                     try:
                         self.parameter_set[key].remove(value)
                     except:
-                        bt.logging.warning(
+                        btlogger.warning(
                             f"Value {value} not found in {key} parameter set. Skipping..."
                         )
                 else:
-                    bt.logging.error(
+                    btlogger.error(
                         f"Parameter {key} not found in parameter set. Only FF, BOX_TYPE, and/or WATER are allowed."
                     )
 
@@ -62,7 +63,7 @@ class HyperParameters:
                 try:
                     self.parameter_set.pop(param)
                 except KeyError:
-                    bt.logging.error(
+                    btlogger.error(
                         f"Parameter {param} not found in parameter set. Only FF, BOX_TYPE, and/or WATER are allowed."
                     )
 
