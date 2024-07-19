@@ -30,7 +30,7 @@ import bittensor as bt
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
 from folding.rewards.reward_pipeline import reward_pipeline
-from folding.validators.forward import create_new_challenge, run_step
+from folding.validators.forward import create_new_challenge, run_step, run_ping_step
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
@@ -120,6 +120,49 @@ class Validator(BaseValidatorNeuron):
     def get_pdbs_to_exclude(self) -> List[str]:
         # Set of pdbs that are currently in the process of running + old submitted simulations.
         return list(self.store._db.index)
+    
+    def sample_random_uids(self, num_uids_to_sample:int, exclude_uids:List[int]) -> List[int]:
+        """ Helper function to sample a batch of uids on the network, 
+        determine their serving status, and sample more until a desired 
+        number of uids is found.
+
+        Recurrsion is used to sample until there is enough uids. 
+
+        Args:
+            exclude_uids (List[int]): a list of uids that we know we shouldn't use.
+        """
+        valid_uids = []
+        reported_compute = []
+
+        sampled_uids:torch.Tensor = get_random_uids(
+            self, k = num_uids_to_sample, exclude=exclude_uids
+        )
+
+        #TODO: Should this be async? 
+        ping_report = run_ping_step(self, uids = sampled_uids, timeout=self.config.neuron.ping_timeout)
+        can_serve = ping_report['miner_status'] #list of booleans
+
+        valid_uids.extend(np.array(sampled_uids)[can_serve].tolist())
+        reported_compute.extend(np.array(ping_report['reported_compute'])[can_serve].tolist())
+
+        deficit = num_uids_to_sample - sum(can_serve)
+
+        # If there are not enough uids, you will obtain the remainder
+        # And since you have already added the valid uids to the growing list, we can just return the valid_uids 
+        if len(sampled_uids) < num_uids_to_sample:
+            return valid_uids
+
+        if deficit > 0: 
+            exclude_uids.extend(sampled_uids)  #exclude all uids sampled.
+
+            #recursive call adding to the valid uids
+            valid_uids.extend(self.sample_random_uids(
+                num_uids_to_sample = deficit, 
+                exclude_uids=exclude_uids)
+            ) 
+
+        return valid_uids
+
 
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
@@ -136,25 +179,28 @@ class Validator(BaseValidatorNeuron):
             # This will change on each loop since we are submitting a new pdb to the batch of miners
             exclude_pdbs = self.get_pdbs_to_exclude()
 
-            # selects a new pdb, downloads data, preprocesses and gets hyperparams.
-            job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
-
             # assign workers to the job (hotkeys)
             active_jobs = self.store.get_queue(ready=False).queue
             active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
-            uids = get_random_uids(
-                self, self.config.neuron.sample_size, exclude=exclude_uids
-            )
+            #Sample uids in a recurrsive manner until we have enough (or other condition is met.)
+            start_time = time.time()
+            valid_uids = self.sample_random_uids(
+                num_uids_to_sample= self.config.neuron.sample_size, 
+                exclude_uids=exclude_uids
+                )
+            
+            uid_search_time = time.time() - start_time
 
-            selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
+            selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
-            # TODO: We can pass other custom stuff like update_interval, max_time_no_improvement and min_updates to control length
-            # update_interval = 60 * np.log10(job['pdb_length'])
-            # min_updates = 10
-            # max_time_no_improvement = min_updates * update_interval
+            # With the above logic, we know we have a valid set of uids. 
+            # selects a new pdb, downloads data, preprocesses and gets hyperparams.
+            job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
+
+            job_event["uid_search_time"] = uid_search_time
 
             if len(selected_hotkeys) > 0:
                 self.store.insert(
