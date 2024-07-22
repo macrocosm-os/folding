@@ -19,9 +19,8 @@ import os
 import re
 import time
 import numpy as np
-from typing import Dict
+from typing import Dict, List, Optional
 from itertools import chain
-from typing import List
 
 import torch
 import pandas as pd
@@ -120,49 +119,64 @@ class Validator(BaseValidatorNeuron):
     def get_pdbs_to_exclude(self) -> List[str]:
         # Set of pdbs that are currently in the process of running + old submitted simulations.
         return list(self.store._db.index)
-    
-    def sample_random_uids(self, num_uids_to_sample:int, exclude_uids:List[int]) -> List[int]:
-        """ Helper function to sample a batch of uids on the network, 
-        determine their serving status, and sample more until a desired 
-        number of uids is found.
 
-        Recurrsion is used to sample until there is enough uids. 
+    def sample_random_uids(
+        self,
+        num_uids_to_sample: int,
+        exclude_uids: List[int],
+        retry_num: Optional[int] = 0,
+    ) -> List[int]:
+        """Helper function to sample a batch of uids on the network, determine their serving status,
+        and sample more until a desired number of uids is found.
+
+        This function uses recursion to sample until there are enough uids.
 
         Args:
-            exclude_uids (List[int]): a list of uids that we know we shouldn't use.
+            num_uids_to_sample (int): The number of uids to sample.
+            exclude_uids (List[int]): A list of uids that should be excluded from sampling.
+
+        Returns:
+            List[int]: A list of responding and free uids.
         """
+        max_retries = 5  # maximum number of retries
         valid_uids = []
         reported_compute = []
 
-        sampled_uids:torch.Tensor = get_random_uids(
-            self, k = num_uids_to_sample, exclude=exclude_uids
+        sampled_uids: torch.Tensor = get_random_uids(
+            self, k=num_uids_to_sample, exclude=exclude_uids
         )
 
-        #TODO: Should this be async? 
-        ping_report = run_ping_step(self, uids = sampled_uids, timeout=self.config.neuron.ping_timeout)
-        can_serve = ping_report['miner_status'] #list of booleans
+        # TODO: Should this be async?
+        ping_report = run_ping_step(
+            self, uids=sampled_uids, timeout=self.config.neuron.ping_timeout
+        )
+        can_serve = ping_report["miner_status"]  # list of booleans
 
         valid_uids.extend(np.array(sampled_uids)[can_serve].tolist())
-        reported_compute.extend(np.array(ping_report['reported_compute'])[can_serve].tolist())
+        reported_compute.extend(
+            np.array(ping_report["reported_compute"])[can_serve].tolist()
+        )
 
         deficit = num_uids_to_sample - sum(can_serve)
 
         # If there are not enough uids, you will obtain the remainder
-        # And since you have already added the valid uids to the growing list, we can just return the valid_uids 
+        # And since you have already added the valid uids to the growing list, we can just return the valid_uids
         if len(sampled_uids) < num_uids_to_sample:
             return valid_uids
 
-        if deficit > 0: 
-            exclude_uids.extend(sampled_uids)  #exclude all uids sampled.
+        if deficit > 0 and max_retries > retry_num:
+            exclude_uids.extend(sampled_uids)  # exclude all uids sampled.
 
-            #recursive call adding to the valid uids
-            valid_uids.extend(self.sample_random_uids(
-                num_uids_to_sample = deficit, 
-                exclude_uids=exclude_uids)
-            ) 
+            # recursive call adding to the valid uids
+            valid_uids.extend(
+                self.sample_random_uids(
+                    num_uids_to_sample=deficit,
+                    exclude_uids=exclude_uids,
+                    retry_num=retry_num + 1,
+                )
+            )
 
         return valid_uids
-
 
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
@@ -185,18 +199,18 @@ class Validator(BaseValidatorNeuron):
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
-            #Sample uids in a recurrsive manner until we have enough (or other condition is met.)
+            # Sample uids in a recursive manner until we have enough (or other condition is met.)
             start_time = time.time()
             valid_uids = self.sample_random_uids(
-                num_uids_to_sample= self.config.neuron.sample_size, 
-                exclude_uids=exclude_uids
-                )
-            
+                num_uids_to_sample=self.config.neuron.sample_size,
+                exclude_uids=exclude_uids,
+            )
+
             uid_search_time = time.time() - start_time
 
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
-            # With the above logic, we know we have a valid set of uids. 
+            # With the above logic, we know we have a valid set of uids.
             # selects a new pdb, downloads data, preprocesses and gets hyperparams.
             job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
 
