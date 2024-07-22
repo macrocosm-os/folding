@@ -1,4 +1,4 @@
-from .protocol import FoldingSynapse
+from .protocol import JobSubmissionSynapse
 from .validators.protein import Protein
 
 __version__ = "0.2.0"

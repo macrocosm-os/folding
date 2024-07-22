@@ -1,19 +1,19 @@
-import os
-import re
-import sys
-import tqdm
-import shutil
-import random
 import hashlib
-import subprocess
-import traceback
+import os
 import pickle as pkl
-
-from typing import List, Dict
-import requests
+import random
+import re
+import shutil
+import subprocess
+import sys
+import traceback
+from typing import Dict, List
 
 import bittensor as bt
-from folding.protocol import FoldingSynapse
+import requests
+import tqdm
+
+from folding.protocol import JobSubmissionSynapse
 
 # Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
 FF_WATER_PAIRS = {
@@ -244,7 +244,7 @@ def is_pdb_complete(pdb_text: str) -> bool:
     return True
 
 
-def get_response_info(responses: List[FoldingSynapse]) -> Dict:
+def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
     """Gather all desired response information from the set of miners."""
 
     response_times = []
