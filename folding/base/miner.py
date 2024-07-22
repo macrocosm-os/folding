@@ -77,6 +77,9 @@ class BaseMinerNeuron(BaseNeuron):
         Args:
             self (PingSynapse): must attach "can_serve" and "available_compute"
         """
+        
+        bt.logging.debug(f"Received ping request from {synapse.dendrite.uuid}")
+        
         synapse.available_compute = len(self.simulations) - self.max_workers
         
         #TODO: add more conditions. 
