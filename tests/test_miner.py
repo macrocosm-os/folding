@@ -43,7 +43,6 @@ def test_miner(num_requests: int):
     synapses = []
     for ii in range(num_requests):
         test_synapse = JobSubmissionSynapse(
-        test_synapse = JobSubmissionSynapse(
             pdb_id=test_config.protein.pdb_id + f"_{ii}",
             md_inputs={},  # label ids with _ii
         )
