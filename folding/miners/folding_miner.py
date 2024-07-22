@@ -23,7 +23,9 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
 
-def attach_files(files_to_attach: List, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
+def attach_files(
+    files_to_attach: List, synapse: JobSubmissionSynapse
+) -> JobSubmissionSynapse:
     """function that parses a list of files and attaches them to the synapse object"""
     bt.logging.info(f"Sending files to validator: {files_to_attach}")
     for filename in files_to_attach:
@@ -240,7 +242,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         return event
 
-    def job_submission_forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
+    def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
         There are a set of default behaviours the miner should carry out based on the form the synapse comes in as:
@@ -330,9 +332,7 @@ class FoldingMiner(BaseMinerNeuron):
                     f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
                 )
 
-                bt.logging.warning(
-                    f"❗ Removing miner from job pool ❗"
-                )
+                bt.logging.warning(f"❗ Removing miner from job pool ❗")
 
                 event["condition"] = "cpu_limit_reached"
                 synapse.miner_serving = False

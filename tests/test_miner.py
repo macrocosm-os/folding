@@ -14,7 +14,6 @@ import pytest
 
 from folding.miners.mock_miner import MockFoldingMiner
 from folding.protocol import JobSubmissionSynapse
-from folding.protocol import JobSubmissionSynapse
 from folding.utils.ops import delete_directory
 from tests.fixtures.gro_files.default_config import get_test_config
 

@@ -57,7 +57,7 @@ class BaseMinerNeuron(BaseNeuron):
         # Attach determiners which functions are called when servicing a request.
         bt.logging.info(f"Attaching forward function to miner axon.")
         self.axon.attach(
-            forward_fn=self.job_submission_forward,
+            forward_fn=self.forward,
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
         ).attach(
