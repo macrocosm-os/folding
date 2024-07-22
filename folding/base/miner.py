@@ -61,7 +61,7 @@ class BaseMinerNeuron(BaseNeuron):
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
         ).attach(
-            forward_fn=self.ping_forward, #not sure if we need blacklist on this.
+            forward_fn=self.ping_forward,  # not sure if we need blacklist on this.
         )
         bt.logging.info(f"Axon created: {self.axon}")
 
@@ -77,16 +77,15 @@ class BaseMinerNeuron(BaseNeuron):
         Args:
             self (PingSynapse): must attach "can_serve" and "available_compute"
         """
-        
-        bt.logging.debug(f"Received ping request from {synapse.dendrite.uuid}")
-        
+
+        bt.logging.debug(f"Received ping request from {synapse.dendrite.hotkey[:8]}")
+
         synapse.available_compute = len(self.simulations) - self.max_workers
-        
-        #TODO: add more conditions. 
+
+        # TODO: add more conditions.
         if synapse.available_compute > 0:
-            synapse.can_serve = True 
+            synapse.can_serve = True
         return synapse
-    
 
     def run(self):
         """
