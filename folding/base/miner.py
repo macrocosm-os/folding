@@ -80,7 +80,7 @@ class BaseMinerNeuron(BaseNeuron):
 
         bt.logging.debug(f"Received ping request from {synapse.dendrite.hotkey[:8]}")
 
-        synapse.available_compute = len(self.simulations) - self.max_workers
+        synapse.available_compute = self.max_workers - len(self.simulations)
 
         # TODO: add more conditions.
         if synapse.available_compute > 0:
