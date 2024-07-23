@@ -70,7 +70,7 @@ def add_args(cls, parser):
         help="Device to run on.",
         default="cpu",
     )
-    
+
     parser.add_argument(
         "--neuron.metagraph_resync_length",
         type=int,
@@ -301,6 +301,12 @@ def add_validator_args(cls, parser):
         type=float,
         help="The timeout for each forward call. (seconds)",
         default=45,
+    )
+    parser.add_argument(
+        "--neuron.ping_timeout",
+        type=float,
+        help="Controls the timeout for the PingSynapse call",
+        default=3,
     )
 
     parser.add_argument(
