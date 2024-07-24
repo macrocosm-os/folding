@@ -216,7 +216,10 @@ class Validator(BaseValidatorNeuron):
 
             job_event["uid_search_time"] = uid_search_time
 
-            if len(selected_hotkeys) > 0:
+            if (
+                len(selected_hotkeys) > 0
+                and len(valid_uids) == self.config.neuron.sample_size
+            ):
                 self.store.insert(
                     pdb=job_event["pdb_id"],
                     ff=job_event["ff"],
@@ -225,6 +228,10 @@ class Validator(BaseValidatorNeuron):
                     hotkeys=selected_hotkeys,
                     epsilon=job_event["epsilon"],
                     event=job_event,
+                )
+            else:
+                bt.logging.warning(
+                    f"Not enough available uids for job {job_event["pdb_id"]} to be inserted into the store..."
                 )
 
     def update_job(self, job: Job):
