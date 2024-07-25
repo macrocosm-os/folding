@@ -156,8 +156,6 @@ class Validator(BaseValidatorNeuron):
         """Helper function to sample a batch of uids on the network, determine their serving status,
         and sample more until a desired number of uids is found.
 
-        This function uses recursion to sample until there are enough uids.
-
         Args:
             num_uids_to_sample (int): The number of uids to sample.
             exclude_uids (List[int]): A list of uids that should be excluded from sampling.
