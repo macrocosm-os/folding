@@ -18,8 +18,9 @@
 import os
 import re
 import time
+import random
 import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List, Tuple, Optional
 from itertools import chain
 
 import torch
@@ -53,6 +54,9 @@ class Validator(BaseValidatorNeuron):
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
+
+        # Sample all the uids on the network, and return only the uids that are non-valis. 
+        self.all_miner_uids: List = get_random_uids(self, k = self.metagraph.n, exclude = None).tolist()
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
@@ -120,11 +124,34 @@ class Validator(BaseValidatorNeuron):
         # Set of pdbs that are currently in the process of running + old submitted simulations.
         return list(self.store._db.index)
 
+    def ping_all_miners(
+        self,
+        exclude_uids: List[int],
+    ) -> Tuple[List[int], List[int]]:
+        """Sample ALL (non-excluded) miner uids and return the list of uids
+        that can serve jobs.
+
+        Args:
+            exclude_uids (List[int]): uids to exclude from the uids search
+
+        Returns:
+           Tuple(List,List): Lists of active and inactive uids
+        """
+        
+        current_miner_uids = list(set(self.all_miner_uids).difference(set(exclude_uids)))
+
+        ping_report = run_ping_step(
+            self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout
+        )
+        can_serve = ping_report["miner_status"]  # list of booleans
+
+        active_uids = np.array(current_miner_uids)[can_serve].tolist()
+        return active_uids
+        
     def sample_random_uids(
         self,
         num_uids_to_sample: int,
         exclude_uids: List[int],
-        retry_num: Optional[int] = 0,
     ) -> List[int]:
         """Helper function to sample a batch of uids on the network, determine their serving status,
         and sample more until a desired number of uids is found.
@@ -138,45 +165,14 @@ class Validator(BaseValidatorNeuron):
         Returns:
             List[int]: A list of responding and free uids.
         """
-        max_retries = 5  # maximum number of retries
-        valid_uids = []
-        reported_compute = []
+        active_uids = self.ping_all_miners(exclude_uids=exclude_uids)
 
-        sampled_uids: torch.Tensor = get_random_uids(
-            self, k=num_uids_to_sample, exclude=exclude_uids
-        )
+        if len(active_uids) > num_uids_to_sample:
+            return random.sample(active_uids, num_uids_to_sample)
+        
+        elif len(active_uids) <= num_uids_to_sample:
+            return active_uids
 
-        # TODO: Should this be async?
-        ping_report = run_ping_step(
-            self, uids=sampled_uids, timeout=self.config.neuron.ping_timeout
-        )
-        can_serve = ping_report["miner_status"]  # list of booleans
-
-        valid_uids.extend(np.array(sampled_uids)[can_serve].tolist())
-        reported_compute.extend(
-            np.array(ping_report["reported_compute"])[can_serve].tolist()
-        )
-
-        deficit = num_uids_to_sample - sum(can_serve)
-
-        # If there are not enough uids, you will obtain the remainder
-        # And since you have already added the valid uids to the growing list, we can just return the valid_uids
-        if len(sampled_uids) < num_uids_to_sample:
-            return valid_uids
-
-        if deficit > 0 and max_retries > retry_num:
-            exclude_uids.extend(sampled_uids)  # exclude all uids sampled.
-
-            # recursive call adding to the valid uids
-            valid_uids.extend(
-                self.sample_random_uids(
-                    num_uids_to_sample=deficit,
-                    exclude_uids=exclude_uids,
-                    retry_num=retry_num + 1,
-                )
-            )
-
-        return valid_uids
 
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
@@ -207,19 +203,18 @@ class Validator(BaseValidatorNeuron):
             )
 
             uid_search_time = time.time() - start_time
-
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
-
-            # With the above logic, we know we have a valid set of uids.
-            # selects a new pdb, downloads data, preprocesses and gets hyperparams.
-            job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
-
-            job_event["uid_search_time"] = uid_search_time
 
             if (
                 len(selected_hotkeys) > 0
                 and len(valid_uids) == self.config.neuron.sample_size
             ):
+                
+                # With the above logic, we know we have a valid set of uids.
+                # selects a new pdb, downloads data, preprocesses and gets hyperparams.
+                job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
+                job_event["uid_search_time"] = uid_search_time
+
                 self.store.insert(
                     pdb=job_event["pdb_id"],
                     ff=job_event["ff"],
