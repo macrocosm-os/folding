@@ -201,17 +201,14 @@ class Validator(BaseValidatorNeuron):
             )
 
             uid_search_time = time.time() - start_time
-            selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
-            if (
-                len(selected_hotkeys) > 0
-                and len(valid_uids) == self.config.neuron.sample_size
-            ):
-                
+            if len(valid_uids) == self.config.neuron.sample_size:
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
                 job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
                 job_event["uid_search_time"] = uid_search_time
+
+                selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
                 self.store.insert(
                     pdb=job_event["pdb_id"],
