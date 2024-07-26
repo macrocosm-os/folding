@@ -9,7 +9,7 @@ import bittensor as bt
 
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
-from folding.protocol import FoldingSynapse
+from folding.protocol import JobSubmissionSynapse
 from folding.utils.logging import log_event
 from folding.utils.ops import (
     run_cmd_commands,
@@ -23,7 +23,9 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
 
-def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynapse:
+def attach_files(
+    files_to_attach: List, synapse: JobSubmissionSynapse
+) -> JobSubmissionSynapse:
     """function that parses a list of files and attaches them to the synapse object"""
     bt.logging.info(f"Sending files to validator: {files_to_attach}")
     for filename in files_to_attach:
@@ -45,14 +47,14 @@ def attach_files(files_to_attach: List, synapse: FoldingSynapse) -> FoldingSynap
 
 
 def attach_files_to_synapse(
-    synapse: FoldingSynapse,
+    synapse: JobSubmissionSynapse,
     data_directory: str,
     state: str,
-) -> FoldingSynapse:
+) -> JobSubmissionSynapse:
     """load the output files as bytes and add to synapse.md_output
 
     Args:
-        synapse (FoldingSynapse): Recently received synapse object
+        synapse (JobSubmissionSynapse): Recently received synapse object
         data_directory (str): directory where the miner is holding the necessary data for the validator.
         state (str): the current state of the simulation
 
@@ -72,7 +74,7 @@ def attach_files_to_synapse(
 
 
     Returns:
-        FoldingSynapse: synapse with md_output attached
+        JobSubmissionSynapse: synapse with md_output attached
     """
 
     synapse.md_output = {}  # ensure that the initial state is empty
@@ -110,8 +112,8 @@ def attach_files_to_synapse(
 
 
 def check_synapse(
-    self, synapse: FoldingSynapse, output_dir: str, event: Dict = None
-) -> FoldingSynapse:
+    self, synapse: JobSubmissionSynapse, output_dir: str, event: Dict = None
+) -> JobSubmissionSynapse:
     """Utility function to remove md_inputs if they exist"""
     if len(synapse.md_inputs) > 0:
         event["md_inputs_sizes"] = list(map(len, synapse.md_inputs.values()))
@@ -240,7 +242,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         return event
 
-    def forward(self, synapse: FoldingSynapse) -> FoldingSynapse:
+    def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
         There are a set of default behaviours the miner should carry out based on the form the synapse comes in as:
@@ -252,7 +254,7 @@ class FoldingMiner(BaseMinerNeuron):
                 - If the number of active processes is less than the number of CPUs and the pdb_id is unique, start a new process
 
         Returns:
-            FoldingSynapse: synapse with md_output attached
+            JobSubmissionSynapse: synapse with md_output attached
         """
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
@@ -330,9 +332,7 @@ class FoldingMiner(BaseMinerNeuron):
                     f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
                 )
 
-                bt.logging.warning(
-                    f"❗ Removing miner from job pool ❗"
-                )
+                bt.logging.warning(f"❗ Removing miner from job pool ❗")
 
                 event["condition"] = "cpu_limit_reached"
                 synapse.miner_serving = False
@@ -378,7 +378,7 @@ class FoldingMiner(BaseMinerNeuron):
             self=self, synapse=synapse, event=event, output_dir=output_dir
         )
 
-    async def blacklist(self, synapse: FoldingSynapse) -> Tuple[bool, str]:
+    async def blacklist(self, synapse: JobSubmissionSynapse) -> Tuple[bool, str]:
         if (
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
@@ -406,7 +406,7 @@ class FoldingMiner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: FoldingSynapse) -> float:
+    async def priority(self, synapse: JobSubmissionSynapse) -> float:
         caller_uid = self.metagraph.hotkeys.index(
             synapse.dendrite.hotkey
         )  # Get the caller index.

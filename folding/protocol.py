@@ -21,7 +21,13 @@ import base64
 import bittensor as bt
 
 
-class FoldingSynapse(bt.Synapse):
+class PingSynapse(bt.Synapse):
+    """ Responsible for determining if a miner can accept a request """
+    can_serve: bool = False
+    available_compute: typing.Optional[int] = None #TODO: number of threads / gpus? 
+    
+
+class JobSubmissionSynapse(bt.Synapse):
     """
     A protocol representation which uses bt.Synapse as its base.
     This protocol helps in handling request and response communication between
@@ -59,7 +65,7 @@ class FoldingSynapse(bt.Synapse):
             f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the reponse has expected hash
-        if type(self.md_output) != dict:
+        if not isinstance(self.md_output, dict):
             self.md_output = {}
         else:
             md_output = {}

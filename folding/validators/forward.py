@@ -3,11 +3,12 @@ from tqdm import tqdm
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
+from collections import defaultdict
 
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
-from folding.protocol import FoldingSynapse
+from folding.protocol import PingSynapse, JobSubmissionSynapse
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
 from folding.validators.hyperparameters import HyperParameters
@@ -16,6 +17,31 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(
     root_dir=ROOT_DIR, filename="pdb_ids.pkl"
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
+
+def run_ping_step(
+        self, 
+        uids: List[int], 
+        timeout: float
+) -> Dict:
+    """ Report a dictionary of ping information from all miners that were
+    randomly sampled for this batch.
+    """
+    axons = [self.metagraph.axons[uid] for uid in uids]
+    synapse = PingSynapse()
+
+    bt.logging.info(f"Pinging {len(axons)} uids")
+    responses: List[PingSynapse] = self.dendrite.query(
+        axons=axons,
+        synapse=synapse,
+        timeout=timeout,
+    )
+
+    ping_report = defaultdict(list)
+    for resp in responses:
+        ping_report['miner_status'].append(resp.can_serve)
+        ping_report['reported_compute'].append(resp.available_compute)
+
+    return ping_report
 
 
 def run_step(
@@ -29,13 +55,13 @@ def run_step(
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
-    synapse = FoldingSynapse(
+    synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
     )
 
     # Make calls to the network with the prompt - this is synchronous.
     bt.logging.warning("waiting for responses....")
-    responses: List[FoldingSynapse] = self.dendrite.query(
+    responses: List[JobSubmissionSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
