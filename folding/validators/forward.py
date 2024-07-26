@@ -29,7 +29,7 @@ def run_ping_step(
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = PingSynapse()
 
-    bt.logging.warning("waiting for responses....")
+    bt.logging.info(f"Pinging {len(axons)} uids")
     responses: List[PingSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
