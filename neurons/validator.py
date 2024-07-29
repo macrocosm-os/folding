@@ -55,8 +55,11 @@ class Validator(BaseValidatorNeuron):
         self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
 
-        # Sample all the uids on the network, and return only the uids that are non-valis. 
-        self.all_miner_uids: List = get_random_uids(self, k = self.metagraph.n, exclude = None).tolist()
+        # Sample all the uids on the network, and return only the uids that are non-valis.
+        bt.logging.info("Determining all miner uids...⏳")
+        self.all_miner_uids: List = get_random_uids(
+            self, k=int(self.metagraph.n), exclude=None
+        ).tolist()
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
@@ -137,8 +140,10 @@ class Validator(BaseValidatorNeuron):
         Returns:
            Tuple(List,List): Lists of active and inactive uids
         """
-        
-        current_miner_uids = list(set(self.all_miner_uids).difference(set(exclude_uids)))
+
+        current_miner_uids = list(
+            set(self.all_miner_uids).difference(set(exclude_uids))
+        )
 
         ping_report = run_ping_step(
             self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout
@@ -147,7 +152,7 @@ class Validator(BaseValidatorNeuron):
 
         active_uids = np.array(current_miner_uids)[can_serve].tolist()
         return active_uids
-        
+
     def sample_random_uids(
         self,
         num_uids_to_sample: int,
@@ -167,10 +172,9 @@ class Validator(BaseValidatorNeuron):
 
         if len(active_uids) > num_uids_to_sample:
             return random.sample(active_uids, num_uids_to_sample)
-        
+
         elif len(active_uids) <= num_uids_to_sample:
             return active_uids
-
 
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
@@ -221,7 +225,7 @@ class Validator(BaseValidatorNeuron):
                 )
             else:
                 bt.logging.warning(
-                    f"Not enough available uids for job {job_event["pdb_id"]} to be inserted into the store..."
+                    f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
                 )
 
     def update_job(self, job: Job):
