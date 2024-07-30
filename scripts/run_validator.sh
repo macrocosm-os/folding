@@ -10,5 +10,3 @@ python3 ./neurons/validator.py \
     --wallet.name <test_coldkey> \
     --wallet.hotkey <test_hotkey> \
     --axon.port <your_port> \
-    --neuron.queue_size <number of pdb_ids to submit> \
-    --neuron.sample_size <number of miners per pdb_id> \

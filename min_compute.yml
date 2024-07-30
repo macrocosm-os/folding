@@ -7,7 +7,7 @@
 
 # NOTE: Specification for miners may be different from validators
 
-version: '1.0' # update this version key as needed, ideally should match your release version
+version: '0.3.0' # update this version key as needed, ideally should match your release version
 
 compute_spec:
 
@@ -19,6 +19,12 @@ compute_spec:
       recommended_cores: 8    # Recommended number of CPU cores
       recommended_speed: 3.5  # Recommended speed per core (GHz)
       architecture: "x86_64"  # Architecture type (e.g., x86_64, arm64)
+
+    gpu:
+      required: True                       # Does the application require a GPU?
+      min_vram: 24                         # Minimum GPU VRAM (GB)
+      min_compute_capability: 6.0          # Minimum CUDA compute capability
+      recommended_compute_capability: 7.0  # Recommended CUDA compute capability
 
     memory:
       min_ram: 16          # Minimum RAM (GB)
