@@ -335,7 +335,7 @@ def add_validator_args(cls, parser):
         "--neuron.disable_set_weights",
         action="store_true",
         help="Disables setting weights.",
-        default=False,
+        default=True,
     )
 
     parser.add_argument(

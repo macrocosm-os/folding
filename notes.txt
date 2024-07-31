@@ -1,0 +1,38 @@
+0.5 gb binary file - PASSED
+0.1 gb files (10) - they dont go through 
+
+setup wqandb log such that i run my own logging situation. 
+    log event for the validator 
+    & add params. 
+
+Runs to use for data analysis 
+    firm-yogurt-6627
+    fanciful-vortex-6626
+
+
+
+
+
+
+ROOT_DIR = '/home/spunion/folding/synapse_test_data'
+
+    self.base_directory = os.path.join(str(ROOT_DIR), "data")
+                        = '/home/spunion/folding/synapse_test_data/data'
+
+
+def setup_filepaths(self):
+    self.pdb_file = f"{self.pdb_id}.pdb"
+    self.pdb_directory = os.path.join('/home/spunion/folding/synapse_test_data', self.pdb_id)
+    self.pdb_location = os.path.join('/home/spunion/folding/synapse_test_data', self.pdb_file)
+
+    self.validator_directory = os.path.join(self.pdb_directory, "validator")
+    self.gro_path = os.path.join(self.validator_directory, "em.gro")
+    self.topol_path = os.path.join(self.validator_directory, "topol.top")
+
+def get_miner_data_directory(self, hotkey: str):
+    self.miner_data_directory = os.path.join(self.validator_directory, hotkey[:8])
+
+check_if_directory_exists(output_directory=self.validator_directory):
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+        bt.logging.debug(f"Created directory {output_directory!r}")

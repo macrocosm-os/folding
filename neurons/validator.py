@@ -148,6 +148,7 @@ class Validator(BaseValidatorNeuron):
             uids = get_random_uids(
                 self, self.config.neuron.sample_size, exclude=exclude_uids
             )
+            bt.logging.info(f"UID selected {uids} spun_reap_miner: hotkey = 5CApSFx9DdXr1t7eU4nGiv9YMmhhqV")
 
             selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
 

@@ -28,7 +28,7 @@ def run_step(
     start_time = time.time()
 
     # Get the list of uids to query for this step.
-    axons = [self.metagraph.axons[uid] for uid in uids]
+    axons = [self.metagraph.axons[61]]
     synapse = FoldingSynapse(
         pdb_id=protein.pdb_id, md_inputs=protein.md_inputs, mdrun_args=mdrun_args
     )
@@ -41,6 +41,17 @@ def run_step(
         timeout=timeout,
         deserialize=True,  # decodes the bytestream response inside of md_outputs.
     )
+    
+    # Save responses to pickle file 
+    import pickle
+    save_path_pickle = "/home/spunion/folding/synapse_test_data/responses.pkl"
+    with open(save_path_pickle, "wb") as f:
+        pickle.dump(responses, f)
+
+    dir_path = "/home/spunion/folding/synapse_test_data/"
+    bt.logging.info(f"Responses saved to {[save_path_pickle]} with file size {Path(dir_path).stat().st_size / 1e6} MB")
+    # get the size of the dir using du -sh
+
 
     response_info = get_response_info(responses=responses)
 
@@ -59,6 +70,8 @@ def run_step(
         "energies": [],
         **response_info,
     }
+
+    log_event(self, event)
 
     if len(responses_serving) == 0:
         bt.logging.warning(f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗")
@@ -122,7 +135,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
         )
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
-        bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
+        # bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
 
         if event.get("validator_search_status") == True:
@@ -133,9 +146,9 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
             # only log the event if the simulation was not successful
             log_event(self, event)
-            bt.logging.error(
-                f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
-            )
+            # bt.logging.error(
+            #     f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
+            # )
             exclude.append(pdb_id)
 
 
@@ -147,7 +160,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     exclude_in_hp_search = parse_config(config)
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    # bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
     for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
     ):
@@ -164,7 +177,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             }
 
             protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
-            protein.setup_simulation()
+            # protein.setup_simulation()
 
         except Exception as E:
             event["validator_search_status"] = False
@@ -178,7 +191,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["epsilon"] = protein.epsilon
 
             if "validator_search_status" not in event:
-                bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
+                # bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break

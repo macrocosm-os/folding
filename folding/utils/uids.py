@@ -39,7 +39,8 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
     candidate_uids = []
     avail_uids = []
 
-    for uid in range(self.metagraph.n.item()):
+    # for uid in range(self.metagraph.n.item()):
+    for uid in [116]:
         uid_is_available = check_uid_availability(
             self.metagraph, uid, self.config.neuron.vpermit_tao_limit
         )

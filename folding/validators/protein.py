@@ -25,7 +25,7 @@ from folding.utils.ops import (
 from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
-ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = '/home/spunion/folding/synapse_test_data'
 
 
 @dataclass
@@ -81,12 +81,12 @@ class Protein:
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
-        self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
-        self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
+        self.pdb_directory = os.path.join('/home/spunion/folding/synapse_test_data', self.pdb_id)
+        self.pdb_location = os.path.join('/home/spunion/folding/synapse_test_data', self.pdb_file)
 
-        self.validator_directory = os.path.join(self.pdb_directory, "validator")
-        self.gro_path = os.path.join(self.validator_directory, "em.gro")
-        self.topol_path = os.path.join(self.validator_directory, "topol.top")
+        self.validator_directory = "/home/spunion/folding/synapse_test_data/validator"
+        self.gro_path = "/home/spunion/folding/synapse_test_data/validator/em.gro"
+        self.topol_path = "/home/spunion/folding/synapse_test_data/validator/topol.top"
 
     @staticmethod
     def from_job(job: Job, config: Dict):
@@ -206,8 +206,8 @@ class Protein:
         required_files = self.mdp_files + self.other_files
         missing_files = self.check_for_missing_files(required_files=required_files)
 
-        if missing_files is not None:
-            self.generate_input_files()
+        # if missing_files is not None:
+        #     self.generate_input_files()
 
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -223,17 +223,17 @@ class Protein:
         ]
 
         # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(
-            mdp_files=self.mdp_files,
-            params_to_change=params_to_change,
-            seed=self.config.seed,
-        )
+        # self.edit_files(
+        #     mdp_files=self.mdp_files,
+        #     params_to_change=params_to_change,
+        #     seed=self.config.seed,
+        # )
 
-        self.save_files(
-            files=self.md_inputs,
-            output_directory=self.validator_directory,
-            write_mode="w",
-        )
+        # self.save_files(
+        #     files=self.md_inputs,
+        #     output_directory=self.validator_directory,
+        #     write_mode="w",
+        # )
 
         self.remaining_steps = []
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
@@ -643,4 +643,5 @@ class Protein:
         """Method to remove the pdb directory after the simulation is complete.
         Temp. method before we know what we want to keep.
         """
-        shutil.rmtree(self.pdb_directory)
+        # shutil.rmtree(self.pdb_directory)
+        return
