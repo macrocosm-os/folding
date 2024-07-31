@@ -1,15 +1,20 @@
+import os
+import random
+import string
+import random
+import string
+import time
+from collections import defaultdict
+from pathlib import Path
+
+import pytest
+from pathlib import Path
+
 import pytest
 
-import os
-import time
-import random, string
-from pathlib import Path
-from collections import defaultdict
-
-from folding.protocol import FoldingSynapse
 from folding.miners.mock_miner import MockFoldingMiner
+from folding.protocol import JobSubmissionSynapse
 from folding.utils.ops import delete_directory
-
 from tests.fixtures.gro_files.default_config import get_test_config
 
 ROOT_PATH = Path(__file__).parent
@@ -36,7 +41,7 @@ def test_miner(num_requests: int):
     # the creation of N jobs
     synapses = []
     for ii in range(num_requests):
-        test_synapse = FoldingSynapse(
+        test_synapse = JobSubmissionSynapse(
             pdb_id=test_config.protein.pdb_id + f"_{ii}",
             md_inputs={},  # label ids with _ii
         )

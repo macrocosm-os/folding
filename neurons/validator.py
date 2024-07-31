@@ -18,10 +18,10 @@
 import os
 import re
 import time
+import random
 import numpy as np
-from typing import Dict
+from typing import Dict, List, Tuple, Optional
 from itertools import chain
-from typing import List
 
 import torch
 import pandas as pd
@@ -30,7 +30,7 @@ import bittensor as bt
 from folding.store import PandasJobStore
 from folding.utils.uids import get_random_uids
 from folding.rewards.reward_pipeline import reward_pipeline
-from folding.validators.forward import create_new_challenge, run_step
+from folding.validators.forward import create_new_challenge, run_step, run_ping_step
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
@@ -54,6 +54,12 @@ class Validator(BaseValidatorNeuron):
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = PandasJobStore()
         self.mdrun_args = self.parse_mdrun_args()
+
+        # Sample all the uids on the network, and return only the uids that are non-valis.
+        bt.logging.info("Determining all miner uids...⏳")
+        self.all_miner_uids: List = get_random_uids(
+            self, k=int(self.metagraph.n), exclude=None
+        ).tolist()
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
@@ -121,6 +127,55 @@ class Validator(BaseValidatorNeuron):
         # Set of pdbs that are currently in the process of running + old submitted simulations.
         return list(self.store._db.index)
 
+    def ping_all_miners(
+        self,
+        exclude_uids: List[int],
+    ) -> Tuple[List[int], List[int]]:
+        """Sample ALL (non-excluded) miner uids and return the list of uids
+        that can serve jobs.
+
+        Args:
+            exclude_uids (List[int]): uids to exclude from the uids search
+
+        Returns:
+           Tuple(List,List): Lists of active and inactive uids
+        """
+
+        current_miner_uids = list(
+            set(self.all_miner_uids).difference(set(exclude_uids))
+        )
+
+        ping_report = run_ping_step(
+            self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout
+        )
+        can_serve = ping_report["miner_status"]  # list of booleans
+
+        active_uids = np.array(current_miner_uids)[can_serve].tolist()
+        return active_uids
+
+    def sample_random_uids(
+        self,
+        num_uids_to_sample: int,
+        exclude_uids: List[int],
+    ) -> List[int]:
+        """Helper function to sample a batch of uids on the network, determine their serving status,
+        and sample more until a desired number of uids is found.
+
+        Args:
+            num_uids_to_sample (int): The number of uids to sample.
+            exclude_uids (List[int]): A list of uids that should be excluded from sampling.
+
+        Returns:
+            List[int]: A list of responding and free uids.
+        """
+        active_uids = self.ping_all_miners(exclude_uids=exclude_uids)
+
+        if len(active_uids) > num_uids_to_sample:
+            return random.sample(active_uids, num_uids_to_sample)
+
+        elif len(active_uids) <= num_uids_to_sample:
+            return active_uids
+
     def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
         Each "job" is an individual protein folding challenge that is distributed to the miners.
@@ -136,27 +191,29 @@ class Validator(BaseValidatorNeuron):
             # This will change on each loop since we are submitting a new pdb to the batch of miners
             exclude_pdbs = self.get_pdbs_to_exclude()
 
-            # selects a new pdb, downloads data, preprocesses and gets hyperparams.
-            job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
-
             # assign workers to the job (hotkeys)
             active_jobs = self.store.get_queue(ready=False).queue
             active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
-            uids = get_random_uids(
-                self, self.config.neuron.sample_size, exclude=exclude_uids
+            # Sample uids in a recursive manner until we have enough (or other condition is met.)
+            start_time = time.time()
+            valid_uids = self.sample_random_uids(
+                num_uids_to_sample=self.config.neuron.sample_size,
+                exclude_uids=exclude_uids,
             )
 
-            selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
+            uid_search_time = time.time() - start_time
 
-            # TODO: We can pass other custom stuff like update_interval, max_time_no_improvement and min_updates to control length
-            # update_interval = 60 * np.log10(job['pdb_length'])
-            # min_updates = 10
-            # max_time_no_improvement = min_updates * update_interval
+            if len(valid_uids) == self.config.neuron.sample_size:
+                # With the above logic, we know we have a valid set of uids.
+                # selects a new pdb, downloads data, preprocesses and gets hyperparams.
+                job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
+                job_event["uid_search_time"] = uid_search_time
 
-            if len(selected_hotkeys) > 0:
+                selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
+
                 self.store.insert(
                     pdb=job_event["pdb_id"],
                     ff=job_event["ff"],
@@ -165,6 +222,10 @@ class Validator(BaseValidatorNeuron):
                     hotkeys=selected_hotkeys,
                     epsilon=job_event["epsilon"],
                     event=job_event,
+                )
+            else:
+                bt.logging.warning(
+                    f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
                 )
 
     def update_job(self, job: Job):
