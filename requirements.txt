@@ -1,9 +1,0 @@
-bittensor==6.9.3
-torch
-loguru
-gromacs
-pandas 
-beautifulsoup4
-python-dotenv
-wandb==0.17.2
-eth-utils==2.1.1

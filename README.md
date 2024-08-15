@@ -69,13 +69,13 @@ When the simulations finally converge (ΔE/t < threshold), they produce the form
 
 # Running the Subnet
 ## Requirements 
-Protein folding utilizes a standardized package called [GROMACS](https://www.gromacs.org). To run, you will need:
+Protein folding utilizes an open-source package called [OpenMM](https://openmm.org). To run, you will need:
 1. A Linux-based machine 
-2. Multiple high-performance CPU cores. 
+2. At least 1 CUDA-compatible GPU
+3. Conda Distribution (we recommend [Miniconda](https://docs.anaconda.com/miniconda/)). Using conda is an [OpenMM requirement](http://docs.openmm.org/latest/userguide/application/01_getting_started.html#installing-openmm). 
 
-Out of the box, **we do not require miners to run GPU compatible GROMACS packages**. For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
+For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
 
-**IMPORTANT**: GROMACS is a large package, and take anywhere between 1h to 1.5h to download. 
 
 ## Installation
 This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
