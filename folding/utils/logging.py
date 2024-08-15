@@ -36,8 +36,6 @@ def should_reinit_wandb(self):
 
 def init_wandb(self, reinit=False):
     """Starts a new wandb run."""
-    if getattr(self, "wandb_run_start", None):
-        self.wandb_run_start = dt.datetime.now()
 
     tags = [
         self.wallet.hotkey.ss58_address,
@@ -68,6 +66,7 @@ def init_wandb(self, reinit=False):
         tags=tags,
         notes=self.config.wandb.notes,
     )
+    self.wandb_run_start = dt.datetime.now()
     bt.logging.success(
         prefix="Started a new wandb run",
         sufix=f"<blue> {self.wandb.name} </blue>",
