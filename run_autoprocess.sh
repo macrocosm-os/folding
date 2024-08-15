@@ -195,10 +195,6 @@ if pm2 status | grep -q $proc_name; then
     pm2 delete $proc_name
 fi
 
-#add gromacs to the bashrc
-echo "source /usr/local/gromacs/bin/GMXRC" >> ~/.bashrc
-source ~/.bashrc
-
 # Run the Python script with the arguments using pm2
 echo "Running $script with the following pm2 config:"
 

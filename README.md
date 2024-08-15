@@ -87,18 +87,6 @@ bash install.sh
 
 This will also create a virtual environment in which the repo can be run inside of.
 
-Sometimes, there can be problems with the install so to ensure that gromacs is installed correctly, please check the .bashrc. Importantly, these lines MUST be run:
-```bash
-echo "source /usr/local/gromacs/bin/GMXRC" >> ~/.bashrc
-source ~/.bashrc
-``` 
-
-The above commands will install the necessary requirements, as well as download GROMACS and add it to your `.bashrc`. To ensure that installation is complete, running `gmx` in the terminal should print
-```
- :-) GROMACS - gmx, 2024.1 (-:
-```
-
-If not, there is a problem with your installation, or with your `.bashrc`
 
 ## Registering on Mainnet
 ```
@@ -168,7 +156,7 @@ Keep in mind that you will need to change the default parameters for either the 
 
 ## How does the Subnet Work?
 
-In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
+In this subnet, validators create protein folding challenges for miners, who in turn run simulations based using OpenMM to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
 
 ### Validation
 
@@ -183,15 +171,6 @@ For more detailed information, look at [validation.md](./documentation/validatio
 Miners are expected to run many parallel processes, each executing an energy minimization routine for a particular `pdb_id`. The number of protein jobs a miner can handle is determined via the `config.neuron.max_workers` parameter. 
 
 For detailed information, read [mining.md](./documentation/mining.md).
-
-## Notes
-
-**Miner** simulations will output a projected time. The first two runs will be about the same length, with the third taking about an order of magnitude longer using a default number of steps = 50,000. The number of steps (`steps`) and the maximum allowed runtime (`maxh`) are easily configurable and should be employed by miners to prevent timing out. We also encourage miners to take advantage of 'early stopping' techniques so that simulations do not run past convergence.
-
-Furthermore, we want to support the use of ML-based mining so that recent algorithmic advances (e.g. AlphaFold) can be leveraged. At present, this subnet is effectively a **specialized compute subnet** (rather than an algorithmic subnet). For now, we leave this work to motivated miners.
-
-GROMACS itself is a rather robust package and is widely used within the research community. There are specific guides and functions if you wish to parallelize your processing or run these computations off of a GPU to speed things up.
-
 
 
 ## License
