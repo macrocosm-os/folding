@@ -522,7 +522,9 @@ class Protein:
             verbose=self.config.verbose,
         )
 
-    def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
+    def process_md_output(
+        self, md_output: dict, seed: int, state: str, hotkey: str
+    ) -> bool:
         """
         1. Check md_output for the required files, if unsuccessful return False
         2. Save files if above is valid
@@ -534,9 +536,7 @@ class Protein:
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         md_outputs_exts = {
-            k.split(".")[-1]: k
-            for k, v in md_output.items()
-            if len(v) > 0 and "center" not in k
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
         }
 
         if len(md_output.keys()) == 0:
@@ -557,34 +557,71 @@ class Protein:
             files=md_output,
             output_directory=self.miner_data_directory,
         )
-
-        last_miner_simulation_step_time = get_last_step_time(
-            os.path.join(self.miner_data_directory, md_outputs_exts["log"])
-        )
-
-        # We need to generate the gro file from the miner to ensure they are not cheating.
-        gro_file_location = self.compute_intermediate_gro(
-            output_directory=self.miner_data_directory,
-            md_outputs_exts=md_outputs_exts,
-            simulation_step_time=last_miner_simulation_step_time,
-        )
-
-        # Check that the md_output contains the right protein through gro_hash
-        if gro_hash(gro_path=self.gro_path) != gro_hash(gro_path=gro_file_location):
-            bt.logging.warning(
-                f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
+        try:
+            simulation = self.recreate_simulation(
+                seed, state, f"{self.miner_data_directory}/{md_outputs_exts['cpt']}"
             )
-            self.delete_files(directory=self.miner_data_directory)
+        except Exception as e:
+            bt.logging.error(f"Failed to recreate simulation: {e}")
             return False
-        bt.logging.debug(f"The hash for .gro file is correct!")
 
-        # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
-        # .gro -> .edr
-        self.rerun(
-            output_directory=self.miner_data_directory,
-            gro_file_location=gro_file_location,
-        )
+        cpt_step = simulation.currentStep
+        log_file = pd.read_csv(f"{self.miner_data_directory}/{md_outputs_exts['log']}")
+        log_step = log_file['#"Step"'].iloc[-1]
+
+        ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+        if log_step - cpt_step < 5000:
+            bt.logging.error("Miner did not run enough steps since last checkpoint")
+            return False
+
         return True
+
+    def recreate_simulation(
+        self, seed: str, state: str, cpt_file: str
+    ) -> mm.app.Simulation:
+        pdb = mm.app.PDBFile(self.pdb_file)
+        forcefield = mm.app.ForceField(self.system_config.ff, self.system_config.water)
+
+        modeller = mm.app.Modeller(pdb.topology, pdb.positions)
+        modeller.deleteWater()
+
+        modeller.addSolvent(
+            forcefield,
+            padding=self.system_config.box_padding * mm.unit.nanometer,
+            boxShape=self.system_config.box_shape,
+            model=self.system_config.water,
+        )
+
+        # Create the system
+        system = forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=self.system_config.nonbonded_method,
+            nonbondedCutoff=self.system_config.cutoff * mm.unit.nanometers,
+            constraints=self.system_config.constraints,
+        )
+
+        # Integrator settings
+        integrator = mm.LangevinIntegrator(
+            self.system_config.temperature * mm.unit.kelvin,
+            self.system_config.friction / mm.unit.picosecond,
+            self.system_config.time_step_size * mm.unit.picoseconds,
+        )
+        integrator.setRandomNumberSeed(seed)
+        # Periodic boundary conditions
+        pdb.topology.setPeriodicBoxVectors(system.getDefaultPeriodicBoxVectors())
+
+        if state != "nvt":
+            system.addForce(
+                mm.MonteCarloBarostat(
+                    self.system_config.pressure * mm.units.bar,
+                    self.system_config.temperature * mm.units.kelvin,
+                )
+            )
+
+        # Create the simulation object
+        simulation = mm.app.Simulation(modeller.topology, system, integrator)
+        simulation.loadCheckpoint(cpt_file)
+        return simulation
 
     def is_run_valid(self, energy: float, hotkey: str):
         self.get_miner_data_directory(hotkey=hotkey)
