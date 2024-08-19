@@ -86,6 +86,10 @@ class Protein:
         else:
             self.water = FF_WATER_PAIRS[self.ff]
 
+        self.system_config = SimulationConfig(
+            ff=self.ff, water=self.water, box=self.box
+        )
+
         self.config = config
 
         self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "emin.mdp"]
