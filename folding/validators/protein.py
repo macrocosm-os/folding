@@ -10,6 +10,10 @@ from collections import defaultdict
 import bittensor as bt
 import pandas as pd
 from dataclasses import dataclass
+import openmm as mm
+from pydantic import BaseModel
+from typing import Literal, Optional
+
 
 from folding.utils.ops import (
     FF_WATER_PAIRS,
@@ -26,6 +30,29 @@ from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+class SimulationConfig(BaseModel):
+    ff: str
+    water: str
+    box: Literal["cubic", "dodecahedron", "octahedron"]
+    temperature: float = 300.0
+    time_step_size: float = 0.002
+    time_units: mm.unit.unit.Unit = mm.unit.picosecond
+    save_interval_checkpoint: int = 5000
+    save_interval_log: int = 100
+    box_padding: float = 1.0
+    friction: float = 1.0
+    nonbonded_method: Literal[mm.app.PME, mm.app.NoCutoff] = mm.app.PME
+    cutoff: Optional[float] = 1.0
+    constraints: Literal[mm.app.HBonds, mm.app.AllBonds, mm.app.HAngles, None] = (
+        mm.app.HBonds
+    )
+    pressure: float = 1.0
+    max_steps_nvt: int = 50000
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 @dataclass
@@ -364,17 +391,21 @@ class Protein:
                 params_values = {"ld-seed": seed}
             elif file == "nvt.mdp":
                 params_values = {
-                    "nsteps": self.config.nvt_steps
-                    if self.config.nvt_steps is not None
-                    else self.config.max_steps // 100,
+                    "nsteps": (
+                        self.config.nvt_steps
+                        if self.config.nvt_steps is not None
+                        else self.config.max_steps // 100
+                    ),
                     "gen_seed": seed,
                     "ld-seed": seed,
                 }
             elif file == "npt.mdp":
                 params_values = {
-                    "nsteps": self.config.npt_steps
-                    if self.config.npt_steps is not None
-                    else self.config.max_steps // 10,
+                    "nsteps": (
+                        self.config.npt_steps
+                        if self.config.npt_steps is not None
+                        else self.config.max_steps // 10
+                    ),
                     "ld-seed": seed,
                 }
             elif file == "md.mdp":
@@ -499,7 +530,7 @@ class Protein:
         4.
         """
 
-        required_files_extensions = ["xtc", "tpr", "log"]
+        required_files_extensions = ["cpt", "log"]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         md_outputs_exts = {
