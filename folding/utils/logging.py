@@ -83,13 +83,10 @@ def log_event(self, event):
     if not getattr(self, "wandb", None):
         init_wandb(self)
 
-    if getattr(self, "wandb_run_start", None):
-        if (dt.datetime.now() - self.wandb_run_start) >= dt.timedelta(days=1):
-            bt.logging.info(
-                "Current wandb run is more than 1 day old. Starting a new run."
-            )
-            self.wandb.finish()
-            init_wandb(self)
+    if (dt.datetime.now() - self.wandb_run_start) >= dt.timedelta(days=1):
+        bt.logging.info("Current wandb run is more than 1 day old. Starting a new run.")
+        self.wandb.finish()
+        init_wandb(self)
 
     # Log the event to wandb.
     self.wandb.log(event)
