@@ -58,8 +58,8 @@ class SimulationConfig(BaseModel):
     box_padding: float = 1.0
     friction: float = 1.0
     nonbonded_method: NonbondedMethod = NonbondedMethod.PME
+    constraints: Constraints = Constraints.HBonds
     cutoff: Optional[float] = 1.0
-    constraints: Constraints = app.HBonds
     pressure: float = 1.0
     max_steps_nvt: int = 50000
 
