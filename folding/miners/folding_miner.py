@@ -64,7 +64,7 @@ def attach_files_to_synapse(
      3. md_0_1
      4. finished
 
-    State depends on the current state of the simulation (controlled in GromacsExecutor.run() method).
+    State depends on the current state of the simulation (controlled in SimulationExecutor.run() method).
 
     During the simulation procedure, the validator queries the miner for the current state of the simulation.
     The files that the miner needs to return are:
@@ -456,7 +456,7 @@ class SimulationManager:
         check_if_directory_exists(output_directory=self.output_dir)
         os.chdir(self.output_dir)  # TODO: will this be a problem with many processes?
 
-        # The following files are required for GROMACS simulations and are recieved from the validator
+        # The following files are required for openmm simulations and are recieved from the validator
         for filename, content in md_inputs.items():
             # Write the file to the output directory
             with open(filename, "w") as file:

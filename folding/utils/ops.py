@@ -15,7 +15,7 @@ import tqdm
 
 from folding.protocol import JobSubmissionSynapse
 
-# Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
+# Recommended force field-water pairs
 FF_WATER_PAIRS = {
     "amber03": "tip3p",  # AMBER force fields
     "amber94": "tip3p",
@@ -35,7 +35,7 @@ FF_WATER_PAIRS = {
 }
 
 
-class GromacsException(Exception):
+class OpenMMException(Exception):
     """Exception raised for errors in the versioning."""
 
     def __init__(self, message="Version error occurred"):

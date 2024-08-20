@@ -1,0 +1,17 @@
+name: folding  # Replace with your environment name
+channels:
+  - defaults
+  - conda-forge  # Add other channels if needed
+dependencies:
+  - python=3.12  # Specify the Python version
+  - openmm=8.1.2
+  - pandas
+  - beautifulsoup4
+  - pytorch=2.3.0  # torch is often installed as pytorch via conda
+  - loguru
+  - pip
+  - pip:
+      - bittensor==6.9.3
+      - python-dotenv==1.0.1
+      - wandb==0.17.2
+      - eth-utils==2.1.1
