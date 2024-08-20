@@ -3,6 +3,7 @@ import wandb
 from typing import List
 from loguru import logger
 from dataclasses import asdict, dataclass
+import datetime as dt
 
 import folding
 import bittensor as bt
@@ -35,6 +36,7 @@ def should_reinit_wandb(self):
 
 def init_wandb(self, reinit=False):
     """Starts a new wandb run."""
+
     tags = [
         self.wallet.hotkey.ss58_address,
         folding.__version__,
@@ -64,6 +66,7 @@ def init_wandb(self, reinit=False):
         tags=tags,
         notes=self.config.wandb.notes,
     )
+    self.wandb_run_start = dt.datetime.now()
     bt.logging.success(
         prefix="Started a new wandb run",
         sufix=f"<blue> {self.wandb.name} </blue>",
@@ -78,6 +81,11 @@ def log_event(self, event):
         return
 
     if not getattr(self, "wandb", None):
+        init_wandb(self)
+
+    if (dt.datetime.now() - self.wandb_run_start) >= dt.timedelta(days=1):
+        bt.logging.info("Current wandb run is more than 1 day old. Starting a new run.")
+        self.wandb.finish()
         init_wandb(self)
 
     # Log the event to wandb.

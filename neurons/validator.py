@@ -60,6 +60,7 @@ class Validator(BaseValidatorNeuron):
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
+        self.wandb_run_start = None
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
