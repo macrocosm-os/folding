@@ -3,6 +3,7 @@ import glob
 import re
 import random
 import shutil
+from enum import Enum
 from typing import List, Dict
 from pathlib import Path
 from collections import defaultdict
@@ -10,10 +11,11 @@ from collections import defaultdict
 import bittensor as bt
 import pandas as pd
 from dataclasses import dataclass
-import openmm as mm
 from pydantic import BaseModel
 from typing import Literal, Optional
 
+import openmm as mm
+from openmm import app
 
 from folding.utils.ops import (
     FF_WATER_PAIRS,
@@ -32,6 +34,18 @@ from folding.store import Job
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
+class NonbondedMethod(Enum):
+    PME = app.PME
+    NoCutoff = app.NoCutoff
+
+
+class Constraints(Enum):
+    Unconstricted = None
+    HBonds = app.HBonds
+    AllBonds = app.AllBonds
+    HAngles = app.HAngles
+
+
 class SimulationConfig(BaseModel):
     ff: str
     water: str
@@ -43,11 +57,9 @@ class SimulationConfig(BaseModel):
     save_interval_log: int = 100
     box_padding: float = 1.0
     friction: float = 1.0
-    nonbonded_method: Literal[mm.app.PME, mm.app.NoCutoff] = mm.app.PME
+    nonbonded_method: NonbondedMethod = NonbondedMethod.PME
+    constraints: Constraints = Constraints.HBonds
     cutoff: Optional[float] = 1.0
-    constraints: Literal[mm.app.HBonds, mm.app.AllBonds, mm.app.HAngles, None] = (
-        mm.app.HBonds
-    )
     pressure: float = 1.0
     max_steps_nvt: int = 50000
 
@@ -80,11 +92,7 @@ class Protein:
 
         self.ff = ff
         self.box = box
-
-        if water is not None:
-            self.water = water
-        else:
-            self.water = FF_WATER_PAIRS[self.ff]
+        self.water = water
 
         self.system_config = SimulationConfig(
             ff=self.ff, water=self.water, box=self.box
@@ -582,17 +590,28 @@ class Protein:
 
     def recreate_simulation(
         self, seed: str, state: str, cpt_file: str
-    ) -> mm.app.Simulation:
-        pdb = mm.app.PDBFile(self.pdb_file)
-        forcefield = mm.app.ForceField(self.system_config.ff, self.system_config.water)
+    ) -> app.Simulation:
+        """There should be something here to describe what is going on here ... seems important
+        (using Autodocstring)
 
-        modeller = mm.app.Modeller(pdb.topology, pdb.positions)
+        Args:
+            seed (str): _description_
+            state (str): _description_
+            cpt_file (str): _description_
+
+        Returns:
+            app.Simulation: _description_
+        """
+        pdb = app.PDBFile(self.pdb_file)
+        forcefield = app.ForceField(self.system_config.ff, self.system_config.water)
+
+        modeller = app.Modeller(pdb.topology, pdb.positions)
         modeller.deleteWater()
 
         modeller.addSolvent(
             forcefield,
             padding=self.system_config.box_padding * mm.unit.nanometer,
-            boxShape=self.system_config.box_shape,
+            boxShape=self.system_config.box,
             model=self.system_config.water,
         )
 
@@ -623,7 +642,7 @@ class Protein:
             )
 
         # Create the simulation object
-        simulation = mm.app.Simulation(modeller.topology, system, integrator)
+        simulation = app.Simulation(modeller.topology, system, integrator)
         simulation.loadCheckpoint(cpt_file)
         return simulation
 
