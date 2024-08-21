@@ -1,0 +1,9 @@
+What are the most important parameters to get the simulation running. 
+    Having the dict/json and loading it into the pipeling. (protein class) 
+    use the simulation config as a base set of params. 
+    Pass them into a json file and make sure they make sense. 
+    Where are we loading this and how is it getting loaded into the protein class itself. 
+    
+    wherever the protein class is instantiated, 
+    we want it be instantiated with all the parameters. 
+    Then we need a funciton to save those params into a file. 
