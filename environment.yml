@@ -11,7 +11,7 @@ dependencies:
   - loguru
   - pip
   - pip:
-      - bittensor==6.9.3
+      - bittensor==6.9.4
       - python-dotenv==1.0.1
       - wandb==0.17.2
       - eth-utils==2.1.1
