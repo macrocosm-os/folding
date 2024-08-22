@@ -109,14 +109,15 @@ def parse_config(config) -> List[str]:
     Parse config to check if key hyperparameters are set.
     If they are, exclude them from hyperparameter search.
     """
-    ff = config.protein.ff
-    water = config.protein.water
+
     exclude_in_hp_search = []
 
-    if ff is not None:
+    if config.protein.ff is not None:
         exclude_in_hp_search.append("FF")
-    if water is not None:
+    if config.protein.water is not None:
         exclude_in_hp_search.append("WATER")
+    if config.protein.box is not None:
+        exclude_in_hp_search.append("BOX")
 
     return exclude_in_hp_search
 
@@ -196,6 +197,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             hps = {
                 "ff": config.protein.ff or sampled_combination["FF"],
                 "water": config.protein.water or sampled_combination["WATER"],
+                "box": config.protein.box or sampled_combination["BOX"],
             }
 
             protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)

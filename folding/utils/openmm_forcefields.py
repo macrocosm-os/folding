@@ -3,7 +3,8 @@ from abc import ABC, abstractmethod
 
 class OpenMMForceField(ABC):
     def __init__(self) -> None:
-        pass
+        self.forcefields = self.forcefields()
+        self.waters = self.waters()
 
     @property
     @abstractmethod
@@ -37,7 +38,6 @@ class Amber14(OpenMMForceField):
 
     def forcefields(self):
         forces = [
-            "amber14-all.xml",
             "protein.ff14SB.xml",
             "protein.ff15ipq.xml",
             "DNA.OL15.xml",
