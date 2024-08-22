@@ -43,6 +43,5 @@ class SimulationConfig(BaseModel):
     gen_temp: float = 300.0 
 
     def apply_input(self):
-    
-    class Config:
-        arbitrary_types_allowed = True
+        class Config:
+            arbitrary_types_allowed = True
