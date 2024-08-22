@@ -3,13 +3,21 @@ import glob
 import re
 import random
 import shutil
+from enum import Enum
 from typing import List, Dict
 from pathlib import Path
 from collections import defaultdict
+import pickle
 
 import bittensor as bt
 import pandas as pd
 from dataclasses import dataclass
+from pydantic import BaseModel
+from typing import Literal, Optional
+
+import openmm as mm
+from openmm import app
+from openmm import unit
 
 from folding.utils.ops import (
     FF_WATER_PAIRS,
@@ -26,6 +34,39 @@ from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+class NonbondedMethod(Enum):
+    PME = app.PME
+    NoCutoff = app.NoCutoff
+
+
+class Constraints(Enum):
+    Unconstricted = None
+    HBonds = app.HBonds
+    AllBonds = app.AllBonds
+    HAngles = app.HAngles
+
+
+class SimulationConfig(BaseModel):
+    ff: str
+    water: str
+    box: Literal["cubic", "dodecahedron", "octahedron"]
+    temperature: float = 300.0
+    time_step_size: float = 0.002
+    time_units: mm.unit.unit.Unit = mm.unit.picosecond
+    save_interval_checkpoint: int = 5000
+    save_interval_log: int = 100
+    box_padding: float = 1.0
+    friction: float = 1.0
+    nonbonded_method: NonbondedMethod = NonbondedMethod.PME
+    constraints: Constraints = Constraints.HBonds
+    cutoff: Optional[float] = 1.0
+    pressure: float = 1.0
+    max_steps_nvt: int = 50000
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 @dataclass
@@ -53,28 +94,29 @@ class Protein:
 
         self.ff = ff
         self.box = box
+        self.water = water
 
-        if water is not None:
-            self.water = water
-        else:
-            self.water = FF_WATER_PAIRS[self.ff]
+        self.system_config = SimulationConfig(
+            ff=self.ff, water=self.water, box=self.box
+        )
 
         self.config = config
 
-        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "emin.mdp"]
-        self.other_files = [
-            "em.gro",
-            "posre*",
-            "topol*",
-        ]  # capture all possible topol or posre chains
+        self.simulation: app.Simulation = None
+
+        self.input_files = ["config.json", "em.cpt"]
 
         self.md_inputs = (
-            self.read_and_return_files(filenames=self.other_files + self.mdp_files)
+            self.read_and_return_files(filenames=self.input_files)
             if load_md_inputs
             else {}
         )
+        with open(
+            os.path.join(self.base_directory, "upper_bounds_interpolated.pkl"), "rb"
+        ) as f:
+            self.upper_bounds = pickle.load(f)
 
-        # set to an arbitrarilly high number to ensure that the first miner is always accepted.
+        # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
@@ -85,8 +127,6 @@ class Protein:
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
-        self.gro_path = os.path.join(self.validator_directory, "em.gro")
-        self.topol_path = os.path.join(self.validator_directory, "topol.top")
 
     @staticmethod
     def from_job(job: Job, config: Dict):
@@ -105,9 +145,8 @@ class Protein:
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            protein.init_energy = calc_potential_from_edr(
-                output_dir=protein.validator_directory, edr_name="em.edr"
-            )
+            protein.create_simulation(protein.gen_seed(), "em")
+            protein.init_energy = protein.calc_init_energy()
             protein._calculate_epsilon()
         except Exception as E:
             bt.logging.error(
@@ -203,8 +242,7 @@ class Protein:
 
         # TODO: Enable this to send checkpoints rather than only the initial set of files
 
-        required_files = self.mdp_files + self.other_files
-        missing_files = self.check_for_missing_files(required_files=required_files)
+        missing_files = self.check_for_missing_files(required_files=self.input_files)
 
         if missing_files is not None:
             self.generate_input_files()
@@ -214,20 +252,6 @@ class Protein:
 
         # Read the files that should exist now based on generate_input_files.
         self.md_inputs = self.read_and_return_files(filenames=self.other_files)
-        params_to_change = [
-            "nstvout",  # Save velocities every 0 steps
-            "nstfout",  # Save forces every 0 steps
-            "nstxout-compressed",  # Save coordinates to trajectory every 50,000 steps
-            "nstenergy",  # Save energies every 50,000 steps
-            "nstlog",  # Update log file every 50,000 steps
-        ]
-
-        # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(
-            mdp_files=self.mdp_files,
-            params_to_change=params_to_change,
-            seed=self.config.seed,
-        )
 
         self.save_files(
             files=self.md_inputs,
@@ -235,11 +259,8 @@ class Protein:
             write_mode="w",
         )
 
-        self.remaining_steps = []
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
-        self.init_energy = calc_potential_from_edr(
-            output_dir=self.validator_directory, edr_name="em.edr"
-        )
+        self.init_energy = self.calc_init_energy()
         self._calculate_epsilon()
 
     def __str__(self):
@@ -295,32 +316,14 @@ class Protein:
         bt.logging.info(
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
+        with open("config.pkl", "w") as f:
+            pickle.dumps(self.system_config, f)
 
-        commands = self.check_configuration_file_commands()
-
-        # Commands to generate GROMACS input files
-        commands += [
-            f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}",  # remove lines with HETATM
-            f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}",  # remove lines with CONECT
-            f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water {self.water}",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
-            f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
-            "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
-            "touch ions.mdp",  # Create a file to add ions to the system
-            "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
-            'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
-        ]
-
-        # Validator does the first step of the energy minimization
-        commands += [
-            f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
-            "gmx mdrun -v -deffnm em",
-        ]
-
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
-        )
+        self.simulation = self.create_simulation(self.gen_seed(), "em")
+        self.simulation.minimizeEnergy(
+            maxIterations=1000
+        )  # TODO: figure out the right number for this
+        self.simulation.saveCheckpoint("em.cpt")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -364,17 +367,21 @@ class Protein:
                 params_values = {"ld-seed": seed}
             elif file == "nvt.mdp":
                 params_values = {
-                    "nsteps": self.config.nvt_steps
-                    if self.config.nvt_steps is not None
-                    else self.config.max_steps // 100,
+                    "nsteps": (
+                        self.config.nvt_steps
+                        if self.config.nvt_steps is not None
+                        else self.config.max_steps // 100
+                    ),
                     "gen_seed": seed,
                     "ld-seed": seed,
                 }
             elif file == "npt.mdp":
                 params_values = {
-                    "nsteps": self.config.npt_steps
-                    if self.config.npt_steps is not None
-                    else self.config.max_steps // 10,
+                    "nsteps": (
+                        self.config.npt_steps
+                        if self.config.npt_steps is not None
+                        else self.config.max_steps // 10
+                    ),
                     "ld-seed": seed,
                 }
             elif file == "md.mdp":
@@ -491,7 +498,9 @@ class Protein:
             verbose=self.config.verbose,
         )
 
-    def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
+    def process_md_output(
+        self, md_output: dict, seed: int, state: str, hotkey: str
+    ) -> bool:
         """
         1. Check md_output for the required files, if unsuccessful return False
         2. Save files if above is valid
@@ -499,13 +508,11 @@ class Protein:
         4.
         """
 
-        required_files_extensions = ["xtc", "tpr", "log"]
+        required_files_extensions = ["cpt", "log"]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
-        md_outputs_exts = {
-            k.split(".")[-1]: k
-            for k, v in md_output.items()
-            if len(v) > 0 and "center" not in k
+        self.md_outputs_exts = {
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
         }
 
         if len(md_output.keys()) == 0:
@@ -515,7 +522,7 @@ class Protein:
             return False
 
         for ext in required_files_extensions:
-            if ext not in md_outputs_exts:
+            if ext not in self.md_outputs_exts:
                 bt.logging.error(f"Missing file with extension {ext} in md_output")
                 return False
 
@@ -526,108 +533,143 @@ class Protein:
             files=md_output,
             output_directory=self.miner_data_directory,
         )
-
-        last_miner_simulation_step_time = get_last_step_time(
-            os.path.join(self.miner_data_directory, md_outputs_exts["log"])
-        )
-
-        # We need to generate the gro file from the miner to ensure they are not cheating.
-        gro_file_location = self.compute_intermediate_gro(
-            output_directory=self.miner_data_directory,
-            md_outputs_exts=md_outputs_exts,
-            simulation_step_time=last_miner_simulation_step_time,
-        )
-
-        # Check that the md_output contains the right protein through gro_hash
-        if gro_hash(gro_path=self.gro_path) != gro_hash(gro_path=gro_file_location):
-            bt.logging.warning(
-                f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
+        try:
+            self.simulation = self.create_simulation(
+                seed,
+                state,
             )
-            self.delete_files(directory=self.miner_data_directory)
+            self.simulation.loadCheckpoint(
+                f"{self.miner_data_directory}/{self.md_outputs_exts['cpt']}"
+            )
+        except Exception as e:
+            bt.logging.error(f"Failed to recreate simulation: {e}")
             return False
-        bt.logging.debug(f"The hash for .gro file is correct!")
 
-        # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
-        # .gro -> .edr
-        self.rerun(
-            output_directory=self.miner_data_directory,
-            gro_file_location=gro_file_location,
+        cpt_step = self.simulation.currentStep
+        log_file = pd.read_csv(
+            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
         )
+        log_step = log_file['#"Step"'].iloc[-1]
+
+        ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+        if (log_step - cpt_step) < 5000:
+            bt.logging.error("Miner did not run enough steps since last checkpoint")
+            return False
+
         return True
 
-    def is_run_valid(self, energy: float, hotkey: str):
-        self.get_miner_data_directory(hotkey=hotkey)
-        gro_file_location = os.path.join(self.miner_data_directory, "intermediate.gro")
+    def create_simulation(self, seed: str, state: str) -> app.Simulation:
+        """Recreates a simulation object based on the provided parameters.
 
-        md_mdp = os.path.join(
-            self.validator_directory, "md.mdp"
-        )  # md.mdp file is a base config that we never change.
-        topol_path = os.path.join(
-            self.validator_directory, "topol.top"
-        )  # all miners get the same topol file.
-        tpr_path = os.path.join(self.miner_data_directory, "check.tpr")
+        This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
+        Args:
+            seed (str): The seed for the random number generator.
+            state (str): The state of the simulation.
+            cpt_file (str): The path to the checkpoint file.
 
-        # computing 10 steps of the simulation with production parameters
-        commands = [
-            f"gmx grompp -f {md_mdp} -c {gro_file_location} -r {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -s {tpr_path} -deffnm {self.miner_data_directory}/check -ntmpi 1 -nsteps 10",
-        ]
+        Returns:
+            app.Simulation: The recreated simulation object.
+        """
+        pdb = app.PDBFile(self.pdb_file)
+        forcefield = app.ForceField(self.system_config.ff, self.system_config.water)
 
-        # computing the energy after the 10 step production run
-        commands += [
-            f"echo Potential | gmx energy -f {self.miner_data_directory}/check.edr -o {self.miner_data_directory}/check.xvg"
-        ]
+        modeller = app.Modeller(pdb.topology, pdb.positions)
+        modeller.deleteWater()
 
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
-        )
-        df_check = pd.read_csv(
-            f"{self.miner_data_directory}/check.xvg",
-            skiprows=24,
-            delim_whitespace=True,
-            names=["Time", "Energy"],
+        modeller.addSolvent(
+            forcefield,
+            padding=self.system_config.box_padding * unit.nanometer,
+            boxShape=self.system_config.box,
+            model=self.system_config.water,
         )
 
-        check_energy = df_check["Energy"].iloc[-1]
-        percentage_change = abs(((check_energy - energy) / energy))
-        cmd = f"rm {self.miner_data_directory}/check* "
-        os.system(cmd)
-        if check_energy > energy and percentage_change > 0.01:
-            return False, check_energy
-        return True, check_energy
+        # Create the system
+        system = forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=self.system_config.nonbonded_method,
+            nonbondedCutoff=self.system_config.cutoff * mm.unit.nanometers,
+            constraints=self.system_config.constraints,
+        )
 
-    def get_energy(
-        self,
-        data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
-        xvg_command: str = "-xvg none",
-    ):
-        if output_path is None:
-            output_path = self.miner_data_directory
+        # Integrator settings
+        integrator = mm.LangevinIntegrator(
+            self.system_config.temperature * unit.kelvin,
+            self.system_config.friction / unit.picosecond,
+            self.system_config.time_step_size * unit.picoseconds,
+        )
+        integrator.setRandomNumberSeed(seed)
+        # Periodic boundary conditions
+        pdb.topology.setPeriodicBoxVectors(system.getDefaultPeriodicBoxVectors())
 
-        xvg_name = "rerun_energy_extracted.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/rerun_energy.edr -o {output_data_location} {xvg_command}"
-        ]
-        run_cmd_commands(command)
-        return self.extract(filepath=output_data_location, names=["step", "energy"])
+        if state != "nvt":
+            system.addForce(
+                mm.MonteCarloBarostat(
+                    self.system_config.pressure * unit.bar,
+                    self.system_config.temperature * unit.kelvin,
+                )
+            )
+        platform = mm.Platform.getPlatformByName("CUDA")
+        properties = {"DeterministicForces": "true", "Precision": "double"}
+        simulation = mm.app.Simulation(
+            modeller.topology, system, integrator, platform, properties
+        )
+        # Create the simulation object
+        return simulation
+
+    def is_run_valid(self):
+        """
+        Checks if the run is valid by comparing the potential energy values
+        between the current simulation and a reference log file.
+
+        Returns:
+            bool: True if the run is valid, False otherwise.
+        """
+        log_file = pd.read_csv(
+            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
+        )
+        log_step = log_file['#"Step"'].iloc[-1]
+        cpt_step = self.simulation.currentStep
+
+        steps_to_run = log_step - cpt_step
+
+        self.simulation.reporters.append(
+            app.StateDataReporter(
+                f"{self.miner_data_directory}/check.log",
+                10,
+                step=True,
+                potentialEnergy=True,
+                temperature=True,
+            )
+        )
+        self.simulation.step(steps_to_run)
+
+        check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
+
+        check_energies = check_log_file["Potential Energy (kJ/mole)"][cpt_step:]
+        miner_energies = log_file["Potential Energy (kJ/mole)"][cpt_step:]
+
+        # calculating absolute percent difference per step
+        percent_diff = abs((check_energies - miner_energies) / miner_energies * 100)
+        min_length = min(len(percent_diff), len(self.upper_bounds))
+
+        # Compare the entries up to the length of the shorter array
+        comparison_result = percent_diff[:min_length] > self.upper_bounds[:min_length]
+
+        # Calculate the percentage of True values
+        percent_true = (sum(comparison_result) / len(comparison_result)) * 100
+
+        if percent_true > 20:
+            return False
+        return True
+
+    def get_energy(self):
+        state = self.simulation.context.getState(getEnergy=True)
+
+        return state.getPotentialEnergy() / unit.kilojoules_per_mole
 
     def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
-        if output_path is None:
-            output_path = self.miner_data_directory
-
-        xvg_name = "rmsd_xray.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"echo '4 4' | gmx rms -s {self.validator_directory}/em.tpr -f {output_path}/rerun_energy.trr -o {output_data_location} -tu ns {xvg_command}"
-        ]
-        run_cmd_commands(command)
-
-        return self.extract(filepath=output_data_location, names=["step", "rmsd"])
+        """TODO: Implement the RMSD calculation"""
+        return -1
 
     def _calculate_epsilon(self):
         if "ATOM" in self.pdb_complexity.keys():
@@ -644,3 +686,19 @@ class Protein:
         Temp. method before we know what we want to keep.
         """
         shutil.rmtree(self.pdb_directory)
+
+    def calc_init_energy(self):
+        """Calculate the potential energy from an edr file using gmx energy.
+        Args:
+            output_dir (str): directory containing the edr file
+            edr_name (str): name of the edr file
+            xvg_name (str): name of the xvg file
+
+        Returns:
+            float: potential energy
+        """
+
+        return (
+            self.simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            / unit.kilojoules_per_mole
+        )
