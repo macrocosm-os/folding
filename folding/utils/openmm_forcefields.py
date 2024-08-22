@@ -16,7 +16,7 @@ class OpenMMForceField(ABC):
         ...
 
     @abstractmethod
-    def entities(self):
+    def forcefields(self):
         ...
 
     @abstractmethod
@@ -35,8 +35,9 @@ class Amber14(OpenMMForceField):
     def recommended_configuration(self):
         return ["amber14-all.xml", "amber14/tip3pfb.xml"]
 
-    def entities(self):
+    def forcefields(self):
         forces = [
+            "amber14-all.xml",
             "protein.ff14SB.xml",
             "protein.ff15ipq.xml",
             "DNA.OL15.xml",
@@ -71,7 +72,7 @@ class Charmm36(OpenMMForceField):
     def recommended_configuration(self):
         return ["charmm36.xml", "charmm36/water.xml"]
 
-    def entities(self):
+    def forcefields(self):
         forces = [
             "charmm36.xml",
         ]
