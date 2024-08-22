@@ -6,9 +6,14 @@ import concurrent.futures
 from typing import Dict, List, Tuple
 from collections import defaultdict
 import bittensor as bt
+import random
+import openmm as mm
+import openmm.app as app
+import openmm.unit as unit
 
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
+from folding.base.simulation import OpenMMSimulation
 from folding.protocol import JobSubmissionSynapse
 from folding.utils.logging import log_event
 from folding.utils.ops import (
@@ -18,9 +23,28 @@ from folding.utils.ops import (
     calc_potential_from_edr,
 )
 
+
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
+
+
+class LastTwoCheckpointsReporter(app.CheckpointReporter):
+    def __init__(self, file_prefix, reportInterval):
+        super().__init__(file_prefix + "_1.cpt", reportInterval)
+        self.file_prefix = file_prefix
+        self.reportInterval = reportInterval
+
+    def report(self, simulation, state):
+        # Create a new checkpoint
+        current_checkpoint = f"{self.file_prefix}.cpt"
+        if os.path.exists(current_checkpoint):
+            os.rename(current_checkpoint, f"{self.file_prefix}_old.cpt")
+        simulation.saveCheckpoint(current_checkpoint)
+
+    def describeNextReport(self, simulation):
+        steps = self.reportInterval - simulation.currentStep % self.reportInterval
+        return (steps, False, False, False, False, False)
 
 
 def attach_files(
@@ -159,6 +183,8 @@ class FoldingMiner(BaseMinerNeuron):
         )  # remove one for safety
 
         self.mock = None
+        self.openmm_simulation = OpenMMSimulation()
+        self.generate_random_seed = lambda: random.randint(0, 1000)
 
     def create_default_dict(self):
         def nested_dict():
@@ -199,24 +225,24 @@ class FoldingMiner(BaseMinerNeuron):
         return event
 
     def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
-        commands = [
-            "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
-            "gmx mdrun -deffnm nvt " + mdrun_args,
-            "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
-            "gmx mdrun -deffnm npt " + mdrun_args,
-            f"gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
-            f"gmx mdrun -deffnm md_0_1 " + mdrun_args,
-            f"echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
-        ]
-
-        # These are rough identifiers for the different states of the simulation
-        state_commands = {
-            "nvt": commands[:2],
-            "npt": commands[2:4],
-            "md_0_1": commands[4:],
-        }
-
-        return state_commands
+        states = ["nvt", "npt", "md_0_1"]
+        state_commands = {}
+        seed = self.generate_random_seed()
+        for state in states:
+            simulation = self.openmm_simulation.create_simulation(
+                pdb_file=self.pdb_file,
+                system_config=self.system_config,
+                seed=seed,
+                state=state,
+            )
+            simulation.reporters.append(LastTwoCheckpointsReporter(f"{state}", 10000))
+            simulation.reporters.append(
+                app.StateDataReporter(
+                    f"{state}.log", 10, step=True, potentialEnergy=True
+                )
+            )
+            state_commands[state] = simulation
+        return state_commands, seed
 
     def check_and_remove_simulations(self, event: Dict) -> Dict:
         """Check to see if any simulations have finished, and remove them
@@ -347,12 +373,13 @@ class FoldingMiner(BaseMinerNeuron):
                 )
 
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
-        state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
+        state_commands, seed = self.configure_commands(mdrun_args=synapse.mdrun_args)
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
             pdb_id=synapse.pdb_id,
             output_dir=output_dir,
+            seed=seed,
         )
 
         future = self.executor.submit(
@@ -420,10 +447,11 @@ class FoldingMiner(BaseMinerNeuron):
 
 
 class SimulationManager:
-    def __init__(self, pdb_id: str, output_dir: str) -> None:
+    def __init__(self, pdb_id: str, output_dir: str, seed: int) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
         self.state_file_name = f"{pdb_id}_state.txt"
+        self.seed = seed
 
         self.output_dir = output_dir
         self.start_time = time.time()
@@ -436,7 +464,7 @@ class SimulationManager:
     def run(
         self,
         md_inputs: Dict,
-        commands: Dict,
+        simulations: Dict,
         suppress_cmd_output: bool = True,
         mock: bool = False,
     ):
@@ -451,6 +479,8 @@ class SimulationManager:
         bt.logging.info(
             f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
+        steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
+        cpt_file = {"nvt": "em", "npt": "nvt", "md_0_1": "npt"}
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
@@ -463,14 +493,13 @@ class SimulationManager:
                 bt.logging.info(f"\nWriting {filename} to {self.output_dir}")
                 file.write(content)
 
-        for state, commands in commands.items():
+        for state, simulation in simulations.items():
             bt.logging.info(f"Running {state} commands")
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
+            simulation.load_checkpoint(f"{cpt_file[state]}.cpt")
 
-            run_cmd_commands(
-                commands=commands, suppress_cmd_output=suppress_cmd_output, verbose=True
-            )
+            simulation.step(steps[state])
 
             if mock:
                 bt.logging.warning("Running in mock mode, creating fake files...")
