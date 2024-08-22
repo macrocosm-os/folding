@@ -1,5 +1,7 @@
 8/22/24
 
+There is a config associated with BaseValidatorNeuron(BaseNeuron), the parent classes of Validator()
+    we will merge configs when the validator is instantiated
 new load_config_json() method in BaseValidatorNeuron(BaseNeuron)
     __init__ calls this and loads in the json from the directory. 
 
@@ -13,6 +15,10 @@ debug mode.
 
 
 
+
+Notes: 
+    - the BaseValidatorNeuron class accesses and modifies the config attribute inherited from the BaseNeuron class.
+    - 
 
 
 
