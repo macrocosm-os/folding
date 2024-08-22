@@ -316,8 +316,8 @@ class Protein:
         bt.logging.info(
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
-        with open("config.json", "w") as f:
-            f.write(self.system_config.json())
+        with open("config.pkl", "w") as f:
+            pickle.dumps(self.system_config, f)
 
         self.simulation = self.create_simulation(self.gen_seed(), "em")
         self.simulation.minimizeEnergy(
