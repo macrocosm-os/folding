@@ -317,10 +317,15 @@ class Validator(BaseValidatorNeuron):
         bt.logging.success(f"Event information: {merged_events}")
         log_event(self, event=prepare_event_for_logging(merged_events))
 
+import json 
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
-    with Validator() as v:
+    config_json_path = '/home/paperspace/folding/folding/utils/config_input.json'
+    with open(config_json_path, 'r') as file: 
+        config = json.load(file)
+
+    with Validator(config=config) as v:
         while v.is_running and not v.should_exit:
             # bt.logging.info(
             #     f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
