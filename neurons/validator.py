@@ -321,9 +321,7 @@ import json
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
-    config_json_path = '/home/paperspace/folding/folding/utils/config_input.json'
-    with open(config_json_path, 'r') as file: 
-        config = json.load(file)
+
 
     with Validator(config=config) as v:
         while v.is_running and not v.should_exit:
