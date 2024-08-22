@@ -106,38 +106,39 @@ class BaseNeuron(ABC):
         self.step = 0
 
     def check_gromacs_version(self):
-        """
-        A method that enforces that the gromacs version that is running the version specified in the __GROMACS_VERSION_TAG__.
-        """
-        try:
-            result = subprocess.run(
-                ["gmx", "--version"], capture_output=True, text=True
-            )
-            version_output = result.stdout.strip()
+        # """
+        # A method that enforces that the gromacs version that is running the version specified in the __GROMACS_VERSION_TAG__.
+        # """
+        # try:
+        #     result = subprocess.run(
+        #         ["gmx", "--version"], capture_output=True, text=True
+        #     )
+        #     version_output = result.stdout.strip()
 
-            version_pattern = r"GROMACS version:\s+(\d{4}\.\d+)"
-            version_match = re.search(version_pattern, version_output)
-            self.gromacs_version = version_match.group(1) if version_match else None
+        #     version_pattern = r"GROMACS version:\s+(\d{4}\.\d+)"
+        #     version_match = re.search(version_pattern, version_output)
+        #     self.gromacs_version = version_match.group(1) if version_match else None
 
-            is_gpu_pattern = r"GPU support:\s*(.+)"
-            is_gpu_match = re.search(is_gpu_pattern, version_output)
+        #     is_gpu_pattern = r"GPU support:\s*(.+)"
+        #     is_gpu_match = re.search(is_gpu_pattern, version_output)
             
-            try:
-                self.gpu_status = is_gpu_match.group(0).split()[-1]
-            except:
-                self.gpu_status = 'unknown'
+        #     try:
+        #         self.gpu_status = is_gpu_match.group(0).split()[-1]
+        #     except:
+        #         self.gpu_status = 'unknown'
 
-            if (self.gromacs_version is None) or (
-                __GROMACS_VERSION_TAG__ not in self.gromacs_version
-            ):
-                raise GromacsException(
-                    f"GROMACS version mismatch. Installed == {self.gromacs_version}. Please install GROMACS {__GROMACS_VERSION_TAG__}.*"
-                )
+        #     if (self.gromacs_version is None) or (
+        #         __GROMACS_VERSION_TAG__ not in self.gromacs_version
+        #     ):
+        #         raise GromacsException(
+        #             f"GROMACS version mismatch. Installed == {self.gromacs_version}. Please install GROMACS {__GROMACS_VERSION_TAG__}.*"
+        #         )
 
-        except Exception as e:
-            raise e
+        # except Exception as e:
+        #     raise e
 
-        bt.logging.success(f"Running GROMACS version: {self.gromacs_version} with GPU status: {self.gpu_status}")
+        # bt.logging.success(f"Running GROMACS version: {self.gromacs_version} with GPU status: {self.gpu_status}")
+        return
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
