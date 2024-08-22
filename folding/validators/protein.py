@@ -104,8 +104,10 @@ class Protein:
 
         self.simulation: app.Simulation = None
 
+        self.input_files = ["config.json", "em.cpt"]
+
         self.md_inputs = (
-            self.read_and_return_files(filenames=self.other_files + self.mdp_files)
+            self.read_and_return_files(filenames=self.input_files)
             if load_md_inputs
             else {}
         )
@@ -125,8 +127,6 @@ class Protein:
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
-        self.gro_path = os.path.join(self.validator_directory, "em.gro")
-        self.topol_path = os.path.join(self.validator_directory, "topol.top")
 
     @staticmethod
     def from_job(job: Job, config: Dict):
@@ -243,8 +243,7 @@ class Protein:
 
         # TODO: Enable this to send checkpoints rather than only the initial set of files
 
-        required_files = self.mdp_files + self.other_files
-        missing_files = self.check_for_missing_files(required_files=required_files)
+        missing_files = self.check_for_missing_files(required_files=self.input_files)
 
         if missing_files is not None:
             self.generate_input_files()
@@ -254,20 +253,6 @@ class Protein:
 
         # Read the files that should exist now based on generate_input_files.
         self.md_inputs = self.read_and_return_files(filenames=self.other_files)
-        params_to_change = [
-            "nstvout",  # Save velocities every 0 steps
-            "nstfout",  # Save forces every 0 steps
-            "nstxout-compressed",  # Save coordinates to trajectory every 50,000 steps
-            "nstenergy",  # Save energies every 50,000 steps
-            "nstlog",  # Update log file every 50,000 steps
-        ]
-
-        # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(
-            mdp_files=self.mdp_files,
-            params_to_change=params_to_change,
-            seed=self.config.seed,
-        )
 
         self.save_files(
             files=self.md_inputs,
@@ -275,10 +260,10 @@ class Protein:
             write_mode="w",
         )
 
-        self.remaining_steps = []
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
-        self.init_energy = calc_potential_from_edr(
-            output_dir=self.validator_directory, edr_name="em.edr"
+        self.init_energy = (
+            self.simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            / unit.kilojoules_per_mole
         )
         self._calculate_epsilon()
 
@@ -335,32 +320,12 @@ class Protein:
         bt.logging.info(
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
+        with open("config.json", "w") as f:
+            f.write(self.system_config.json())
 
-        commands = self.check_configuration_file_commands()
-
-        # Commands to generate GROMACS input files
-        commands += [
-            f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}",  # remove lines with HETATM
-            f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}",  # remove lines with CONECT
-            f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water {self.water}",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
-            f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
-            "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
-            "touch ions.mdp",  # Create a file to add ions to the system
-            "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
-            'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
-        ]
-
-        # Validator does the first step of the energy minimization
-        commands += [
-            f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
-            "gmx mdrun -v -deffnm em",
-        ]
-
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
-        )
+        self.simulation = self.create_simulation(self.gen_seed(), "em")
+        self.simulation.minimizeEnergy()
+        self.simulation.saveCheckpoint("em.cpt")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -571,10 +536,12 @@ class Protein:
             output_directory=self.miner_data_directory,
         )
         try:
-            self.simulation = self.recreate_simulation(
+            self.simulation = self.create_simulation(
                 seed,
                 state,
-                f"{self.miner_data_directory}/{self.md_outputs_exts['cpt']}",
+            )
+            self.simulation.loadCheckpoint(
+                f"{self.miner_data_directory}/{self.md_outputs_exts['cpt']}"
             )
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
@@ -593,9 +560,7 @@ class Protein:
 
         return True
 
-    def recreate_simulation(
-        self, seed: str, state: str, cpt_file: str
-    ) -> app.Simulation:
+    def create_simulation(self, seed: str, state: str) -> app.Simulation:
         """Recreates a simulation object based on the provided parameters.
 
         This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
@@ -651,7 +616,6 @@ class Protein:
             pdb.topology, system, integrator, platform, properties
         )
         # Create the simulation object
-        simulation.loadCheckpoint(cpt_file)
         return simulation
 
     def is_run_valid(self):
@@ -706,17 +670,8 @@ class Protein:
         return state.getPotentialEnergy() / unit.kilojoules_per_mole
 
     def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
-        if output_path is None:
-            output_path = self.miner_data_directory
-
-        xvg_name = "rmsd_xray.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"echo '4 4' | gmx rms -s {self.validator_directory}/em.tpr -f {output_path}/rerun_energy.trr -o {output_data_location} -tu ns {xvg_command}"
-        ]
-        run_cmd_commands(command)
-
-        return self.extract(filepath=output_data_location, names=["step", "rmsd"])
+        """TODO: Implement the RMSD calculation"""
+        return -1
 
     def _calculate_epsilon(self):
         if "ATOM" in self.pdb_complexity.keys():
