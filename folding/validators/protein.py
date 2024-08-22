@@ -4,7 +4,7 @@ import re
 import random
 import shutil
 from enum import Enum
-from typing import List, Dict
+from typing import List, Dict, Literal, Optional
 from pathlib import Path
 from collections import defaultdict
 import pickle
@@ -13,7 +13,7 @@ import bittensor as bt
 import pandas as pd
 from dataclasses import dataclass
 from pydantic import BaseModel
-from typing import Literal, Optional
+from folding.utils.new_config import SimulationConfig
 
 import openmm as mm
 from openmm import app
@@ -34,40 +34,6 @@ from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
-
-
-class NonbondedMethod(Enum):
-    PME = app.PME
-    NoCutoff = app.NoCutoff
-
-
-class Constraints(Enum):
-    Unconstricted = None
-    HBonds = app.HBonds
-    AllBonds = app.AllBonds
-    HAngles = app.HAngles
-
-
-class SimulationConfig(BaseModel):
-    ff: str
-    water: str
-    box: Literal["cubic", "dodecahedron", "octahedron"]
-    temperature: float = 300.0
-    time_step_size: float = 0.002
-    time_units: mm.unit.unit.Unit = mm.unit.picosecond
-    save_interval_checkpoint: int = 5000
-    save_interval_log: int = 100
-    box_padding: float = 1.0
-    friction: float = 1.0
-    nonbonded_method: NonbondedMethod = NonbondedMethod.PME
-    constraints: Constraints = Constraints.HBonds
-    cutoff: Optional[float] = 1.0
-    pressure: float = 1.0
-    max_steps_nvt: int = 50000
-
-    class Config:
-        arbitrary_types_allowed = True
-
 
 @dataclass
 class Protein:
@@ -138,7 +104,7 @@ class Protein:
             ff=job.ff,
             box=job.box,
             water=job.water,
-            config=config,
+            config=SimulationConfig(**config), 
             load_md_inputs=True,
             epsilon=job.epsilon,
         )
