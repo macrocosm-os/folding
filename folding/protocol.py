@@ -22,10 +22,11 @@ import bittensor as bt
 
 
 class PingSynapse(bt.Synapse):
-    """ Responsible for determining if a miner can accept a request """
+    """Responsible for determining if a miner can accept a request"""
+
     can_serve: bool = False
-    available_compute: typing.Optional[int] = None #TODO: number of threads / gpus? 
-    
+    available_compute: typing.Optional[int] = None  # TODO: number of threads / gpus?
+
 
 class JobSubmissionSynapse(bt.Synapse):
     """
@@ -39,13 +40,15 @@ class JobSubmissionSynapse(bt.Synapse):
     - mdrun_args: A string containing the arguments to be passed to the gromacs mdrun command.
     """
 
+    # TODO: reconsider parameters
+
     # Required request input, filled by sending dendrite caller.
     pdb_id: str
     md_inputs: dict
 
     # Optional runtime args for gromacs
     mdrun_args: str = ""
-    
+
     # Miner can decide if they are serving the request or not.
     miner_serving: bool = True
 

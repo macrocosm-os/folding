@@ -145,9 +145,8 @@ class Protein:
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            protein.init_energy = calc_potential_from_edr(
-                output_dir=protein.validator_directory, edr_name="em.edr"
-            )
+            protein.create_simulation(protein.gen_seed(), "em")
+            protein.init_energy = protein.calc_init_energy()
             protein._calculate_epsilon()
         except Exception as E:
             bt.logging.error(
@@ -261,10 +260,7 @@ class Protein:
         )
 
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
-        self.init_energy = (
-            self.simulation.context.getState(getEnergy=True).getPotentialEnergy()
-            / unit.kilojoules_per_mole
-        )
+        self.init_energy = self.calc_init_energy()
         self._calculate_epsilon()
 
     def __str__(self):
@@ -324,7 +320,9 @@ class Protein:
             f.write(self.system_config.json())
 
         self.simulation = self.create_simulation(self.gen_seed(), "em")
-        self.simulation.minimizeEnergy()
+        self.simulation.minimizeEnergy(
+            maxIterations=1000
+        )  # TODO: figure out the right number for this
         self.simulation.saveCheckpoint("em.cpt")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
@@ -554,7 +552,7 @@ class Protein:
         log_step = log_file['#"Step"'].iloc[-1]
 
         ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-        if log_step - cpt_step < 5000:
+        if (log_step - cpt_step) < 5000:
             bt.logging.error("Miner did not run enough steps since last checkpoint")
             return False
 
@@ -613,7 +611,7 @@ class Protein:
         platform = mm.Platform.getPlatformByName("CUDA")
         properties = {"DeterministicForces": "true", "Precision": "double"}
         simulation = mm.app.Simulation(
-            pdb.topology, system, integrator, platform, properties
+            modeller.topology, system, integrator, platform, properties
         )
         # Create the simulation object
         return simulation
@@ -688,3 +686,19 @@ class Protein:
         Temp. method before we know what we want to keep.
         """
         shutil.rmtree(self.pdb_directory)
+
+    def calc_init_energy(self):
+        """Calculate the potential energy from an edr file using gmx energy.
+        Args:
+            output_dir (str): directory containing the edr file
+            edr_name (str): name of the edr file
+            xvg_name (str): name of the xvg file
+
+        Returns:
+            float: potential energy
+        """
+
+        return (
+            self.simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            / unit.kilojoules_per_mole
+        )
