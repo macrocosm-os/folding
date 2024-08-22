@@ -4,6 +4,8 @@ from typing import List, Dict, Union
 
 import bittensor as bt
 
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTERY
+
 
 class HyperParameters:
     def __init__(self, exclude: Union[Dict[str, str], List[str]] = None) -> None:
@@ -11,27 +13,34 @@ class HyperParameters:
 
         Args:
             exclude (List[str], optional): List of hyperparameters to exclude. Defaults to None.
-                needs to be either ['FF','BOX','WATER'] to exclude a specific hyperparameter, or
+                needs to be either ['FF','WATER'] to exclude a specific hyperparameter, or
                 you can exclude a specific value(s) by passing {'FF': 'charmm27', 'BOX_TYPE': 'dodecahedron'}.
         """
 
+        self.sampled_combinations: List[Dict[str, str]] = []
+        self.all_combinations: List[Dict[str, str]] = []
+
         # Need to download files for specific inputs.
-        self.FF: List[str] = ["charmm27", "amber03"]
-        self.BOX: List[str] = ["dodecahedron", "octahedron", "cubic"]
-        self.WATER: List = ["tip3p", "spce"]
-        self.BOX_DISTANCE: List[float] = [1.0]
-
-        self.parameter_set = {
-            "FF": self.FF,
-            "BOX": self.BOX,
-            "WATER": self.WATER,
-            "BOX_DISTANCE": self.BOX_DISTANCE,
-        }
-
+        fields = [field() for field in FORCEFIELD_REGISTERY.values()]
         self.exclude: List[str] = exclude or []
 
-        self.create_parameter_space()
-        self.setup_combinations()
+        for field in fields:
+            self.FF = field.forcefields()
+            self.WATER = field.waters()
+            self.BOX_DISTANCE = [1.0]
+
+            parameter_set = {
+                "FF": self.FF,
+                "WATER": self.WATER,
+                "BOX_DISTANCE": self.BOX_DISTANCE,
+            }
+
+            self.create_parameter_space()
+            self.all_combinations.extend(
+                self.setup_combinations(parameter_set=parameter_set)
+            )
+
+        self.TOTAL_COMBINATIONS = len(self.all_combinations)
 
     def create_parameter_space(self):
         """
@@ -66,24 +75,22 @@ class HyperParameters:
                         f"Parameter {param} not found in parameter set. Only FF, BOX_TYPE, and/or WATER are allowed."
                     )
 
-    def setup_combinations(self):
+    def setup_combinations(
+        self, parameter_set: Dict[str, List[str]]
+    ) -> List[Dict[str, str]]:
         """
         Samples all possible combinations of hyperparameters for protein folding.
         Remove excluded hyperparameters from the list of possible combinations.
         """
-        self.sampled_combinations: List[Dict[str, str]] = []
 
         # Create a list of tuples, and then corresponds them in dictionary format.
-        self.all_combinations = list(product(*self.parameter_set.values()))
-        self.all_combinations = [
-            {key: value for key, value in zip(self.parameter_set.keys(), combination)}
+        all_combinations = list(product(*parameter_set.values()))
+        all_combinations = [
+            {key: value for key, value in zip(parameter_set.keys(), combination)}
             for combination in self.all_combinations
         ]
 
-        self.TOTAL_COMBINATIONS = len(self.all_combinations)
-
-        # Randomly shuffle the parameter space to no bias simulations.
-        random.shuffle(self.all_combinations)
+        return all_combinations
 
     def sample_hyperparameters(self) -> Dict[str, str]:
         """Return a dictionary of pdb_id and sampled hyperparameters."""
