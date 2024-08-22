@@ -1,13 +1,33 @@
 8/22/24
 
-- Go to the earliest point where the validator starts. Thats where we should check for the json 
-- `parse_config()` checks if key hyperparameters are set. If they are, it excludes them from the hyperparameter search. 
+new load_config_json() method in BaseValidatorNeuron(BaseNeuron)
+    __init__ calls this and loads in the json from the directory. 
+
+Locate the config that is sourced. 
+Merge the json config with that sourced config, make sure its accessable as (config.json)
+
+    Now we can use config.json asd we wish, wherever we would like. 
+    For example if we want to pass these to one of the below funcitons or methods. 
+
+debug mode.
+
+
+
+
+
+
+
 - edit `parse_config()` to look at the json input instead
 
 
 
+
+
 /folding/validators/forward.py
-def parse_config(config) -> List[str]
+
+# checks if key hyperparameters are set. If they are, it excludes them from the hyperparameter search. 
+
+def parse_config(config) -> List[str] 
     ...
     return exclude_in_hp_search
 -> 
@@ -32,7 +52,7 @@ def create_new_challenge(self, exclude:List) -> Dict
 
 If we set the config in the context manager, then this will make its way to the hyperparameter search. Let's try it 
     Path to config -> /home/paperspace/folding/folding/utils/config_input.json
-    
+
 
 
 
