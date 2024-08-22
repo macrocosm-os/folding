@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Dict
 
 
 class OpenMMForceField(ABC):
@@ -13,7 +14,7 @@ class OpenMMForceField(ABC):
 
     @property
     @abstractmethod
-    def recommended_configuration(self):
+    def recommended_configuration(self) -> Dict[str, str]:
         ...
 
     @abstractmethod
@@ -34,7 +35,7 @@ class Amber14(OpenMMForceField):
 
     @property
     def recommended_configuration(self):
-        return ["amber14-all.xml", "amber14/tip3pfb.xml"]
+        return {"FF": "amber14-all.xml", "WATER": "amber14/tip3pfb.xml", "BOX": "cubic"}
 
     def forcefields(self):
         forces = [
@@ -70,7 +71,7 @@ class Charmm36(OpenMMForceField):
 
     @property
     def recommended_configuration(self):
-        return ["charmm36.xml", "charmm36/water.xml"]
+        return {"FF": "charmm36.xml", "WATER": "charmm36/water.xml", "BOX": "cubic"}
 
     def forcefields(self):
         forces = [

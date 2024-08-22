@@ -24,19 +24,17 @@ class HyperParameters:
         fields = [field() for field in FORCEFIELD_REGISTERY.values()]
         self.exclude: List[str] = exclude or []
 
-        initial_search = []
+        initial_search: List[Dict[str, str]] = []
 
         for field in fields:
             self.FF: List[str] = field.forcefields
             self.WATER: List[str] = field.waters
             self.BOX = ["cubic", "dodecahedron", "octahedron"]
-            self.BOX_DISTANCE = [1.0]
 
             parameter_set = {
                 "FF": self.FF,
                 "WATER": self.WATER,
                 "BOX": self.BOX,
-                "BOX_DISTANCE": self.BOX_DISTANCE,
             }
 
             self.create_parameter_space()
