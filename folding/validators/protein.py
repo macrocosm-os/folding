@@ -7,6 +7,7 @@ from enum import Enum
 from typing import List, Dict
 from pathlib import Path
 from collections import defaultdict
+import pickle
 
 import bittensor as bt
 import pandas as pd
@@ -16,6 +17,7 @@ from typing import Literal, Optional
 
 import openmm as mm
 from openmm import app
+from openmm import unit
 
 from folding.utils.ops import (
     FF_WATER_PAIRS,
@@ -100,20 +102,19 @@ class Protein:
 
         self.config = config
 
-        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "emin.mdp"]
-        self.other_files = [
-            "em.gro",
-            "posre*",
-            "topol*",
-        ]  # capture all possible topol or posre chains
+        self.simulation: app.Simulation = None
 
         self.md_inputs = (
             self.read_and_return_files(filenames=self.other_files + self.mdp_files)
             if load_md_inputs
             else {}
         )
+        with open(
+            os.path.join(self.base_directory, "upper_bounds_interpolated.pkl"), "rb"
+        ) as f:
+            self.upper_bounds = pickle.load(f)
 
-        # set to an arbitrarilly high number to ensure that the first miner is always accepted.
+        # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
@@ -547,7 +548,7 @@ class Protein:
         required_files_extensions = ["cpt", "log"]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
-        md_outputs_exts = {
+        self.md_outputs_exts = {
             k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
         }
 
@@ -558,7 +559,7 @@ class Protein:
             return False
 
         for ext in required_files_extensions:
-            if ext not in md_outputs_exts:
+            if ext not in self.md_outputs_exts:
                 bt.logging.error(f"Missing file with extension {ext} in md_output")
                 return False
 
@@ -570,15 +571,19 @@ class Protein:
             output_directory=self.miner_data_directory,
         )
         try:
-            simulation = self.recreate_simulation(
-                seed, state, f"{self.miner_data_directory}/{md_outputs_exts['cpt']}"
+            self.simulation = self.recreate_simulation(
+                seed,
+                state,
+                f"{self.miner_data_directory}/{self.md_outputs_exts['cpt']}",
             )
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
             return False
 
-        cpt_step = simulation.currentStep
-        log_file = pd.read_csv(f"{self.miner_data_directory}/{md_outputs_exts['log']}")
+        cpt_step = self.simulation.currentStep
+        log_file = pd.read_csv(
+            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
+        )
         log_step = log_file['#"Step"'].iloc[-1]
 
         ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
@@ -591,16 +596,16 @@ class Protein:
     def recreate_simulation(
         self, seed: str, state: str, cpt_file: str
     ) -> app.Simulation:
-        """There should be something here to describe what is going on here ... seems important
-        (using Autodocstring)
+        """Recreates a simulation object based on the provided parameters.
 
+        This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
         Args:
-            seed (str): _description_
-            state (str): _description_
-            cpt_file (str): _description_
+            seed (str): The seed for the random number generator.
+            state (str): The state of the simulation.
+            cpt_file (str): The path to the checkpoint file.
 
         Returns:
-            app.Simulation: _description_
+            app.Simulation: The recreated simulation object.
         """
         pdb = app.PDBFile(self.pdb_file)
         forcefield = app.ForceField(self.system_config.ff, self.system_config.water)
@@ -610,7 +615,7 @@ class Protein:
 
         modeller.addSolvent(
             forcefield,
-            padding=self.system_config.box_padding * mm.unit.nanometer,
+            padding=self.system_config.box_padding * unit.nanometer,
             boxShape=self.system_config.box,
             model=self.system_config.water,
         )
@@ -625,9 +630,9 @@ class Protein:
 
         # Integrator settings
         integrator = mm.LangevinIntegrator(
-            self.system_config.temperature * mm.unit.kelvin,
-            self.system_config.friction / mm.unit.picosecond,
-            self.system_config.time_step_size * mm.unit.picoseconds,
+            self.system_config.temperature * unit.kelvin,
+            self.system_config.friction / unit.picosecond,
+            self.system_config.time_step_size * unit.picoseconds,
         )
         integrator.setRandomNumberSeed(seed)
         # Periodic boundary conditions
@@ -636,76 +641,69 @@ class Protein:
         if state != "nvt":
             system.addForce(
                 mm.MonteCarloBarostat(
-                    self.system_config.pressure * mm.units.bar,
-                    self.system_config.temperature * mm.units.kelvin,
+                    self.system_config.pressure * unit.bar,
+                    self.system_config.temperature * unit.kelvin,
                 )
             )
-
+        platform = mm.Platform.getPlatformByName("CUDA")
+        properties = {"DeterministicForces": "true", "Precision": "double"}
+        simulation = mm.app.Simulation(
+            pdb.topology, system, integrator, platform, properties
+        )
         # Create the simulation object
-        simulation = app.Simulation(modeller.topology, system, integrator)
         simulation.loadCheckpoint(cpt_file)
         return simulation
 
-    def is_run_valid(self, energy: float, hotkey: str):
-        self.get_miner_data_directory(hotkey=hotkey)
-        gro_file_location = os.path.join(self.miner_data_directory, "intermediate.gro")
+    def is_run_valid(self):
+        """
+        Checks if the run is valid by comparing the potential energy values
+        between the current simulation and a reference log file.
 
-        md_mdp = os.path.join(
-            self.validator_directory, "md.mdp"
-        )  # md.mdp file is a base config that we never change.
-        topol_path = os.path.join(
-            self.validator_directory, "topol.top"
-        )  # all miners get the same topol file.
-        tpr_path = os.path.join(self.miner_data_directory, "check.tpr")
-
-        # computing 10 steps of the simulation with production parameters
-        commands = [
-            f"gmx grompp -f {md_mdp} -c {gro_file_location} -r {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -s {tpr_path} -deffnm {self.miner_data_directory}/check -ntmpi 1 -nsteps 10",
-        ]
-
-        # computing the energy after the 10 step production run
-        commands += [
-            f"echo Potential | gmx energy -f {self.miner_data_directory}/check.edr -o {self.miner_data_directory}/check.xvg"
-        ]
-
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
+        Returns:
+            bool: True if the run is valid, False otherwise.
+        """
+        log_file = pd.read_csv(
+            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
         )
-        df_check = pd.read_csv(
-            f"{self.miner_data_directory}/check.xvg",
-            skiprows=24,
-            delim_whitespace=True,
-            names=["Time", "Energy"],
+        log_step = log_file['#"Step"'].iloc[-1]
+        cpt_step = self.simulation.currentStep
+
+        steps_to_run = log_step - cpt_step
+
+        self.simulation.reporters.append(
+            app.StateDataReporter(
+                f"{self.miner_data_directory}/check.log",
+                10,
+                step=True,
+                potentialEnergy=True,
+                temperature=True,
+            )
         )
+        self.simulation.step(steps_to_run)
 
-        check_energy = df_check["Energy"].iloc[-1]
-        percentage_change = abs(((check_energy - energy) / energy))
-        cmd = f"rm {self.miner_data_directory}/check* "
-        os.system(cmd)
-        if check_energy > energy and percentage_change > 0.01:
-            return False, check_energy
-        return True, check_energy
+        check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
 
-    def get_energy(
-        self,
-        data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
-        xvg_command: str = "-xvg none",
-    ):
-        if output_path is None:
-            output_path = self.miner_data_directory
+        check_energies = check_log_file["Potential Energy (kJ/mole)"][cpt_step:]
+        miner_energies = log_file["Potential Energy (kJ/mole)"][cpt_step:]
 
-        xvg_name = "rerun_energy_extracted.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/rerun_energy.edr -o {output_data_location} {xvg_command}"
-        ]
-        run_cmd_commands(command)
-        return self.extract(filepath=output_data_location, names=["step", "energy"])
+        # calculating absolute percent difference per step
+        percent_diff = abs((check_energies - miner_energies) / miner_energies * 100)
+        min_length = min(len(percent_diff), len(self.upper_bounds))
+
+        # Compare the entries up to the length of the shorter array
+        comparison_result = percent_diff[:min_length] > self.upper_bounds[:min_length]
+
+        # Calculate the percentage of True values
+        percent_true = (sum(comparison_result) / len(comparison_result)) * 100
+
+        if percent_true > 20:
+            return False
+        return True
+
+    def get_energy(self):
+        state = self.simulation.context.getState(getEnergy=True)
+
+        return state.getPotentialEnergy() / unit.kilojoules_per_mole
 
     def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
         if output_path is None:

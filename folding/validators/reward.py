@@ -37,17 +37,16 @@ def get_energies(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
-            energy = protein.get_energy(data_type="Potential").iloc[-1]["energy"]
+            energy = protein.get_energy()
             rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
 
             if energy == 0:
                 continue
 
-            is_valid, checked_energy = protein.is_run_valid(energy, resp.axon.hotkey)
+            is_valid = protein.is_run_valid(energy, resp.axon.hotkey)
             energies[i] = energy if is_valid else 0
 
             event["is_valid"][i] = is_valid
-            event["checked_energy"][i] = float(checked_energy)
             event["reported_energy"][i] = float(energy)
             event["rmsds"][i] = float(rmsd)
 
