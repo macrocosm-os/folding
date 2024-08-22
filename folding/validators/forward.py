@@ -1,5 +1,4 @@
 import time
-import random
 from tqdm import tqdm
 import bittensor as bt
 from pathlib import Path
@@ -20,12 +19,9 @@ PDB_IDS = load_pdb_ids(
     root_dir=ROOT_DIR, filename="pdb_ids.pkl"
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
-def run_ping_step(
-        self, 
-        uids: List[int], 
-        timeout: float
-) -> Dict:
-    """ Report a dictionary of ping information from all miners that were
+
+def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
+    """Report a dictionary of ping information from all miners that were
     randomly sampled for this batch.
     """
     axons = [self.metagraph.axons[uid] for uid in uids]
@@ -40,8 +36,8 @@ def run_ping_step(
 
     ping_report = defaultdict(list)
     for resp in responses:
-        ping_report['miner_status'].append(resp.can_serve)
-        ping_report['reported_compute'].append(resp.available_compute)
+        ping_report["miner_status"].append(resp.can_serve)
+        ping_report["reported_compute"].append(resp.available_compute)
 
     return ping_report
 
@@ -79,7 +75,7 @@ def run_step(
         if state:
             responses_serving.append(responses[ii])
             active_uids.append(uids[ii])
-    
+
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
@@ -89,7 +85,9 @@ def run_step(
     }
 
     if len(responses_serving) == 0:
-        bt.logging.warning(f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗")
+        bt.logging.warning(
+            f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗"
+        )
         return event
 
     energies, energy_event = get_energies(
@@ -97,12 +95,7 @@ def run_step(
     )
 
     # Log the step event.
-    event.update(
-        {
-            "energies": energies.tolist(),
-            **energy_event
-        }
-    )
+    event.update({"energies": energies.tolist(), **energy_event})
 
     if len(protein.md_inputs) > 0:
         event["md_inputs"] = list(protein.md_inputs.keys())
@@ -168,10 +161,6 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
-    forcefields = list(FORCEFIELD_REGISTERY.keys())
-    random.shuffle(forcefields)
-
-    for forcefield in list(FORCEFIELD_REGISTERY.keys()):
 
     exclude_in_hp_search = parse_config(config)
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
@@ -187,13 +176,23 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             sampled_combination: Dict = hp_sampler.sample_hyperparameters()
 
             if config.protein.ff is not None:
-                if config.protein.ff is not None and config.protein.ff not in FORCEFIELD_REGISTERY:
-                    raise ValueError(f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTERY")
-                
+                if (
+                    config.protein.ff is not None
+                    and config.protein.ff not in FORCEFIELD_REGISTERY
+                ):
+                    raise ValueError(
+                        f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTERY"
+                    )
+
             if config.protein.water is not None:
-                if config.protein.water is not None and config.protein.water not in FORCEFIELD_REGISTERY:
-                    raise ValueError(f"Water {config.protein.water} not found in FORCEFIELD_REGISTERY")
-                
+                if (
+                    config.protein.water is not None
+                    and config.protein.water not in FORCEFIELD_REGISTERY
+                ):
+                    raise ValueError(
+                        f"Water {config.protein.water} not found in FORCEFIELD_REGISTERY"
+                    )
+
             hps = {
                 "ff": config.protein.ff or sampled_combination["FF"],
                 "water": config.protein.water or sampled_combination["WATER"],
