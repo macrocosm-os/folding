@@ -224,14 +224,17 @@ class FoldingMiner(BaseMinerNeuron):
         event["state_energies"] = state_potentials
         return event
 
-    def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
+    def configure_commands(
+        self, pdb_id: str, system_config: dict
+    ) -> Dict[str, List[str]]:
         states = ["nvt", "npt", "md_0_1"]
         state_commands = {}
         seed = self.generate_random_seed()
+        pdb_file = os.path.join(self.base_data_path, f"{pdb_id}/{pdb_id}.pdb")
         for state in states:
             simulation = self.openmm_simulation.create_simulation(
-                pdb_file=self.pdb_file,
-                system_config=self.system_config,
+                pdb_file=pdb_file,
+                system_config=system_config,
                 seed=seed,
                 state=state,
             )
@@ -308,6 +311,7 @@ class FoldingMiner(BaseMinerNeuron):
                 data_directory=simulation["output_dir"],
                 state=current_executor_state,
             )
+            synapse.seed = simulation.seed
 
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
@@ -371,9 +375,19 @@ class FoldingMiner(BaseMinerNeuron):
                 return check_synapse(
                     self=self, synapse=synapse, event=event, output_dir=output_dir
                 )
+            # Make sure the output directory exists and if not, create it
+        check_if_directory_exists(output_directory=output_dir)
 
+        # The following files are required for openmm simulations and are received from the validator
+        for filename, content in synapse.md_inputs.items():
+            # Write the file to the output directory
+            with open(filename, "w") as file:
+                bt.logging.info(f"\nWriting {filename} to {output_dir}")
+                file.write(content)
         # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
-        state_commands, seed = self.configure_commands(mdrun_args=synapse.mdrun_args)
+        state_commands, seed = self.configure_commands(
+            pdb_id=synapse.pdb_id, system_config=synapse.system_config
+        )
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
@@ -481,17 +495,6 @@ class SimulationManager:
         )
         steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
         cpt_file = {"nvt": "em", "npt": "nvt", "md_0_1": "npt"}
-
-        # Make sure the output directory exists and if not, create it
-        check_if_directory_exists(output_directory=self.output_dir)
-        os.chdir(self.output_dir)  # TODO: will this be a problem with many processes?
-
-        # The following files are required for openmm simulations and are recieved from the validator
-        for filename, content in md_inputs.items():
-            # Write the file to the output directory
-            with open(filename, "w") as file:
-                bt.logging.info(f"\nWriting {filename} to {self.output_dir}")
-                file.write(content)
 
         for state, simulation in simulations.items():
             bt.logging.info(f"Running {state} commands")
