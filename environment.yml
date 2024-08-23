@@ -5,7 +5,7 @@ channels:
 dependencies:
   - python=3.12  # Specify the Python version
   - openmm=8.1.2
-  - pandas
+  - pandas==2.2.2
   - beautifulsoup4
   - pytorch=2.3.0  # torch is often installed as pytorch via conda
   - loguru
