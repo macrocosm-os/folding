@@ -36,8 +36,8 @@ class JobSubmissionSynapse(bt.Synapse):
 
     Attributes:
     - pdb_id: A Protein id, which contains the necessary details of the protein to be folded.
-    - md_inputs: A dictionary containing the input files for the gromacs simulation.
-    - mdrun_args: A string containing the arguments to be passed to the gromacs mdrun command.
+    - md_inputs: A dictionary containing the input files for the openmm simulation.
+    - mdrun_args: A string containing the arguments to be passed to the openmm mdrun command.
     """
 
     # TODO: reconsider parameters
@@ -46,7 +46,7 @@ class JobSubmissionSynapse(bt.Synapse):
     pdb_id: str
     md_inputs: dict
 
-    # Optional runtime args for gromacs
+    # Optional runtime args for openmm
     mdrun_args: str = ""
 
     # Miner can decide if they are serving the request or not.
