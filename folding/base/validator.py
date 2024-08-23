@@ -79,9 +79,9 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
-        self.json_config = (
-            self.load_config_json()
-        )  # Load the config json file using the new method
+
+        self.json_config = self.load_config_json()
+        self.merged_configs = self.merge_configs()
 
     def serve_axon(self):
         """Serve axon to enable external connections."""
