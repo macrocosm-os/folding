@@ -3,8 +3,7 @@ import glob
 import re
 import random
 import shutil
-from enum import Enum
-from typing import List, Dict, Literal, Optional
+from typing import List, Dict
 from pathlib import Path
 from collections import defaultdict
 import pickle
@@ -12,24 +11,19 @@ import pickle
 import bittensor as bt
 import pandas as pd
 from dataclasses import dataclass
-from pydantic import BaseModel
-
 
 import openmm as mm
 from openmm import app
 from openmm import unit
 
 from folding.utils.ops import (
-    FF_WATER_PAIRS,
     run_cmd_commands,
     check_if_directory_exists,
-    gro_hash,
     load_pdb_ids,
-    calc_potential_from_edr,
     select_random_pdb_id,
     check_and_download_pdbs,
-    get_last_step_time,
 )
+from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
