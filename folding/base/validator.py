@@ -416,4 +416,4 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def load_and_merge_configs(self):
         json_config = self.load_config_json()
-        self.config.system_config = json_config
+        self.config.protein.update(json_config)
