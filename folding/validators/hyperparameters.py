@@ -94,7 +94,7 @@ class HyperParameters:
         all_combinations = list(product(*parameter_set.values()))
         all_combinations = [
             {key: value for key, value in zip(parameter_set.keys(), combination)}
-            for combination in self.all_combinations
+            for combination in all_combinations
         ]
 
         return all_combinations
