@@ -1,6 +1,6 @@
 import random
 from itertools import product
-from typing import List, Dict, Union
+from typing import List, Dict
 
 import bittensor as bt
 
@@ -44,7 +44,6 @@ class HyperParameters:
             # Also, we can only possibly check a water if we are excluding a FF.
             if "FF" in self.exclude:
                 if self.exclude["FF"] not in FF:
-                    print(f"{self.exclude['FF']} not in {FF}")
                     continue
 
                 if "WATER" in self.exclude and self.exclude["WATER"] not in WATER:
