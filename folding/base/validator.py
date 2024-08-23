@@ -16,7 +16,8 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-
+import os
+import json
 import copy
 import time
 import torch
@@ -31,6 +32,10 @@ from traceback import print_exception
 from folding.base.neuron import BaseNeuron
 from folding.mock import MockDendrite
 from folding.utils.config import add_validator_args
+
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -79,6 +84,8 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
+
+        self.load_and_merge_configs()
 
     def serve_axon(self):
         """Serve axon to enable external connections."""
@@ -167,11 +174,11 @@ class BaseValidatorNeuron(BaseNeuron):
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = self.forward(job=job)
 
-                    # If we don't have any miners reply to the query, we will make it inactive. 
-                    if len(job_event["energies"]) == 0: 
+                    # If we don't have any miners reply to the query, we will make it inactive.
+                    if len(job_event["energies"]) == 0:
                         job.active = False
                         self.store.update(job=job)
-                        continue 
+                        continue
 
                     if isinstance(job.event, str):
                         job.event = eval(job.event)  # if str, convert to dict.
@@ -398,3 +405,15 @@ class BaseValidatorNeuron(BaseNeuron):
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]
+
+    def load_config_json(self):
+        config_json_path = os.path.join(
+            str(ROOT_DIR), "folding/utils/config_input.json"
+        )
+        with open(config_json_path, "r") as file:
+            config = json.load(file)
+        return config
+
+    def load_and_merge_configs(self):
+        json_config = self.load_config_json()
+        self.config.protein.update(json_config)
