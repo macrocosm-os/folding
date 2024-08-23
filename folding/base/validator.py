@@ -16,6 +16,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import os
 import json
 import copy
 import time
@@ -31,6 +32,10 @@ from traceback import print_exception
 from folding.base.neuron import BaseNeuron
 from folding.mock import MockDendrite
 from folding.utils.config import add_validator_args
+
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -80,8 +85,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
-        self.json_config = self.load_config_json()
-        self.merged_configs = self.merge_configs()
+        self.load_and_merge_configs()
 
     def serve_axon(self):
         """Serve axon to enable external connections."""
@@ -403,17 +407,13 @@ class BaseValidatorNeuron(BaseNeuron):
         self.hotkeys = state["hotkeys"]
 
     def load_config_json(self):
-        config_json_path = "/home/paperspace/folding/folding/utils/config_input.json"  # New method to load the config json file
+        config_json_path = os.path.join(
+            str(ROOT_DIR), "folding/utils/config_input.json"
+        )
         with open(config_json_path, "r") as file:
             config = json.load(file)
         return config
 
-    def merge_configs(self):
-        merged_config = self.load_config_json()
-
-        # Copy the existing config from the parent classes
-        merged_config.update(self.config)
-
-        # Update the new config into the existing config
-        # config_json.update(new_config)
-        return merged_config
+    def load_and_merge_configs(self):
+        json_config = self.load_config_json()
+        self.config.system_config = json_config
