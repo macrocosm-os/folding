@@ -104,20 +104,20 @@ def run_step(
     return event
 
 
-def parse_config(config) -> List[str]:
+def parse_config(config) -> Dict[str, str]:
     """
     Parse config to check if key hyperparameters are set.
     If they are, exclude them from hyperparameter search.
     """
 
-    exclude_in_hp_search = []
+    exclude_in_hp_search = {}
 
     if config.protein.ff is not None:
-        exclude_in_hp_search.append("FF")
+        exclude_in_hp_search["FF"] = config.protein.ff
     if config.protein.water is not None:
-        exclude_in_hp_search.append("WATER")
+        exclude_in_hp_search["WATER"] = config.protein.water
     if config.protein.box is not None:
-        exclude_in_hp_search.append("BOX")
+        exclude_in_hp_search["BOX"] = config.protein.box
 
     return exclude_in_hp_search
 
