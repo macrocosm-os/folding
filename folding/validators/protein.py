@@ -239,7 +239,7 @@ class Protein:
         )
 
         # This is only for the validators, as they need to open the right config later.
-        with open(f"config_{self.pdb_id}.pkl", "w") as f:
+        with open(self.simulation_pkl, "w") as f:
             pickle.dumps(self.system_config, f)
 
         self.simulation = self.create_simulation(seed=self.gen_seed(), state="em")
