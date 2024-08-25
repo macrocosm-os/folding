@@ -1,96 +1,91 @@
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, List
 
 
 class OpenMMForceField(ABC):
-    def __init__(self) -> None:
-        self.forcefields = self.forcefields()
-        self.waters = self.waters()
+    @property
+    @abstractmethod
+    def name(self) -> str: ...
 
     @property
     @abstractmethod
-    def name(self):
-        ...
+    def recommended_configuration(self) -> Dict[str, str]: ...
 
     @property
     @abstractmethod
-    def recommended_configuration(self) -> Dict[str, str]:
-        ...
+    def forcefields(self) -> List[str]: ...
 
+    @property
     @abstractmethod
-    def forcefields(self):
-        ...
+    def waters(self) -> List[str]: ...
 
-    @abstractmethod
-    def waters(self):
-        ...
+    def _prefix_paths(self, items: List[str]) -> List[str]:
+        return [f"{self.name}/{item}" for item in items]
 
 
 class Amber14(OpenMMForceField):
-    # ref: http://docs.openmm.org/latest/userguide/application/02_running_sims.html?highlight=gaff#amber14
+    name = "amber14"
+    recommended_configuration = {
+        "FF": "amber14-all.xml",
+        "WATER": "amber14/tip3pfb.xml",
+        "BOX": "cubic",
+    }
 
     @property
-    def name(self):
-        return "amber14"
-
-    @property
-    def recommended_configuration(self):
-        return {"FF": "amber14-all.xml", "WATER": "amber14/tip3pfb.xml", "BOX": "cubic"}
-
     def forcefields(self):
-        forces = [
-            "protein.ff14SB.xml",
-            "protein.ff15ipq.xml",
-            "DNA.OL15.xml",
-            "DNA.bsc1.xml",
-            "RNA.OL3.xml",
-            "lipid17.xml",
-            "GLYCAM_06j-1.xml",
-        ]
-        return [f"{self.name}/{force}" for force in forces]
+        return self._prefix_paths(
+            [
+                "protein.ff14SB.xml",
+                "protein.ff15ipq.xml",
+                "DNA.OL15.xml",
+                "DNA.bsc1.xml",
+                "RNA.OL3.xml",
+                "lipid17.xml",
+                "GLYCAM_06j-1.xml",
+            ]
+        )
 
+    @property
     def waters(self):
-        waters = [
-            "tip3p.xml",
-            "tip3pfb.xml",
-            "tip4pew.xml",
-            "tip4pfb.xml",
-            "spce.xml",
-            "opc.xml",
-            "opc3.xml",
-        ]
-        return [f"{self.name}/{water}" for water in waters]
+        return self._prefix_paths(
+            [
+                "tip3p.xml",
+                "tip3pfb.xml",
+                "tip4pew.xml",
+                "tip4pfb.xml",
+                "spce.xml",
+                "opc.xml",
+                "opc3.xml",
+            ]
+        )
 
 
 class Charmm36(OpenMMForceField):
-    # ref: http://docs.openmm.org/latest/userguide/application/02_running_sims.html?highlight=gaff#charmm36
+    name = "charmm36"
+    recommended_configuration = {
+        "FF": "charmm36.xml",
+        "WATER": "charmm36/water.xml",
+        "BOX": "cubic",
+    }
 
     @property
-    def name(self):
-        return "charmm36"
-
-    @property
-    def recommended_configuration(self):
-        return {"FF": "charmm36.xml", "WATER": "charmm36/water.xml", "BOX": "cubic"}
-
     def forcefields(self):
-        forces = [
-            "charmm36.xml",
-        ]
-        return forces
+        return ["charmm36.xml"]
 
+    @property
     def waters(self):
-        waters = [
-            "water.xml",
-            "spce.xml",
-            "tip3p-pme-b.xml",
-            "tip3p-pme-f.xml",
-            "tip4pew.xml",
-            "tip4p2005.xml",
-            "tip5p.xml",
-            "tip5pew.xml",
-        ]
-        return [f"{self.name}/{water}" for water in waters]
+        return self._prefix_paths(
+            [
+                "water.xml",
+                "spce.xml",
+                "tip3p-pme-b.xml",
+                "tip3p-pme-f.xml",
+                "tip4pew.xml",
+                "tip4p2005.xml",
+                "tip5p.xml",
+                "tip5pew.xml",
+            ]
+        )
 
 
-FORCEFIELD_REGISTERY = {"amber14": Amber14, "charmm36": Charmm36}
+FORCEFIELD_REGISTRY = {cls.name: cls for cls in [Amber14, Charmm36]}
