@@ -454,7 +454,7 @@ class SimulationManager:
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
-        os.chdir(self.output_dir)  # TODO: will this be a problem with many processes?
+        os.chdir(self.output_dir)
 
         # The following files are required for openmm simulations and are recieved from the validator
         for filename, content in md_inputs.items():
