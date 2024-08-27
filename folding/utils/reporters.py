@@ -1,5 +1,4 @@
 import os
-
 import openmm.app as app
 
 

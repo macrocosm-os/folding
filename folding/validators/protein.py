@@ -20,7 +20,6 @@ from folding.utils.ops import (
     check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
-    run_cmd_commands,
     select_random_pdb_id,
 )
 from folding.store import Job
@@ -110,8 +109,9 @@ class Protein(OpenMMSimulation):
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
+            protein.pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_file)
             protein.create_simulation(
-                pdb_file=protein.load_pdb_file(pdb_file=protein.pdb_file),
+                pdb_file=protein.pdb_obj,
                 system_config=protein.system_config,
                 seed=protein.gen_seed(),
                 state="em",

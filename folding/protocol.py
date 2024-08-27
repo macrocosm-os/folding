@@ -19,6 +19,7 @@
 import typing
 import base64
 import bittensor as bt
+from openmm import app
 from folding.utils.opemm_simulation_config import SimulationConfig
 
 
@@ -44,13 +45,13 @@ class JobSubmissionSynapse(bt.Synapse):
     # TODO: reconsider parameters
 
     # Required request input, filled by sending dendrite caller.
-    pdb_id: str
+    pdb_id: dict[str, app.PDBFile]
     system_config: SimulationConfig
-    md_inputs: dict
+    md_inputs: dict  # Right now this is just a "em.cpt" file.
 
     # Optional runtime args for openmm
     system_config: dict = {}
-    seed: int = 0
+    seed: int = None
 
     # Miner can decide if they are serving the request or not.
     miner_serving: bool = True

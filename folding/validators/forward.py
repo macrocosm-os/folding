@@ -54,9 +54,10 @@ def run_step(
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = JobSubmissionSynapse(
-        pdb_id=protein.pdb_id,
+        pdb_id={protein.pdb_id: protein.pdb_obj},
         md_inputs=protein.md_inputs,
         system_config=protein.system_config,
+        seed=self.config.protein.seed,  # by default this is None.
     )
 
     # Make calls to the network with the prompt - this is synchronous.
