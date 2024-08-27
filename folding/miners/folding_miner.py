@@ -1,12 +1,13 @@
-import os
-import time
-import glob
 import base64
 import concurrent.futures
-from typing import Dict, List, Tuple
-from collections import defaultdict
-import bittensor as bt
+import glob
+import os
 import random
+import time
+from collections import defaultdict
+from typing import Dict, List, Tuple
+
+import bittensor as bt
 import openmm as mm
 import openmm.app as app
 import openmm.unit as unit
@@ -16,35 +17,17 @@ from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
 from folding.protocol import JobSubmissionSynapse
 from folding.utils.logging import log_event
+from folding.utils.miner_utils import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
-    run_cmd_commands,
+    calc_potential_from_edr,
     check_if_directory_exists,
     get_tracebacks,
-    calc_potential_from_edr,
+    run_cmd_commands,
 )
-
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
-
-
-class LastTwoCheckpointsReporter(app.CheckpointReporter):
-    def __init__(self, file_prefix, reportInterval):
-        super().__init__(file_prefix + "_1.cpt", reportInterval)
-        self.file_prefix = file_prefix
-        self.reportInterval = reportInterval
-
-    def report(self, simulation, state):
-        # Create a new checkpoint
-        current_checkpoint = f"{self.file_prefix}.cpt"
-        if os.path.exists(current_checkpoint):
-            os.rename(current_checkpoint, f"{self.file_prefix}_old.cpt")
-        simulation.saveCheckpoint(current_checkpoint)
-
-    def describeNextReport(self, simulation):
-        steps = self.reportInterval - simulation.currentStep % self.reportInterval
-        return (steps, False, False, False, False, False)
 
 
 def attach_files(
@@ -244,6 +227,7 @@ class FoldingMiner(BaseMinerNeuron):
                     f"{state}.log", 10, step=True, potentialEnergy=True
                 )
             )
+            simulation.reporters.append(ExitFileReporter(self.pdb_id, 10, f"{state}"))
             state_commands[state] = simulation
         return state_commands, seed
 
