@@ -63,13 +63,17 @@ class Protein:
 
         self.simulation: app.Simulation = None
 
-        self.input_files = ["config.json", "em.cpt"]
+        self.simulation_pkl = f"config_{self.pdb_id}.pkl"
+        self.simulation_cpt = "em.cpt"
+        self.input_files = [self.simulation_cpt]
 
         self.md_inputs = (
             self.read_and_return_files(filenames=self.input_files)
             if load_md_inputs
             else {}
         )
+
+        # Historic data that specifies the upper bounds of the energy as a function of steps.
         with open(
             os.path.join(self.base_directory, "upper_bounds_interpolated.pkl"), "rb"
         ) as f:
@@ -177,9 +181,6 @@ class Protein:
                 try:
                     files_to_return[f.split("/")[-1]] = open(f, "r").read()
                 except Exception as E:
-                    # bt.logging.warning(
-                    #     f"Attempted to put file {file} in md_inputs.\nError: {E}"
-                    # )
                     continue
         return files_to_return
 
@@ -199,8 +200,6 @@ class Protein:
         self.gather_pdb_id()
         self.setup_pdb_directory()
 
-        # TODO: Enable this to send checkpoints rather than only the initial set of files
-
         missing_files = self.check_for_missing_files(required_files=self.input_files)
 
         if missing_files is not None:
@@ -210,7 +209,7 @@ class Protein:
         check_if_directory_exists(output_directory=self.validator_directory)
 
         # Read the files that should exist now based on generate_input_files.
-        self.md_inputs = self.read_and_return_files(filenames=self.other_files)
+        self.md_inputs = self.read_and_return_files(filenames=self.input_files)
 
         self.save_files(
             files=self.md_inputs,
@@ -228,46 +227,7 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
-    def calculate_params_save_interval(self):
-        # TODO Define what this function should do. Placeholder for now.
-        return self.config.save_interval
-
-    def check_configuration_file_commands(self) -> List[str]:
-        """
-        There are a set of configuration files that are used to setup the simulation
-        environment. These are typically denoted by the force field name. If they do
-        not exist, then we default to the same names without the force field included.
-        """
-        # strip away trailing number in forcefield name e.g charmm27 -> charmm, and
-        ff_base = "".join([c for c in self.ff if not c.isdigit()])
-
-        filepaths = [
-            f"{self.base_directory}/nvt_{ff_base}.mdp",
-            f"{self.base_directory}/npt_{ff_base}.mdp",
-            f"{self.base_directory}/md_{ff_base}.mdp",
-            f"{self.base_directory}/emin_{ff_base}.mdp",
-        ]
-
-        commands = []
-
-        for file_path in filepaths:
-            match = re.search(
-                r"/([^/]+)_" + re.escape(ff_base) + r"\.mdp", file_path
-            )  # extract the nvt, npt...
-            config_name = match.group(1)
-
-            if os.path.exists(file_path):
-                commands.append(
-                    f"cp {file_path} {self.pdb_directory}/{config_name}.mdp"
-                )
-            else:
-                # If the file with the _ff suffix doesn't exist, remove it from the base filepath.
-                path = re.sub(r"_" + re.escape(ff_base), "", file_path)
-                commands.append(f"cp {path} {self.pdb_directory}/{config_name}.mdp")
-
-        return commands
-
-    # Function to generate GROMACS input files
+    # Function to generate the OpenMM simulation state.
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
@@ -275,10 +235,12 @@ class Protein:
         bt.logging.info(
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
-        with open("config.pkl", "w") as f:
+
+        # This is only for the validators, as they need to open the right config later.
+        with open(self.simulation_pkl, "w") as f:
             pickle.dumps(self.system_config, f)
 
-        self.simulation = self.create_simulation(self.gen_seed(), "em")
+        self.simulation = self.create_simulation(seed=self.gen_seed(), state="em")
         self.simulation.minimizeEnergy(
             maxIterations=1000
         )  # TODO: figure out the right number for this
@@ -297,70 +259,6 @@ class Protein:
     def gen_seed(self):
         """Generate a random seed"""
         return random.randint(1000, 999999)
-
-    def edit_files(self, mdp_files: List, params_to_change: List, seed: int = None):
-        """Edit the files that are needed for simulation and attach them to md_inputs.
-
-        Args:
-            mdp_files (List): Files that contain parameters to change.
-            params_to_change (List): List of parameters to change in the desired file(s)
-            seed (int): Seed to use for the simulation. Defaults to None.
-        """
-
-        seed = self.gen_seed() if seed is None else seed
-
-        def mapper(content: str, param_name: str, value: int) -> str:
-            """change the parameter value to the desired value in the content of the file."""
-            content = re.sub(
-                f"{param_name}\\s+=\\s+-?\\d+", f"{param_name} = {value}", content
-            )
-            return content
-
-        for file in mdp_files:
-            filepath = os.path.join(self.validator_directory, file)
-            content = open(filepath, "r").read()
-
-            # Set the value of nsteps based on the config, orders of magnitude smaller than max_steps.
-            # Set the value of gen_seed, ld-seed based on the current instance.
-            if file == "emin.mdp":
-                params_values = {"ld-seed": seed}
-            elif file == "nvt.mdp":
-                params_values = {
-                    "nsteps": (
-                        self.config.nvt_steps
-                        if self.config.nvt_steps is not None
-                        else self.config.max_steps // 100
-                    ),
-                    "gen_seed": seed,
-                    "ld-seed": seed,
-                }
-            elif file == "npt.mdp":
-                params_values = {
-                    "nsteps": (
-                        self.config.npt_steps
-                        if self.config.npt_steps is not None
-                        else self.config.max_steps // 10
-                    ),
-                    "ld-seed": seed,
-                }
-            elif file == "md.mdp":
-                params_values = {"nsteps": self.config.max_steps, "ld-seed": seed}
-
-            # Specific implementation for each file
-            for param_name, value in params_values.items():
-                content = mapper(content=content, param_name=param_name, value=value)
-
-            save_interval = self.calculate_params_save_interval()
-            for param in params_to_change:
-                if param in content:
-                    bt.logging.debug(
-                        f"Changing {param} in {file} to {save_interval}..."
-                    )
-                    content = mapper(
-                        content=content, param_name=param, value=save_interval
-                    )
-
-            self.md_inputs[file] = content
 
     def save_files(
         self, files: Dict, output_directory: str, write_mode: str = "wb"
@@ -395,67 +293,6 @@ class Protein:
 
     def get_miner_data_directory(self, hotkey: str):
         self.miner_data_directory = os.path.join(self.validator_directory, hotkey[:8])
-
-    def compute_intermediate_gro(
-        self,
-        output_directory: str,
-        md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
-        simulation_step_time: float,  # A step (frame) of the simulation that you want to compute the gro file on.
-    ) -> str:
-        """
-        Compute the intermediate gro file from the xtc and tpr file from the miner.
-        We do this because we need to ensure that the miners are running the correct protein.
-
-        Args:
-            md_output (Dict): dictionary of information from the miner.
-        """
-
-        # Make times to 1 decimal place for gromacs stability.
-        simulation_step_time = round(simulation_step_time, 1)
-
-        gro_file_location = os.path.join(output_directory, "intermediate.gro")
-        tpr_file = os.path.join(output_directory, md_outputs_exts["tpr"])
-        xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
-
-        command = [
-            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -b {simulation_step_time} -e {simulation_step_time}"
-        ]
-
-        bt.logging.warning("Computing an intermediate gro...")
-        run_cmd_commands(
-            commands=command,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
-        )
-
-        return gro_file_location
-
-    def rerun(self, output_directory: str, gro_file_location: str):
-        """Rerun method is to rerun a step of a miner simulation to ensure that
-        the miner is running the correct protein.
-
-        Args:
-            output_directory: The directory where the files are stored and where the rerun files will be written to.
-                output location will be the miner directory held on the validator side, from get_miner_data_directory
-            gro_file_name: The name of the .gro file that will be rerun. This is calculated by the *validator* beforehand.
-        """
-        rerun_mdp = os.path.join(
-            self.base_directory, "rerun.mdp"
-        )  # rerun file is a base config that we never change.
-        topol_path = os.path.join(
-            self.validator_directory, "topol.top"
-        )  # all miners get the same topol file.
-        tpr_path = os.path.join(output_directory, "rerun.tpr")
-
-        commands = [
-            f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
-        ]
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
-        )
 
     def process_md_output(
         self, md_output: dict, seed: int, state: str, hotkey: str

@@ -3,14 +3,14 @@
 # Copyright © 2024 Macrocosmos AI
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
 # the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 # and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 # The above copyright notice and this permission notice shall be included in all copies or substantial portions of
 # the Software.
 
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
 # THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
@@ -22,7 +22,6 @@ import codecs
 from os import path
 from io import open
 from setuptools import setup, find_packages
-from pkg_resources import parse_requirements
 
 
 def read_requirements(path):
@@ -45,7 +44,40 @@ def read_requirements(path):
         return processed_requirements
 
 
-requirements = read_requirements("requirements.txt")
+def extract_dependencies(file: str):
+    try:
+        with open(file, "r") as f:
+            content = f.read()
+    except Exception as e:
+        print(e)
+        return []
+
+    continue_below = False
+    parsed_dependencies = []
+    for line in content.splitlines():
+        if line == "dependencies:":
+            continue_below = True
+            continue
+        if continue_below:
+            print(line)
+            package = re.search(r"-\s*([^#]+)", line).group(1).strip()
+            if package == "pip:":
+                continue
+
+            parsed_dependencies.append(package)
+
+        edited_dependencies = []
+        for package in parsed_dependencies:
+            if "==" in package:
+                edited_dependencies.append(package)
+                continue
+            package = package.replace("=", "==")
+            edited_dependencies.append(package)
+
+    return edited_dependencies
+
+
+requirements = extract_dependencies("environment.yml")
 here = path.abspath(path.dirname(__file__))
 
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
