@@ -140,7 +140,6 @@ class FoldingMiner(BaseMinerNeuron):
         )  # remove one for safety
 
         self.mock = None
-        self.openmm_simulation = OpenMMSimulation()
         self.generate_random_seed = lambda: random.randint(0, 1000)
 
         # hardcorded for now -- TODO: make this more flexible
@@ -158,15 +157,15 @@ class FoldingMiner(BaseMinerNeuron):
         return defaultdict(nested_dict)
 
     def configure_commands(
-        self, pdb_id: app.PDBFile, system_config: dict, seed: int = None
+        self, pdb_obj: app.PDBFile, system_config: dict, seed: int = None
     ) -> Dict[str, List[str]]:
         state_commands = {}
 
         seed = self.generate_random_seed() if seed is None else seed
 
         for state in self.STATES:
-            simulation = self.openmm_simulation.create_simulation(
-                pdb_file=pdb_id,
+            simulation = OpenMMSimulation().create_simulation(
+                pdb_file=pdb_obj,
                 system_config=system_config,
                 seed=seed,
                 state=state,
@@ -337,7 +336,7 @@ class FoldingMiner(BaseMinerNeuron):
                 file.write(content)
 
         state_commands, seed = self.configure_commands(
-            pdb_id=pdb_obj, system_config=synapse.system_config, seed=synapse.seed
+            pdb_obj=pdb_obj, system_config=synapse.system_config, seed=synapse.seed
         )
 
         # Create the job and submit it to the executor
