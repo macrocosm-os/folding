@@ -1,30 +1,28 @@
-import os
 import glob
-import re
-import random
-import shutil
-from typing import List, Dict
-from pathlib import Path
-from collections import defaultdict
+import os
 import pickle
+import random
+import re
+import shutil
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Literal
 
 import bittensor as bt
-import pandas as pd
-from dataclasses import dataclass
-
 import openmm as mm
-from openmm import app
-from openmm import unit
+import pandas as pd
+from openmm import app, unit
 
+from folding.store import Job
+from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
-    run_cmd_commands,
+    check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
+    run_cmd_commands,
     select_random_pdb_id,
-    check_and_download_pdbs,
 )
-from folding.utils.opemm_simulation_config import SimulationConfig
-from folding.store import Job
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -41,21 +39,21 @@ class Protein:
     def __init__(
         self,
         ff: str,
-        box: str,
+        box: Literal["cubic", "dodecahedron", "octahedron"],
         config: Dict,
         pdb_id: str = None,
         water: str = None,
         load_md_inputs: bool = False,
         epsilon: float = 5e3,
-    ):
+    ) -> None:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
-        self.pdb_id = pdb_id.lower()
+        self.pdb_id: str = pdb_id.lower()
         self.setup_filepaths()
 
-        self.ff = ff
-        self.box = box
-        self.water = water
+        self.ff: str = ff
+        self.box: Literal["cubic", "dodecahedron", "octahedron"] = box
+        self.water: str = water
 
         self.system_config = SimulationConfig(
             ff=self.ff, water=self.water, box=self.box
@@ -356,7 +354,7 @@ class Protein:
 
         return True
 
-    def create_simulation(self, seed: str, state: str) -> app.Simulation:
+    def create_simulation(self, seed: int, state: str) -> app.Simulation:
         """Recreates a simulation object based on the provided parameters.
 
         This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
@@ -385,7 +383,7 @@ class Protein:
         system = forcefield.createSystem(
             modeller.topology,
             nonbondedMethod=self.system_config.nonbonded_method,
-            nonbondedCutoff=self.system_config.cutoff * mm.unit.nanometers,
+            nonbondedCutoff=self.system_config.cutoff * unit.nanometers,
             constraints=self.system_config.constraints,
         )
 
@@ -408,7 +406,7 @@ class Protein:
             )
         platform = mm.Platform.getPlatformByName("CUDA")
         properties = {"DeterministicForces": "true", "Precision": "double"}
-        simulation = mm.app.Simulation(
+        simulation = app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
         # Create the simulation object
