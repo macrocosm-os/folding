@@ -11,6 +11,7 @@ from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTERY
 from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -105,22 +106,20 @@ def run_step(
     return event
 
 
-def parse_config(config) -> List[str]:
+def parse_config(config) -> Dict[str, str]:
     """
     Parse config to check if key hyperparameters are set.
     If they are, exclude them from hyperparameter search.
     """
-    ff = config.protein.ff
-    water = config.protein.water
-    box = config.protein.box
-    exclude_in_hp_search = []
 
-    if ff is not None:
-        exclude_in_hp_search.append("FF")
-    if water is not None:
-        exclude_in_hp_search.append("WATER")
-    if box is not None:
-        exclude_in_hp_search.append("BOX")
+    exclude_in_hp_search = {}
+
+    if config.protein.ff is not None:
+        exclude_in_hp_search["FF"] = config.protein.ff
+    if config.protein.water is not None:
+        exclude_in_hp_search["WATER"] = config.protein.water
+    if config.protein.box is not None:
+        exclude_in_hp_search["BOX"] = config.protein.box
 
     return exclude_in_hp_search
 
@@ -178,11 +177,29 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
         event = {"hp_tries": tries}
         try:
             sampled_combination: Dict = hp_sampler.sample_hyperparameters()
+
+            if config.protein.ff is not None:
+                if (
+                    config.protein.ff is not None
+                    and config.protein.ff not in FORCEFIELD_REGISTERY
+                ):
+                    raise ValueError(
+                        f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTERY"
+                    )
+
+            if config.protein.water is not None:
+                if (
+                    config.protein.water is not None
+                    and config.protein.water not in FORCEFIELD_REGISTERY
+                ):
+                    raise ValueError(
+                        f"Water {config.protein.water} not found in FORCEFIELD_REGISTERY"
+                    )
+
             hps = {
                 "ff": config.protein.ff or sampled_combination["FF"],
                 "water": config.protein.water or sampled_combination["WATER"],
                 "box": config.protein.box or sampled_combination["BOX"],
-                # "BOX_DISTANCE": sampled_combination["BOX_DISTANCE"], #TODO: Add this to the downstream logic.
             }
 
             protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)

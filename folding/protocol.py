@@ -19,6 +19,7 @@
 import typing
 import base64
 import bittensor as bt
+from folding.utils.opemm_simulation_config import SimulationConfig
 
 
 class PingSynapse(bt.Synapse):
@@ -44,6 +45,7 @@ class JobSubmissionSynapse(bt.Synapse):
 
     # Required request input, filled by sending dendrite caller.
     pdb_id: str
+    system_config: SimulationConfig
     md_inputs: dict
 
     # Optional runtime args for openmm

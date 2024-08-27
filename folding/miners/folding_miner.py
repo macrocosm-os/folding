@@ -477,6 +477,11 @@ class SimulationManager:
         bt.logging.info(
             f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
         )
+
+        # Make sure the output directory exists and if not, create it
+        check_if_directory_exists(output_directory=self.output_dir)
+        os.chdir(self.output_dir)
+
         steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
         cpt_file = {"nvt": "em", "npt": "nvt", "md_0_1": "npt"}
 

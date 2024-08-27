@@ -6,15 +6,6 @@ if ! command -v conda &> /dev/null; then
     exit 1
 fi
 
-# Create a venv
-conda env create -f environment.yml
-conda activate folding
-
-# Install auxiliary packages
-apt-get update
-apt-get install build-essential cmake libfftw3-dev vim npm -y
-npm install -g pm2 -y
-
 # Check for CUDA availability
 if command -v nvidia-smi &> /dev/null; then
     CUDA_AVAILABLE=true
@@ -25,7 +16,7 @@ else
 fi
 
 # Check GCC version
-$REQUIRED_MAJOR_GCC_VERSION=11
+REQUIRED_MAJOR_GCC_VERSION=11
 GCC_VERSION=$(gcc --version | grep ^gcc | awk '{print $NF}')
 GCC_MAJOR_VERSION=$(echo $GCC_VERSION | cut -d. -f1)
 GCC_MINOR_VERSION=$(echo $GCC_VERSION | cut -d. -f2)
@@ -42,6 +33,15 @@ if [ "$GCC_MAJOR_VERSION" -ne $REQUIRED_MAJOR_GCC_VERSION ]; then
     echo "❌ Warning: Your GCC version is $GCC_VERSION. The script expects GCC version $REQUIRED_MAJOR_GCC_VERSION. Not installing folding."
     exit 1
 fi
+
+# Create a venv
+conda env create -f environment.yml
+conda activate folding
+
+# Install auxiliary packages
+sudo apt-get update
+sudo apt-get install build-essential cmake libfftw3-dev vim npm -y
+sudo npm install -g pm2 -y
 
 # Install folding
 pip install -e .
