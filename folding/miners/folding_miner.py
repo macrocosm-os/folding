@@ -22,7 +22,6 @@ from folding.utils.ops import (
     calc_potential_from_edr,
     check_if_directory_exists,
     get_tracebacks,
-    run_cmd_commands,
 )
 
 # root level directory for the project (I HATE THIS)
