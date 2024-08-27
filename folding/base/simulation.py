@@ -15,7 +15,7 @@ class GenericSimulation(ABC):
 
 class OpenMMSimulation(GenericSimulation):
     def create_simulation(
-        self, pdb_file: str, system_config, seed: str, state: str
+        self, pdb: app.PDBFile, system_config, seed: str, state: str
     ) -> app.Simulation:
         """Recreates a simulation object based on the provided parameters.
 
@@ -28,7 +28,6 @@ class OpenMMSimulation(GenericSimulation):
         Returns:
             app.Simulation: The recreated simulation object.
         """
-        pdb = app.PDBFile(pdb_file)
         forcefield = app.ForceField(system_config.ff, system_config.water)
 
         modeller = app.Modeller(pdb.topology, pdb.positions)

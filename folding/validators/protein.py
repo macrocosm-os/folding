@@ -111,7 +111,7 @@ class Protein(OpenMMSimulation):
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
             protein.create_simulation(
-                pdb_file=protein.pdb_file,
+                pdb_file=protein.load_pdb_file(pdb_file=protein.pdb_file),
                 system_config=protein.system_config,
                 seed=protein.gen_seed(),
                 state="em",
@@ -234,6 +234,10 @@ class Protein(OpenMMSimulation):
     def __repr__(self):
         return self.__str__()
 
+    def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
+        """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
+        return app.PDBFile(pdb_file)
+
     # Function to generate the OpenMM simulation state.
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
@@ -248,7 +252,7 @@ class Protein(OpenMMSimulation):
             pickle.dumps(self.system_config, f)
 
         self.simulation = self.create_simulation(
-            pdb_file=self.pdb_file,
+            pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
             system_config=self.system_config,
             seed=self.gen_seed(),
             state="em",
@@ -343,7 +347,7 @@ class Protein(OpenMMSimulation):
         )
         try:
             self.simulation = self.create_simulation(
-                pdb_file=self.pdb_file,
+                pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
                 system_config=self.system_config,
                 seed=seed,
                 state=state,
