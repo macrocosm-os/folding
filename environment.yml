@@ -3,7 +3,7 @@ channels:
   - defaults
   - conda-forge  # Add other channels if needed
 dependencies:
-  - python=3.12  # Specify the Python version
+  - python=3.9  # Specify the Python version
   - openmm=8.1.2
   - pandas=2.2.2
   - beautifulsoup4

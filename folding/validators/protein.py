@@ -20,16 +20,17 @@ from folding.utils.ops import (
     check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
-    run_cmd_commands,
     select_random_pdb_id,
 )
+from folding.store import Job
+from folding.base.simulation import OpenMMSimulation
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 @dataclass
-class Protein:
+class Protein(OpenMMSimulation):
     PDB_RECORDS = ("ATOM", "ANISOU", "REMARK", "HETATM", "CONECT")
 
     @property
@@ -108,7 +109,13 @@ class Protein:
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            protein.create_simulation(protein.gen_seed(), "em")
+            protein.pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_file)
+            protein.create_simulation(
+                pdb_file=protein.pdb_obj,
+                system_config=protein.system_config,
+                seed=protein.gen_seed(),
+                state="em",
+            )
             protein.init_energy = protein.calc_init_energy()
             protein._calculate_epsilon()
         except Exception as E:
@@ -227,6 +234,10 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
+    def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
+        """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
+        return app.PDBFile(pdb_file)
+
     # Function to generate the OpenMM simulation state.
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
@@ -240,7 +251,12 @@ class Protein:
         with open(self.simulation_pkl, "w") as f:
             pickle.dumps(self.system_config, f)
 
-        self.simulation = self.create_simulation(seed=self.gen_seed(), state="em")
+        self.simulation = self.create_simulation(
+            pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
+            system_config=self.system_config,
+            seed=self.gen_seed(),
+            state="em",
+        )
         self.simulation.minimizeEnergy(
             maxIterations=1000
         )  # TODO: figure out the right number for this
@@ -331,8 +347,10 @@ class Protein:
         )
         try:
             self.simulation = self.create_simulation(
-                seed,
-                state,
+                pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
+                system_config=self.system_config,
+                seed=seed,
+                state=state,
             )
             self.simulation.loadCheckpoint(
                 f"{self.miner_data_directory}/{self.md_outputs_exts['cpt']}"
@@ -353,64 +371,6 @@ class Protein:
             return False
 
         return True
-
-    def create_simulation(self, seed: int, state: str) -> app.Simulation:
-        """Recreates a simulation object based on the provided parameters.
-
-        This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
-        Args:
-            seed (str): The seed for the random number generator.
-            state (str): The state of the simulation.
-            cpt_file (str): The path to the checkpoint file.
-
-        Returns:
-            app.Simulation: The recreated simulation object.
-        """
-        pdb = app.PDBFile(self.pdb_file)
-        forcefield = app.ForceField(self.system_config.ff, self.system_config.water)
-
-        modeller = app.Modeller(pdb.topology, pdb.positions)
-        modeller.deleteWater()
-
-        modeller.addSolvent(
-            forcefield,
-            padding=self.system_config.box_padding * unit.nanometer,
-            boxShape=self.system_config.box,
-            model=self.system_config.water,
-        )
-
-        # Create the system
-        system = forcefield.createSystem(
-            modeller.topology,
-            nonbondedMethod=self.system_config.nonbonded_method,
-            nonbondedCutoff=self.system_config.cutoff * unit.nanometers,
-            constraints=self.system_config.constraints,
-        )
-
-        # Integrator settings
-        integrator = mm.LangevinIntegrator(
-            self.system_config.temperature * unit.kelvin,
-            self.system_config.friction / unit.picosecond,
-            self.system_config.time_step_size * unit.picoseconds,
-        )
-        integrator.setRandomNumberSeed(seed)
-        # Periodic boundary conditions
-        pdb.topology.setPeriodicBoxVectors(system.getDefaultPeriodicBoxVectors())
-
-        if state != "nvt":
-            system.addForce(
-                mm.MonteCarloBarostat(
-                    self.system_config.pressure * unit.bar,
-                    self.system_config.temperature * unit.kelvin,
-                )
-            )
-        platform = mm.Platform.getPlatformByName("CUDA")
-        properties = {"DeterministicForces": "true", "Precision": "double"}
-        simulation = app.Simulation(
-            modeller.topology, system, integrator, platform, properties
-        )
-        # Create the simulation object
-        return simulation
 
     def is_run_valid(self):
         """

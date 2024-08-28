@@ -5,19 +5,23 @@ from typing import Dict, List
 class OpenMMForceField(ABC):
     @property
     @abstractmethod
-    def name(self) -> str: ...
+    def name(self) -> str:
+        ...
 
     @property
     @abstractmethod
-    def recommended_configuration(self) -> Dict[str, str]: ...
+    def recommended_configuration(self) -> Dict[str, str]:
+        ...
 
     @property
     @abstractmethod
-    def forcefields(self) -> List[str]: ...
+    def forcefields(self) -> List[str]:
+        ...
 
     @property
     @abstractmethod
-    def waters(self) -> List[str]: ...
+    def waters(self) -> List[str]:
+        ...
 
     def _prefix_paths(self, items: List[str]) -> List[str]:
         return [f"{self.name}/{item}" for item in items]

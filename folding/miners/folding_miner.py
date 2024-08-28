@@ -1,21 +1,26 @@
-import os
-import time
-import glob
 import base64
 import concurrent.futures
-from typing import Dict, List, Tuple
+import glob
+import os
+import random
+import time
 from collections import defaultdict
+from typing import Dict, List, Tuple
+
 import bittensor as bt
+import openmm as mm
+import openmm.app as app
+import openmm.unit as unit
 
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
+from folding.base.simulation import OpenMMSimulation
 from folding.protocol import JobSubmissionSynapse
 from folding.utils.logging import log_event
+from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
-    run_cmd_commands,
     check_if_directory_exists,
     get_tracebacks,
-    calc_potential_from_edr,
 )
 
 # root level directory for the project (I HATE THIS)
@@ -29,10 +34,6 @@ def attach_files(
     """function that parses a list of files and attaches them to the synapse object"""
     bt.logging.info(f"Sending files to validator: {files_to_attach}")
     for filename in files_to_attach:
-        # trrs are large, and validators don't need them.
-        if filename.endswith(".trr"):
-            continue
-
         try:
             with open(filename, "rb") as f:
                 filename = filename.split("/")[
@@ -64,15 +65,6 @@ def attach_files_to_synapse(
      3. md_0_1
      4. finished
 
-    State depends on the current state of the simulation (controlled in SimulationExecutor.run() method).
-
-    During the simulation procedure, the validator queries the miner for the current state of the simulation.
-    The files that the miner needs to return are:
-        1. .tpr (created during grompp commands)
-        2. .xtc (created during mdrun commands, logged every nstxout-compressed steps)
-        3. .cpt (created during mdrun commands, logged every nstcheckpoint steps) # TODO: remove (re create .gro file from .tpr and .xtc)
-
-
     Returns:
         JobSubmissionSynapse: synapse with md_output attached
     """
@@ -80,24 +72,17 @@ def attach_files_to_synapse(
     synapse.md_output = {}  # ensure that the initial state is empty
 
     try:
-        state_files = os.path.join(
-            data_directory, f"{state}"
-        )  # mdrun commands make the filenames [state.*]
+        state_files = os.path.join(data_directory, f"{state}")
 
-        # applying glob to state_files will get the necessary files we need (e.g. nvt.tpr, nvt.xtc, nvt.cpt, nvt.edr, etc.)
+        # This should be "state.cpt" and "state_old.cpt"
         all_state_files = glob.glob(f"{state_files}*")  # Grab all the state_files
-        latest_cpt_file = glob.glob("*.cpt")
 
-        files_to_attach: List = (
-            all_state_files + latest_cpt_file
-        )  # combine the state files and the latest checkpoint file
-
-        if len(files_to_attach) == 0:
+        if len(all_state_files) == 0:
             raise FileNotFoundError(
                 f"No files found for {state}"
             )  # if this happens, goes to except block
 
-        synapse = attach_files(files_to_attach=files_to_attach, synapse=synapse)
+        synapse = attach_files(files_to_attach=all_state_files, synapse=synapse)
 
     except Exception as e:
         bt.logging.error(
@@ -112,7 +97,7 @@ def attach_files_to_synapse(
 
 
 def check_synapse(
-    self, synapse: JobSubmissionSynapse, output_dir: str, event: Dict = None
+    self, synapse: JobSubmissionSynapse, event: Dict = None
 ) -> JobSubmissionSynapse:
     """Utility function to remove md_inputs if they exist"""
     if len(synapse.md_inputs) > 0:
@@ -123,10 +108,6 @@ def check_synapse(
     if synapse.md_output is not None:
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
         event["md_output_filenames"] = list(synapse.md_output.keys())
-
-    if not self.config.wandb.off:
-        energy_event = self.get_state_energies(output_dir=output_dir)
-        event.update(energy_event)
 
     event["query_forward_time"] = time.time() - self.query_start_time
 
@@ -159,6 +140,13 @@ class FoldingMiner(BaseMinerNeuron):
         )  # remove one for safety
 
         self.mock = None
+        self.generate_random_seed = lambda: random.randint(0, 1000)
+
+        # hardcorded for now -- TODO: make this more flexible
+        self.STATES = ["nvt", "npt", "md_0_1"]
+        self.CHECKPOINT_INTERVAL = 10000
+        self.STATE_DATA_REPORTER_INTERVAL = 10
+        self.EXIT_REPORTER_INTERVAL = 10
 
     def create_default_dict(self):
         def nested_dict():
@@ -168,55 +156,43 @@ class FoldingMiner(BaseMinerNeuron):
 
         return defaultdict(nested_dict)
 
-    def get_state_energies(self, output_dir: str) -> Dict:
-        all_edr_files = glob.glob(os.path.join(output_dir, "*.edr"))
-        state_potentials = []
-        edr_files = []
-        event = {}
+    def configure_commands(
+        self, pdb_obj: app.PDBFile, system_config: dict, seed: int = None
+    ) -> Dict[str, List[str]]:
+        state_commands = {}
 
-        for file in all_edr_files:
-            edr_name = file.split("/")[-1]
-            try:
-                state_potentials.append(
-                    calc_potential_from_edr(output_dir=output_dir, edr_name=edr_name)
+        seed = self.generate_random_seed() if seed is None else seed
+
+        for state in self.STATES:
+            simulation = OpenMMSimulation().create_simulation(
+                pdb_file=pdb_obj,
+                system_config=system_config,
+                seed=seed,
+                state=state,
+            )
+            simulation.reporters.append(
+                LastTwoCheckpointsReporter(
+                    file_prefix=f"{state}", reportInterval=self.CHECKPOINT_INTERVAL
                 )
-                stats = os.stat(file)
-                edr_files.append(
-                    {
-                        "name": edr_name,
-                        "created_at": stats.st_ctime,
-                        "modified_at": stats.st_ctime,
-                        "size_bytes": stats.st_size,
-                    }
+            )
+            simulation.reporters.append(
+                app.StateDataReporter(
+                    file=f"{state}.log",
+                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                    step=True,
+                    potentialEnergy=True,
                 )
-            except Exception as e:
-                bt.logging.error(
-                    f"Failed to calculate potential from edr file with error: {e}"
+            )
+            simulation.reporters.append(
+                ExitFileReporter(
+                    filename=f"{state}",
+                    reportInterval=self.EXIT_REPORTER_INTERVAL,
+                    state=state,
                 )
+            )
+            state_commands[state] = simulation
 
-        event["edr_files"] = edr_files
-        event["state_energies"] = state_potentials
-        return event
-
-    def configure_commands(self, mdrun_args: str) -> Dict[str, List[str]]:
-        commands = [
-            "gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr",  # Temperature equilibration
-            "gmx mdrun -deffnm nvt " + mdrun_args,
-            "gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -o npt.tpr",  # Pressure equilibration
-            "gmx mdrun -deffnm npt " + mdrun_args,
-            f"gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md_0_1.tpr",  # Production run
-            f"gmx mdrun -deffnm md_0_1 " + mdrun_args,
-            f"echo '1\n1\n' | gmx trjconv -s md_0_1.tpr -f md_0_1.xtc -o md_0_1_center.xtc -center -pbc mol",
-        ]
-
-        # These are rough identifiers for the different states of the simulation
-        state_commands = {
-            "nvt": commands[:2],
-            "npt": commands[2:4],
-            "md_0_1": commands[4:],
-        }
-
-        return state_commands
+        return state_commands, seed
 
     def check_and_remove_simulations(self, event: Dict) -> Dict:
         """Check to see if any simulations have finished, and remove them
@@ -256,25 +232,28 @@ class FoldingMiner(BaseMinerNeuron):
         Returns:
             JobSubmissionSynapse: synapse with md_output attached
         """
+
+        pdb_id, pdb_obj = list(synapse.pdb_id.items())[0]
+
         # If we are already running a process with the same identifier, return intermediate information
-        bt.logging.debug(f"⌛ Query from validator for protein: {synapse.pdb_id} ⌛")
+        bt.logging.debug(f"⌛ Query from validator for protein: {pdb_id} ⌛")
 
         # increment step counter everytime miner receives a query.
         self.step += 1
         self.query_start_time = time.time()
 
         event = self.create_default_dict()
-        event["pdb_id"] = synapse.pdb_id
+        event["pdb_id"] = pdb_id
 
-        output_dir = os.path.join(self.base_data_path, synapse.pdb_id)
+        output_dir = os.path.join(self.base_data_path, pdb_id)
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
 
         # The set of RUNNING simulations.
-        if synapse.pdb_id in self.simulations:
-            self.simulations[synapse.pdb_id]["queried_at"] = time.time()
-            simulation = self.simulations[synapse.pdb_id]
+        if pdb_id in self.simulations:
+            self.simulations[pdb_id]["queried_at"] = time.time()
+            simulation = self.simulations[pdb_id]
             current_executor_state = simulation["executor"].get_state()
 
             synapse = attach_files_to_synapse(
@@ -282,6 +261,7 @@ class FoldingMiner(BaseMinerNeuron):
                 data_directory=simulation["output_dir"],
                 state=current_executor_state,
             )
+            synapse.seed = simulation.seed
 
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
@@ -292,14 +272,14 @@ class FoldingMiner(BaseMinerNeuron):
             )
 
         else:
-            if os.path.exists(self.base_data_path) and synapse.pdb_id in os.listdir(
+            if os.path.exists(self.base_data_path) and pdb_id in os.listdir(
                 self.base_data_path
             ):
                 # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
                 # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
 
                 # We will attempt to read the state of the simulation from the state file
-                state_file = os.path.join(output_dir, f"{synapse.pdb_id}_state.txt")
+                state_file = os.path.join(output_dir, f"{pdb_id}_state.txt")
 
                 # Open the state file that should be generated during the simulation.
                 try:
@@ -309,14 +289,14 @@ class FoldingMiner(BaseMinerNeuron):
                         state = "md_0_1" if state == "finished" else state
 
                     bt.logging.warning(
-                        f"❗ Found existing data for protein: {synapse.pdb_id}... Sending previously computed, most advanced simulation state ❗"
+                        f"❗ Found existing data for protein: {pdb_id}... Sending previously computed, most advanced simulation state ❗"
                     )
                     synapse = attach_files_to_synapse(
                         synapse=synapse, data_directory=output_dir, state=state
                     )
                 except Exception as e:
                     bt.logging.error(
-                        f"Failed to read state file for protein {synapse.pdb_id} with error: {e}"
+                        f"Failed to read state file for protein {pdb_id} with error: {e}"
                     )
                     state = None
 
@@ -345,32 +325,39 @@ class FoldingMiner(BaseMinerNeuron):
                 return check_synapse(
                     self=self, synapse=synapse, event=event, output_dir=output_dir
                 )
+            # Make sure the output directory exists and if not, create it
+        check_if_directory_exists(output_directory=output_dir)
 
-        # TODO: also check if the md_inputs is empty here. If so, then the validator is broken
-        state_commands = self.configure_commands(mdrun_args=synapse.mdrun_args)
+        # The following files are required for openmm simulations and are received from the validator
+        for filename, content in synapse.md_inputs.items():
+            # Write the file to the output directory
+            with open(filename, "w") as file:
+                bt.logging.info(f"\nWriting {filename} to {output_dir}")
+                file.write(content)
+
+        state_commands, seed = self.configure_commands(
+            pdb_obj=pdb_obj, system_config=synapse.system_config, seed=synapse.seed
+        )
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
-            pdb_id=synapse.pdb_id,
+            pdb_id=pdb_id,
             output_dir=output_dir,
+            seed=seed,
         )
 
         future = self.executor.submit(
             simulation_manager.run,
-            synapse.md_inputs,
             state_commands,
-            self.config.neuron.suppress_cmd_output,
             self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
         )
 
-        self.simulations[synapse.pdb_id]["executor"] = simulation_manager
-        self.simulations[synapse.pdb_id]["future"] = future
-        self.simulations[synapse.pdb_id]["output_dir"] = simulation_manager.output_dir
-        self.simulations[synapse.pdb_id]["queried_at"] = time.time()
+        self.simulations[pdb_id]["executor"] = simulation_manager
+        self.simulations[pdb_id]["future"] = future
+        self.simulations[pdb_id]["output_dir"] = simulation_manager.output_dir
+        self.simulations[pdb_id]["queried_at"] = time.time()
 
-        bt.logging.success(
-            f"✅ New pdb_id {synapse.pdb_id} submitted to job executor ✅ "
-        )
+        bt.logging.success(f"✅ New pdb_id {pdb_id} submitted to job executor ✅ ")
 
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
@@ -420,13 +407,16 @@ class FoldingMiner(BaseMinerNeuron):
 
 
 class SimulationManager:
-    def __init__(self, pdb_id: str, output_dir: str) -> None:
+    def __init__(self, pdb_id: str, output_dir: str, seed: int) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
         self.state_file_name = f"{pdb_id}_state.txt"
+        self.seed = seed
 
         self.output_dir = output_dir
         self.start_time = time.time()
+
+        self.cpt_file_mapper = {"nvt": "em", "npt": "nvt", "md_0_1": "npt"}
 
     def create_empty_file(self, file_path: str):
         # For mocking
@@ -435,49 +425,34 @@ class SimulationManager:
 
     def run(
         self,
-        md_inputs: Dict,
-        commands: Dict,
-        suppress_cmd_output: bool = True,
+        simulations: Dict,
         mock: bool = False,
     ):
         """run method to handle the processing of generic simulations.
 
         Args:
-            md_inputs (Dict): input files from the validator
-            commands (Dict): dictionary where state as the key and the commands as the value
+            simulations (Dict): state_name : OpenMMSimulation object dictionary
             suppress_cmd_output (bool, optional): Defaults to True.
             mock (bool, optional): mock for debugging. Defaults to False.
         """
-        bt.logging.info(
-            f"Running simulation for protein: {self.pdb_id} with files {md_inputs.keys()}"
-        )
+        bt.logging.info(f"Running simulation for protein: {self.pdb_id}")
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
         os.chdir(self.output_dir)
 
-        # The following files are required for openmm simulations and are recieved from the validator
-        for filename, content in md_inputs.items():
-            # Write the file to the output directory
-            with open(filename, "w") as file:
-                bt.logging.info(f"\nWriting {filename} to {self.output_dir}")
-                file.write(content)
+        steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
 
-        for state, commands in commands.items():
+        for state, simulation in simulations.items():
             bt.logging.info(f"Running {state} commands")
+
             with open(self.state_file_name, "w") as f:
                 f.write(f"{state}\n")
 
-            run_cmd_commands(
-                commands=commands, suppress_cmd_output=suppress_cmd_output, verbose=True
-            )
+            simulation.load_checkpoint(f"{self.cpt_file_mapper[state]}.cpt")
+            simulation.step(steps[state])
 
-            if mock:
-                bt.logging.warning("Running in mock mode, creating fake files...")
-                for ext in ["tpr", "xtc", "edr", "cpt"]:
-                    self.create_empty_file(
-                        os.path.join(self.output_dir, f"{state}.{ext}")
-                    )
+            # TODO: Add a Mock pipeline for the new OpenMM simulation here.
 
         bt.logging.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
 
