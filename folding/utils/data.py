@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import bittensor as bt
 
-from folding.utils.ops import run_cmd_commands
 
 
 class DataExtractor:
