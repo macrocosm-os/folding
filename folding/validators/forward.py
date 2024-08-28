@@ -182,19 +182,19 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             if config.protein.ff is not None:
                 if (
                     config.protein.ff is not None
-                    and config.protein.ff not in FORCEFIELD_REGISTERY
+                    and config.protein.ff not in FORCEFIELD_REGISTRY
                 ):
                     raise ValueError(
-                        f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTERY"
+                        f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTRY"
                     )
 
             if config.protein.water is not None:
                 if (
                     config.protein.water is not None
-                    and config.protein.water not in FORCEFIELD_REGISTERY
+                    and config.protein.water not in FORCEFIELD_REGISTRY
                 ):
                     raise ValueError(
-                        f"Water {config.protein.water} not found in FORCEFIELD_REGISTERY"
+                        f"Water {config.protein.water} not found in FORCEFIELD_REGISTRY"
                     )
 
             hps = {

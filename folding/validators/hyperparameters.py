@@ -4,7 +4,7 @@ from typing import List, Dict
 
 import bittensor as bt
 
-from folding.utils.openmm_forcefields import FORCEFIELD_REGISTERY
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 
 
 class HyperParameters:
@@ -31,7 +31,7 @@ class HyperParameters:
             )
 
         # There are combinations of water and field that need to be upheld. If a field is removed, remove the entire class from search.
-        fields = [field() for field in FORCEFIELD_REGISTERY.values()]
+        fields = [field() for field in FORCEFIELD_REGISTRY.values()]
 
         initial_search: List[Dict[str, str]] = []
 
