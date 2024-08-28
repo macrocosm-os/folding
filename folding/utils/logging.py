@@ -33,7 +33,7 @@ def should_reinit_wandb(self):
     )
 
 
-def init_wandb(self, reinit=False):
+def init_wandb(self, pdb_id: str, reinit=True):
     """Starts a new wandb run."""
     tags = [
         self.wallet.hotkey.ss58_address,
@@ -53,8 +53,9 @@ def init_wandb(self, reinit=False):
     }
     wandb_config["neuron"].pop("full_path", None)
 
-    self.wandb = wandb.init(
+    self.wandb[pdb_id] = wandb.init(
         anonymous="allow",
+        name=pdb_id,
         reinit=reinit,
         project=self.config.wandb.project_name,
         entity=self.config.wandb.entity,
@@ -76,9 +77,14 @@ def log_event(self, event):
 
     if self.config.wandb.off:
         return
-
+    pdb_id = event["pdb_id"]
     if not getattr(self, "wandb", None):
-        init_wandb(self)
+        self.wandb = {}
+        init_wandb(self, pdb_id=pdb_id)
+    elif pdb_id not in self.wandb:
+        init_wandb(self, pdb_id=pdb_id)
 
     # Log the event to wandb.
-    self.wandb.log(event)
+    self.wandb[pdb_id].init()
+    self.wandb[pdb_id].log(event)
+    self.wandb[pdb_id].finish()
