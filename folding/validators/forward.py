@@ -11,7 +11,7 @@ from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
 from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
-from folding.utils.openmm_forcefields import FORCEFIELD_REGISTERY
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]

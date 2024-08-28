@@ -6,10 +6,9 @@ dependencies:
   - python=3.9  # Specify the Python version
   - openmm=8.1.2
   - pandas=2.2.2
-  - beautifulsoup4
   - pytorch=2.3.0  # torch is often installed as pytorch via conda
-  - loguru
-  - pip
+  - loguru=0.7.0
+  - pip=24.2
   - pip:
       - bittensor==6.9.4
       - python-dotenv==1.0.1

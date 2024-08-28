@@ -38,9 +38,6 @@ from folding.store import Job, PandasJobStore
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
 
-os.environ["GMX_MAXBACKUP"] = "-1"
-
-
 class Validator(BaseValidatorNeuron):
     """
     Protein folding validator neuron. This neuron is responsible for validating the folding of proteins by querying the miners and updating the scores based on the responses.
