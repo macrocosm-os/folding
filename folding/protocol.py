@@ -45,7 +45,7 @@ class JobSubmissionSynapse(bt.Synapse):
     # TODO: reconsider parameters
 
     # Required request input, filled by sending dendrite caller.
-    pdb_id: dict[str, app.PDBFile]
+    pdb_id: dict[str, str]
     system_config: SimulationConfig
     md_inputs: dict  # Right now this is just a "em.cpt" file.
 
