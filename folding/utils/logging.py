@@ -85,6 +85,6 @@ def log_event(self, event):
         init_wandb(self, pdb_id=pdb_id)
 
     # Log the event to wandb.
-    self.wandb[pdb_id].init()
+    self.wandb[pdb_id].init(reinit=True)
     self.wandb[pdb_id].log(event)
     self.wandb[pdb_id].finish()
