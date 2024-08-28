@@ -53,22 +53,41 @@ def init_wandb(self, pdb_id: str, reinit=True):
     }
     wandb_config["neuron"].pop("full_path", None)
 
-    self.wandb[pdb_id] = wandb.init(
-        anonymous="allow",
-        name=pdb_id,
-        reinit=reinit,
-        project=self.config.wandb.project_name,
-        entity=self.config.wandb.entity,
-        config=wandb_config,
-        mode="offline" if self.config.wandb.offline else "online",
-        dir=self.config.neuron.full_path,
-        tags=tags,
-        notes=self.config.wandb.notes,
-    )
+    if pdb_id not in self.wandb_ids.keys():
+        run = wandb.init(
+            anonymous="allow",
+            name=pdb_id,
+            reinit=reinit,
+            project=self.config.wandb.project_name,
+            entity=self.config.wandb.entity,
+            config=wandb_config,
+            mode="offline" if self.config.wandb.offline else "online",
+            dir=self.config.neuron.full_path,
+            tags=tags,
+            notes=self.config.wandb.notes,
+            resume="allow",
+        )
+        self.wandb_ids[pdb_id] = run.id
+    else:
+        run = wandb.init(
+            anonymous="allow",
+            name=pdb_id,
+            id=self.wandb_ids[pdb_id],
+            reinit=reinit,
+            project=self.config.wandb.project_name,
+            entity=self.config.wandb.entity,
+            config=wandb_config,
+            mode="offline" if self.config.wandb.offline else "online",
+            dir=self.config.neuron.full_path,
+            tags=tags,
+            notes=self.config.wandb.notes,
+            resume="allow",
+        )
     bt.logging.success(
         prefix="Started a new wandb run",
         sufix=f"<blue> {self.wandb.name} </blue>",
     )
+    return run
 
 
 def log_event(self, event):
@@ -78,13 +97,11 @@ def log_event(self, event):
     if self.config.wandb.off:
         return
     pdb_id = event["pdb_id"]
-    if not getattr(self, "wandb", None):
-        self.wandb = {}
-        init_wandb(self, pdb_id=pdb_id)
-    elif pdb_id not in self.wandb:
-        init_wandb(self, pdb_id=pdb_id)
+    if not getattr(self, "wandb_ids", None):
+        self.wandb_ids = {}
+
+    run = init_wandb(self, pdb_id=pdb_id)
 
     # Log the event to wandb.
-    self.wandb[pdb_id].init(reinit=True)
-    self.wandb[pdb_id].log(event)
-    self.wandb[pdb_id].finish()
+    run.log(event)
+    run.finish()
