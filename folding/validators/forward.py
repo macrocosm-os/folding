@@ -176,34 +176,35 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
         hp_sampler_time = time.time()
 
         event = {"hp_tries": tries}
+        sampled_combination: Dict = hp_sampler.sample_hyperparameters()
+
+        if config.protein.ff is not None:
+            if (
+                config.protein.ff is not None
+                and config.protein.ff not in FORCEFIELD_REGISTRY
+            ):
+                raise ValueError(
+                    f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTRY"
+                )
+
+        if config.protein.water is not None:
+            if (
+                config.protein.water is not None
+                and config.protein.water not in FORCEFIELD_REGISTRY
+            ):
+                raise ValueError(
+                    f"Water {config.protein.water} not found in FORCEFIELD_REGISTRY"
+                )
+
+        hps = {
+            "ff": config.protein.ff or sampled_combination["FF"],
+            "water": config.protein.water or sampled_combination["WATER"],
+            "box": config.protein.box or sampled_combination["BOX"],
+        }
+
+        protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
+        
         try:
-            sampled_combination: Dict = hp_sampler.sample_hyperparameters()
-
-            if config.protein.ff is not None:
-                if (
-                    config.protein.ff is not None
-                    and config.protein.ff not in FORCEFIELD_REGISTRY
-                ):
-                    raise ValueError(
-                        f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTRY"
-                    )
-
-            if config.protein.water is not None:
-                if (
-                    config.protein.water is not None
-                    and config.protein.water not in FORCEFIELD_REGISTRY
-                ):
-                    raise ValueError(
-                        f"Water {config.protein.water} not found in FORCEFIELD_REGISTRY"
-                    )
-
-            hps = {
-                "ff": config.protein.ff or sampled_combination["FF"],
-                "water": config.protein.water or sampled_combination["WATER"],
-                "box": config.protein.box or sampled_combination["BOX"],
-            }
-
-            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
             protein.setup_simulation()
 
         except Exception as E:

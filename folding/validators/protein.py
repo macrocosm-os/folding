@@ -74,11 +74,13 @@ class Protein(OpenMMSimulation):
             else {}
         )
 
-        # Historic data that specifies the upper bounds of the energy as a function of steps.
-        with open(
-            os.path.join(self.base_directory, "upper_bounds_interpolated.pkl"), "rb"
-        ) as f:
-            self.upper_bounds = pickle.load(f)
+        # # Historic data that specifies the upper bounds of the energy as a function of steps.
+        # with open(
+        #     os.path.join(self.base_directory, "upper_bounds_interpolated.pkl"), "rb"
+        # ) as f:
+        #     self.upper_bounds : List = pickle.load(f)
+
+        self.upper_bounds = [0,1,2,3]
 
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
@@ -247,10 +249,6 @@ class Protein(OpenMMSimulation):
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        # This is only for the validators, as they need to open the right config later.
-        with open(self.simulation_pkl, "w") as f:
-            pickle.dumps(self.system_config, f)
-
         self.simulation = self.create_simulation(
             pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
             system_config=self.system_config,
@@ -261,6 +259,11 @@ class Protein(OpenMMSimulation):
             maxIterations=1000
         )  # TODO: figure out the right number for this
         self.simulation.saveCheckpoint("em.cpt")
+
+        # This is only for the validators, as they need to open the right config later.
+        # Only save the config if the simulation was successful.
+        with open(self.simulation_pkl, "wb") as f:
+            pickle.dump(self.system_config, f)
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
