@@ -241,16 +241,25 @@ class Protein(OpenMMSimulation):
         return app.PDBFile(pdb_file)
     
     def fix_pdb_file(self):
+        """
+        Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems 
+        that must be fixed before they can be used in a molecular dynamics simulation. 
+
+        Reference docs for the PDBFixer class can be found here:
+            https://htmlpreview.github.io/?https://github.com/openmm/pdbfixer/blob/master/Manual.html
+        """
         pdb_path = os.path.join(self.pdb_directory, self.pdb_file)
-        fixer = PDBFixer(pdb_path)
+
+        fixer = PDBFixer(filename = pdb_path)
         fixer.findMissingResidues()
         fixer.findNonstandardResidues()
         fixer.replaceNonstandardResidues()
         fixer.removeHeterogens(True)
         fixer.findMissingAtoms()
         fixer.addMissingAtoms()
-        fixer.addMissingHydrogens(7.0)
-        app.PDBFile.writeFile(fixer.topology, fixer.positions, open(pdb_path, 'w'))
+        fixer.addMissingHydrogens(pH = 7.0)
+
+        app.PDBFile.writeFile(topology=fixer.topology, positions=fixer.positions, file = open(pdb_path, 'w'))
 
 
     # Function to generate the OpenMM simulation state.

@@ -215,7 +215,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
         try:
             protein.setup_simulation()
 
-        except Exception as E:
+        except Exception:
             # full traceback
             bt.logging.error(traceback.format_exc())
             event["validator_search_status"] = False
