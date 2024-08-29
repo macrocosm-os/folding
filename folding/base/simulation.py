@@ -32,6 +32,8 @@ class OpenMMSimulation(GenericSimulation):
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
         modeller.deleteWater()
+        # modeller.addExtraParticles(forcefield)
+        modeller.addHydrogens(forcefield)
 
         modeller.addSolvent(
             forcefield,
@@ -42,7 +44,7 @@ class OpenMMSimulation(GenericSimulation):
         # Create the system
         system = forcefield.createSystem(
             modeller.topology,
-            nonbondedMethod=system_config.nonbonded_method,
+            nonbondedMethod=mm.app.PME,
             nonbondedCutoff=system_config.cutoff * mm.unit.nanometers,
             constraints=system_config.constraints,
         )
@@ -69,5 +71,8 @@ class OpenMMSimulation(GenericSimulation):
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
+        # Set initial positions
+        simulation.context.setPositions(modeller.positions)
+
         # Create the simulation object
         return simulation

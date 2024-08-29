@@ -4,7 +4,7 @@ import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
-
+import traceback
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
@@ -170,6 +170,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
     bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    protein = None
     for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
     ):
@@ -201,13 +202,22 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             "water": config.protein.water or sampled_combination["WATER"],
             "box": config.protein.box or sampled_combination["BOX"],
         }
+        if protein is None:
+            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
+        else:
+            protein.ff = hps["ff"]
+            protein.water = hps["water"]
+            protein.box = hps["box"]
+            protein.system_config.ff = hps["ff"]
+            protein.system_config.water = hps["water"]
+            protein.system_config.box = hps["box"]
 
-        protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
-        
         try:
             protein.setup_simulation()
 
         except Exception as E:
+            # full traceback
+            bt.logging.error(traceback.format_exc())
             event["validator_search_status"] = False
 
         finally:

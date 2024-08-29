@@ -13,7 +13,7 @@ import bittensor as bt
 import openmm as mm
 import pandas as pd
 from openmm import app, unit
-
+from pdbfixer import PDBFixer
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
@@ -165,7 +165,7 @@ class Protein(OpenMMSimulation):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
-
+            self.fix_pdb_file()
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -239,6 +239,19 @@ class Protein(OpenMMSimulation):
     def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
         """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
         return app.PDBFile(pdb_file)
+    
+    def fix_pdb_file(self):
+        pdb_path = os.path.join(self.pdb_directory, self.pdb_file)
+        fixer = PDBFixer(pdb_path)
+        fixer.findMissingResidues()
+        fixer.findNonstandardResidues()
+        fixer.replaceNonstandardResidues()
+        fixer.removeHeterogens(True)
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(7.0)
+        app.PDBFile.writeFile(fixer.topology, fixer.positions, open(pdb_path, 'w'))
+
 
     # Function to generate the OpenMM simulation state.
     def generate_input_files(self):

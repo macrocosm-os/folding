@@ -45,7 +45,6 @@ class Amber14(OpenMMForceField):
                 "DNA.bsc1.xml",
                 "RNA.OL3.xml",
                 "lipid17.xml",
-                "GLYCAM_06j-1.xml",
             ]
         )
 

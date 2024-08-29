@@ -6,8 +6,8 @@ from pydantic import BaseModel
 
 
 class NonbondedMethod(Enum):
-    PME = mm.NonbondedForce.PME
-    NoCutoff = mm.NonbondedForce.NoCutoff
+    PME = mm.app.PME
+    NoCutoff = mm.app.NoCutoff
 
 
 class Constraints(Enum):
@@ -28,7 +28,7 @@ class SimulationConfig(BaseModel):
     save_interval_log: int = 100
     box_padding: float = 1.0
     friction: float = 1.0
-    nonbonded_method: NonbondedMethod = NonbondedMethod.PME
+    nonbonded_method: NonbondedMethod = NonbondedMethod.NoCutoff
     constraints: Constraints = Constraints.HBonds
     cutoff: Optional[float] = 1.0
     pressure: float = 1.0
