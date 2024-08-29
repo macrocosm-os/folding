@@ -33,7 +33,7 @@ def should_reinit_wandb(self):
     )
 
 
-def init_wandb(self, pdb_id: str, reinit=True):
+def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     """Starts a new wandb run."""
     tags = [
         self.wallet.hotkey.ss58_address,
@@ -41,6 +41,11 @@ def init_wandb(self, pdb_id: str, reinit=True):
         str(folding.__spec_version__),
         f"netuid_{self.metagraph.netuid}",
     ]
+
+    if failed:
+        project = self.config.wandb.failed_project_name
+    else:
+        project = self.config.wandb.project_name
 
     if self.config.mock:
         tags.append("mock")
@@ -58,7 +63,7 @@ def init_wandb(self, pdb_id: str, reinit=True):
             anonymous="allow",
             name=pdb_id,
             reinit=reinit,
-            project=self.config.wandb.project_name,
+            project=project,
             entity=self.config.wandb.entity,
             config=wandb_config,
             mode="offline" if self.config.wandb.offline else "online",
@@ -74,7 +79,7 @@ def init_wandb(self, pdb_id: str, reinit=True):
             name=pdb_id,
             id=self.wandb_ids[pdb_id],
             reinit=reinit,
-            project=self.config.wandb.project_name,
+            project=project,
             entity=self.config.wandb.entity,
             config=wandb_config,
             mode="offline" if self.config.wandb.offline else "online",
@@ -90,7 +95,7 @@ def init_wandb(self, pdb_id: str, reinit=True):
     return run
 
 
-def log_event(self, event):
+def log_event(self, event, failed=False):
     if not self.config.neuron.dont_save_events:
         logger.log("EVENTS", "events", **event)
 
@@ -100,7 +105,7 @@ def log_event(self, event):
     if not getattr(self, "wandb_ids", None):
         self.wandb_ids = {}
 
-    run = init_wandb(self, pdb_id=pdb_id)
+    run = init_wandb(self, pdb_id=pdb_id, failed=failed)
 
     # Log the event to wandb.
     run.log(event)
