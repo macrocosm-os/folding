@@ -38,7 +38,7 @@ class HyperParameters:
         for field in fields:
             FF: List[str] = field.forcefields
             WATER: List[str] = field.waters
-            BOX = ["cubic", "dodecahedron", "octahedron"]
+            BOX = ["cube", "dodecahedron", "octahedron"]
 
             # We need to check if the FF they are asking for is actually a possible FF.
             # Also, we can only possibly check a water if we are excluding a FF.

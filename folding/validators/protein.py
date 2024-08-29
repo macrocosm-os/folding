@@ -40,7 +40,7 @@ class Protein(OpenMMSimulation):
     def __init__(
         self,
         ff: str,
-        box: Literal["cubic", "dodecahedron", "octahedron"],
+        box: Literal["cube", "dodecahedron", "octahedron"],
         config: Dict,
         pdb_id: str = None,
         water: str = None,
@@ -53,7 +53,7 @@ class Protein(OpenMMSimulation):
         self.setup_filepaths()
 
         self.ff: str = ff
-        self.box: Literal["cubic", "dodecahedron", "octahedron"] = box
+        self.box: Literal["cube", "dodecahedron", "octahedron"] = box
         self.water: str = water
 
         self.system_config = SimulationConfig(
