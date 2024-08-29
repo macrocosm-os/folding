@@ -374,6 +374,12 @@ def add_validator_args(cls, parser):
         help="The name of the project where you are sending the new run.",
         default="folding-openmm",
     )
+    parser.add_argument(
+        "--wandb.failed_project_name",
+        type=str,
+        help="The name of the project where you are sending failed runs.",
+        default="folding-openmm-failed",
+    )
 
     parser.add_argument(
         "--wandb.entity",
