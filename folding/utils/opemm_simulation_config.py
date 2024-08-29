@@ -1,12 +1,13 @@
 from typing import Literal, Optional
 from openmm import app
+import openmm as mm
 from enum import Enum
 from pydantic import BaseModel
 
 
 class NonbondedMethod(Enum):
-    PME = app.PME
-    NoCutoff = app.NoCutoff
+    PME = mm.NonbondedForce.PME
+    NoCutoff = mm.NonbondedForce.NoCutoff
 
 
 class Constraints(Enum):
