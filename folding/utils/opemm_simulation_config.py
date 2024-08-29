@@ -19,7 +19,7 @@ class Constraints(Enum):
 class SimulationConfig(BaseModel):
     ff: str
     water: str
-    box: Literal["cubic", "dodecahedron", "octahedron"]
+    box: Literal["cube", "dodecahedron", "octahedron"]
     temperature: float = 300.0
     time_step_size: float = 0.002
     time_units: str = "picosecond"
