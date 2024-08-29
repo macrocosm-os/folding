@@ -37,7 +37,6 @@ class OpenMMSimulation(GenericSimulation):
             forcefield,
             padding=system_config.box_padding * unit.nanometer,
             boxShape=system_config.box,
-            model=system_config.water,
         )
 
         # Create the system
