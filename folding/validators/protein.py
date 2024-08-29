@@ -113,7 +113,7 @@ class Protein(OpenMMSimulation):
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
             protein.pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_file)
             protein.create_simulation(
-                pdb_file=protein.pdb_obj,
+                pdb=protein.pdb_obj,
                 system_config=protein.system_config,
                 seed=protein.gen_seed(),
                 state="em",
@@ -250,7 +250,7 @@ class Protein(OpenMMSimulation):
         )
 
         self.simulation = self.create_simulation(
-            pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
+            pdb=self.load_pdb_file(pdb_file=self.pdb_file),
             system_config=self.system_config,
             seed=self.gen_seed(),
             state="em",
@@ -350,7 +350,7 @@ class Protein(OpenMMSimulation):
         )
         try:
             self.simulation = self.create_simulation(
-                pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
+                pdb=self.load_pdb_file(pdb_file=self.pdb_file),
                 system_config=self.system_config,
                 seed=seed,
                 state=state,
