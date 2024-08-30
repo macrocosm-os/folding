@@ -33,7 +33,7 @@ def save_data_as_df(data: defaultdict[List]):
 
 
 def extract_pdb_id(filename: str) -> str:
-    result = re.search(r"pdb(.*?)\.", filename)
+    result = re.search(r"([a-zA-Z0-9]{4})", filename)
     if result:
         return result.group(1)
     return "ERROR"
@@ -61,12 +61,15 @@ def get_pdb_files(parent_directory: str, pdb_directory: str):
     a_tags = soup.find_all("a")
 
     href_contents = [a.get("href") for a in a_tags]
-    pdb_files = [f for f in href_contents if f.endswith(".ent.gz")]
+    pdb_files = [f for f in href_contents if f.endswith(".cif.gz")]
     return set(pdb_files)  # remove duplicates from a.get("href")
 
+# original parent directory "https://files.rcsb.org/pub/pdb/data/structures/divided/pdb/"
+
+# new parent directory "https://files.wwpdb.org/pub/pdb/data/assemblies/mmCIF/divided/"
 
 def main(
-    parent_directory="https://files.rcsb.org/pub/pdb/data/structures/divided/pdb/",
+    parent_directory="https://files.wwpdb.org/pub/pdb/data/assemblies/mmCIF/divided/",
     save_location=".",
 ) -> defaultdict:
     """Main function to generate a dictionary of PDB IDs for each parent directory.
@@ -95,11 +98,11 @@ def main(
         count += 1
         if count % 10 == 0:  # save every 10 iterations for safety.
             save_data_to_pkl(
-                pdbs, folder_location=save_location, filename="pdb_ids.pkl"
+                pdbs, folder_location=save_location, filename="cif_ids_new_parent_dir.pkl"
             )
 
     # save the final packet
-    save_data_to_pkl(pdbs, folder_location=save_location, filename="pdb_ids.pkl")
+    save_data_to_pkl(pdbs, folder_location=save_location, filename="cif_ids_new_parent_dir.pkl")
 
 
 if __name__ == "__main__":
