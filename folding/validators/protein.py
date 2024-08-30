@@ -19,7 +19,7 @@ from pdbfixer import PDBFixer
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
-    check_and_download_pdbs,
+    check_and_download_pdbs_cif,
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
@@ -49,7 +49,7 @@ class Protein(OpenMMSimulation):
         load_md_inputs: bool = False,
         epsilon: float = 5e3,
     ) -> None:
-        self.base_directory = os.path.join(str(ROOT_DIR), "data")
+        self.base_directory = os.path.join(str(ROOT_DIR), "data/cif_to_pdb")
 
         self.pdb_id: str = pdb_id.lower()
         self.setup_filepaths()
@@ -158,7 +158,7 @@ class Protein(OpenMMSimulation):
             os.makedirs(self.pdb_directory)
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
-            if not check_and_download_pdbs(
+            if not check_and_download_pdbs_cif(
                 pdb_directory=self.pdb_directory,
                 pdb_id=self.pdb_file,
                 download=True,
@@ -167,7 +167,9 @@ class Protein(OpenMMSimulation):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
+            
             self.fix_pdb_file()
+            self.convert_cif_to_pdb()
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -232,7 +234,7 @@ class Protein(OpenMMSimulation):
         self.save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
-            write_mode="w",
+            write_mode="wb",
         )
 
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
@@ -270,6 +272,18 @@ class Protein(OpenMMSimulation):
 
         app.PDBFile.writeFile(topology=fixer.topology, positions=fixer.positions, file = open(pdb_path, 'w'))
 
+
+    def convert_cif_to_pdb(self, cif_file: str, pdb_file: str):
+        """Convert a CIF file to a PDB file using the `parmed` library."""
+        import parmed as pmd
+        try:
+            # Load the structure from the CIF file
+            structure = pmd.load_file(cif_file)
+            # Write the structure to a PDB file
+            structure.write_pdb(pdb_file)
+            print(f"Successfully converted {cif_file} to {pdb_file}")
+        except Exception as e:
+            print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
 
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
