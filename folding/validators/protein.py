@@ -1,3 +1,5 @@
+
+import time 
 import glob
 import os
 import pickle
@@ -104,15 +106,15 @@ class Protein(OpenMMSimulation):
             ff=job.ff,
             box=job.box,
             water=job.water,
-            config=SimulationConfig(**config),
+            config=config,
             load_md_inputs=True,
             epsilon=job.epsilon,
         )
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            protein.pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_file)
-            protein.create_simulation(
+            protein.pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_location)
+            protein.simulation = protein.create_simulation(
                 pdb=protein.pdb_obj,
                 system_config=protein.system_config,
                 seed=protein.gen_seed(),
@@ -263,6 +265,7 @@ class Protein(OpenMMSimulation):
 
 
     # Function to generate the OpenMM simulation state.
+    @OpenMMSimulation.timeit
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
@@ -277,9 +280,15 @@ class Protein(OpenMMSimulation):
             seed=self.gen_seed(),
             state="em",
         )
+
+        bt.logging.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
+        
+        start_time = time.time() 
         self.simulation.minimizeEnergy(
             maxIterations=1000
         )  # TODO: figure out the right number for this
+        bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
+
         self.simulation.saveCheckpoint("em.cpt")
 
         # This is only for the validators, as they need to open the right config later.

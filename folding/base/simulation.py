@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
+import time 
+import functools 
 import openmm as mm
 from openmm import app
 from openmm import unit
+
+import bittensor as bt 
 
 
 class GenericSimulation(ABC):
@@ -12,8 +16,20 @@ class GenericSimulation(ABC):
     def create_simulation(self):
         pass
 
+    @staticmethod
+    def timeit(method):
+        @functools.wraps(method)
+        def timed(*args, **kwargs):
+            start_time = time.time()
+            result = method(*args, **kwargs)
+            end_time = time.time()
+            print(f"Method {method.__name__} took {end_time - start_time:.4f} seconds")
+            return result
+        return timed
+
 
 class OpenMMSimulation(GenericSimulation):
+    @GenericSimulation.timeit 
     def create_simulation(
         self, pdb: app.PDBFile, system_config, seed: str, state: str
     ) -> app.Simulation:
@@ -28,26 +44,39 @@ class OpenMMSimulation(GenericSimulation):
         Returns:
             app.Simulation: The recreated simulation object.
         """
+        start_time = time.time()
         forcefield = app.ForceField(system_config.ff, system_config.water)
+        bt.logging.warning(f"Creating ff took {time.time() - start_time:.4f} seconds")
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
-        modeller.deleteWater()
-        # modeller.addExtraParticles(forcefield)
-        modeller.addHydrogens(forcefield)
 
-        modeller.addSolvent(
-            forcefield,
-            padding=system_config.box_padding * unit.nanometer,
-            boxShape=system_config.box,
-        )
+        start_time = time.time()
+        modeller.deleteWater()
+        bt.logging.warning(f"Deleting water took {time.time() - start_time:.4f} seconds")
+
+        # modeller.addExtraParticles(forcefield)
+
+        start_time = time.time()
+        modeller.addHydrogens(forcefield)
+        bt.logging.warning(f"Adding hydrogens took {time.time() - start_time:.4f} seconds")
+
+        start_time = time.time()
+        # modeller.addSolvent(
+        #     forcefield,
+        #     padding=system_config.box_padding * unit.nanometer,
+        #     boxShape=system_config.box,
+        # )
+        bt.logging.warning(f"Adding solvent took {time.time() - start_time:.4f} seconds")
 
         # Create the system
+        start_time = time.time()
         system = forcefield.createSystem(
             modeller.topology,
             nonbondedMethod=mm.app.PME,
             nonbondedCutoff=system_config.cutoff * mm.unit.nanometers,
             constraints=system_config.constraints,
         )
+        bt.logging.warning(f"Creating system took {time.time() - start_time:.4f} seconds")
 
         # Integrator settings
         integrator = mm.LangevinIntegrator(
@@ -68,11 +97,17 @@ class OpenMMSimulation(GenericSimulation):
             )
         platform = mm.Platform.getPlatformByName("CUDA")
         properties = {"DeterministicForces": "true", "Precision": "double"}
+
+        start_time = time.time()
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
+        bt.logging.warning(f"Creating simulation took {time.time() - start_time:.4f} seconds")
         # Set initial positions
+        
+        start_time = time.time()
         simulation.context.setPositions(modeller.positions)
+        bt.logging.warning(f"Setting positions took {time.time() - start_time:.4f} seconds")
 
         # Create the simulation object
         return simulation

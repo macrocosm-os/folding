@@ -202,15 +202,8 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             "water": config.protein.water or sampled_combination["WATER"],
             "box": config.protein.box or sampled_combination["BOX"],
         }
-        if protein is None:
-            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
-        else:
-            protein.ff = hps["ff"]
-            protein.water = hps["water"]
-            protein.box = hps["box"]
-            protein.system_config.ff = hps["ff"]
-            protein.system_config.water = hps["water"]
-            protein.system_config.box = hps["box"]
+        
+        protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
 
         try:
             protein.setup_simulation()
