@@ -31,7 +31,7 @@ class GenericSimulation(ABC):
 class OpenMMSimulation(GenericSimulation):
     @GenericSimulation.timeit 
     def create_simulation(
-        self, pdb: app.PDBFile, system_config, seed: str, state: str
+        self, pdb: app.PDBFile, system_config, state: str, seed: int = None
     ) -> app.Simulation:
         """Recreates a simulation object based on the provided parameters.
 
@@ -84,7 +84,10 @@ class OpenMMSimulation(GenericSimulation):
             system_config.friction / unit.picosecond,
             system_config.time_step_size * unit.picoseconds,
         )
+        
+        seed = seed if system_config.seed is None else system_config.seed
         integrator.setRandomNumberSeed(seed)
+
         # Periodic boundary conditions
         pdb.topology.setPeriodicBoxVectors(system.getDefaultPeriodicBoxVectors())
 

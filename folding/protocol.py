@@ -51,13 +51,14 @@ class JobSubmissionSynapse(bt.Synapse):
 
     # Optional runtime args for openmm
     system_config: dict = {}
-    seed: int = None
 
     # Miner can decide if they are serving the request or not.
     miner_serving: bool = True
 
     # Optional request output, filled by receiving axon.
     md_output: typing.Optional[dict] = None
+    miner_seed: typing.Optional[int] = None
+    miner_state: typing.Optional[str] = None
 
     def deserialize(self) -> int:
         """
@@ -69,7 +70,7 @@ class JobSubmissionSynapse(bt.Synapse):
         - dict: The serialized response, which in this case is the value of md_output.
         """
         bt.logging.info(
-            f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
+            f"Deserializing response from miner, I am: {list(self.pdb_id.keys())[0]}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the response has expected hash
         if not isinstance(self.md_output, dict):

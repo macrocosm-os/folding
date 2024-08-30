@@ -21,6 +21,7 @@ class SimulationConfig(BaseModel):
     ff: str
     water: str
     box: Literal["cube", "dodecahedron", "octahedron"]
+    seed: int = None, 
     temperature: float = 300.0
     time_step_size: float = 0.002
     time_units: str = "picosecond"

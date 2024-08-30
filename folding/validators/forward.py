@@ -57,7 +57,6 @@ def run_step(
         pdb_id={protein.pdb_id: protein.pdb_obj},
         md_inputs=protein.md_inputs,
         system_config=protein.system_config,
-        seed=self.config.protein.seed,  # by default this is None.
     )
 
     # Make calls to the network with the prompt - this is synchronous.

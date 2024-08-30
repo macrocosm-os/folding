@@ -51,6 +51,7 @@ def attach_files_to_synapse(
     synapse: JobSubmissionSynapse,
     data_directory: str,
     state: str,
+    seed = int, 
 ) -> JobSubmissionSynapse:
     """load the output files as bytes and add to synapse.md_output
 
@@ -83,6 +84,9 @@ def attach_files_to_synapse(
             )  # if this happens, goes to except block
 
         synapse = attach_files(files_to_attach=all_state_files, synapse=synapse)
+        
+        synapse.miner_seed = seed
+        synapse.miner_state = state
 
     except Exception as e:
         bt.logging.error(
@@ -90,7 +94,6 @@ def attach_files_to_synapse(
         )
         get_tracebacks()
         synapse.md_output = {}
-        # TODO Maybe in this point in the logic it makes sense to try and restart the sim.
 
     finally:
         return synapse  # either return the synapse wth the md_output attached or the synapse as is.
@@ -255,13 +258,14 @@ class FoldingMiner(BaseMinerNeuron):
             self.simulations[pdb_id]["queried_at"] = time.time()
             simulation = self.simulations[pdb_id]
             current_executor_state = simulation["executor"].get_state()
+            current_seed = simulation["executor"].seed
 
             synapse = attach_files_to_synapse(
                 synapse=synapse,
                 data_directory=simulation["output_dir"],
                 state=current_executor_state,
+                seed = current_seed
             )
-            synapse.seed = simulation.seed
 
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
@@ -325,7 +329,7 @@ class FoldingMiner(BaseMinerNeuron):
                 return check_synapse(
                     self=self, synapse=synapse, event=event, output_dir=output_dir
                 )
-            # Make sure the output directory exists and if not, create it
+        # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=output_dir)
 
         # The following files are required for openmm simulations and are received from the validator
@@ -336,13 +340,14 @@ class FoldingMiner(BaseMinerNeuron):
                 file.write(content)
 
         state_commands, seed = self.configure_commands(
-            pdb_obj=pdb_obj, system_config=synapse.system_config, seed=synapse.seed
+            pdb_obj=pdb_obj, system_config=synapse.system_config, seed=synapse.system_config["seed"]
         )
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
             output_dir=output_dir,
+            system_config = synapse.system_config,
             seed=seed,
         )
 
@@ -407,11 +412,13 @@ class FoldingMiner(BaseMinerNeuron):
 
 
 class SimulationManager:
-    def __init__(self, pdb_id: str, output_dir: str, seed: int) -> None:
+    def __init__(self, pdb_id: str, output_dir: str,  seed: int) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
-        self.state_file_name = f"{pdb_id}_state.txt"
         self.seed = seed
+
+        self.state_file_name = f"{pdb_id}_state.txt"
+        self.seed_file_name = f"{pdb_id}_seed.txt"
 
         self.output_dir = output_dir
         self.start_time = time.time()
@@ -443,6 +450,10 @@ class SimulationManager:
 
         steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
 
+        #Write the seed so that we always know what was used. 
+        with open(self.seed_file_name, "w") as f:
+            f.write(f"{self.seed}\n")
+
         for state, simulation in simulations.items():
             bt.logging.info(f"Running {state} commands")
 
@@ -467,6 +478,13 @@ class SimulationManager:
             return (
                 lines[-1].strip() if lines else None
             )  # return the last line of the file
+
+    def get_seed(self) -> str: 
+        with open(os.path.join(self.output_dir, self.seed_file_name), "r") as f:
+            lines = f.readlines()
+            return (
+                lines[-1].strip() if lines else None
+            )
 
 
 class MockSimulationManager(SimulationManager):

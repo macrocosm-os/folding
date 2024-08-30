@@ -59,7 +59,7 @@ class Protein(OpenMMSimulation):
         self.water: str = water
 
         self.system_config = SimulationConfig(
-            ff=self.ff, water=self.water, box=self.box
+            ff=self.ff, water=self.water, box=self.box, seed = self.gen_seed()
         )
 
         self.config = config
@@ -117,7 +117,7 @@ class Protein(OpenMMSimulation):
             protein.simulation = protein.create_simulation(
                 pdb=protein.pdb_obj,
                 system_config=protein.system_config,
-                seed=protein.gen_seed(),
+                seed=protein.system_config.seed,
                 state="em",
             )
             protein.init_energy = protein.calc_init_energy()
@@ -190,7 +190,14 @@ class Protein(OpenMMSimulation):
         for file in filenames:
             for f in glob.glob(os.path.join(self.validator_directory, file)):
                 try:
-                    files_to_return[f.split("/")[-1]] = open(f, "r").read()
+                    #A bit of a hack to load in the data correctly depending on the file ext
+                    name = f.split("/")[-1]
+                    if name.split(".")[-1] == "cpt":
+                        readmode = "rb"
+                    else:
+                        readmode = "r"
+
+                    files_to_return[name] = open(f, readmode).read()
                 except Exception as E:
                     continue
         return files_to_return
@@ -277,7 +284,6 @@ class Protein(OpenMMSimulation):
         self.simulation = self.create_simulation(
             pdb=self.load_pdb_file(pdb_file=self.pdb_file),
             system_config=self.system_config,
-            seed=self.gen_seed(),
             state="em",
         )
 
@@ -380,6 +386,9 @@ class Protein(OpenMMSimulation):
             output_directory=self.miner_data_directory,
         )
         try:
+            # NOTE: The seed written in the self.system_config is not used here 
+            # because the miner could have used something different and we want to
+            # make sure that we are using the correct seed.
             self.simulation = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_file),
                 system_config=self.system_config,
