@@ -10,7 +10,7 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
-from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
+from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info, load_pkl
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 
@@ -54,7 +54,8 @@ def run_step(
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = JobSubmissionSynapse(
-        pdb_id={protein.pdb_id: protein.pdb_obj},
+        pdb_id=protein.pdb_id, 
+        pdb_contents= protein.pdb_contents, 
         md_inputs=protein.md_inputs,
         system_config=protein.system_config,
     )
