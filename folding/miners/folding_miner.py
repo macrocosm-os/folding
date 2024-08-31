@@ -167,7 +167,7 @@ class FoldingMiner(BaseMinerNeuron):
         seed = self.generate_random_seed() if seed is None else seed
 
         for state in self.STATES:
-            simulation = OpenMMSimulation().create_simulation(
+            simulation, _ = OpenMMSimulation().create_simulation(
                 pdb_file=pdb_obj,
                 system_config=system_config,
                 seed=seed,
