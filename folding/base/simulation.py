@@ -70,10 +70,19 @@ class OpenMMSimulation(GenericSimulation):
 
         # Create the system
         start_time = time.time()
+        #The assumption here is that the system_config cutoff MUST be given in nanometers
+        threshold = (pdb.topology.getUnitCellDimensions().min().value_in_unit(mm.unit.nanometers)) / 2
+        if system_config.cutoff > threshold:
+            nonbondedCutoff = threshold * mm.unit.nanometers
+            system_config.cutoff = threshold #set the attribute in the config for the pipeline. 
+            bt.logging.warning(f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm")
+        else:
+            nonbondedCutoff = system_config.cutoff * mm.unit.nanometers
+
         system = forcefield.createSystem(
             modeller.topology,
             nonbondedMethod=mm.app.PME,
-            nonbondedCutoff=system_config.cutoff * mm.unit.nanometers,
+            nonbondedCutoff=nonbondedCutoff,
             constraints=system_config.constraints,
         )
         bt.logging.warning(f"Creating system took {time.time() - start_time:.4f} seconds")
@@ -113,4 +122,4 @@ class OpenMMSimulation(GenericSimulation):
         bt.logging.warning(f"Setting positions took {time.time() - start_time:.4f} seconds")
 
         # Create the simulation object
-        return simulation
+        return simulation, system_config
