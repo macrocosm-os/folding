@@ -23,11 +23,11 @@ from folding.utils.ops import (
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
+    write_pkl
 )
 from folding.store import Job
 from folding.base.simulation import OpenMMSimulation
 
-# root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -98,8 +98,6 @@ class Protein(OpenMMSimulation):
 
     @staticmethod
     def from_job(job: Job, config: Dict):
-        # TODO: This must be called after the protein has already been downloaded etc.
-        bt.logging.warning(f"sampling pdb job {job.pdb}")
         # Load_md_inputs is set to True to ensure that miners get files every query.
         protein = Protein(
             pdb_id=job.pdb,
@@ -113,21 +111,31 @@ class Protein(OpenMMSimulation):
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            protein.pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_location)
-            protein.simulation = protein.create_simulation(
-                pdb=protein.pdb_obj,
+            pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_location)
+
+            #TODO: We should pass in the simulation into from_job to see if we really need to do this again...
+            protein.simulation, protein.system_config = protein.create_simulation( 
+                pdb = pdb_obj,
                 system_config=protein.system_config,
                 seed=protein.system_config.seed,
                 state="em",
             )
             protein.init_energy = protein.calc_init_energy()
             protein._calculate_epsilon()
+
+            protein.pdb_contents = protein.load_pdb_as_string(protein.pdb_location)
+
         except Exception as E:
             bt.logging.error(
-                f"pdb_complexity or init_energy failed for {protein.pdb_id} with Exception {E}."
+                f"from_job failed for {protein.pdb_id} with Exception {E}."
             )
         finally:
             return protein
+
+    @staticmethod
+    def load_pdb_as_string(pdb_path: str) -> str:
+        with open(pdb_path, "r") as f:
+            return f.read()
 
     @staticmethod
     def _get_pdb_complexity(pdb_path):
@@ -232,7 +240,7 @@ class Protein(OpenMMSimulation):
         self.save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
-            write_mode="w",
+            write_mode="wb",
         )
 
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
@@ -254,12 +262,15 @@ class Protein(OpenMMSimulation):
         Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems 
         that must be fixed before they can be used in a molecular dynamics simulation. 
 
+        The fixer will remove metadata that is contained in the header of the original pdb, and we might
+        want to keep this. Therefore, we will rename the original pdb file to *_original.pdb and make a new
+        pdb file using the PDBFile.writeFile method. 
+        
         Reference docs for the PDBFixer class can be found here:
             https://htmlpreview.github.io/?https://github.com/openmm/pdbfixer/blob/master/Manual.html
         """
-        pdb_path = os.path.join(self.pdb_directory, self.pdb_file)
 
-        fixer = PDBFixer(filename = pdb_path)
+        fixer = PDBFixer(filename = self.pdb_location)
         fixer.findMissingResidues()
         fixer.findNonstandardResidues()
         fixer.replaceNonstandardResidues()
@@ -268,7 +279,10 @@ class Protein(OpenMMSimulation):
         fixer.addMissingAtoms()
         fixer.addMissingHydrogens(pH = 7.0)
 
-        app.PDBFile.writeFile(topology=fixer.topology, positions=fixer.positions, file = open(pdb_path, 'w'))
+        original_pdb = self.pdb_location.split('.')[0] + "_original.pdb"
+        os.rename(self.pdb_location, original_pdb)
+
+        app.PDBFile.writeFile(topology=fixer.topology, positions=fixer.positions, file = open(self.pdb_location, 'w'))
 
 
     # Function to generate the OpenMM simulation state.
@@ -281,7 +295,7 @@ class Protein(OpenMMSimulation):
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        self.simulation = self.create_simulation(
+        self.simulation, self.system_config = self.create_simulation(
             pdb=self.load_pdb_file(pdb_file=self.pdb_file),
             system_config=self.system_config,
             state="em",
@@ -299,8 +313,7 @@ class Protein(OpenMMSimulation):
 
         # This is only for the validators, as they need to open the right config later.
         # Only save the config if the simulation was successful.
-        with open(self.simulation_pkl, "wb") as f:
-            pickle.dump(self.system_config, f)
+        write_pkl(data=self.system_config, path=self.simulation_pkl, write_mode = "wb")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -389,7 +402,7 @@ class Protein(OpenMMSimulation):
             # NOTE: The seed written in the self.system_config is not used here 
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
-            self.simulation = self.create_simulation(
+            self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_file),
                 system_config=self.system_config,
                 seed=seed,
@@ -410,7 +423,7 @@ class Protein(OpenMMSimulation):
 
         ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
         if (log_step - cpt_step) < 5000:
-            bt.logging.error("Miner did not run enough steps since last checkpoint")
+            bt.logging.warning("Miner did not run enough steps since last checkpoint")
             return False
 
         return True
