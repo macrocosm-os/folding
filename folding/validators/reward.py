@@ -28,7 +28,10 @@ def get_energies(
         # Ensures that the md_outputs from the miners are parsed correctly
         try:
             if not protein.process_md_output(
-                md_output=resp.md_output, hotkey=resp.axon.hotkey, state = resp.miner_state, seed = resp.miner_seed, 
+                md_output=resp.md_output,
+                hotkey=resp.axon.hotkey,
+                state=resp.miner_state,
+                seed=resp.miner_seed,
             ):
                 continue
 

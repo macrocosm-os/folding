@@ -20,6 +20,7 @@ import typing
 import base64
 import bittensor as bt
 
+
 class PingSynapse(bt.Synapse):
     """Responsible for determining if a miner can accept a request"""
 
@@ -39,7 +40,7 @@ class JobSubmissionSynapse(bt.Synapse):
     - mdrun_args: A string containing the arguments to be passed to the openmm mdrun command.
     """
 
-    pdb_id: str 
+    pdb_id: str
     pdb_contents: str
     md_inputs: dict  # Right now this is just a "em.cpt" file.
     system_config: dict = {}

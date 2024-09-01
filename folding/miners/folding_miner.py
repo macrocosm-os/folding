@@ -51,7 +51,7 @@ def attach_files_to_synapse(
     synapse: JobSubmissionSynapse,
     data_directory: str,
     state: str,
-    seed = int, 
+    seed=int,
 ) -> JobSubmissionSynapse:
     """load the output files as bytes and add to synapse.md_output
 
@@ -84,7 +84,7 @@ def attach_files_to_synapse(
             )  # if this happens, goes to except block
 
         synapse = attach_files(files_to_attach=all_state_files, synapse=synapse)
-        
+
         synapse.miner_seed = seed
         synapse.miner_state = state
 
@@ -264,16 +264,14 @@ class FoldingMiner(BaseMinerNeuron):
                 synapse=synapse,
                 data_directory=simulation["output_dir"],
                 state=current_executor_state,
-                seed = current_seed
+                seed=current_seed,
             )
 
             event["condition"] = "running_simulation"
             event["state"] = current_executor_state
             event["queried_at"] = simulation["queried_at"]
 
-            return check_synapse(
-                self=self, synapse=synapse, event=event
-            )
+            return check_synapse(self=self, synapse=synapse, event=event)
 
         else:
             if os.path.exists(self.base_data_path) and pdb_id in os.listdir(
@@ -307,9 +305,7 @@ class FoldingMiner(BaseMinerNeuron):
                 event["condition"] = "found_existing_data"
                 event["state"] = state
 
-                return check_synapse(
-                    self=self, synapse=synapse, event=event
-                )
+                return check_synapse(self=self, synapse=synapse, event=event)
 
             elif len(self.simulations) >= self.max_workers:
                 bt.logging.warning(
@@ -321,14 +317,10 @@ class FoldingMiner(BaseMinerNeuron):
                 event["condition"] = "cpu_limit_reached"
                 synapse.miner_serving = False
 
-                return check_synapse(
-                    self=self, synapse=synapse, event=event
-                )
+                return check_synapse(self=self, synapse=synapse, event=event)
 
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
-                return check_synapse(
-                    self=self, synapse=synapse, event=event
-                )
+                return check_synapse(self=self, synapse=synapse, event=event)
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=output_dir)
 
@@ -340,14 +332,16 @@ class FoldingMiner(BaseMinerNeuron):
                 file.write(content)
 
         state_commands, seed = self.configure_commands(
-            pdb_obj=pdb_obj, system_config=synapse.system_config, seed=synapse.system_config["seed"]
+            pdb_obj=pdb_obj,
+            system_config=synapse.system_config,
+            seed=synapse.system_config["seed"],
         )
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
             output_dir=output_dir,
-            system_config = synapse.system_config,
+            system_config=synapse.system_config,
             seed=seed,
         )
 
@@ -366,9 +360,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
-        return check_synapse(
-            self=self, synapse=synapse, event=event
-        )
+        return check_synapse(self=self, synapse=synapse, event=event)
 
     async def blacklist(self, synapse: JobSubmissionSynapse) -> Tuple[bool, str]:
         if (
@@ -412,7 +404,7 @@ class FoldingMiner(BaseMinerNeuron):
 
 
 class SimulationManager:
-    def __init__(self, pdb_id: str, output_dir: str,  seed: int) -> None:
+    def __init__(self, pdb_id: str, output_dir: str, seed: int) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
         self.seed = seed
@@ -450,7 +442,7 @@ class SimulationManager:
 
         steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
 
-        #Write the seed so that we always know what was used. 
+        # Write the seed so that we always know what was used.
         with open(self.seed_file_name, "w") as f:
             f.write(f"{self.seed}\n")
 
@@ -479,12 +471,10 @@ class SimulationManager:
                 lines[-1].strip() if lines else None
             )  # return the last line of the file
 
-    def get_seed(self) -> str: 
+    def get_seed(self) -> str:
         with open(os.path.join(self.output_dir, self.seed_file_name), "r") as f:
             lines = f.readlines()
-            return (
-                lines[-1].strip() if lines else None
-            )
+            return lines[-1].strip() if lines else None
 
 
 class MockSimulationManager(SimulationManager):

@@ -30,11 +30,13 @@ def delete_directory(directory: str):
     """
     shutil.rmtree(directory)
 
-def write_pkl(data, path:str, write_mode="wb"):
+
+def write_pkl(data, path: str, write_mode="wb"):
     with open(path, write_mode) as f:
         pkl.dump(data, f)
 
-def load_pkl(path:str, read_mode="rb"):
+
+def load_pkl(path: str, read_mode="rb"):
     with open(path, read_mode) as f:
         data = pkl.load(f)
     return data
@@ -240,4 +242,3 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
         "response_returned_files_sizes": response_returned_files_sizes,
         "response_miners_serving": response_miners_serving,
     }
-

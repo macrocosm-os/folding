@@ -21,7 +21,7 @@ class SimulationConfig(BaseModel):
     ff: str
     water: str
     box: Literal["cube", "dodecahedron", "octahedron"]
-    seed: int = None, 
+    seed: int = (None,)
     temperature: float = 300.0
     time_step_size: float = 0.002
     time_units: str = "picosecond"
@@ -29,8 +29,8 @@ class SimulationConfig(BaseModel):
     save_interval_log: int = 100
     box_padding: float = 1.0
     friction: float = 1.0
-    nonbonded_method: str = 'NoCutoff'
-    constraints: str = 'HBonds'
+    nonbonded_method: str = "NoCutoff"
+    constraints: str = "HBonds"
     cutoff: Optional[float] = 1.0
     pressure: float = 1.0
     max_steps_nvt: int = 50000
@@ -46,9 +46,9 @@ class SimulationConfig(BaseModel):
 
     def get_config(self) -> dict:
         attributes = self.dict()
-        attributes['nonbonded_method'] = NonbondedMethod[self.nonbonded_method].value
-        attributes['constraints'] = Constraints[self.constraints].value
+        attributes["nonbonded_method"] = NonbondedMethod[self.nonbonded_method].value
+        attributes["constraints"] = Constraints[self.constraints].value
         return attributes
-    
+
     def to_dict(self):
         return self.dict()

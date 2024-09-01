@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
-import time 
+import time
 from typing import Union
-import functools 
+import functools
 import openmm as mm
 from openmm import app
 from openmm import unit
 
-import bittensor as bt 
+import bittensor as bt
 from folding.utils.opemm_simulation_config import SimulationConfig
 
 
@@ -27,13 +27,14 @@ class GenericSimulation(ABC):
             end_time = time.time()
             print(f"Method {method.__name__} took {end_time - start_time:.4f} seconds")
             return result
+
         return timed
 
 
 class OpenMMSimulation(GenericSimulation):
-    @GenericSimulation.timeit 
+    @GenericSimulation.timeit
     def create_simulation(
-        self, pdb: app.PDBFile, system_config : dict, state: str, seed: int = None
+        self, pdb: app.PDBFile, system_config: dict, state: str, seed: int = None
     ) -> Union[app.Simulation, SimulationConfig]:
         """Recreates a simulation object based on the provided parameters.
 
@@ -45,23 +46,27 @@ class OpenMMSimulation(GenericSimulation):
 
         Returns:
             app.Simulation: The recreated simulation object.
-            system_config: The potentially altered system configuration in SimulationConfig format. 
+            system_config: The potentially altered system configuration in SimulationConfig format.
         """
         start_time = time.time()
-        forcefield = app.ForceField(system_config['ff'], system_config['water'])
+        forcefield = app.ForceField(system_config["ff"], system_config["water"])
         bt.logging.warning(f"Creating ff took {time.time() - start_time:.4f} seconds")
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
         start_time = time.time()
         modeller.deleteWater()
-        bt.logging.warning(f"Deleting water took {time.time() - start_time:.4f} seconds")
+        bt.logging.warning(
+            f"Deleting water took {time.time() - start_time:.4f} seconds"
+        )
 
         # modeller.addExtraParticles(forcefield)
 
         start_time = time.time()
         modeller.addHydrogens(forcefield)
-        bt.logging.warning(f"Adding hydrogens took {time.time() - start_time:.4f} seconds")
+        bt.logging.warning(
+            f"Adding hydrogens took {time.time() - start_time:.4f} seconds"
+        )
 
         start_time = time.time()
         # modeller.addSolvent(
@@ -69,35 +74,45 @@ class OpenMMSimulation(GenericSimulation):
         #     padding=system_config.box_padding * unit.nanometer,
         #     boxShape=system_config.box,
         # )
-        bt.logging.warning(f"Adding solvent took {time.time() - start_time:.4f} seconds")
+        bt.logging.warning(
+            f"Adding solvent took {time.time() - start_time:.4f} seconds"
+        )
 
         # Create the system
         start_time = time.time()
-        #The assumption here is that the system_config cutoff MUST be given in nanometers
-        threshold = (pdb.topology.getUnitCellDimensions().min().value_in_unit(mm.unit.nanometers)) / 2
-        if system_config['cutoff'] > threshold:
+        # The assumption here is that the system_config cutoff MUST be given in nanometers
+        threshold = (
+            pdb.topology.getUnitCellDimensions().min().value_in_unit(mm.unit.nanometers)
+        ) / 2
+        if system_config["cutoff"] > threshold:
             nonbondedCutoff = threshold * mm.unit.nanometers
-            system_config['cutoff'] = threshold #set the attribute in the config for the pipeline. 
-            bt.logging.warning(f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm")
+            system_config[
+                "cutoff"
+            ] = threshold  # set the attribute in the config for the pipeline.
+            bt.logging.warning(
+                f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm"
+            )
         else:
-            nonbondedCutoff = system_config['cutoff'] * mm.unit.nanometers
+            nonbondedCutoff = system_config["cutoff"] * mm.unit.nanometers
 
         system = forcefield.createSystem(
             modeller.topology,
             nonbondedMethod=mm.app.PME,
             nonbondedCutoff=nonbondedCutoff,
-            constraints=system_config['constraints'],
+            constraints=system_config["constraints"],
         )
-        bt.logging.warning(f"Creating system took {time.time() - start_time:.4f} seconds")
+        bt.logging.warning(
+            f"Creating system took {time.time() - start_time:.4f} seconds"
+        )
 
         # Integrator settings
         integrator = mm.LangevinIntegrator(
-            system_config['temperature'] * unit.kelvin,
-            system_config['friction'] / unit.picosecond,
-            system_config['time_step_size'] * unit.picoseconds,
+            system_config["temperature"] * unit.kelvin,
+            system_config["friction"] / unit.picosecond,
+            system_config["time_step_size"] * unit.picoseconds,
         )
-        
-        seed = seed if system_config['seed'] is None else system_config['seed']
+
+        seed = seed if system_config["seed"] is None else system_config["seed"]
         integrator.setRandomNumberSeed(seed)
 
         # Periodic boundary conditions
@@ -106,8 +121,8 @@ class OpenMMSimulation(GenericSimulation):
         if state != "nvt":
             system.addForce(
                 mm.MonteCarloBarostat(
-                    system_config['pressure'] * unit.bar,
-                    system_config['temperature'] * unit.kelvin,
+                    system_config["pressure"] * unit.bar,
+                    system_config["temperature"] * unit.kelvin,
                 )
             )
         platform = mm.Platform.getPlatformByName("CUDA")
@@ -117,12 +132,16 @@ class OpenMMSimulation(GenericSimulation):
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
-        bt.logging.warning(f"Creating simulation took {time.time() - start_time:.4f} seconds")
+        bt.logging.warning(
+            f"Creating simulation took {time.time() - start_time:.4f} seconds"
+        )
         # Set initial positions
-        
+
         start_time = time.time()
         simulation.context.setPositions(modeller.positions)
-        bt.logging.warning(f"Setting positions took {time.time() - start_time:.4f} seconds")
+        bt.logging.warning(
+            f"Setting positions took {time.time() - start_time:.4f} seconds"
+        )
 
         # Converting the system config into a Dict[str,str]
         for k, v in system_config.items():

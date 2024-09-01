@@ -10,7 +10,12 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
-from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info, load_pkl
+from folding.utils.ops import (
+    select_random_pdb_id,
+    load_pdb_ids,
+    get_response_info,
+    load_pkl,
+)
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 
@@ -53,11 +58,11 @@ def run_step(
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
-    
+
     protein.md_inputs = {}
     synapse = JobSubmissionSynapse(
-        pdb_id=protein.pdb_id, 
-        pdb_contents= protein.pdb_contents, 
+        pdb_id=protein.pdb_id,
+        pdb_contents=protein.pdb_contents,
         md_inputs=protein.md_inputs,
         system_config=protein.system_config.to_dict(),
     )
@@ -204,7 +209,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             "water": config.protein.water or sampled_combination["WATER"],
             "box": config.protein.box or sampled_combination["BOX"],
         }
-        
+
         protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
 
         try:

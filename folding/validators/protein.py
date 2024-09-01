@@ -1,5 +1,4 @@
-
-import time 
+import time
 import glob
 import os
 import pickle
@@ -23,7 +22,7 @@ from folding.utils.ops import (
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
-    write_pkl
+    write_pkl,
 )
 from folding.store import Job
 from folding.base.simulation import OpenMMSimulation
@@ -59,7 +58,7 @@ class Protein(OpenMMSimulation):
         self.water: str = water
 
         self.system_config = SimulationConfig(
-            ff=self.ff, water=self.water, box=self.box, seed = self.gen_seed()
+            ff=self.ff, water=self.water, box=self.box, seed=self.gen_seed()
         )
 
         self.config = config
@@ -82,7 +81,7 @@ class Protein(OpenMMSimulation):
         # ) as f:
         #     self.upper_bounds : List = pickle.load(f)
 
-        self.upper_bounds = [0,1,2,3]
+        self.upper_bounds = [0, 1, 2, 3]
 
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
@@ -113,9 +112,9 @@ class Protein(OpenMMSimulation):
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
             pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_location)
 
-            #TODO: We should pass in the simulation into from_job to see if we really need to do this again...
-            protein.simulation, protein.system_config = protein.create_simulation( 
-                pdb = pdb_obj,
+            # TODO: We should pass in the simulation into from_job to see if we really need to do this again...
+            protein.simulation, protein.system_config = protein.create_simulation(
+                pdb=pdb_obj,
                 system_config=protein.system_config.get_config(),
                 seed=protein.system_config.seed,
                 state="em",
@@ -157,9 +156,6 @@ class Protein(OpenMMSimulation):
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
-        self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
-        self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
-
     def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
@@ -198,7 +194,7 @@ class Protein(OpenMMSimulation):
         for file in filenames:
             for f in glob.glob(os.path.join(self.validator_directory, file)):
                 try:
-                    #A bit of a hack to load in the data correctly depending on the file ext
+                    # A bit of a hack to load in the data correctly depending on the file ext
                     name = f.split("/")[-1]
                     if name.split(".")[-1] == "cpt":
                         readmode = "rb"
@@ -256,34 +252,37 @@ class Protein(OpenMMSimulation):
     def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
         """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
         return app.PDBFile(pdb_file)
-    
+
     def fix_pdb_file(self):
         """
-        Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems 
-        that must be fixed before they can be used in a molecular dynamics simulation. 
+        Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems
+        that must be fixed before they can be used in a molecular dynamics simulation.
 
         The fixer will remove metadata that is contained in the header of the original pdb, and we might
         want to keep this. Therefore, we will rename the original pdb file to *_original.pdb and make a new
-        pdb file using the PDBFile.writeFile method. 
-        
+        pdb file using the PDBFile.writeFile method.
+
         Reference docs for the PDBFixer class can be found here:
             https://htmlpreview.github.io/?https://github.com/openmm/pdbfixer/blob/master/Manual.html
         """
 
-        fixer = PDBFixer(filename = self.pdb_location)
+        fixer = PDBFixer(filename=self.pdb_location)
         fixer.findMissingResidues()
         fixer.findNonstandardResidues()
         fixer.replaceNonstandardResidues()
         fixer.removeHeterogens(True)
         fixer.findMissingAtoms()
         fixer.addMissingAtoms()
-        fixer.addMissingHydrogens(pH = 7.0)
+        fixer.addMissingHydrogens(pH=7.0)
 
-        original_pdb = self.pdb_location.split('.')[0] + "_original.pdb"
+        original_pdb = self.pdb_location.split(".")[0] + "_original.pdb"
         os.rename(self.pdb_location, original_pdb)
 
-        app.PDBFile.writeFile(topology=fixer.topology, positions=fixer.positions, file = open(self.pdb_location, 'w'))
-
+        app.PDBFile.writeFile(
+            topology=fixer.topology,
+            positions=fixer.positions,
+            file=open(self.pdb_location, "w"),
+        )
 
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
@@ -302,8 +301,8 @@ class Protein(OpenMMSimulation):
         )
 
         bt.logging.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
-        
-        start_time = time.time() 
+
+        start_time = time.time()
         self.simulation.minimizeEnergy(
             maxIterations=1000
         )  # TODO: figure out the right number for this
@@ -313,7 +312,7 @@ class Protein(OpenMMSimulation):
 
         # This is only for the validators, as they need to open the right config later.
         # Only save the config if the simulation was successful.
-        write_pkl(data=self.system_config, path=self.simulation_pkl, write_mode = "wb")
+        write_pkl(data=self.system_config, path=self.simulation_pkl, write_mode="wb")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -399,7 +398,7 @@ class Protein(OpenMMSimulation):
             output_directory=self.miner_data_directory,
         )
         try:
-            # NOTE: The seed written in the self.system_config is not used here 
+            # NOTE: The seed written in the self.system_config is not used here
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
             self.simulation, self.system_config = self.create_simulation(
