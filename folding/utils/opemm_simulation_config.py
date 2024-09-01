@@ -29,12 +29,11 @@ class SimulationConfig(BaseModel):
     save_interval_log: int = 100
     box_padding: float = 1.0
     friction: float = 1.0
-    nonbonded_method: NonbondedMethod = NonbondedMethod.NoCutoff
-    constraints: Constraints = Constraints.HBonds
+    nonbonded_method: str = 'NoCutoff'
+    constraints: str = 'HBonds'
     cutoff: Optional[float] = 1.0
     pressure: float = 1.0
     max_steps_nvt: int = 50000
-
     emtol: float = 1000.0
     nsteps_minimize: int = 100
     rvdw: float = 1.2
@@ -45,7 +44,11 @@ class SimulationConfig(BaseModel):
     ref_t: float = 300.0
     gen_temp: float = 300.0
 
-    # TODO: Do we need this?
-    def apply_input(self):
-        class Config:
-            arbitrary_types_allowed = True
+    def get_config(self) -> dict:
+        attributes = self.dict()
+        attributes['nonbonded_method'] = NonbondedMethod[self.nonbonded_method].value
+        attributes['constraints'] = Constraints[self.constraints].value
+        return attributes
+    
+    def to_dict(self):
+        return self.dict()

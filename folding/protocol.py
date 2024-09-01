@@ -19,9 +19,6 @@
 import typing
 import base64
 import bittensor as bt
-from openmm import app
-from folding.utils.opemm_simulation_config import SimulationConfig
-
 
 class PingSynapse(bt.Synapse):
     """Responsible for determining if a miner can accept a request"""
@@ -42,14 +39,9 @@ class JobSubmissionSynapse(bt.Synapse):
     - mdrun_args: A string containing the arguments to be passed to the openmm mdrun command.
     """
 
-    # TODO: reconsider parameters
-
     pdb_id: str 
     pdb_contents: str
-    system_config: SimulationConfig
     md_inputs: dict  # Right now this is just a "em.cpt" file.
-
-    # Optional runtime args for openmm
     system_config: dict = {}
 
     # Miner can decide if they are serving the request or not.
@@ -70,7 +62,7 @@ class JobSubmissionSynapse(bt.Synapse):
         - dict: The serialized response, which in this case is the value of md_output.
         """
         bt.logging.info(
-            f"Deserializing response from miner, I am: {list(self.pdb_id.keys())[0]}, hotkey: {self.axon.hotkey[:8]}"
+            f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the response has expected hash
         if not isinstance(self.md_output, dict):

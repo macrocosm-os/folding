@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
 import time 
+from typing import Union
 import functools 
 import openmm as mm
 from openmm import app
 from openmm import unit
 
 import bittensor as bt 
+from folding.utils.opemm_simulation_config import SimulationConfig
 
 
 class GenericSimulation(ABC):
@@ -31,8 +33,8 @@ class GenericSimulation(ABC):
 class OpenMMSimulation(GenericSimulation):
     @GenericSimulation.timeit 
     def create_simulation(
-        self, pdb: app.PDBFile, system_config, state: str, seed: int = None
-    ) -> app.Simulation:
+        self, pdb: app.PDBFile, system_config : dict, state: str, seed: int = None
+    ) -> Union[app.Simulation, SimulationConfig]:
         """Recreates a simulation object based on the provided parameters.
 
         This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
@@ -43,9 +45,10 @@ class OpenMMSimulation(GenericSimulation):
 
         Returns:
             app.Simulation: The recreated simulation object.
+            system_config: The potentially altered system configuration in SimulationConfig format. 
         """
         start_time = time.time()
-        forcefield = app.ForceField(system_config.ff, system_config.water)
+        forcefield = app.ForceField(system_config['ff'], system_config['water'])
         bt.logging.warning(f"Creating ff took {time.time() - start_time:.4f} seconds")
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
@@ -72,29 +75,29 @@ class OpenMMSimulation(GenericSimulation):
         start_time = time.time()
         #The assumption here is that the system_config cutoff MUST be given in nanometers
         threshold = (pdb.topology.getUnitCellDimensions().min().value_in_unit(mm.unit.nanometers)) / 2
-        if system_config.cutoff > threshold:
+        if system_config['cutoff'] > threshold:
             nonbondedCutoff = threshold * mm.unit.nanometers
-            system_config.cutoff = threshold #set the attribute in the config for the pipeline. 
+            system_config['cutoff'] = threshold #set the attribute in the config for the pipeline. 
             bt.logging.warning(f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm")
         else:
-            nonbondedCutoff = system_config.cutoff * mm.unit.nanometers
+            nonbondedCutoff = system_config['cutoff'] * mm.unit.nanometers
 
         system = forcefield.createSystem(
             modeller.topology,
             nonbondedMethod=mm.app.PME,
             nonbondedCutoff=nonbondedCutoff,
-            constraints=system_config.constraints,
+            constraints=system_config['constraints'],
         )
         bt.logging.warning(f"Creating system took {time.time() - start_time:.4f} seconds")
 
         # Integrator settings
         integrator = mm.LangevinIntegrator(
-            system_config.temperature * unit.kelvin,
-            system_config.friction / unit.picosecond,
-            system_config.time_step_size * unit.picoseconds,
+            system_config['temperature'] * unit.kelvin,
+            system_config['friction'] / unit.picosecond,
+            system_config['time_step_size'] * unit.picoseconds,
         )
         
-        seed = seed if system_config.seed is None else system_config.seed
+        seed = seed if system_config['seed'] is None else system_config['seed']
         integrator.setRandomNumberSeed(seed)
 
         # Periodic boundary conditions
@@ -103,8 +106,8 @@ class OpenMMSimulation(GenericSimulation):
         if state != "nvt":
             system.addForce(
                 mm.MonteCarloBarostat(
-                    system_config.pressure * unit.bar,
-                    system_config.temperature * unit.kelvin,
+                    system_config['pressure'] * unit.bar,
+                    system_config['temperature'] * unit.kelvin,
                 )
             )
         platform = mm.Platform.getPlatformByName("CUDA")
@@ -121,5 +124,9 @@ class OpenMMSimulation(GenericSimulation):
         simulation.context.setPositions(modeller.positions)
         bt.logging.warning(f"Setting positions took {time.time() - start_time:.4f} seconds")
 
-        # Create the simulation object
-        return simulation, system_config
+        # Converting the system config into a Dict[str,str]
+        for k, v in system_config.items():
+            if not isinstance(v, str) or not isinstance(v, int):
+                system_config[k] = str(v)
+
+        return simulation, SimulationConfig(**system_config)

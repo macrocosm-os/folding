@@ -116,7 +116,7 @@ class Protein(OpenMMSimulation):
             #TODO: We should pass in the simulation into from_job to see if we really need to do this again...
             protein.simulation, protein.system_config = protein.create_simulation( 
                 pdb = pdb_obj,
-                system_config=protein.system_config,
+                system_config=protein.system_config.get_config(),
                 seed=protein.system_config.seed,
                 state="em",
             )
@@ -297,7 +297,7 @@ class Protein(OpenMMSimulation):
 
         self.simulation, self.system_config = self.create_simulation(
             pdb=self.load_pdb_file(pdb_file=self.pdb_file),
-            system_config=self.system_config,
+            system_config=self.system_config.get_config(),
             state="em",
         )
 
@@ -404,7 +404,7 @@ class Protein(OpenMMSimulation):
             # make sure that we are using the correct seed.
             self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_file),
-                system_config=self.system_config,
+                system_config=self.system_config.get_config(),
                 seed=seed,
                 state=state,
             )

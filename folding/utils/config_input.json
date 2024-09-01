@@ -9,7 +9,7 @@
     "save_interval_log": 100,
     "box_padding": 1.0,
     "friction": 1.0,
-    "nonbonded_method": "PME",
+    "nonbonded_method": "NoCutoff",
     "constraints": "HBonds",
     "cutoff": 1.0,
     "pressure": 1.0,
