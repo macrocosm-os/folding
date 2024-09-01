@@ -272,7 +272,7 @@ class FoldingMiner(BaseMinerNeuron):
             event["queried_at"] = simulation["queried_at"]
 
             return check_synapse(
-                self=self, synapse=synapse, event=event, output_dir=output_dir
+                self=self, synapse=synapse, event=event
             )
 
         else:
@@ -308,7 +308,7 @@ class FoldingMiner(BaseMinerNeuron):
                 event["state"] = state
 
                 return check_synapse(
-                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                    self=self, synapse=synapse, event=event
                 )
 
             elif len(self.simulations) >= self.max_workers:
@@ -322,12 +322,12 @@ class FoldingMiner(BaseMinerNeuron):
                 synapse.miner_serving = False
 
                 return check_synapse(
-                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                    self=self, synapse=synapse, event=event
                 )
 
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(
-                    self=self, synapse=synapse, event=event, output_dir=output_dir
+                    self=self, synapse=synapse, event=event
                 )
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=output_dir)
@@ -367,7 +367,7 @@ class FoldingMiner(BaseMinerNeuron):
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
         return check_synapse(
-            self=self, synapse=synapse, event=event, output_dir=output_dir
+            self=self, synapse=synapse, event=event
         )
 
     async def blacklist(self, synapse: JobSubmissionSynapse) -> Tuple[bool, str]:
