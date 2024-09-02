@@ -6,6 +6,9 @@ import random
 import time
 from collections import defaultdict
 from typing import Dict, List, Tuple
+from sys import stdout
+import copy
+
 
 import bittensor as bt
 import openmm as mm
@@ -22,6 +25,7 @@ from folding.utils.ops import (
     check_if_directory_exists,
     get_tracebacks,
 )
+from folding.utils.opemm_simulation_config import SimulationConfig
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -168,7 +172,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         for state in self.STATES:
             simulation, _ = OpenMMSimulation().create_simulation(
-                pdb_file=pdb_obj,
+                pdb=pdb_obj,
                 system_config=system_config,
                 seed=seed,
                 state=state,
@@ -190,7 +194,7 @@ class FoldingMiner(BaseMinerNeuron):
                 ExitFileReporter(
                     filename=f"{state}",
                     reportInterval=self.EXIT_REPORTER_INTERVAL,
-                    state=state,
+                    file_prefix=state,
                 )
             )
             state_commands[state] = simulation
@@ -236,7 +240,7 @@ class FoldingMiner(BaseMinerNeuron):
             JobSubmissionSynapse: synapse with md_output attached
         """
 
-        pdb_id, pdb_obj = list(synapse.pdb_id.items())[0]
+        pdb_id = synapse.pdb_id
 
         # If we are already running a process with the same identifier, return intermediate information
         bt.logging.debug(f"⌛ Query from validator for protein: {pdb_id} ⌛")
@@ -327,27 +331,27 @@ class FoldingMiner(BaseMinerNeuron):
         # The following files are required for openmm simulations and are received from the validator
         for filename, content in synapse.md_inputs.items():
             # Write the file to the output directory
-            with open(filename, "w") as file:
+            with open(f"{output_dir}/{filename}", "w") as file:
                 bt.logging.info(f"\nWriting {filename} to {output_dir}")
+                bt.logging.info(f"Content: {content[:3]}")
                 file.write(content)
-
-        state_commands, seed = self.configure_commands(
-            pdb_obj=pdb_obj,
-            system_config=synapse.system_config,
-            seed=synapse.system_config["seed"],
-        )
+        system_config = SimulationConfig(**synapse.system_config)
+        # state_commands, seed = self.configure_commands(
+        #     pdb_obj=app.PDBFile(f"{output_dir}/{pdb_id}.pdb"),
+        #     system_config=system_config,
+        #     seed=system_config.seed,
+        # )
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
             output_dir=output_dir,
-            system_config=synapse.system_config,
-            seed=seed,
+            system_config=system_config.to_dict(),
+            seed=self.generate_random_seed() if system_config.seed is None else system_config.seed,
         )
 
         future = self.executor.submit(
             simulation_manager.run,
-            state_commands,
             self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
         )
 
@@ -404,18 +408,26 @@ class FoldingMiner(BaseMinerNeuron):
 
 
 class SimulationManager:
-    def __init__(self, pdb_id: str, output_dir: str, seed: int) -> None:
+    def __init__(self, pdb_id: str, output_dir: str, seed: int, system_config: dict) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
         self.seed = seed
+        self.pdb_obj = app.PDBFile(f"{output_dir}/{pdb_id}.pdb")
 
         self.state_file_name = f"{pdb_id}_state.txt"
         self.seed_file_name = f"{pdb_id}_seed.txt"
+        self.system_config = SimulationConfig(**system_config)
 
         self.output_dir = output_dir
         self.start_time = time.time()
 
-        self.cpt_file_mapper = {"nvt": "em", "npt": "nvt", "md_0_1": "npt"}
+        self.cpt_file_mapper = {"nvt": f"{output_dir}/em.cpt", "npt": f"{output_dir}/nvt.cpt", "md_0_1": f"{output_dir}/npt.cpt"}
+        
+        self.STATES = ["nvt", "npt", "md_0_1"]
+        self.CHECKPOINT_INTERVAL = 10000
+        self.STATE_DATA_REPORTER_INTERVAL = 10
+        self.EXIT_REPORTER_INTERVAL = 10
+
 
     def create_empty_file(self, file_path: str):
         # For mocking
@@ -424,7 +436,6 @@ class SimulationManager:
 
     def run(
         self,
-        simulations: Dict,
         mock: bool = False,
     ):
         """run method to handle the processing of generic simulations.
@@ -435,6 +446,8 @@ class SimulationManager:
             mock (bool, optional): mock for debugging. Defaults to False.
         """
         bt.logging.info(f"Running simulation for protein: {self.pdb_id}")
+        simulations = self.configure_commands(seed=self.seed, system_config=copy.deepcopy(self.system_config))
+        bt.logging.info(f"Simulations: {simulations}")
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
@@ -449,10 +462,10 @@ class SimulationManager:
         for state, simulation in simulations.items():
             bt.logging.info(f"Running {state} commands")
 
-            with open(self.state_file_name, "w") as f:
+            with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
                 f.write(f"{state}\n")
 
-            simulation.load_checkpoint(f"{self.cpt_file_mapper[state]}.cpt")
+            simulation.loadCheckpoint(self.cpt_file_mapper[state])
             simulation.step(steps[state])
 
             # TODO: Add a Mock pipeline for the new OpenMM simulation here.
@@ -475,6 +488,45 @@ class SimulationManager:
         with open(os.path.join(self.output_dir, self.seed_file_name), "r") as f:
             lines = f.readlines()
             return lines[-1].strip() if lines else None
+    
+    def configure_commands(
+        self, seed: int, system_config: dict
+    ) -> Dict[str, List[str]]:
+        state_commands = {}
+
+
+
+        for state in self.STATES:
+            simulation, _ = OpenMMSimulation().create_simulation(
+                pdb=self.pdb_obj,
+                system_config=system_config.get_config(),
+                seed=seed,
+                state=state,
+            )
+            simulation.reporters.append(
+                LastTwoCheckpointsReporter(
+                    file_prefix=f"{self.output_dir}/{state}", reportInterval=self.CHECKPOINT_INTERVAL
+                )
+            )
+            simulation.reporters.append(
+                app.StateDataReporter(
+                    file=f"{self.output_dir}/{state}.log",
+                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                    step=True,
+                    potentialEnergy=True,
+                )
+            )
+            simulation.reporters.append(
+                ExitFileReporter(
+                    filename=f"{self.output_dir}/{state}",
+                    reportInterval=self.EXIT_REPORTER_INTERVAL,
+                    file_prefix=state,
+                )
+            )
+            simulation.reporters.append(app.StateDataReporter(stdout, 100, step=True, potentialEnergy=True))
+            state_commands[state] = simulation
+
+        return state_commands
 
 
 class MockSimulationManager(SimulationManager):

@@ -78,4 +78,17 @@ class JobSubmissionSynapse(bt.Synapse):
                     md_output[k] = None
 
             self.md_output = md_output
+            
+        if not isinstance(self.md_inputs, dict):
+            self.md_inputs = {}
+        else:
+            md_inputs = {}
+            for k, v in self.md_inputs.items():
+                try:
+                    md_inputs[k] = base64.b64decode(v)
+                except Exception as e:
+                    bt.logging.error(f"Error decoding {k} from md_inputs: {e}")
+                    md_inputs[k] = None
+
+            self.md_inputs = md_inputs
         return self
