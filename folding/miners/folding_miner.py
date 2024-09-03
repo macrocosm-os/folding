@@ -534,9 +534,6 @@ class SimulationManager:
                     file_prefix=state,
                 )
             )
-            simulation.reporters.append(
-                app.StateDataReporter(stdout, 100, step=True, potentialEnergy=True)
-            )
             state_commands[state] = simulation
 
         return state_commands
