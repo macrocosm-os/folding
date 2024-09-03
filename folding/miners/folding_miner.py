@@ -341,7 +341,8 @@ class FoldingMiner(BaseMinerNeuron):
                     
             except Exception as e:
                 bt.logging.error(f"Failed to write file {filename!r} with error: {e}")            
-
+        with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
+            f.write(synapse.pdb_contents)
         system_config = SimulationConfig(**synapse.system_config)
 
         # Create the job and submit it to the executor
