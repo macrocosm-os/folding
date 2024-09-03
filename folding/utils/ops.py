@@ -8,6 +8,7 @@ import subprocess
 import sys
 import traceback
 from typing import Dict, List
+from bs4 import BeautifulSoup
 
 import bittensor as bt
 import requests
@@ -187,14 +188,16 @@ def run_cmd_commands(
             raise
 
 
-def check_and_download_pdbs(
+def check_and_download_pdbs_cif(
     pdb_directory: str, pdb_id: str, download: bool = True, force: bool = False
 ) -> bool:
     """Check the status and optionally download a PDB file from the RCSB PDB database.
 
     Args:
         pdb_directory (str): Directory to save the downloaded PDB file.
-        pdb_id (str): PDB file ID to download.
+        pdb_id (str): PDB file ID to download (four characters).
+        download (bool): Whether to download the file if it is not already available. Defaults to True.
+        force (bool): Force the download even if the PDB file is incomplete. Defaults to False.
 
     Returns:
         bool: True if the PDB file is downloaded successfully and doesn't contain missing values, False otherwise.
@@ -203,30 +206,67 @@ def check_and_download_pdbs(
         Exception: If download fails.
 
     """
-    url = f"https://files.rcsb.org/download/{pdb_id}"
-    path = os.path.join(pdb_directory, f"{pdb_id}")
+    base_url = "https://files.wwpdb.org/pub/pdb/data/assemblies/mmCIF/divided/"
+    # Use the second and third characters of the PDB ID to determine the folder
+    pdb_id_folder = pdb_id[1:3].lower()
+    pdb_id_url = f"{base_url}{pdb_id_folder}/"
+    path = os.path.join(pdb_directory, f"{pdb_id}.cif.gz")
 
-    r = requests.get(url)
-    if r.status_code == 200:
-        is_complete = is_pdb_complete(r.text)
-        if is_complete or force:
-            if download:
+    # Request the directory listing for the PDB ID's subdirectory
+    r = requests.get(pdb_id_url)
+    if r.status_code != 200:
+        bt.logging.error(
+            f"Failed to access the directory for PDB ID {pdb_id} at {pdb_id_url}"
+        )
+        raise Exception(f"Failed to access the directory for PDB ID {pdb_id}.")
+
+    # Parse the directory listing and find the link matching the PDB ID
+    soup = BeautifulSoup(r.text, "html.parser")
+    file_name = None
+    for link in soup.find_all("a"):
+        href = link.get("href")
+        if href.startswith(pdb_id):
+            file_name = href
+            break
+
+    if not file_name:
+        bt.logging.warning(
+            f"No matching file found for PDB ID {pdb_id} in the directory {pdb_id_url}"
+        )
+        return False
+
+    # Full URL for the specific PDB file
+    file_url = os.path.join(pdb_id_url, file_name)
+
+    # Check if the PDB file needs to be downloaded or if it exists and is complete
+    if download or not os.path.exists(path):
+        r = requests.get(file_url)
+        if r.status_code == 200:
+            is_complete = is_pdb_complete(r.text)
+            if is_complete or force:
                 check_if_directory_exists(output_directory=pdb_directory)
-                with open(path, "w") as file:
-                    file.write(r.text)
+                with open(path, "wb") as file:
+                    file.write(r.content)
 
-            message = " but contains missing values." if not is_complete else ""
-            bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+                message = " but contains missing values." if not is_complete else ""
+                bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
 
-            return True
+                return True
+            else:
+                bt.logging.warning(
+                    f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+                )
+                return False
         else:
-            bt.logging.warning(
-                f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+            bt.logging.error(
+                f"Failed to download PDB file with ID {pdb_id} from {file_url}"
             )
-            return False
+            raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
     else:
-        bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
-        raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+        bt.logging.info(
+            f"PDB file {pdb_id} already exists at {path}. No download needed."
+        )
+        return True
 
 
 def is_pdb_complete(pdb_text: str) -> bool:
