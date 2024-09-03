@@ -9,6 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
+import base64
 
 import bittensor as bt
 import openmm as mm
@@ -51,6 +52,9 @@ class Protein(OpenMMSimulation):
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
         self.pdb_id: str = pdb_id.lower()
+        self.simulation_cpt = "em.cpt"
+        self.simulation_pkl = f"config_{self.pdb_id}.pkl"
+
         self.setup_filepaths()
 
         self.ff: str = ff
@@ -62,12 +66,8 @@ class Protein(OpenMMSimulation):
         )
 
         self.config = config
-
         self.simulation: app.Simulation = None
-
-        self.simulation_pkl = f"config_{self.pdb_id}.pkl"
-        self.simulation_cpt = "em.cpt"
-        self.input_files = [self.simulation_cpt]
+        self.input_files = [self.em_cpt_location]
 
         self.md_inputs = (
             self.read_and_return_files(filenames=self.input_files)
@@ -94,6 +94,12 @@ class Protein(OpenMMSimulation):
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
+        self.em_cpt_location = os.path.join(
+            self.validator_directory, self.simulation_cpt
+        )
+        self.simulation_pkl_location = os.path.join(
+            self.validator_directory, self.simulation_pkl
+        )
 
     @staticmethod
     def from_job(job: Job, config: Dict):
@@ -191,17 +197,21 @@ class Protein(OpenMMSimulation):
     def read_and_return_files(self, filenames: List) -> Dict:
         """Read the files and return them as a dictionary."""
         files_to_return = {}
-        for file in filenames:
-            for f in glob.glob(os.path.join(self.validator_directory, file)):
+        for filename in filenames:
+            for file in glob.glob(os.path.join(self.validator_directory, filename)):
                 try:
                     # A bit of a hack to load in the data correctly depending on the file ext
-                    name = f.split("/")[-1]
-                    if name.split(".")[-1] == "cpt":
-                        readmode = "rb"
-                    else:
-                        readmode = "r"
+                    name = file.split("/")[-1]
+                    with open(file, "rb") as f:
+                        if "cpt" in name:
+                            files_to_return[name] = base64.b64encode(f.read()).decode(
+                                "utf-8"
+                            )
+                        else:
+                            files_to_return[
+                                name
+                            ] = f.read()  # This would be the pdb file.
 
-                    files_to_return[name] = open(f, readmode).read()
                 except Exception as E:
                     continue
         return files_to_return
@@ -304,7 +314,7 @@ class Protein(OpenMMSimulation):
 
         start_time = time.time()
         self.simulation.minimizeEnergy(
-            maxIterations=1000
+            maxIterations=100
         )  # TODO: figure out the right number for this
         bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
 
@@ -347,6 +357,10 @@ class Protein(OpenMMSimulation):
         filetypes = {}
         for filename, content in files.items():
             filetypes[filename.split(".")[-1]] = filename
+
+            if "cpt" in filename:
+                filename = "em_binary.cpt"
+
             # loop over all of the output files and save to local disk
             with open(os.path.join(output_directory, filename), write_mode) as f:
                 f.write(content)
