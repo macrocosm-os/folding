@@ -38,6 +38,7 @@ from folding.store import Job, PandasJobStore
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
 
+
 class Validator(BaseValidatorNeuron):
     """
     Protein folding validator neuron. This neuron is responsible for validating the folding of proteins by querying the miners and updating the scores based on the responses.
@@ -109,9 +110,8 @@ class Validator(BaseValidatorNeuron):
         protein = Protein.from_job(job=job, config=self.config.protein)
 
         uids = self.get_uids(hotkeys=job.hotkeys)
-        # query the miners and get the rewards for their responses
-        # Check check_uid_availability to ensure that the hotkeys are valid and active
-        bt.logging.info("⏰ Waiting for miner responses ⏰")
+
+        bt.logging.info("Running run_step...⏳")
         return run_step(
             self,
             protein=protein,
