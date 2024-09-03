@@ -59,11 +59,10 @@ def run_step(
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
 
-    protein.md_inputs = {}
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
-        pdb_contents=protein.pdb_contents,
         md_inputs=protein.md_inputs,
+        pdb_contents=protein.pdb_contents,
         system_config=protein.system_config.to_dict(),
     )
 
