@@ -243,7 +243,7 @@ class FoldingMiner(BaseMinerNeuron):
         pdb_id = synapse.pdb_id
 
         # If we are already running a process with the same identifier, return intermediate information
-        bt.logging.debug(f"⌛ Query from validator for protein: {pdb_id} ⌛")
+        bt.logging.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
 
         # increment step counter everytime miner receives a query.
         self.step += 1
@@ -330,24 +330,28 @@ class FoldingMiner(BaseMinerNeuron):
 
         # The following files are required for openmm simulations and are received from the validator
         for filename, content in synapse.md_inputs.items():
-            # Write the file to the output directory
-            with open(f"{output_dir}/{filename}", "w") as file:
-                bt.logging.info(f"\nWriting {filename} to {output_dir}")
-                bt.logging.info(f"Content: {content[:3]}")
-                file.write(content)
+            write_mode = "w"
+            try:
+                if 'cpt' in filename: 
+                    write_mode = "wb"
+                    content = base64.b64decode(content)
+                
+                with open(os.path.join(output_dir, filename), write_mode) as f:
+                    f.write(content)
+                    
+            except Exception as e:
+                bt.logging.error(f"Failed to write file {filename!r} with error: {e}")            
+
         system_config = SimulationConfig(**synapse.system_config)
-        # state_commands, seed = self.configure_commands(
-        #     pdb_obj=app.PDBFile(f"{output_dir}/{pdb_id}.pdb"),
-        #     system_config=system_config,
-        #     seed=system_config.seed,
-        # )
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
             output_dir=output_dir,
             system_config=system_config.to_dict(),
-            seed=self.generate_random_seed() if system_config.seed is None else system_config.seed,
+            seed=self.generate_random_seed()
+            if system_config.seed is None
+            else system_config.seed,
         )
 
         future = self.executor.submit(
@@ -408,7 +412,9 @@ class FoldingMiner(BaseMinerNeuron):
 
 
 class SimulationManager:
-    def __init__(self, pdb_id: str, output_dir: str, seed: int, system_config: dict) -> None:
+    def __init__(
+        self, pdb_id: str, output_dir: str, seed: int, system_config: dict
+    ) -> None:
         self.pdb_id = pdb_id
         self.state: str = None
         self.seed = seed
@@ -421,13 +427,16 @@ class SimulationManager:
         self.output_dir = output_dir
         self.start_time = time.time()
 
-        self.cpt_file_mapper = {"nvt": f"{output_dir}/em.cpt", "npt": f"{output_dir}/nvt.cpt", "md_0_1": f"{output_dir}/npt.cpt"}
-        
+        self.cpt_file_mapper = {
+            "nvt": f"{output_dir}/em.cpt",
+            "npt": f"{output_dir}/nvt.cpt",
+            "md_0_1": f"{output_dir}/npt.cpt",
+        }
+
         self.STATES = ["nvt", "npt", "md_0_1"]
         self.CHECKPOINT_INTERVAL = 10000
         self.STATE_DATA_REPORTER_INTERVAL = 10
         self.EXIT_REPORTER_INTERVAL = 10
-
 
     def create_empty_file(self, file_path: str):
         # For mocking
@@ -446,7 +455,9 @@ class SimulationManager:
             mock (bool, optional): mock for debugging. Defaults to False.
         """
         bt.logging.info(f"Running simulation for protein: {self.pdb_id}")
-        simulations = self.configure_commands(seed=self.seed, system_config=copy.deepcopy(self.system_config))
+        simulations = self.configure_commands(
+            seed=self.seed, system_config=copy.deepcopy(self.system_config)
+        )
         bt.logging.info(f"Simulations: {simulations}")
 
         # Make sure the output directory exists and if not, create it
@@ -488,13 +499,11 @@ class SimulationManager:
         with open(os.path.join(self.output_dir, self.seed_file_name), "r") as f:
             lines = f.readlines()
             return lines[-1].strip() if lines else None
-    
+
     def configure_commands(
         self, seed: int, system_config: dict
     ) -> Dict[str, List[str]]:
         state_commands = {}
-
-
 
         for state in self.STATES:
             simulation, _ = OpenMMSimulation().create_simulation(
@@ -505,7 +514,8 @@ class SimulationManager:
             )
             simulation.reporters.append(
                 LastTwoCheckpointsReporter(
-                    file_prefix=f"{self.output_dir}/{state}", reportInterval=self.CHECKPOINT_INTERVAL
+                    file_prefix=f"{self.output_dir}/{state}",
+                    reportInterval=self.CHECKPOINT_INTERVAL,
                 )
             )
             simulation.reporters.append(
@@ -523,7 +533,9 @@ class SimulationManager:
                     file_prefix=state,
                 )
             )
-            simulation.reporters.append(app.StateDataReporter(stdout, 100, step=True, potentialEnergy=True))
+            simulation.reporters.append(
+                app.StateDataReporter(stdout, 100, step=True, potentialEnergy=True)
+            )
             state_commands[state] = simulation
 
         return state_commands
