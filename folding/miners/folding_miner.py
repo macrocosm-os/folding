@@ -55,7 +55,7 @@ def attach_files_to_synapse(
     synapse: JobSubmissionSynapse,
     data_directory: str,
     state: str,
-    seed=int,
+    seed: int,
 ) -> JobSubmissionSynapse:
     """load the output files as bytes and add to synapse.md_output
 
@@ -163,44 +163,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         return defaultdict(nested_dict)
 
-    def configure_commands(
-        self, pdb_obj: app.PDBFile, system_config: dict, seed: int = None
-    ) -> Dict[str, List[str]]:
-        state_commands = {}
-
-        seed = self.generate_random_seed() if seed is None else seed
-
-        for state in self.STATES:
-            simulation, _ = OpenMMSimulation().create_simulation(
-                pdb=pdb_obj,
-                system_config=system_config,
-                seed=seed,
-                state=state,
-            )
-            simulation.reporters.append(
-                LastTwoCheckpointsReporter(
-                    file_prefix=f"{state}", reportInterval=self.CHECKPOINT_INTERVAL
-                )
-            )
-            simulation.reporters.append(
-                app.StateDataReporter(
-                    file=f"{state}.log",
-                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
-                    step=True,
-                    potentialEnergy=True,
-                )
-            )
-            simulation.reporters.append(
-                ExitFileReporter(
-                    filename=f"{state}",
-                    reportInterval=self.EXIT_REPORTER_INTERVAL,
-                    file_prefix=state,
-                )
-            )
-            state_commands[state] = simulation
-
-        return state_commands, seed
-
     def check_and_remove_simulations(self, event: Dict) -> Dict:
         """Check to see if any simulations have finished, and remove them
         from the simulation store
@@ -286,6 +248,7 @@ class FoldingMiner(BaseMinerNeuron):
 
                 # We will attempt to read the state of the simulation from the state file
                 state_file = os.path.join(output_dir, f"{pdb_id}_state.txt")
+                seed_file = os.path.join(output_dir, f"{pdb_id}_seed.txt")
 
                 # Open the state file that should be generated during the simulation.
                 try:
@@ -294,11 +257,17 @@ class FoldingMiner(BaseMinerNeuron):
                         state = lines[-1].strip()
                         state = "md_0_1" if state == "finished" else state
 
+                    with open(seed_file, "r") as f:
+                        seed = f.readlines()[-1].strip()
+
                     bt.logging.warning(
                         f"❗ Found existing data for protein: {pdb_id}... Sending previously computed, most advanced simulation state ❗"
                     )
                     synapse = attach_files_to_synapse(
-                        synapse=synapse, data_directory=output_dir, state=state
+                        synapse=synapse,
+                        data_directory=output_dir,
+                        state=state,
+                        seed=seed,
                     )
                 except Exception as e:
                     bt.logging.error(
@@ -332,17 +301,20 @@ class FoldingMiner(BaseMinerNeuron):
         for filename, content in synapse.md_inputs.items():
             write_mode = "w"
             try:
-                if 'cpt' in filename: 
+                if "cpt" in filename:
                     write_mode = "wb"
                     content = base64.b64decode(content)
-                
+
                 with open(os.path.join(output_dir, filename), write_mode) as f:
                     f.write(content)
-                    
+
             except Exception as e:
-                bt.logging.error(f"Failed to write file {filename!r} with error: {e}")            
+                bt.logging.error(f"Failed to write file {filename!r} with error: {e}")
+
+        # Write the contents of the pdb file to the output directory
         with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
             f.write(synapse.pdb_contents)
+
         system_config = SimulationConfig(**synapse.system_config)
 
         # Create the job and submit it to the executor
