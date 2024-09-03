@@ -42,11 +42,11 @@ class Protein(OpenMMSimulation):
 
     def __init__(
         self,
+        pdb_id: str,
         ff: str,
+        water: str,
         box: Literal["cube", "dodecahedron", "octahedron"],
         config: Dict,
-        pdb_id: str = None,
-        water: str = None,
         load_md_inputs: bool = False,
         epsilon: float = 5e3,
     ) -> None:
@@ -117,16 +117,6 @@ class Protein(OpenMMSimulation):
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_location)
-
-            # TODO: We should pass in the simulation into from_job to see if we really need to do this again...
-            protein.simulation, protein.system_config = protein.create_simulation(
-                pdb=pdb_obj,
-                system_config=protein.system_config.get_config(),
-                seed=protein.system_config.seed,
-                state="em",
-            )
-            protein.init_energy = protein.calc_init_energy()
             protein._calculate_epsilon()
 
             protein.pdb_contents = protein.load_pdb_as_string(protein.pdb_location)
@@ -382,14 +372,8 @@ class Protein(OpenMMSimulation):
     def process_md_output(
         self, md_output: dict, seed: int, state: str, hotkey: str
     ) -> bool:
-        """
-        1. Check md_output for the required files, if unsuccessful return False
-        2. Save files if above is valid
-        3. Check the hash of the .gro file to ensure miners are running the correct protein.
-        4.
-        """
-
         required_files_extensions = ["cpt", "log"]
+        hotkey_alias = hotkey[:8]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         self.md_outputs_exts = {
@@ -398,7 +382,7 @@ class Protein(OpenMMSimulation):
 
         if len(md_output.keys()) == 0:
             bt.logging.warning(
-                f"Miner {hotkey[:8]} returned empty md_output... Skipping!"
+                f"Miner {hotkey_alias} returned empty md_output... Skipping!"
             )
             return False
 
@@ -418,6 +402,10 @@ class Protein(OpenMMSimulation):
             # NOTE: The seed written in the self.system_config is not used here
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
+
+            bt.logging.info(
+                f"Recreating miner {hotkey_alias} simulation in state: {state}"
+            )
             self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
@@ -425,26 +413,30 @@ class Protein(OpenMMSimulation):
                 state=state,
             )
             self.simulation.loadCheckpoint(f"{self.miner_data_directory}/{state}.cpt")
-            cpt_step = self.simulation.currentStep
             log_file = pd.read_csv(
                 f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
             )
             log_step = log_file['#"Step"'].iloc[-1]
 
             ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+            cpt_step = self.simulation.currentStep
             if (log_step - cpt_step) < 5000:
-                self.simulation.loadCheckpoint(
+                previous_checkpoint_path = (
                     f"{self.miner_data_directory}/{state}_old.cpt"
                 )
+                if os.path.exists(previous_checkpoint_path):
+                    bt.logging.warning(
+                        f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
+                    )
+                    self.simulation.loadCheckpoint(previous_checkpoint_path)
+                else:
+                    bt.logging.warning(
+                        f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
+                    )
+                    return False
+
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
-            return False
-
-        cpt_step = self.simulation.currentStep
-
-        ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-        if (log_step - cpt_step) < 5000:
-            bt.logging.warning("Miner did not run enough steps since last checkpoint")
             return False
 
         return True
@@ -461,13 +453,15 @@ class Protein(OpenMMSimulation):
         log_file = pd.read_csv(
             f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
         )
-        log_step = log_file['#"Step"'].iloc[-1]  # last step in the log file
-        cpt_step = (
-            self.simulation.currentStep
-        )  # step at which miner checkpoint was made
+
+        # Last step in the log file given to us by the miner.
+        log_step = log_file['#"Step"'].iloc[-1]
+
+        # step at which the most recent miner checkpoint was made
+        cpt_step = self.simulation.currentStep
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
-        if log_file['#"Step"'][1] - log_file['#"Step"'][0] > 10:
+        if (log_file['#"Step"'][1] - log_file['#"Step"'][0]) > 10:
             return False
 
         steps_to_run = min(10000, log_step - cpt_step)  # run at most 10000 steps
@@ -496,6 +490,8 @@ class Protein(OpenMMSimulation):
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
         min_length = len(percent_diff)
+
+        # This is some debugging information for plotting the information from the miner.
         df = pd.DataFrame([check_energies, miner_energies])
         df = df.T
         df.columns = ["validator", "miner"]
@@ -503,6 +499,7 @@ class Protein(OpenMMSimulation):
             df,
             title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
         ).show()
+
         # Compare the entries up to the length of the shorter array
         anomalies_detected = percent_diff > self.upper_bounds[:min_length]
 
