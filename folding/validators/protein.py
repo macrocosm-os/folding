@@ -10,10 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
 import base64
-
+import plotly.express as px
 import bittensor as bt
 import openmm as mm
 import pandas as pd
+import numpy as np
 from openmm import app, unit
 from pdbfixer import PDBFixer
 from folding.store import Job
@@ -456,13 +457,20 @@ class Protein(OpenMMSimulation):
         Returns:
             bool: True if the run is valid, False otherwise.
         """
+        ANOMALY_THRESHOLD = 20
         log_file = pd.read_csv(
             f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
         )
-        log_step = log_file['#"Step"'].iloc[-1]
-        cpt_step = self.simulation.currentStep
+        log_step = log_file['#"Step"'].iloc[-1]  # last step in the log file
+        cpt_step = (
+            self.simulation.currentStep
+        )  # step at which miner checkpoint was made
 
-        steps_to_run = log_step - cpt_step
+        # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
+        if log_file['#"Step"'][1] - log_file['#"Step"'][0] > 10:
+            return False
+
+        steps_to_run = min(10000, log_step - cpt_step)  # run at most 10000 steps
 
         self.simulation.reporters.append(
             app.StateDataReporter(
@@ -470,34 +478,40 @@ class Protein(OpenMMSimulation):
                 10,
                 step=True,
                 potentialEnergy=True,
-                temperature=True,
             )
         )
         bt.logging.info(
             f"Running {steps_to_run} steps. log_step: {log_step}, cpt_step: {cpt_step}"
         )
-        self.simulation.step(min(steps_to_run, 10000))
+        self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
+        max_step = cpt_step + steps_to_run
 
-        check_energies = check_log_file[check_log_file['#"Step"'] >= cpt_step][
-            "Potential Energy (kJ/mole)"
-        ]
-        miner_energies = log_file[log_file['#"Step"'] >= cpt_step][
-            "Potential Energy (kJ/mole)"
-        ]
+        check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
+        miner_energies: np.ndarray = log_file[
+            (log_file['#"Step"'] >= cpt_step) & (log_file['#"Step"'] < max_step)
+        ]["Potential Energy (kJ/mole)"].values
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
-        min_length = min(len(percent_diff), len(self.upper_bounds))
-
+        min_length = len(percent_diff)
+        df = pd.DataFrame([check_energies, miner_energies])
+        df = df.T
+        df.columns = ["validator", "miner"]
+        px.scatter(
+            df,
+            title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
+        ).show()
         # Compare the entries up to the length of the shorter array
-        comparison_result = percent_diff[:min_length] > self.upper_bounds[:min_length]
+        anomalies_detected = percent_diff > self.upper_bounds[:min_length]
 
         # Calculate the percentage of True values
-        percent_true = (sum(comparison_result) / len(comparison_result)) * 100
+        percent_anomalies_detected = (
+            sum(anomalies_detected) / len(anomalies_detected)
+        ) * 100
 
-        if percent_true > 20:
+        if percent_anomalies_detected > ANOMALY_THRESHOLD:
             return False
         return True
 
