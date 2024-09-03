@@ -25,8 +25,8 @@ class SimulationConfig(BaseModel):
     temperature: float = 300.0
     time_step_size: float = 0.002
     time_units: str = "picosecond"
-    save_interval_checkpoint: int = 5000
-    save_interval_log: int = 100
+    save_interval_checkpoint: int = 10000
+    save_interval_log: int = 10
     box_padding: float = 1.0
     friction: float = 1.0
     nonbonded_method: str = "NoCutoff"
