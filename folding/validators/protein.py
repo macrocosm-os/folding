@@ -359,7 +359,7 @@ class Protein(OpenMMSimulation):
             filetypes[filename.split(".")[-1]] = filename
 
             bt.logging.info(f"Saving file {filename} to {output_directory}")
-            if "cpt" in filename:
+            if "em.cpt" in filename:
                 filename = "em_binary.cpt"
 
             # loop over all of the output files and save to local disk
@@ -417,23 +417,28 @@ class Protein(OpenMMSimulation):
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
             self.simulation, self.system_config = self.create_simulation(
-                pdb=self.load_pdb_file(pdb_file=self.pdb_file),
+                pdb=self.load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=seed,
                 state=state,
             )
-            self.simulation.loadCheckpoint(
-                f"{self.miner_data_directory}/{self.md_outputs_exts['cpt']}"
+            self.simulation.loadCheckpoint(f"{self.miner_data_directory}/{state}.cpt")
+            cpt_step = self.simulation.currentStep
+            log_file = pd.read_csv(
+                f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
             )
+            log_step = log_file['#"Step"'].iloc[-1]
+
+            ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+            if (log_step - cpt_step) < 5000:
+                self.simulation.loadCheckpoint(
+                    f"{self.miner_data_directory}/{state}_old.cpt"
+                )
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
             return False
 
         cpt_step = self.simulation.currentStep
-        log_file = pd.read_csv(
-            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
-        )
-        log_step = log_file['#"Step"'].iloc[-1]
 
         ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
         if (log_step - cpt_step) < 5000:
