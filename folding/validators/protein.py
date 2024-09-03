@@ -246,7 +246,7 @@ class Protein(OpenMMSimulation):
         self.save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
-            write_mode="wb",
+            write_mode="w",
         )
 
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
@@ -358,6 +358,7 @@ class Protein(OpenMMSimulation):
         for filename, content in files.items():
             filetypes[filename.split(".")[-1]] = filename
 
+            bt.logging.info(f"Saving file {filename} to {output_directory}")
             if "cpt" in filename:
                 filename = "em_binary.cpt"
 
