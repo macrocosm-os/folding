@@ -1,5 +1,4 @@
-
-import time 
+import time
 import glob
 import os
 import pickle
@@ -59,7 +58,7 @@ class Protein(OpenMMSimulation):
         self.water: str = water
 
         self.system_config = SimulationConfig(
-            ff=self.ff, water=self.water, box=self.box, seed = self.gen_seed()
+            ff=self.ff, water=self.water, box=self.box, seed=self.gen_seed()
         )
 
         self.config = config
@@ -82,7 +81,7 @@ class Protein(OpenMMSimulation):
         # ) as f:
         #     self.upper_bounds : List = pickle.load(f)
 
-        self.upper_bounds = [0,1,2,3]
+        self.upper_bounds = [0, 1, 2, 3]
 
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
@@ -93,6 +92,7 @@ class Protein(OpenMMSimulation):
         self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
+        self.cif_file = os.path.join(self.pdb_directory, f"{self.pdb_id}.cif.gz")
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
 
@@ -141,10 +141,10 @@ class Protein(OpenMMSimulation):
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self):
+    def gather_pdb_id(self):  # funct. doesnt get executed because we provided pdb_id
         if self.pdb_id is None:
             PDB_IDS = load_pdb_ids(
-                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+                root_dir=ROOT_DIR, filename="cif_ids_new_parent_dir.pkl"
             )  # TODO: This should be a class variable via config
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
@@ -154,22 +154,27 @@ class Protein(OpenMMSimulation):
 
     def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
-        if not os.path.exists(self.pdb_directory):
+        # if not os.path.exists(self.cif_file):
+        #     raise FileNotFoundError(f"{self.cif_file} does not exist")
+
+        if not os.path.exists(self.pdb_directory):  # skip, its already defined.
             os.makedirs(self.pdb_directory)
 
-        if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
+        if not os.path.exists(self.pdb_location):
             if not check_and_download_pdbs_cif(
                 pdb_directory=self.pdb_directory,
-                pdb_id=self.pdb_file,
+                pdb_id=self.pdb_id,
                 download=True,
-                force=self.config.force_use_pdb,
+                force=True,
             ):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
-            
-            self.fix_pdb_file()
-            self.convert_cif_to_pdb()
+
+            self.convert_cif_to_pdb(
+                dir=self.pdb_directory, cif_file=self.cif_file, pdb_file=self.pdb_file
+            )
+            # self.fix_pdb_file()
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -192,7 +197,7 @@ class Protein(OpenMMSimulation):
         for file in filenames:
             for f in glob.glob(os.path.join(self.validator_directory, file)):
                 try:
-                    #A bit of a hack to load in the data correctly depending on the file ext
+                    # A bit of a hack to load in the data correctly depending on the file ext
                     name = f.split("/")[-1]
                     if name.split(".")[-1] == "cpt":
                         readmode = "rb"
@@ -215,7 +220,6 @@ class Protein(OpenMMSimulation):
         bt.logging.info(
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
-
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
         self.setup_pdb_directory()
@@ -250,40 +254,44 @@ class Protein(OpenMMSimulation):
     def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
         """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
         return app.PDBFile(pdb_file)
-    
+
     def fix_pdb_file(self):
         """
-        Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems 
-        that must be fixed before they can be used in a molecular dynamics simulation. 
+        Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems
+        that must be fixed before they can be used in a molecular dynamics simulation.
 
         Reference docs for the PDBFixer class can be found here:
             https://htmlpreview.github.io/?https://github.com/openmm/pdbfixer/blob/master/Manual.html
         """
-        pdb_path = os.path.join(self.pdb_directory, self.pdb_file)
 
-        fixer = PDBFixer(filename = pdb_path)
+        fixer = PDBFixer(filename=self.pdb_location)
         fixer.findMissingResidues()
         fixer.findNonstandardResidues()
         fixer.replaceNonstandardResidues()
         fixer.removeHeterogens(True)
         fixer.findMissingAtoms()
         fixer.addMissingAtoms()
-        fixer.addMissingHydrogens(pH = 7.0)
+        fixer.addMissingHydrogens(pH=7.0)
 
-        app.PDBFile.writeFile(topology=fixer.topology, positions=fixer.positions, file = open(pdb_path, 'w'))
-
+        app.PDBFile.writeFile(
+            topology=fixer.topology,
+            positions=fixer.positions,
+            file=open(self.pdb_location, "w"),
+        )
 
     def convert_cif_to_pdb(self, cif_file: str, pdb_file: str):
         """Convert a CIF file to a PDB file using the `parmed` library."""
         import parmed as pmd
-        try:
-            # Load the structure from the CIF file
-            structure = pmd.load_file(cif_file)
-            # Write the structure to a PDB file
-            structure.write_pdb(pdb_file)
-            print(f"Successfully converted {cif_file} to {pdb_file}")
-        except Exception as e:
-            print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
+
+        if not os.path.exists(self.pdb_location):
+            try:
+                # Load the structure from the CIF file
+                structure = pmd.load_file(self.cif_file)
+                # Write the structure to a PDB file
+                structure.write_pdb(self.pdb_location)
+                print(f"Successfully converted {cif_file} to pdb format")
+            except Exception as e:
+                print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
 
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
@@ -302,8 +310,8 @@ class Protein(OpenMMSimulation):
         )
 
         bt.logging.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
-        
-        start_time = time.time() 
+
+        start_time = time.time()
         self.simulation.minimizeEnergy(
             maxIterations=1000
         )  # TODO: figure out the right number for this
@@ -400,7 +408,7 @@ class Protein(OpenMMSimulation):
             output_directory=self.miner_data_directory,
         )
         try:
-            # NOTE: The seed written in the self.system_config is not used here 
+            # NOTE: The seed written in the self.system_config is not used here
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
             self.simulation = self.create_simulation(
