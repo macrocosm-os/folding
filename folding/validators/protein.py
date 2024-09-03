@@ -273,6 +273,8 @@ class Protein(OpenMMSimulation):
         fixer.addMissingAtoms()
         fixer.addMissingHydrogens(pH=7.0)
 
+        original_pdb = self.pdb_location.split(".")[0] + "_original.pdb"
+        os.rename(self.pdb_location, original_pdb)
         app.PDBFile.writeFile(
             topology=fixer.topology,
             positions=fixer.positions,
