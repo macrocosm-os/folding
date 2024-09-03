@@ -472,15 +472,22 @@ class Protein(OpenMMSimulation):
                 temperature=True,
             )
         )
+        bt.logging.info(
+            f"Running {steps_to_run} steps. log_step: {log_step}, cpt_step: {cpt_step}"
+        )
         self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
 
-        check_energies = check_log_file["Potential Energy (kJ/mole)"][cpt_step:]
-        miner_energies = log_file["Potential Energy (kJ/mole)"][cpt_step:]
+        check_energies = check_log_file[check_log_file['#"Step"'] >= cpt_step][
+            "Potential Energy (kJ/mole)"
+        ]
+        miner_energies = log_file[log_file['#"Step"'] >= cpt_step][
+            "Potential Energy (kJ/mole)"
+        ]
 
         # calculating absolute percent difference per step
-        percent_diff = abs((check_energies - miner_energies) / miner_energies * 100)
+        percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
         min_length = min(len(percent_diff), len(self.upper_bounds))
 
         # Compare the entries up to the length of the shorter array

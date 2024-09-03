@@ -47,7 +47,7 @@ def get_energies(
             if energy == 0:
                 continue
 
-            is_valid = protein.is_run_valid(energy, resp.axon.hotkey)
+            is_valid = protein.is_run_valid()
             energies[i] = energy if is_valid else 0
 
             event["is_valid"][i] = is_valid
