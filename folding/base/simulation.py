@@ -86,9 +86,8 @@ class OpenMMSimulation(GenericSimulation):
         ) / 2
         if system_config["cutoff"] > threshold:
             nonbondedCutoff = threshold * mm.unit.nanometers
-            system_config[
-                "cutoff"
-            ] = threshold  # set the attribute in the config for the pipeline.
+            # set the attribute in the config for the pipeline.
+            system_config["cutoff"] = threshold
             bt.logging.warning(
                 f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm"
             )
@@ -125,8 +124,15 @@ class OpenMMSimulation(GenericSimulation):
                     system_config["temperature"] * unit.kelvin,
                 )
             )
+
         platform = mm.Platform.getPlatformByName("CUDA")
-        properties = {"DeterministicForces": "true", "Precision": "double"}
+
+        # Reference for DisablePmeStream: https://github.com/openmm/openmm/issues/3589
+        properties = {
+            "DeterministicForces": "true",
+            "Precision": "double",
+            "DisablePmeStream": "true",
+        }
 
         start_time = time.time()
         simulation = mm.app.Simulation(
