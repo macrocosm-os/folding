@@ -41,7 +41,8 @@ def get_energies(
                 )
                 continue
             energy = protein.get_energy()
-            rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
+            # rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
+            rmsd = protein.get_rmsd()
 
             if energy == 0:
                 continue
