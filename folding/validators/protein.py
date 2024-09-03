@@ -317,6 +317,7 @@ class Protein(OpenMMSimulation):
             maxIterations=100
         )  # TODO: figure out the right number for this
         bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
+        self.simulation.step(1000)
 
         self.simulation.saveCheckpoint("em.cpt")
 
@@ -475,7 +476,7 @@ class Protein(OpenMMSimulation):
         bt.logging.info(
             f"Running {steps_to_run} steps. log_step: {log_step}, cpt_step: {cpt_step}"
         )
-        self.simulation.step(steps_to_run)
+        self.simulation.step(min(steps_to_run, 10000))
 
         check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
 
