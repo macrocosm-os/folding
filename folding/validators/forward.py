@@ -67,7 +67,7 @@ def run_step(
     )
 
     # Make calls to the network with the prompt - this is synchronous.
-    bt.logging.warning("waiting for responses....")
+    bt.logging.info("⏰ Waiting for miner responses ⏰")
     responses: List[JobSubmissionSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
