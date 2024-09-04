@@ -15,7 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import copy 
+import copy
 import bittensor as bt
 from abc import ABC, abstractmethod
 
@@ -119,7 +119,7 @@ class BaseNeuron(ABC):
         except Exception as e:
             raise e
 
-        bt.logging.success(f"Running OpenMM version: {self.openmm_version} with GPU status: {self.gpu_status}")
+        bt.logging.success(f"Running OpenMM version: {self.openmm_version}")
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:

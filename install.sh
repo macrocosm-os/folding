@@ -36,6 +36,7 @@ fi
 
 # Create a venv
 conda env create -f environment.yml
+conda init
 conda activate folding
 
 # Install auxiliary packages

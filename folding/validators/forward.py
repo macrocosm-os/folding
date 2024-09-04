@@ -4,14 +4,19 @@ import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
-
+import traceback
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
-from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
-from folding.utils.openmm_forcefields import FORCEFIELD_REGISTERY
+from folding.utils.ops import (
+    select_random_pdb_id,
+    load_pdb_ids,
+    get_response_info,
+    load_pkl,
+)
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -53,15 +58,16 @@ def run_step(
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
+
     synapse = JobSubmissionSynapse(
-        pdb_id={protein.pdb_id: protein.pdb_obj},
+        pdb_id=protein.pdb_id,
         md_inputs=protein.md_inputs,
-        system_config=protein.system_config,
-        seed=self.config.protein.seed,  # by default this is None.
+        pdb_contents=protein.pdb_contents,
+        system_config=protein.system_config.to_dict(),
     )
 
     # Make calls to the network with the prompt - this is synchronous.
-    bt.logging.warning("waiting for responses....")
+    bt.logging.info("⏰ Waiting for miner responses ⏰")
     responses: List[JobSubmissionSynapse] = self.dendrite.query(
         axons=axons,
         synapse=synapse,
@@ -170,43 +176,47 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
     bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    protein = None
     for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
     ):
         hp_sampler_time = time.time()
 
         event = {"hp_tries": tries}
+        sampled_combination: Dict = hp_sampler.sample_hyperparameters()
+
+        if config.protein.ff is not None:
+            if (
+                config.protein.ff is not None
+                and config.protein.ff not in FORCEFIELD_REGISTRY
+            ):
+                raise ValueError(
+                    f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTRY"
+                )
+
+        if config.protein.water is not None:
+            if (
+                config.protein.water is not None
+                and config.protein.water not in FORCEFIELD_REGISTRY
+            ):
+                raise ValueError(
+                    f"Water {config.protein.water} not found in FORCEFIELD_REGISTRY"
+                )
+
+        hps = {
+            "ff": config.protein.ff or sampled_combination["FF"],
+            "water": config.protein.water or sampled_combination["WATER"],
+            "box": config.protein.box or sampled_combination["BOX"],
+        }
+
+        protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
+
         try:
-            sampled_combination: Dict = hp_sampler.sample_hyperparameters()
-
-            if config.protein.ff is not None:
-                if (
-                    config.protein.ff is not None
-                    and config.protein.ff not in FORCEFIELD_REGISTERY
-                ):
-                    raise ValueError(
-                        f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTERY"
-                    )
-
-            if config.protein.water is not None:
-                if (
-                    config.protein.water is not None
-                    and config.protein.water not in FORCEFIELD_REGISTERY
-                ):
-                    raise ValueError(
-                        f"Water {config.protein.water} not found in FORCEFIELD_REGISTERY"
-                    )
-
-            hps = {
-                "ff": config.protein.ff or sampled_combination["FF"],
-                "water": config.protein.water or sampled_combination["WATER"],
-                "box": config.protein.box or sampled_combination["BOX"],
-            }
-
-            protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
             protein.setup_simulation()
 
-        except Exception as E:
+        except Exception:
+            # full traceback
+            bt.logging.error(traceback.format_exc())
             event["validator_search_status"] = False
 
         finally:

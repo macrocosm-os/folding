@@ -32,7 +32,7 @@ class Amber14(OpenMMForceField):
     recommended_configuration = {
         "FF": "amber14-all.xml",
         "WATER": "amber14/tip3pfb.xml",
-        "BOX": "cubic",
+        "BOX": "cube",
     }
 
     @property
@@ -45,7 +45,6 @@ class Amber14(OpenMMForceField):
                 "DNA.bsc1.xml",
                 "RNA.OL3.xml",
                 "lipid17.xml",
-                "GLYCAM_06j-1.xml",
             ]
         )
 
@@ -69,7 +68,7 @@ class Charmm36(OpenMMForceField):
     recommended_configuration = {
         "FF": "charmm36.xml",
         "WATER": "charmm36/water.xml",
-        "BOX": "cubic",
+        "BOX": "cube",
     }
 
     @property

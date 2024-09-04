@@ -1,6 +1,6 @@
 import pytest
 
-from folding.utils.openmm_forcefields import FORCEFIELD_REGISTERY
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 
 BOX = ["cubic", "dodecahedron", "octahedron"]
@@ -10,7 +10,7 @@ def test_total_combinations():
     hp = HyperParameters()
 
     expected_number_of_combinations = 0
-    for field in FORCEFIELD_REGISTERY.values():
+    for field in FORCEFIELD_REGISTRY.values():
         FF = field().forcefields
         WATER = field().waters
 
@@ -26,7 +26,7 @@ def test_exclude_parameter():
     WATER_FILE = "FAKE_WATER.xml"
     hp = HyperParameters(exclude={"FF": "amber14/protein.ff14SB.xml"})
 
-    field = FORCEFIELD_REGISTERY[FIELD_NAME]()
+    field = FORCEFIELD_REGISTRY[FIELD_NAME]()
 
     assert hp.TOTAL_COMBINATIONS == len(field.waters) * len(BOX)
 

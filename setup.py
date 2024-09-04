@@ -23,61 +23,6 @@ from os import path
 from io import open
 from setuptools import setup, find_packages
 
-
-def read_requirements(path):
-    with open(path, "r") as f:
-        requirements = f.read().splitlines()
-        processed_requirements = []
-
-        for req in requirements:
-            # For git or other VCS links
-            if req.startswith("git+") or "@" in req:
-                pkg_name = re.search(r"(#egg=)([\w\-_]+)", req)
-                if pkg_name:
-                    processed_requirements.append(pkg_name.group(2))
-                else:
-                    # You may decide to raise an exception here,
-                    # if you want to ensure every VCS link has an #egg=<package_name> at the end
-                    continue
-            else:
-                processed_requirements.append(req)
-        return processed_requirements
-
-
-def extract_dependencies(file: str):
-    try:
-        with open(file, "r") as f:
-            content = f.read()
-    except Exception as e:
-        print(e)
-        return []
-
-    continue_below = False
-    parsed_dependencies = []
-    for line in content.splitlines():
-        if line == "dependencies:":
-            continue_below = True
-            continue
-        if continue_below:
-            print(line)
-            package = re.search(r"-\s*([^#]+)", line).group(1).strip()
-            if package == "pip:":
-                continue
-
-            parsed_dependencies.append(package)
-
-        edited_dependencies = []
-        for package in parsed_dependencies:
-            if "==" in package:
-                edited_dependencies.append(package)
-                continue
-            package = package.replace("=", "==")
-            edited_dependencies.append(package)
-
-    return edited_dependencies
-
-
-requirements = extract_dependencies("environment.yml")
 here = path.abspath(path.dirname(__file__))
 
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
@@ -102,20 +47,17 @@ setup(
     author="Macrocosmos",
     packages=find_packages(),
     include_package_data=True,
-    author_email="steffen@macrocosmos.ai",
+    author_email="brian@macrocosmos.ai",
     license="MIT",
-    python_requires=">=3.8",
-    install_requires=requirements,
+    python_requires=">=3.9",
+    install_requires=[],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Build Tools",
         # Pick your license as you wish
         "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Mathematics",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",

@@ -1,3 +1,4 @@
+import time
 import glob
 import os
 import pickle
@@ -8,12 +9,15 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
+import base64
 
+# import plotly.express as px
 import bittensor as bt
 import openmm as mm
 import pandas as pd
+import numpy as np
 from openmm import app, unit
-
+from pdbfixer import PDBFixer
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
@@ -21,11 +25,11 @@ from folding.utils.ops import (
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
+    write_pkl,
 )
 from folding.store import Job
 from folding.base.simulation import OpenMMSimulation
 
-# root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -39,34 +43,33 @@ class Protein(OpenMMSimulation):
 
     def __init__(
         self,
+        pdb_id: str,
         ff: str,
-        box: Literal["cubic", "dodecahedron", "octahedron"],
+        water: str,
+        box: Literal["cube", "dodecahedron", "octahedron"],
         config: Dict,
-        pdb_id: str = None,
-        water: str = None,
         load_md_inputs: bool = False,
         epsilon: float = 5e3,
     ) -> None:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
         self.pdb_id: str = pdb_id.lower()
+        self.simulation_cpt = "em.cpt"
+        self.simulation_pkl = f"config_{self.pdb_id}.pkl"
+
         self.setup_filepaths()
 
         self.ff: str = ff
-        self.box: Literal["cubic", "dodecahedron", "octahedron"] = box
+        self.box: Literal["cube", "dodecahedron", "octahedron"] = box
         self.water: str = water
 
         self.system_config = SimulationConfig(
-            ff=self.ff, water=self.water, box=self.box
+            ff=self.ff, water=self.water, box=self.box, seed=self.gen_seed()
         )
 
         self.config = config
-
         self.simulation: app.Simulation = None
-
-        self.simulation_pkl = f"config_{self.pdb_id}.pkl"
-        self.simulation_cpt = "em.cpt"
-        self.input_files = [self.simulation_cpt]
+        self.input_files = [self.em_cpt_location]
 
         self.md_inputs = (
             self.read_and_return_files(filenames=self.input_files)
@@ -75,10 +78,8 @@ class Protein(OpenMMSimulation):
         )
 
         # Historic data that specifies the upper bounds of the energy as a function of steps.
-        with open(
-            os.path.join(self.base_directory, "upper_bounds_interpolated.pkl"), "rb"
-        ) as f:
-            self.upper_bounds = pickle.load(f)
+        with open(os.path.join(ROOT_DIR, "upper_bounds_interpolated.pkl"), "rb") as f:
+            self.upper_bounds: List = pickle.load(f)
 
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
@@ -91,39 +92,43 @@ class Protein(OpenMMSimulation):
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
+        self.em_cpt_location = os.path.join(
+            self.validator_directory, self.simulation_cpt
+        )
+        self.simulation_pkl_location = os.path.join(
+            self.validator_directory, self.simulation_pkl
+        )
 
     @staticmethod
     def from_job(job: Job, config: Dict):
-        # TODO: This must be called after the protein has already been downloaded etc.
-        bt.logging.warning(f"sampling pdb job {job.pdb}")
         # Load_md_inputs is set to True to ensure that miners get files every query.
         protein = Protein(
             pdb_id=job.pdb,
             ff=job.ff,
             box=job.box,
             water=job.water,
-            config=SimulationConfig(**config),
+            config=config,
             load_md_inputs=True,
             epsilon=job.epsilon,
         )
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            protein.pdb_obj = protein.load_pdb_file(pdb_file=protein.pdb_file)
-            protein.create_simulation(
-                pdb_file=protein.pdb_obj,
-                system_config=protein.system_config,
-                seed=protein.gen_seed(),
-                state="em",
-            )
-            protein.init_energy = protein.calc_init_energy()
             protein._calculate_epsilon()
+
+            protein.pdb_contents = protein.load_pdb_as_string(protein.pdb_location)
+
         except Exception as E:
             bt.logging.error(
-                f"pdb_complexity or init_energy failed for {protein.pdb_id} with Exception {E}."
+                f"from_job failed for {protein.pdb_id} with Exception {E}."
             )
         finally:
             return protein
+
+    @staticmethod
+    def load_pdb_as_string(pdb_path: str) -> str:
+        with open(pdb_path, "r") as f:
+            return f.read()
 
     @staticmethod
     def _get_pdb_complexity(pdb_path):
@@ -145,9 +150,6 @@ class Protein(OpenMMSimulation):
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
-        self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
-        self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
-
     def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
@@ -163,7 +165,7 @@ class Protein(OpenMMSimulation):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
-
+            self.fix_pdb_file()
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -183,10 +185,21 @@ class Protein(OpenMMSimulation):
     def read_and_return_files(self, filenames: List) -> Dict:
         """Read the files and return them as a dictionary."""
         files_to_return = {}
-        for file in filenames:
-            for f in glob.glob(os.path.join(self.validator_directory, file)):
+        for filename in filenames:
+            for file in glob.glob(os.path.join(self.validator_directory, filename)):
                 try:
-                    files_to_return[f.split("/")[-1]] = open(f, "r").read()
+                    # A bit of a hack to load in the data correctly depending on the file ext
+                    name = file.split("/")[-1]
+                    with open(file, "rb") as f:
+                        if "cpt" in name:
+                            files_to_return[name] = base64.b64encode(f.read()).decode(
+                                "utf-8"
+                            )
+                        else:
+                            files_to_return[
+                                name
+                            ] = f.read()  # This would be the pdb file.
+
                 except Exception as E:
                     continue
         return files_to_return
@@ -238,7 +251,39 @@ class Protein(OpenMMSimulation):
         """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
         return app.PDBFile(pdb_file)
 
+    def fix_pdb_file(self):
+        """
+        Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems
+        that must be fixed before they can be used in a molecular dynamics simulation.
+
+        The fixer will remove metadata that is contained in the header of the original pdb, and we might
+        want to keep this. Therefore, we will rename the original pdb file to *_original.pdb and make a new
+        pdb file using the PDBFile.writeFile method.
+
+        Reference docs for the PDBFixer class can be found here:
+            https://htmlpreview.github.io/?https://github.com/openmm/pdbfixer/blob/master/Manual.html
+        """
+
+        fixer = PDBFixer(filename=self.pdb_location)
+        fixer.findMissingResidues()
+        fixer.findNonstandardResidues()
+        fixer.replaceNonstandardResidues()
+        fixer.removeHeterogens(True)
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(pH=7.0)
+
+        original_pdb = self.pdb_location.split(".")[0] + "_original.pdb"
+        os.rename(self.pdb_location, original_pdb)
+
+        app.PDBFile.writeFile(
+            topology=fixer.topology,
+            positions=fixer.positions,
+            file=open(self.pdb_location, "w"),
+        )
+
     # Function to generate the OpenMM simulation state.
+    @OpenMMSimulation.timeit
     def generate_input_files(self):
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
@@ -247,20 +292,26 @@ class Protein(OpenMMSimulation):
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        # This is only for the validators, as they need to open the right config later.
-        with open(self.simulation_pkl, "w") as f:
-            pickle.dumps(self.system_config, f)
-
-        self.simulation = self.create_simulation(
-            pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
-            system_config=self.system_config,
-            seed=self.gen_seed(),
+        self.simulation, self.system_config = self.create_simulation(
+            pdb=self.load_pdb_file(pdb_file=self.pdb_file),
+            system_config=self.system_config.get_config(),
             state="em",
         )
+
+        bt.logging.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
+
+        start_time = time.time()
         self.simulation.minimizeEnergy(
-            maxIterations=1000
+            maxIterations=100
         )  # TODO: figure out the right number for this
+        bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
+        self.simulation.step(1000)
+
         self.simulation.saveCheckpoint("em.cpt")
+
+        # This is only for the validators, as they need to open the right config later.
+        # Only save the config if the simulation was successful.
+        write_pkl(data=self.system_config, path=self.simulation_pkl, write_mode="wb")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -295,6 +346,11 @@ class Protein(OpenMMSimulation):
         filetypes = {}
         for filename, content in files.items():
             filetypes[filename.split(".")[-1]] = filename
+
+            bt.logging.info(f"Saving file {filename} to {output_directory}")
+            if "em.cpt" in filename:
+                filename = "em_binary.cpt"
+
             # loop over all of the output files and save to local disk
             with open(os.path.join(output_directory, filename), write_mode) as f:
                 f.write(content)
@@ -313,14 +369,8 @@ class Protein(OpenMMSimulation):
     def process_md_output(
         self, md_output: dict, seed: int, state: str, hotkey: str
     ) -> bool:
-        """
-        1. Check md_output for the required files, if unsuccessful return False
-        2. Save files if above is valid
-        3. Check the hash of the .gro file to ensure miners are running the correct protein.
-        4.
-        """
-
         required_files_extensions = ["cpt", "log"]
+        hotkey_alias = hotkey[:8]
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         self.md_outputs_exts = {
@@ -329,7 +379,7 @@ class Protein(OpenMMSimulation):
 
         if len(md_output.keys()) == 0:
             bt.logging.warning(
-                f"Miner {hotkey[:8]} returned empty md_output... Skipping!"
+                f"Miner {hotkey_alias} returned empty md_output... Skipping!"
             )
             return False
 
@@ -346,28 +396,44 @@ class Protein(OpenMMSimulation):
             output_directory=self.miner_data_directory,
         )
         try:
-            self.simulation = self.create_simulation(
-                pdb_file=self.load_pdb_file(pdb_file=self.pdb_file),
-                system_config=self.system_config,
+            # NOTE: The seed written in the self.system_config is not used here
+            # because the miner could have used something different and we want to
+            # make sure that we are using the correct seed.
+
+            bt.logging.info(
+                f"Recreating miner {hotkey_alias} simulation in state: {state}"
+            )
+            self.simulation, self.system_config = self.create_simulation(
+                pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+                system_config=self.system_config.get_config(),
                 seed=seed,
                 state=state,
             )
-            self.simulation.loadCheckpoint(
-                f"{self.miner_data_directory}/{self.md_outputs_exts['cpt']}"
+            self.simulation.loadCheckpoint(f"{self.miner_data_directory}/{state}.cpt")
+            log_file = pd.read_csv(
+                f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
             )
+            log_step = log_file['#"Step"'].iloc[-1]
+
+            ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+            cpt_step = self.simulation.currentStep
+            if (log_step - cpt_step) < 5000:
+                previous_checkpoint_path = (
+                    f"{self.miner_data_directory}/{state}_old.cpt"
+                )
+                if os.path.exists(previous_checkpoint_path):
+                    bt.logging.warning(
+                        f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
+                    )
+                    self.simulation.loadCheckpoint(previous_checkpoint_path)
+                else:
+                    bt.logging.warning(
+                        f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
+                    )
+                    return False
+
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
-            return False
-
-        cpt_step = self.simulation.currentStep
-        log_file = pd.read_csv(
-            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
-        )
-        log_step = log_file['#"Step"'].iloc[-1]
-
-        ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-        if (log_step - cpt_step) < 5000:
-            bt.logging.error("Miner did not run enough steps since last checkpoint")
             return False
 
         return True
@@ -380,13 +446,22 @@ class Protein(OpenMMSimulation):
         Returns:
             bool: True if the run is valid, False otherwise.
         """
+        ANOMALY_THRESHOLD = 20
         log_file = pd.read_csv(
             f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
         )
+
+        # Last step in the log file given to us by the miner.
         log_step = log_file['#"Step"'].iloc[-1]
+
+        # step at which the most recent miner checkpoint was made
         cpt_step = self.simulation.currentStep
 
-        steps_to_run = log_step - cpt_step
+        # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
+        if (log_file['#"Step"'][1] - log_file['#"Step"'][0]) > 10:
+            return False
+
+        steps_to_run = min(10000, log_step - cpt_step)  # run at most 10000 steps
 
         self.simulation.reporters.append(
             app.StateDataReporter(
@@ -394,27 +469,43 @@ class Protein(OpenMMSimulation):
                 10,
                 step=True,
                 potentialEnergy=True,
-                temperature=True,
             )
+        )
+        bt.logging.info(
+            f"Running {steps_to_run} steps. log_step: {log_step}, cpt_step: {cpt_step}"
         )
         self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
+        max_step = cpt_step + steps_to_run
 
-        check_energies = check_log_file["Potential Energy (kJ/mole)"][cpt_step:]
-        miner_energies = log_file["Potential Energy (kJ/mole)"][cpt_step:]
+        check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
+        miner_energies: np.ndarray = log_file[
+            (log_file['#"Step"'] >= cpt_step) & (log_file['#"Step"'] < max_step)
+        ]["Potential Energy (kJ/mole)"].values
 
         # calculating absolute percent difference per step
-        percent_diff = abs((check_energies - miner_energies) / miner_energies * 100)
-        min_length = min(len(percent_diff), len(self.upper_bounds))
+        percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
+        min_length = len(percent_diff)
+
+        # This is some debugging information for plotting the information from the miner.
+        # df = pd.DataFrame([check_energies, miner_energies])
+        # df = df.T
+        # df.columns = ["validator", "miner"]
+        # px.scatter(
+        #     df,
+        #     title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
+        # ).show()
 
         # Compare the entries up to the length of the shorter array
-        comparison_result = percent_diff[:min_length] > self.upper_bounds[:min_length]
+        anomalies_detected = percent_diff > self.upper_bounds[:min_length]
 
         # Calculate the percentage of True values
-        percent_true = (sum(comparison_result) / len(comparison_result)) * 100
+        percent_anomalies_detected = (
+            sum(anomalies_detected) / len(anomalies_detected)
+        ) * 100
 
-        if percent_true > 20:
+        if percent_anomalies_detected > ANOMALY_THRESHOLD:
             return False
         return True
 

@@ -232,7 +232,7 @@ class MockJob(Job):
     def __init__(self, n_hotkeys=5, update_seconds=5, stop_after_seconds=10):
         self.pdb = self._make_pdb()
         self.ff = "charmm27"
-        self.box = "cubic"
+        self.box = "cube"
         self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
         self.created_at = (

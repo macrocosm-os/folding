@@ -19,8 +19,6 @@
 import typing
 import base64
 import bittensor as bt
-from openmm import app
-from folding.utils.opemm_simulation_config import SimulationConfig
 
 
 class PingSynapse(bt.Synapse):
@@ -42,22 +40,18 @@ class JobSubmissionSynapse(bt.Synapse):
     - mdrun_args: A string containing the arguments to be passed to the openmm mdrun command.
     """
 
-    # TODO: reconsider parameters
-
-    # Required request input, filled by sending dendrite caller.
-    pdb_id: dict[str, app.PDBFile]
-    system_config: SimulationConfig
+    pdb_id: str
+    pdb_contents: str
     md_inputs: dict  # Right now this is just a "em.cpt" file.
-
-    # Optional runtime args for openmm
     system_config: dict = {}
-    seed: int = None
 
     # Miner can decide if they are serving the request or not.
     miner_serving: bool = True
 
     # Optional request output, filled by receiving axon.
     md_output: typing.Optional[dict] = None
+    miner_seed: typing.Optional[int] = None
+    miner_state: typing.Optional[str] = None
 
     def deserialize(self) -> int:
         """
@@ -84,4 +78,17 @@ class JobSubmissionSynapse(bt.Synapse):
                     md_output[k] = None
 
             self.md_output = md_output
+            
+        if not isinstance(self.md_inputs, dict):
+            self.md_inputs = {}
+        else:
+            md_inputs = {}
+            for k, v in self.md_inputs.items():
+                try:
+                    md_inputs[k] = base64.b64decode(v)
+                except Exception as e:
+                    bt.logging.error(f"Error decoding {k} from md_inputs: {e}")
+                    md_inputs[k] = None
+
+            self.md_inputs = md_inputs
         return self

@@ -28,7 +28,10 @@ def get_energies(
         # Ensures that the md_outputs from the miners are parsed correctly
         try:
             if not protein.process_md_output(
-                md_output=resp.md_output, hotkey=resp.axon.hotkey
+                md_output=resp.md_output,
+                hotkey=resp.axon.hotkey,
+                state=resp.miner_state,
+                seed=resp.miner_seed,
             ):
                 continue
 
@@ -38,12 +41,13 @@ def get_energies(
                 )
                 continue
             energy = protein.get_energy()
-            rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
+            # rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
+            rmsd = protein.get_rmsd()
 
             if energy == 0:
                 continue
 
-            is_valid = protein.is_run_valid(energy, resp.axon.hotkey)
+            is_valid = protein.is_run_valid()
             energies[i] = energy if is_valid else 0
 
             event["is_valid"][i] = is_valid
