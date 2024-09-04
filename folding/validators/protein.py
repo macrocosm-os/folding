@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
 import base64
-import plotly.express as px
+
+# import plotly.express as px
 import bittensor as bt
 import openmm as mm
 import pandas as pd
@@ -76,13 +77,9 @@ class Protein(OpenMMSimulation):
             else {}
         )
 
-        # # Historic data that specifies the upper bounds of the energy as a function of steps.
-        # with open(
-        #     os.path.join(self.base_directory, "upper_bounds_interpolated.pkl"), "rb"
-        # ) as f:
-        #     self.upper_bounds : List = pickle.load(f)
-
-        self.upper_bounds = [0, 1, 2, 3]
+        # Historic data that specifies the upper bounds of the energy as a function of steps.
+        with open(os.path.join(ROOT_DIR, "upper_bounds_interpolated.pkl"), "rb") as f:
+            self.upper_bounds: List = pickle.load(f)
 
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
@@ -492,13 +489,13 @@ class Protein(OpenMMSimulation):
         min_length = len(percent_diff)
 
         # This is some debugging information for plotting the information from the miner.
-        df = pd.DataFrame([check_energies, miner_energies])
-        df = df.T
-        df.columns = ["validator", "miner"]
-        px.scatter(
-            df,
-            title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
-        ).show()
+        # df = pd.DataFrame([check_energies, miner_energies])
+        # df = df.T
+        # df.columns = ["validator", "miner"]
+        # px.scatter(
+        #     df,
+        #     title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
+        # ).show()
 
         # Compare the entries up to the length of the shorter array
         anomalies_detected = percent_diff > self.upper_bounds[:min_length]
