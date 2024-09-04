@@ -317,7 +317,7 @@ class FoldingMiner(BaseMinerNeuron):
             f.write(synapse.pdb_contents)
 
         system_config = SimulationConfig(**synapse.system_config)
-        write_pkl(system_config, os.path.join(output_dir, f"{pdb_id}_system_config.pkl"))
+        write_pkl(system_config, os.path.join(output_dir, f"config_{pdb_id}.pkl"))
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
