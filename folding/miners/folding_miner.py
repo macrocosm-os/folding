@@ -24,6 +24,7 @@ from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
     check_if_directory_exists,
     get_tracebacks,
+    write_pkl,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
 
@@ -316,6 +317,7 @@ class FoldingMiner(BaseMinerNeuron):
             f.write(synapse.pdb_contents)
 
         system_config = SimulationConfig(**synapse.system_config)
+        write_pkl(system_config, os.path.join(output_dir, f"{pdb_id}_system_config.pkl"))
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
