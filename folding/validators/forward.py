@@ -233,4 +233,8 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
                 # break out of the loop if the simulation was successful
                 break
 
+            if tries == 10:
+                bt.logging.error(f"Max tries reached for pdb_id {pdb_id} ❌❌")
+                return event
+
     return event
