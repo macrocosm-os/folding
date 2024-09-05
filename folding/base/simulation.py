@@ -96,7 +96,7 @@ class OpenMMSimulation(GenericSimulation):
 
         system = forcefield.createSystem(
             modeller.topology,
-            nonbondedMethod=mm.app.PME,
+            nonbondedMethod=mm.app.NoCutoff,
             nonbondedCutoff=nonbondedCutoff,
             constraints=system_config["constraints"],
         )
@@ -115,15 +115,15 @@ class OpenMMSimulation(GenericSimulation):
         integrator.setRandomNumberSeed(seed)
 
         # Periodic boundary conditions
-        pdb.topology.setPeriodicBoxVectors(system.getDefaultPeriodicBoxVectors())
+        # pdb.topology.setPeriodicBoxVectors(system.getDefaultPeriodicBoxVectors())
 
-        if state != "nvt":
-            system.addForce(
-                mm.MonteCarloBarostat(
-                    system_config["pressure"] * unit.bar,
-                    system_config["temperature"] * unit.kelvin,
-                )
-            )
+        # if state != "nvt":
+        #     system.addForce(
+        #         mm.MonteCarloBarostat(
+        #             system_config["pressure"] * unit.bar,
+        #             system_config["temperature"] * unit.kelvin,
+        #         )
+        #     )
 
         platform = mm.Platform.getPlatformByName("CUDA")
 

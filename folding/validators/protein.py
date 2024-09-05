@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Literal
 import base64
 
-# import plotly.express as px
+import plotly.express as px
 import bittensor as bt
 import openmm as mm
 import pandas as pd
@@ -49,7 +49,7 @@ class Protein(OpenMMSimulation):
         box: Literal["cube", "dodecahedron", "octahedron"],
         config: Dict,
         load_md_inputs: bool = False,
-        epsilon: float = 5e3,
+        epsilon: float = 0.05,
     ) -> None:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
@@ -371,6 +371,7 @@ class Protein(OpenMMSimulation):
     ) -> bool:
         required_files_extensions = ["cpt", "log"]
         hotkey_alias = hotkey[:8]
+        self.current_state = state
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         self.md_outputs_exts = {
@@ -401,7 +402,7 @@ class Protein(OpenMMSimulation):
             # make sure that we are using the correct seed.
 
             bt.logging.info(
-                f"Recreating miner {hotkey_alias} simulation in state: {state}"
+                f"Recreating miner {hotkey_alias} simulation in state: {self.current_state}"
             )
             self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_location),
@@ -409,28 +410,52 @@ class Protein(OpenMMSimulation):
                 seed=seed,
                 state=state,
             )
-            self.simulation.loadCheckpoint(f"{self.miner_data_directory}/{state}.cpt")
-            log_file = pd.read_csv(
-                f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
+
+            checkpoint_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.cpt"
             )
-            log_step = log_file['#"Step"'].iloc[-1]
+
+            log_file_path = os.path.join(
+                self.miner_data_directory, self.md_outputs_exts["log"]
+            )
+
+            self.simulation.loadCheckpoint(checkpoint_path)
+            self.log_file = pd.read_csv(log_file_path)
+            self.log_step = self.log_file['#"Step"'].iloc[-1]
 
             ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-            cpt_step = self.simulation.currentStep
-            if (log_step - cpt_step) < 5000:
-                previous_checkpoint_path = (
-                    f"{self.miner_data_directory}/{state}_old.cpt"
+            if (
+                self.log_step - self.simulation.currentStep
+            ) < 5000:  # Right now, needs at least 5000 steps.
+                checkpoint_path = os.path.join(
+                    self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
-                if os.path.exists(previous_checkpoint_path):
+                if os.path.exists(checkpoint_path):
                     bt.logging.warning(
                         f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
-                    self.simulation.loadCheckpoint(previous_checkpoint_path)
+                    self.simulation.loadCheckpoint(checkpoint_path)
                 else:
                     bt.logging.warning(
                         f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
                     return False
+            else:
+                self.simulation.loadCheckpoint(checkpoint_path)
+
+            self.cpt_step = self.simulation.currentStep
+            self.checkpoint_path = checkpoint_path
+
+            # Save the system config to the miner data directory
+            system_config_path = os.path.join(
+                self.miner_data_directory, f"miner_system_config_{seed}.pkl"
+            )
+            if not os.path.exists(system_config_path):
+                write_pkl(
+                    data=self.system_config,
+                    path=system_config_path,
+                    write_mode="wb",
+                )
 
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
@@ -446,42 +471,43 @@ class Protein(OpenMMSimulation):
         Returns:
             bool: True if the run is valid, False otherwise.
         """
+
+        # The percentage that we allow the energy to differ from the miner to the validator.
         ANOMALY_THRESHOLD = 20
-        log_file = pd.read_csv(
-            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
-        )
-
-        # Last step in the log file given to us by the miner.
-        log_step = log_file['#"Step"'].iloc[-1]
-
-        # step at which the most recent miner checkpoint was made
-        cpt_step = self.simulation.currentStep
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
-        if (log_file['#"Step"'][1] - log_file['#"Step"'][0]) > 10:
+        if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
             return False
 
-        steps_to_run = min(10000, log_step - cpt_step)  # run at most 10000 steps
+        steps_to_run = min(
+            10000, self.log_step - self.cpt_step
+        )  # run at most 10000 steps
 
         self.simulation.reporters.append(
             app.StateDataReporter(
-                f"{self.miner_data_directory}/check.log",
+                os.path.join(
+                    self.miner_data_directory, f"check_{self.current_state}.log"
+                ),
                 10,
                 step=True,
                 potentialEnergy=True,
             )
         )
         bt.logging.info(
-            f"Running {steps_to_run} steps. log_step: {log_step}, cpt_step: {cpt_step}"
+            f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
         )
         self.simulation.step(steps_to_run)
 
-        check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
-        max_step = cpt_step + steps_to_run
+        check_log_file = pd.read_csv(
+            os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
+        )
+
+        max_step = self.cpt_step + steps_to_run
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
-        miner_energies: np.ndarray = log_file[
-            (log_file['#"Step"'] >= cpt_step) & (log_file['#"Step"'] < max_step)
+        miner_energies: np.ndarray = self.log_file[
+            (self.log_file['#"Step"'] > self.cpt_step)
+            & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
         # calculating absolute percent difference per step
@@ -489,13 +515,31 @@ class Protein(OpenMMSimulation):
         min_length = len(percent_diff)
 
         # This is some debugging information for plotting the information from the miner.
-        # df = pd.DataFrame([check_energies, miner_energies])
-        # df = df.T
-        # df.columns = ["validator", "miner"]
-        # px.scatter(
-        #     df,
-        #     title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
-        # ).show()
+        df = pd.DataFrame([check_energies, miner_energies]).T
+        df.columns = ["validator", "miner"]
+
+        fig = px.scatter(
+            df,
+            title=f"Energy: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+            labels={"index": "Step", "value": "Energy (kJ/mole)"},
+            height=600,
+            width=1400,
+        )
+        filename = f"{self.pdb_id}_cpt_step_{self.cpt_step}_state_{self.current_state}"
+        fig.write_image(
+            os.path.join(self.miner_data_directory, filename + "_energy.png")
+        )
+
+        fig = px.scatter(
+            percent_diff,
+            title=f"Percent Diff: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+            labels={"index": "Step", "value": "Percent Diff"},
+            height=600,
+            width=1400,
+        )
+        fig.write_image(
+            os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
+        )
 
         # Compare the entries up to the length of the shorter array
         anomalies_detected = percent_diff > self.upper_bounds[:min_length]
@@ -504,6 +548,8 @@ class Protein(OpenMMSimulation):
         percent_anomalies_detected = (
             sum(anomalies_detected) / len(anomalies_detected)
         ) * 100
+
+        # We want to save all the information to the local filesystem so we can index them later.
 
         if percent_anomalies_detected > ANOMALY_THRESHOLD:
             return False
@@ -519,11 +565,8 @@ class Protein(OpenMMSimulation):
         return -1
 
     def _calculate_epsilon(self):
-        if "ATOM" in self.pdb_complexity.keys():
-            num_atoms = self.pdb_complexity["ATOM"]
-
-            if num_atoms > 100:
-                self.epsilon = 7.14819473 * num_atoms + 1.68442317e04
+        # TODO: Make this a better relationship?
+        return self.epsilon
 
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
