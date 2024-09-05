@@ -481,7 +481,7 @@ class Protein(OpenMMSimulation):
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
         miner_energies: np.ndarray = log_file[
-            (log_file['#"Step"'] >= cpt_step) & (log_file['#"Step"'] < max_step)
+            (log_file['#"Step"'] > cpt_step) & (log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
         # calculating absolute percent difference per step
@@ -496,6 +496,7 @@ class Protein(OpenMMSimulation):
         #     df,
         #     title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
         # ).show()
+        # px.scatter(percent_diff, title=f"Percent difference for {self.pdb_id}").show()
 
         # Compare the entries up to the length of the shorter array
         anomalies_detected = percent_diff > self.upper_bounds[:min_length]
