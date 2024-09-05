@@ -409,17 +409,29 @@ class Protein(OpenMMSimulation):
                 seed=seed,
                 state=state,
             )
-            self.simulation.loadCheckpoint(f"{self.miner_data_directory}/{state}.cpt")
-            log_file = pd.read_csv(
-                f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
+
+            # Save the system_config as pkl file
+            write_pkl(
+                data=self.system_config,
+                path=os.path.join(self.miner_data_directory, "system_config.pkl"),
+                write_mode="wb",
             )
-            log_step = log_file['#"Step"'].iloc[-1]
+
+            checkpoint_path = os.path.join(self.miner_data_directory, f"{state}.cpt")
+            log_file_path = os.path.join(
+                self.miner_data_directory, self.md_outputs_exts["log"]
+            )
+
+            self.log_file = pd.read_csv(log_file_path)
+            self.log_step = self.log_file['#"Step"'].iloc[-1]
 
             ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-            cpt_step = self.simulation.currentStep
-            if (log_step - cpt_step) < 5000:
-                previous_checkpoint_path = (
-                    f"{self.miner_data_directory}/{state}_old.cpt"
+            self.cpt_step = self.simulation.currentStep
+            if (
+                self.log_step - self.cpt_step
+            ) < 5000:  # Right now, needs at least 5000 steps.
+                previous_checkpoint_path = os.path.join(
+                    self.miner_data_directory, f"{state}_old.cpt"
                 )
                 if os.path.exists(previous_checkpoint_path):
                     bt.logging.warning(
@@ -431,6 +443,8 @@ class Protein(OpenMMSimulation):
                         f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
                     return False
+            else:
+                self.simulation.loadCheckpoint(checkpoint_path)
 
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
@@ -447,21 +461,14 @@ class Protein(OpenMMSimulation):
             bool: True if the run is valid, False otherwise.
         """
         ANOMALY_THRESHOLD = 20
-        log_file = pd.read_csv(
-            os.path.join(self.miner_data_directory, self.md_outputs_exts["log"])
-        )
-
-        # Last step in the log file given to us by the miner.
-        log_step = log_file['#"Step"'].iloc[-1]
-
-        # step at which the most recent miner checkpoint was made
-        cpt_step = self.simulation.currentStep
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
-        if (log_file['#"Step"'][1] - log_file['#"Step"'][0]) > 10:
+        if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
             return False
 
-        steps_to_run = min(10000, log_step - cpt_step)  # run at most 10000 steps
+        steps_to_run = min(
+            10000, self.log_step - self.cpt_step
+        )  # run at most 10000 steps
 
         self.simulation.reporters.append(
             app.StateDataReporter(
@@ -472,18 +479,19 @@ class Protein(OpenMMSimulation):
             )
         )
         bt.logging.info(
-            f"Running {steps_to_run} steps. log_step: {log_step}, cpt_step: {cpt_step}"
+            f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
         )
         self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(
             os.path.join(self.miner_data_directory, "check.log")
         )
-        max_step = cpt_step + steps_to_run
+        max_step = self.cpt_step + steps_to_run
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
-        miner_energies: np.ndarray = log_file[
-            (log_file['#"Step"'] > cpt_step) & (log_file['#"Step"'] <= max_step)
+        miner_energies: np.ndarray = self.log_file[
+            (self.log_file['#"Step"'] > self.cpt_step)
+            & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
         # calculating absolute percent difference per step
@@ -507,6 +515,8 @@ class Protein(OpenMMSimulation):
         percent_anomalies_detected = (
             sum(anomalies_detected) / len(anomalies_detected)
         ) * 100
+
+        # We want to save all the information to the local filesystem so we can index them later.
 
         if percent_anomalies_detected > ANOMALY_THRESHOLD:
             return False
