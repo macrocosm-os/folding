@@ -155,7 +155,7 @@ class Job:
     updated_count: int = 0
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
     min_updates: int = 10
-    epsilon: float = 5e3
+    epsilon: float = 0.05  # percentage.
     event: dict = None
 
     def to_dict(self):
@@ -189,7 +189,9 @@ class Job:
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if loss < self.best_loss - self.epsilon:
+        if (loss < self.best_loss) and (
+            (self.best_loss - loss) / self.best_loss >= self.epsilon
+        ):
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey

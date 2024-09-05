@@ -49,7 +49,7 @@ class Protein(OpenMMSimulation):
         box: Literal["cube", "dodecahedron", "octahedron"],
         config: Dict,
         load_md_inputs: bool = False,
-        epsilon: float = 5e3,
+        epsilon: float = 0.05,
     ) -> None:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
@@ -565,11 +565,8 @@ class Protein(OpenMMSimulation):
         return -1
 
     def _calculate_epsilon(self):
-        if "ATOM" in self.pdb_complexity.keys():
-            num_atoms = self.pdb_complexity["ATOM"]
-
-            if num_atoms > 100:
-                self.epsilon = 7.14819473 * num_atoms + 1.68442317e04
+        # TODO: Make this a better relationship?
+        return self.epsilon
 
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
