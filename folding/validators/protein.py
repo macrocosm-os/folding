@@ -448,7 +448,7 @@ class Protein(OpenMMSimulation):
         """
         ANOMALY_THRESHOLD = 20
         log_file = pd.read_csv(
-            f"{self.miner_data_directory}/{self.md_outputs_exts['log']}"
+            os.path.join(self.miner_data_directory, self.md_outputs_exts["log"])
         )
 
         # Last step in the log file given to us by the miner.
@@ -465,7 +465,7 @@ class Protein(OpenMMSimulation):
 
         self.simulation.reporters.append(
             app.StateDataReporter(
-                f"{self.miner_data_directory}/check.log",
+                os.path.join(self.miner_data_directory, "check.log"),
                 10,
                 step=True,
                 potentialEnergy=True,
@@ -476,7 +476,9 @@ class Protein(OpenMMSimulation):
         )
         self.simulation.step(steps_to_run)
 
-        check_log_file = pd.read_csv(f"{self.miner_data_directory}/check.log")
+        check_log_file = pd.read_csv(
+            os.path.join(self.miner_data_directory, "check.log")
+        )
         max_step = cpt_step + steps_to_run
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
