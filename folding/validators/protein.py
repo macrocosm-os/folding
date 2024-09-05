@@ -371,6 +371,7 @@ class Protein(OpenMMSimulation):
     ) -> bool:
         required_files_extensions = ["cpt", "log"]
         hotkey_alias = hotkey[:8]
+        self.current_state = state
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         self.md_outputs_exts = {
@@ -401,7 +402,7 @@ class Protein(OpenMMSimulation):
             # make sure that we are using the correct seed.
 
             bt.logging.info(
-                f"Recreating miner {hotkey_alias} simulation in state: {state}"
+                f"Recreating miner {hotkey_alias} simulation in state: {self.current_state}"
             )
             self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_location),
@@ -410,14 +411,9 @@ class Protein(OpenMMSimulation):
                 state=state,
             )
 
-            # Save the system_config as pkl file
-            write_pkl(
-                data=self.system_config,
-                path=os.path.join(self.miner_data_directory, "system_config.pkl"),
-                write_mode="wb",
+            checkpoint_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.cpt"
             )
-
-            checkpoint_path = os.path.join(self.miner_data_directory, f"{state}.cpt")
             log_file_path = os.path.join(
                 self.miner_data_directory, self.md_outputs_exts["log"]
             )
@@ -426,18 +422,17 @@ class Protein(OpenMMSimulation):
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
             ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-            self.cpt_step = self.simulation.currentStep
             if (
-                self.log_step - self.cpt_step
+                self.log_step - self.simulation.currentStep
             ) < 5000:  # Right now, needs at least 5000 steps.
-                previous_checkpoint_path = os.path.join(
-                    self.miner_data_directory, f"{state}_old.cpt"
+                checkpoint_path = os.path.join(
+                    self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
-                if os.path.exists(previous_checkpoint_path):
+                if os.path.exists(checkpoint_path):
                     bt.logging.warning(
                         f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
-                    self.simulation.loadCheckpoint(previous_checkpoint_path)
+                    self.simulation.loadCheckpoint(checkpoint_path)
                 else:
                     bt.logging.warning(
                         f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
@@ -445,6 +440,19 @@ class Protein(OpenMMSimulation):
                     return False
             else:
                 self.simulation.loadCheckpoint(checkpoint_path)
+
+            self.cpt_step = self.simulation.currentStep
+
+            # Save the system config to the miner data directory
+            system_config_path = os.path.join(
+                self.miner_data_directory, f"miner_system_config_{seed}.pkl"
+            )
+            if not os.path.exists(system_config_path):
+                write_pkl(
+                    data=self.system_config,
+                    path=system_config_path,
+                    write_mode="wb",
+                )
 
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
@@ -460,6 +468,8 @@ class Protein(OpenMMSimulation):
         Returns:
             bool: True if the run is valid, False otherwise.
         """
+
+        # The percentage that we allow the energy to differ from the miner to the validator.
         ANOMALY_THRESHOLD = 20
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
@@ -472,7 +482,9 @@ class Protein(OpenMMSimulation):
 
         self.simulation.reporters.append(
             app.StateDataReporter(
-                os.path.join(self.miner_data_directory, "check.log"),
+                os.path.join(
+                    self.miner_data_directory, f"check_{self.current_state}.log"
+                ),
                 10,
                 step=True,
                 potentialEnergy=True,
@@ -484,8 +496,9 @@ class Protein(OpenMMSimulation):
         self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(
-            os.path.join(self.miner_data_directory, "check.log")
+            os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
         )
+
         max_step = self.cpt_step + steps_to_run
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
