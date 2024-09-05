@@ -414,10 +414,12 @@ class Protein(OpenMMSimulation):
             checkpoint_path = os.path.join(
                 self.miner_data_directory, f"{self.current_state}.cpt"
             )
+
             log_file_path = os.path.join(
                 self.miner_data_directory, self.md_outputs_exts["log"]
             )
 
+            self.simulation.loadCheckpoint(checkpoint_path)
             self.log_file = pd.read_csv(log_file_path)
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
@@ -442,6 +444,7 @@ class Protein(OpenMMSimulation):
                 self.simulation.loadCheckpoint(checkpoint_path)
 
             self.cpt_step = self.simulation.currentStep
+            self.checkpoint_path = checkpoint_path
 
             # Save the system config to the miner data directory
             system_config_path = os.path.join(
@@ -518,8 +521,11 @@ class Protein(OpenMMSimulation):
         fig = px.scatter(
             df,
             title=f"Energy: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+            labels={"index": "Step", "value": "Energy (kJ/mole)"},
+            height=600,
+            width=1400,
         )
-        filename = f"{self.pdb_id}_step_{self.cpt_step}_state_{self.current_state}"
+        filename = f"{self.pdb_id}_cpt_step_{self.cpt_step}_state_{self.current_state}"
         fig.write_image(
             os.path.join(self.miner_data_directory, filename + "_energy.png")
         )
@@ -527,6 +533,9 @@ class Protein(OpenMMSimulation):
         fig = px.scatter(
             percent_diff,
             title=f"Percent Diff: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+            labels={"index": "Step", "value": "Percent Diff"},
+            height=600,
+            width=1400,
         )
         fig.write_image(
             os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
