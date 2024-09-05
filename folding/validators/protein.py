@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Literal
 import base64
 
-# import plotly.express as px
+import plotly.express as px
 import bittensor as bt
 import openmm as mm
 import pandas as pd
@@ -512,14 +512,25 @@ class Protein(OpenMMSimulation):
         min_length = len(percent_diff)
 
         # This is some debugging information for plotting the information from the miner.
-        # df = pd.DataFrame([check_energies, miner_energies])
-        # df = df.T
-        # df.columns = ["validator", "miner"]
-        # px.scatter(
-        #     df,
-        #     title=f"Energy plots for {self.pdb_id} starting at checkpoint step: {cpt_step}",
-        # ).show()
-        # px.scatter(percent_diff, title=f"Percent difference for {self.pdb_id}").show()
+        df = pd.DataFrame([check_energies, miner_energies]).T
+        df.columns = ["validator", "miner"]
+
+        fig = px.scatter(
+            df,
+            title=f"Energy: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+        )
+        filename = f"{self.pdb_id}_step_{self.cpt_step}_state_{self.current_state}"
+        fig.write_image(
+            os.path.join(self.miner_data_directory, filename + "_energy.png")
+        )
+
+        fig = px.scatter(
+            percent_diff,
+            title=f"Percent Diff: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+        )
+        fig.write_image(
+            os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
+        )
 
         # Compare the entries up to the length of the shorter array
         anomalies_detected = percent_diff > self.upper_bounds[:min_length]
