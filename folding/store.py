@@ -189,10 +189,9 @@ class Job:
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if (
-            self.best_loss == np.inf
-            or (self.best_loss - loss) / self.best_loss >= self.epsilon
-        ):
+        if ((loss < self.best_loss) and np.isinf(self.best_loss)) or (
+            self.best_loss - loss
+        ) / self.best_loss >= self.epsilon:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
