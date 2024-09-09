@@ -189,8 +189,9 @@ class Job:
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if (loss < self.best_loss) and (
-            (self.best_loss - loss) / self.best_loss >= self.epsilon
+        if (
+            self.best_loss == np.inf
+            or (self.best_loss - loss) / self.best_loss >= self.epsilon
         ):
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
