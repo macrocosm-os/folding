@@ -186,12 +186,17 @@ class Job:
         if hotkey not in self.hotkeys:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
+        percent_improvement = (
+            (self.best_loss - loss) / self.best_loss
+            if not np.isinf(self.best_loss) and not self.best_loss == 0
+            else -1
+        )
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if ((loss < self.best_loss) and np.isinf(self.best_loss)) or (
-            self.best_loss - loss
-        ) / self.best_loss >= self.epsilon:
+        if (
+            (loss < self.best_loss) and np.isinf(self.best_loss)
+        ) or percent_improvement >= self.epsilon:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
