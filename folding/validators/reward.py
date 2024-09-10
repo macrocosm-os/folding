@@ -21,6 +21,7 @@ def get_energies(
     event = {}
     event["is_valid"] = [False] * len(uids)
     event["checked_energy"] = [0] * len(uids)
+    event["miner_energy"] = [0] * len(uids)
     event["reported_energy"] = [0] * len(uids)
     event["rmsds"] = [0] * len(uids)
     energies = np.zeros(len(uids))
@@ -48,6 +49,12 @@ def get_energies(
                 continue
 
             is_valid = protein.is_run_valid()
+
+            if isinstance(is_valid, tuple):
+                is_valid, checked_energy, miner_energy = is_valid
+                event["checked_energy"][i] = checked_energy
+                event["miner_energy"][i] = miner_energy
+
             energies[i] = energy if is_valid else 0
 
             event["is_valid"][i] = is_valid

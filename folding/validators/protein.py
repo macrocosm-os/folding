@@ -553,7 +553,7 @@ class Protein(OpenMMSimulation):
 
         if percent_anomalies_detected > ANOMALY_THRESHOLD:
             return False
-        return True
+        return True, check_energies, miner_energies
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)
