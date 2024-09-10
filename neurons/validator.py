@@ -203,7 +203,7 @@ class Validator(BaseValidatorNeuron):
 
             uid_search_time = time.time() - start_time
 
-            if len(valid_uids) == self.config.neuron.sample_size:
+            if len(valid_uids) >= self.config.neuron.sample_size and len(valid_uids)<10:
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
                 job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
