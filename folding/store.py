@@ -155,7 +155,7 @@ class Job:
     updated_count: int = 0
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
     min_updates: int = 10
-    epsilon: float = 5e3
+    epsilon: float = 0.01  # percentage.
     event: dict = None
 
     def to_dict(self):
@@ -186,10 +186,20 @@ class Job:
         if hotkey not in self.hotkeys:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
+        # Check to see if the loss has improved by a certain percentage.
+        if not np.isinf(self.best_loss) and not self.best_loss == 0:
+            percent_improvement = (self.best_loss - loss) / self.best_loss
+
+        elif self.best_loss == 0 and loss < 0:
+            percent_improvement = self.epsilon
+
+        else:
+            percent_improvement = -1
+
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if loss < self.best_loss - self.epsilon:
+        if np.isinf(self.best_loss) or (percent_improvement >= self.epsilon):
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
