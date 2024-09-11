@@ -553,7 +553,7 @@ class Protein(OpenMMSimulation):
 
         if percent_anomalies_detected > ANOMALY_THRESHOLD:
             return False
-        return True, check_energies, miner_energies
+        return True, check_energies.tolist(), miner_energies.tolist()
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)
@@ -575,7 +575,8 @@ class Protein(OpenMMSimulation):
         """Method to remove the pdb directory after the simulation is complete.
         Temp. method before we know what we want to keep.
         """
-        shutil.rmtree(self.pdb_directory)
+        # shutil.rmtree(self.pdb_directory)
+        pass
 
     def calc_init_energy(self):
         """Calculate the potential energy from an edr file using gmx energy.
