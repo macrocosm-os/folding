@@ -72,7 +72,11 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
             notes=self.config.wandb.notes,
             resume="allow",
         )
-        self.wandb_ids[pdb_id] = run.id
+        self.add_wandb_id(pdb_id, run.id)
+        bt.logging.success(
+        prefix="Started a new wandb run",
+        sufix=f"<blue> {pdb_id} </blue>",
+        )
     else:
         run = wandb.init(
             anonymous="allow",
@@ -88,10 +92,11 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
             notes=self.config.wandb.notes,
             resume="allow",
         )
-    bt.logging.success(
-        prefix="Started a new wandb run",
-        sufix=f"<blue> {pdb_id} </blue>",
-    )
+        bt.logging.success(
+            prefix="updated a wandb run",
+            sufix=f"<blue> {pdb_id} </blue>",
+            )
+
     return run
 
 
@@ -102,8 +107,6 @@ def log_event(self, event, failed=False):
     if self.config.wandb.off:
         return
     pdb_id = event["pdb_id"]
-    if not getattr(self, "wandb_ids", None):
-        self.wandb_ids = {}
 
     run = init_wandb(self, pdb_id=pdb_id, failed=failed)
 
