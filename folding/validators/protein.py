@@ -44,7 +44,7 @@ class Protein:
         pdb_id: str = None,
         water: str = None,
         load_md_inputs: bool = False,
-        epsilon: float = 5e3,
+        epsilon: float = 0.01,
     ):
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
@@ -108,7 +108,6 @@ class Protein:
             protein.init_energy = calc_potential_from_edr(
                 output_dir=protein.validator_directory, edr_name="em.edr"
             )
-            protein._calculate_epsilon()
         except Exception as E:
             bt.logging.error(
                 f"pdb_complexity or init_energy failed for {protein.pdb_id} with Exception {E}."
@@ -240,7 +239,6 @@ class Protein:
         self.init_energy = calc_potential_from_edr(
             output_dir=self.validator_directory, edr_name="em.edr"
         )
-        self._calculate_epsilon()
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}, water={self.water})"
@@ -628,13 +626,6 @@ class Protein:
         run_cmd_commands(command)
 
         return self.extract(filepath=output_data_location, names=["step", "rmsd"])
-
-    def _calculate_epsilon(self):
-        if "ATOM" in self.pdb_complexity.keys():
-            num_atoms = self.pdb_complexity["ATOM"]
-
-            if num_atoms > 100:
-                self.epsilon = 7.14819473 * num_atoms + 1.68442317e04
 
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
