@@ -41,11 +41,11 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
         str(folding.__spec_version__),
         f"netuid_{self.metagraph.netuid}",
     ]
-
+    project = self.config.wandb.project_name
     if failed:
-        project = self.config.wandb.failed_project_name
-    else:
-        project = self.config.wandb.project_name
+        tags.append("failed")
+
+        
 
     if self.config.mock:
         tags.append("mock")
@@ -90,7 +90,7 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
         )
     bt.logging.success(
         prefix="Started a new wandb run",
-        sufix=f"<blue> {self.wandb.name} </blue>",
+        sufix=f"<blue> {pdb_id} </blue>",
     )
     return run
 
