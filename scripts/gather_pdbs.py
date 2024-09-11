@@ -64,9 +64,11 @@ def get_pdb_files(parent_directory: str, pdb_directory: str):
     pdb_files = [f for f in href_contents if f.endswith(".cif.gz")]
     return set(pdb_files)  # remove duplicates from a.get("href")
 
+
 # original parent directory "https://files.rcsb.org/pub/pdb/data/structures/divided/pdb/"
 
 # new parent directory "https://files.wwpdb.org/pub/pdb/data/assemblies/mmCIF/divided/"
+
 
 def main(
     parent_directory="https://files.wwpdb.org/pub/pdb/data/assemblies/mmCIF/divided/",
@@ -98,11 +100,15 @@ def main(
         count += 1
         if count % 10 == 0:  # save every 10 iterations for safety.
             save_data_to_pkl(
-                pdbs, folder_location=save_location, filename="cif_ids_new_parent_dir.pkl"
+                pdbs,
+                folder_location=save_location,
+                filename="cif_ids_new_parent_dir.pkl",
             )
 
     # save the final packet
-    save_data_to_pkl(pdbs, folder_location=save_location, filename="cif_ids_new_parent_dir.pkl")
+    save_data_to_pkl(
+        pdbs, folder_location=save_location, filename="cif_ids_new_parent_dir.pkl"
+    )
 
 
 if __name__ == "__main__":

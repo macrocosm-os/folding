@@ -10,7 +10,7 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
-from folding.utils.ops import select_random_pdb_id, load_pdb_ids, get_response_info
+from folding.utils.ops import select_sequential_pdb_id, load_pdb_ids, get_response_info
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 
@@ -138,9 +138,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
         forward_start_time = time.time()
 
         # Select a random pdb
-        pdb_id = self.config.protein.pdb_id or select_random_pdb_id(
-            PDB_IDS=PDB_IDS, exclude=exclude
-        )
+        pdb_id = select_sequential_pdb_id(PDB_IDS=PDB_IDS, exclude=exclude)
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
@@ -201,7 +199,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             "water": config.protein.water or sampled_combination["WATER"],
             "box": config.protein.box or sampled_combination["BOX"],
         }
-        
+
         protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
 
         try:

@@ -9,6 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
+from log_event_funct import log_event
 
 import bittensor as bt
 import openmm as mm
@@ -18,7 +19,7 @@ from pdbfixer import PDBFixer
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
-    check_and_download_pdbs_cif,
+    check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
@@ -47,8 +48,16 @@ class Protein(OpenMMSimulation):
         water: str = None,
         load_md_inputs: bool = False,
         epsilon: float = 5e3,
+        source: str = None,
     ) -> None:
-        self.base_directory = os.path.join(str(ROOT_DIR), "data/cif_to_pdb")
+        if source == "old":
+            self.base_directory = os.path.join(str(ROOT_DIR), "data/old_source")
+
+        if source == "cif":
+            self.base_directory = os.path.join(str(ROOT_DIR), "data/cif_to_pdb")
+
+        if source == "new-cif":
+            self.base_directory = os.path.join(str(ROOT_DIR), "data/cifs_with_pbc")
 
         self.pdb_id: str = pdb_id.lower()
         self.setup_filepaths()
@@ -62,7 +71,6 @@ class Protein(OpenMMSimulation):
         )
 
         self.config = config
-
         self.simulation: app.Simulation = None
 
         self.simulation_pkl = f"config_{self.pdb_id}.pkl"
@@ -74,6 +82,7 @@ class Protein(OpenMMSimulation):
             if load_md_inputs
             else {}
         )
+        self.source = source
 
         # # Historic data that specifies the upper bounds of the energy as a function of steps.
         # with open(
@@ -92,7 +101,11 @@ class Protein(OpenMMSimulation):
         self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
-        self.cif_file = os.path.join(self.pdb_directory, f"{self.pdb_id}.cif.gz")
+        self.cif_file = f"{self.pdb_id}.cif.gz"
+        self.cif_directory = os.path.join(
+            self.base_directory, self.pdb_id
+        )  # use the pdb_id to name the directory
+        self.cif_location = os.path.join(self.cif_directory, self.cif_file)
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
 
@@ -141,7 +154,7 @@ class Protein(OpenMMSimulation):
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self):  # funct. doesnt get executed because we provided pdb_id
+    def gather_pdb_id(self):
         if self.pdb_id is None:
             PDB_IDS = load_pdb_ids(
                 root_dir=ROOT_DIR, filename="cif_ids_new_parent_dir.pkl"
@@ -152,29 +165,45 @@ class Protein(OpenMMSimulation):
         self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
         self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
 
-    def setup_pdb_directory(self):
+    def setup_pdb_directory(self, source: str):
         # if directory doesn't exist, download the pdb file and save it to the directory
         # if not os.path.exists(self.cif_file):
         #     raise FileNotFoundError(f"{self.cif_file} does not exist")
+        self.source = source
 
-        if not os.path.exists(self.pdb_directory):  # skip, its already defined.
-            os.makedirs(self.pdb_directory)
-
-        if not os.path.exists(self.pdb_location):
-            if not check_and_download_pdbs_cif(
-                pdb_directory=self.pdb_directory,
-                pdb_id=self.pdb_id,
-                download=True,
-                force=True,
-            ):
-                raise Exception(
-                    f"Failed to download {self.pdb_file} to {self.pdb_directory}"
+        if self.source == "new-cif":
+            if not os.path.exists(self.cif_directory):
+                os.makedirs(self.cif_directory)
+                check_and_download_pdbs(
+                    pdb_directory=self.cif_directory,
+                    pdb_id=self.pdb_id,
+                    download=False,
+                    # force=True,
+                    source=self.source,
                 )
 
-            self.convert_cif_to_pdb(
-                dir=self.pdb_directory, cif_file=self.cif_file, pdb_file=self.pdb_file
-            )
-            # self.fix_pdb_file()
+            self.convert_cif_to_pdb(cif_file=self.cif_location, pdb_file=self.pdb_file)
+            pdb_fixer_dict = self.fix_pdb_file(filename=self.pdb_location)
+            log_event(pdb_fixer_dict)
+
+        # if self.source == "old":
+        #     if not os.path.exists(self.pdb_location):
+        #         if not check_and_download_pdbs(
+        #             pdb_directory=self.pdb_directory,
+        #             pdb_id=self.pdb_id,
+        #             download=True,
+        #             # force=True,
+        #             source=self.source,
+        #         ):
+        #             raise Exception(
+        #                 f"Failed to download {self.pdb_file} to {self.pdb_directory}"
+        #             )
+
+        #     self.convert_cif_to_pdb(cif_file=self.cif_location, pdb_file=self.pdb_file) # convert cif to pdb if the source is cif
+
+        #     pdb_fixer_dict = self.fix_pdb_file()
+        #     log_event(pdb_fixer_dict)
+
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -209,7 +238,7 @@ class Protein(OpenMMSimulation):
                     continue
         return files_to_return
 
-    def setup_simulation(self):
+    def setup_simulation(self, source: str):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
         2. setup the pdb directory and download the pdb file if it doesn't exist.
@@ -222,7 +251,7 @@ class Protein(OpenMMSimulation):
         )
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
-        self.setup_pdb_directory()
+        self.setup_pdb_directory(source=source)
 
         missing_files = self.check_for_missing_files(required_files=self.input_files)
 
@@ -255,7 +284,7 @@ class Protein(OpenMMSimulation):
         """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
         return app.PDBFile(pdb_file)
 
-    def fix_pdb_file(self):
+    def fix_pdb_file(self, filename):
         """
         Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems
         that must be fixed before they can be used in a molecular dynamics simulation.
@@ -263,15 +292,40 @@ class Protein(OpenMMSimulation):
         Reference docs for the PDBFixer class can be found here:
             https://htmlpreview.github.io/?https://github.com/openmm/pdbfixer/blob/master/Manual.html
         """
+        start_time = time.time()
 
-        fixer = PDBFixer(filename=self.pdb_location)
+        event_dict = {}
+        fixer = PDBFixer(filename=filename)
+        event_dict.update({"pdb_fixer_time": time.time() - start_time})
+
+        start_time = time.time()
         fixer.findMissingResidues()
+        event_dict.update({"missing_residues_time": time.time() - start_time})
+
+        start_time = time.time()
         fixer.findNonstandardResidues()
+        event_dict.update({"nonstandard_residues_time": time.time() - start_time})
+
+        start_time = time.time()
         fixer.replaceNonstandardResidues()
+        event_dict.update(
+            {"replace_nonstandard_residues_time": time.time() - start_time}
+        )
+        start_time = time.time()
         fixer.removeHeterogens(True)
+        event_dict.update({"remove_heterogens_time": time.time() - start_time})
+
+        start_time = time.time()
         fixer.findMissingAtoms()
+        event_dict.update({"missing_atoms_time": time.time() - start_time})
+
+        start_time = time.time()
         fixer.addMissingAtoms()
+        event_dict.update({"add_missing_atoms_time": time.time() - start_time})
+
+        start_time = time.time()
         fixer.addMissingHydrogens(pH=7.0)
+        event_dict.update({"add_missing_hydrogens_time": time.time() - start_time})
 
         original_pdb = self.pdb_location.split(".")[0] + "_original.pdb"
         os.rename(self.pdb_location, original_pdb)
@@ -281,6 +335,8 @@ class Protein(OpenMMSimulation):
             file=open(self.pdb_location, "w"),
         )
 
+        return event_dict
+
     def convert_cif_to_pdb(self, cif_file: str, pdb_file: str):
         """Convert a CIF file to a PDB file using the `parmed` library."""
         import parmed as pmd
@@ -288,10 +344,11 @@ class Protein(OpenMMSimulation):
         if not os.path.exists(self.pdb_location):
             try:
                 # Load the structure from the CIF file
-                structure = pmd.load_file(self.cif_file)
+                structure = pmd.load_file(self.cif_location)
                 # Write the structure to a PDB file
-                structure.write_pdb(self.pdb_location)
-                print(f"Successfully converted {cif_file} to pdb format")
+                structure.write_pdb(
+                    os.path.join(self.cif_directory, f"{self.pdb_id}.pdb")
+                )
             except Exception as e:
                 print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
 
@@ -304,10 +361,9 @@ class Protein(OpenMMSimulation):
         bt.logging.info(
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
-
         self.simulation = self.create_simulation(
             pdb=self.load_pdb_file(pdb_file=self.pdb_file),
-            system_config=self.system_config,
+            system_config=self.system_config.get_config(),
             state="em",
         )
 

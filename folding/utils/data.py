@@ -3,7 +3,6 @@ import pandas as pd
 import bittensor as bt
 
 
-
 class DataExtractor:
     """
     A class that containing methods to extract various types of data from simulation files using GROMACS commandsds.
