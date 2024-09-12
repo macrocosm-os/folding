@@ -188,7 +188,7 @@ class Job:
 
         # Check to see if the loss has improved by a certain percentage.
         if not np.isinf(self.best_loss) and not self.best_loss == 0:
-            percent_improvement = (self.best_loss - loss) / self.best_loss
+            percent_improvement = (self.best_loss - loss) / abs(self.best_loss)
 
         elif self.best_loss == 0 and loss < 0:
             percent_improvement = self.epsilon
