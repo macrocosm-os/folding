@@ -291,10 +291,10 @@ class Validator(BaseValidatorNeuron):
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
-
         # If the job is finished, remove the pdb directory
         if job.active is False:
             protein = Protein.from_job(job=job, config=self.config.protein)
+            self.remove_wandb_id(job.pdb)
             protein.remove_pdb_directory()
 
         def prepare_event_for_logging(event: Dict):

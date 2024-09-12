@@ -33,7 +33,7 @@ def should_reinit_wandb(self):
     )
 
 
-def init_wandb(self, reinit=False):
+def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     """Starts a new wandb run."""
     tags = [
         self.wallet.hotkey.ss58_address,
@@ -41,6 +41,9 @@ def init_wandb(self, reinit=False):
         str(folding.__spec_version__),
         f"netuid_{self.metagraph.netuid}",
     ]
+    project = self.config.wandb.project_name
+    if failed:
+        tags.append("failed")
 
     if self.config.mock:
         tags.append("mock")
@@ -53,32 +56,49 @@ def init_wandb(self, reinit=False):
     }
     wandb_config["neuron"].pop("full_path", None)
 
-    self.wandb = wandb.init(
+    id = None if pdb_id not in self.wandb_ids.keys() else self.wandb_ids[pdb_id]
+
+    run = wandb.init(
         anonymous="allow",
+        name=pdb_id,
         reinit=reinit,
-        project=self.config.wandb.project_name,
+        project=project,
+        id=id,
         entity=self.config.wandb.entity,
         config=wandb_config,
         mode="offline" if self.config.wandb.offline else "online",
         dir=self.config.neuron.full_path,
         tags=tags,
         notes=self.config.wandb.notes,
-    )
-    bt.logging.success(
-        prefix="Started a new wandb run",
-        sufix=f"<blue> {self.wandb.name} </blue>",
+        resume="allow",
     )
 
+    self.add_wandb_id(pdb_id, run.id)
 
-def log_event(self, event):
+    if id is None:
+        bt.logging.success(
+            prefix="Started a new wandb run",
+            sufix=f"<blue> {pdb_id} </blue>",
+        )
+    else:
+        bt.logging.success(
+            prefix="updated a wandb run",
+            sufix=f"<blue> {pdb_id} </blue>",
+        )
+
+    return run
+
+
+def log_event(self, event, failed=False):
     if not self.config.neuron.dont_save_events:
         logger.log("EVENTS", "events", **event)
 
     if self.config.wandb.off:
         return
+    pdb_id = event["pdb_id"]
 
-    if not getattr(self, "wandb", None):
-        init_wandb(self)
+    run = init_wandb(self, pdb_id=pdb_id, failed=failed)
 
     # Log the event to wandb.
-    self.wandb.log(event)
+    run.log(event)
+    run.finish()

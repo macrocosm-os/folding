@@ -18,6 +18,7 @@
 import copy
 import bittensor as bt
 from abc import ABC, abstractmethod
+import os
 
 import openmm
 
@@ -26,7 +27,7 @@ from folding.utils.config import check_config, add_args, config
 from folding.utils.misc import ttl_get_block
 from folding import __spec_version__ as spec_version
 from folding import __OPENMM_VERSION_TAG__
-from folding.utils.ops import OpenMMException
+from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
 
 
@@ -89,6 +90,7 @@ class BaseNeuron(ABC):
 
             # Check OpenMM version if we are not in mock mode.
             self.check_openmm_version()
+            self.setup_wandb_logging()
 
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
@@ -120,6 +122,20 @@ class BaseNeuron(ABC):
             raise e
 
         bt.logging.success(f"Running OpenMM version: {self.openmm_version}")
+        
+    def setup_wandb_logging(self):
+        if os.path.isfile(f"{self.config.neuron.full_path}/wandb_ids.pkl"):
+            self.wandb_ids = load_pkl(f"{self.config.neuron.full_path}/wandb_ids.pkl", "rb")
+        else:
+            self.wandb_ids = {}
+            
+    def add_wandb_id(self, pdb_id: str, wandb_id: str):
+        self.wandb_ids[pdb_id] = wandb_id
+        write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")
+        
+    def remove_wandb_id(self, pdb_id: str):
+        self.wandb_ids.pop(pdb_id)
+        write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
