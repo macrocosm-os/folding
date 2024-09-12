@@ -45,8 +45,6 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     if failed:
         tags.append("failed")
 
-        
-
     if self.config.mock:
         tags.append("mock")
     if self.config.neuron.disable_set_weights:
@@ -58,44 +56,35 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     }
     wandb_config["neuron"].pop("full_path", None)
 
-    if pdb_id not in self.wandb_ids.keys():
-        run = wandb.init(
-            anonymous="allow",
-            name=pdb_id,
-            reinit=reinit,
-            project=project,
-            entity=self.config.wandb.entity,
-            config=wandb_config,
-            mode="offline" if self.config.wandb.offline else "online",
-            dir=self.config.neuron.full_path,
-            tags=tags,
-            notes=self.config.wandb.notes,
-            resume="allow",
-        )
-        self.add_wandb_id(pdb_id, run.id)
+    id = None if pdb_id not in self.wandb_ids.keys() else self.wandb_ids[pdb_id]
+
+    run = wandb.init(
+        anonymous="allow",
+        name=pdb_id,
+        reinit=reinit,
+        project=project,
+        id=id,
+        entity=self.config.wandb.entity,
+        config=wandb_config,
+        mode="offline" if self.config.wandb.offline else "online",
+        dir=self.config.neuron.full_path,
+        tags=tags,
+        notes=self.config.wandb.notes,
+        resume="allow",
+    )
+
+    self.add_wandb_id(pdb_id, run.id)
+
+    if id is None:
         bt.logging.success(
-        prefix="Started a new wandb run",
-        sufix=f"<blue> {pdb_id} </blue>",
+            prefix="Started a new wandb run",
+            sufix=f"<blue> {pdb_id} </blue>",
         )
     else:
-        run = wandb.init(
-            anonymous="allow",
-            name=pdb_id,
-            id=self.wandb_ids[pdb_id],
-            reinit=reinit,
-            project=project,
-            entity=self.config.wandb.entity,
-            config=wandb_config,
-            mode="offline" if self.config.wandb.offline else "online",
-            dir=self.config.neuron.full_path,
-            tags=tags,
-            notes=self.config.wandb.notes,
-            resume="allow",
-        )
         bt.logging.success(
             prefix="updated a wandb run",
             sufix=f"<blue> {pdb_id} </blue>",
-            )
+        )
 
     return run
 
