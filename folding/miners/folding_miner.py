@@ -8,7 +8,7 @@ from collections import defaultdict
 from typing import Dict, List, Tuple
 from sys import stdout
 import copy
-
+import traceback
 
 import bittensor as bt
 import openmm as mm
@@ -172,12 +172,21 @@ class FoldingMiner(BaseMinerNeuron):
             sims_to_delete = []
 
             for pdb_id, simulation in self.simulations.items():
-                current_executor_state = simulation["executor"].get_state()
-
-                if current_executor_state == "finished":
-                    bt.logging.warning(
-                        f"✅ {pdb_id} finished simulation... Removing from execution stack ✅"
-                    )
+                future = simulation["future"]
+                # Check if the future is done
+                if future.done():
+                    state, error_info = future.result()
+                    # If the simulation is done, we can remove it from the simulation store
+                    if state == "finished":
+                        bt.logging.warning(
+                            f"✅ {pdb_id} finished simulation... Removing from execution stack ✅"
+                        )
+                    else:
+                        # If the simulation failed, we should log the error and remove it from the simulation store
+                        bt.logging.error(
+                            f"❗ {pdb_id} failed simulation... Removing from execution stack ❗"
+                        )
+                        bt.logging.error(f"Error info: {error_info}")
                     sims_to_delete.append(pdb_id)
 
             for pdb_id in sims_to_delete:
@@ -257,6 +266,14 @@ class FoldingMiner(BaseMinerNeuron):
                         lines = f.readlines()
                         state = lines[-1].strip()
                         state = "md_0_1" if state == "finished" else state
+                    
+                    # If the state is failed, we should not return the files.
+                    if state == "failed":
+                        synapse.miner_state = state
+                        synapse.miner_serving = False
+                        event["condition"] = "failed_simulation"
+                        event["state"] = state
+                        return check_synapse(self=self, synapse=synapse, event=event)
 
                     with open(seed_file, "r") as f:
                         seed = f.readlines()[-1].strip()
@@ -445,22 +462,51 @@ class SimulationManager:
         with open(self.seed_file_name, "w") as f:
             f.write(f"{self.seed}\n")
 
-        for state, simulation in simulations.items():
-            bt.logging.info(f"Running {state} commands")
+        try:
+            for state, simulation in simulations.items():
+                bt.logging.info(f"Running {state} commands")
 
+                with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
+                    f.write(f"{state}\n")
+
+                simulation.loadCheckpoint(self.cpt_file_mapper[state])
+                simulation.step(steps[state])
+
+                # TODO: Add a Mock pipeline for the new OpenMM simulation here.
+
+            bt.logging.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
+
+            state = "finished"
+            with open(self.state_file_name, "w") as f:
+                f.write(f"{state}\n")
+            return state, None
+        # This is the exception that is raised when the simulation fails.
+        except mm.OpenMMException as e:
+            state="failed"
+            error_info = {
+                "type": "OpenMMException",
+                "message": str(e),
+                "traceback": trceback.format_exc(), # This is the traceback of the exception
+            }
+            try:
+                platform = mm.Platform.getPlatformByName('CUDA')
+                error_info["cuda_version"] = platform.getPropertyDefaultValue('CudaCompiler')
+            except:
+                error_info["cuda_version"] = "Unable to get CUDA information"
             with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
                 f.write(f"{state}\n")
-
-            simulation.loadCheckpoint(self.cpt_file_mapper[state])
-            simulation.step(steps[state])
-
-            # TODO: Add a Mock pipeline for the new OpenMM simulation here.
-
-        bt.logging.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
-
-        state = "finished"
-        with open(self.state_file_name, "w") as f:
-            f.write(f"{state}\n")
+            return state, error_info
+        
+        except Exception as e:
+            state = "failed"
+            error_info = {
+                "type": "UnexpectedException",
+                "message": str(e),
+                "traceback": traceback.format_exc()
+            }
+            with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
+                f.write(f"{state}\n")
+            return state, error_info
 
     def get_state(self) -> str:
         """get_state reads a txt file that contains the current state of the simulation"""
