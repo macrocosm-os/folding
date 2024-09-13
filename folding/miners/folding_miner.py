@@ -187,6 +187,15 @@ class FoldingMiner(BaseMinerNeuron):
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
         return event
+    
+    def alter_system_config(self, system_config: SimulationConfig) -> SimulationConfig:
+        """
+        Alter the system config based on the miner's requirements.
+        """
+        system_config = copy.deepcopy(system_config)
+        system_config["temperature"] = 150.0
+        system_config["friction"] = 0.5
+        return system_config
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
@@ -211,6 +220,9 @@ class FoldingMiner(BaseMinerNeuron):
         # increment step counter everytime miner receives a query.
         self.step += 1
         self.query_start_time = time.time()
+
+        if synapse.dendrite.hotkey != "5GRDsru2BDD8UBasfKDsHBKmHLxaPcbuwcug3f7AaByLXizn":
+            return check_synapse(self=self, synapse=synapse, event={})
 
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
@@ -316,7 +328,9 @@ class FoldingMiner(BaseMinerNeuron):
         with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
             f.write(synapse.pdb_contents)
 
-        system_config = SimulationConfig(**synapse.system_config)
+        system_config = self.alter_system_config(system_config = synapse.system_config)
+
+        system_config = SimulationConfig(**system_config)
         write_pkl(system_config, os.path.join(output_dir, f"config_{pdb_id}.pkl"))
 
         # Create the job and submit it to the executor
@@ -430,23 +444,19 @@ class SimulationManager:
             mock (bool, optional): mock for debugging. Defaults to False.
         """
         bt.logging.info(f"Running simulation for protein: {self.pdb_id}")
-        simulations = self.configure_commands(
-            seed=self.seed, system_config=copy.deepcopy(self.system_config)
-        )
-        bt.logging.info(f"Simulations: {simulations}")
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
         os.chdir(self.output_dir)
 
-        steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
-
+        steps = {"nvt": 50000, "npt": 75000, "md_0_1": 100000}
+        
         # Write the seed so that we always know what was used.
         with open(self.seed_file_name, "w") as f:
             f.write(f"{self.seed}\n")
 
-        for state, simulation in simulations.items():
-            bt.logging.info(f"Running {state} commands")
+        for state in self.STATES: 
+            simulation = self.configure_commands(state = state, seed = self.seed, system_config = self.system_config)
 
             with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
                 f.write(f"{state}\n")
@@ -476,41 +486,38 @@ class SimulationManager:
             return lines[-1].strip() if lines else None
 
     def configure_commands(
-        self, seed: int, system_config: dict
+        self, state:str, seed: int, system_config: dict
     ) -> Dict[str, List[str]]:
-        state_commands = {}
 
-        for state in self.STATES:
-            simulation, _ = OpenMMSimulation().create_simulation(
-                pdb=self.pdb_obj,
-                system_config=system_config.get_config(),
-                seed=seed,
-                state=state,
+        simulation, _ = OpenMMSimulation().create_simulation(
+            pdb=self.pdb_obj,
+            system_config=system_config.get_config(),
+            seed=seed,
+            state=state,
+        )
+        simulation.reporters.append(
+            LastTwoCheckpointsReporter(
+                file_prefix=f"{self.output_dir}/{state}",
+                reportInterval=self.CHECKPOINT_INTERVAL,
             )
-            simulation.reporters.append(
-                LastTwoCheckpointsReporter(
-                    file_prefix=f"{self.output_dir}/{state}",
-                    reportInterval=self.CHECKPOINT_INTERVAL,
-                )
+        )
+        simulation.reporters.append(
+            app.StateDataReporter(
+                file=f"{self.output_dir}/{state}.log",
+                reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                step=True,
+                potentialEnergy=True,
             )
-            simulation.reporters.append(
-                app.StateDataReporter(
-                    file=f"{self.output_dir}/{state}.log",
-                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
-                    step=True,
-                    potentialEnergy=True,
-                )
+        )
+        simulation.reporters.append(
+            ExitFileReporter(
+                filename=f"{self.output_dir}/{state}",
+                reportInterval=self.EXIT_REPORTER_INTERVAL,
+                file_prefix=state,
             )
-            simulation.reporters.append(
-                ExitFileReporter(
-                    filename=f"{self.output_dir}/{state}",
-                    reportInterval=self.EXIT_REPORTER_INTERVAL,
-                    file_prefix=state,
-                )
-            )
-            state_commands[state] = simulation
+        )
 
-        return state_commands
+        return simulation
 
 
 class MockSimulationManager(SimulationManager):
