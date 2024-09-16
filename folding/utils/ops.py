@@ -260,12 +260,11 @@ def check_and_download_pdbs(
         try:
             subprocess.run(rsync_command, check=True)
             subprocess.run(unzip_command, check=True)
-            bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
-
             convert_cif_to_pdb(
                 cif_file=f"{pdb_directory}/{id}.cif",
                 pdb_file=f"{pdb_directory}/{id}.pdb",
             )
+            bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
             return True
         except subprocess.CalledProcessError as e:
             bt.logging.error(
@@ -366,7 +365,6 @@ def convert_cif_to_pdb(cif_file: str, pdb_file: str):
     try:
         structure = pmd.load_file(cif_file)
         # Write the structure to a PDB file
-        structure.write_pdb(pdb_file)
-        print(f"Successfully converted {cif_file} to {pdb_file}")
+        structure.save(pdb_file, format="pdb")
     except Exception as e:
         print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
