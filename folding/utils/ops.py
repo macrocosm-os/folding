@@ -8,6 +8,8 @@ import subprocess
 import sys
 import traceback
 from typing import Dict, List
+import gzip
+import parmed as pmd
 
 import bittensor as bt
 import requests
@@ -50,7 +52,9 @@ def delete_directory(directory: str):
     shutil.rmtree(directory)
 
 
-def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
+def load_pdb_ids(
+    root_dir: str, filename: str = "combined_sources.pkl"
+) -> Dict[str, List[str]]:
     """If you want to randomly sample pdb_ids, you need to load in
     the data that was computed via the gather_pdbs.py script.
 
@@ -70,15 +74,16 @@ def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List
     return PDB_IDS
 
 
-def select_random_pdb_id(PDB_IDS: Dict, exclude: list = None) -> str:
-    """This function is really important as its where you select the protein you want to fold"""
+def select_random_pdb_id(
+    PDB_IDS: Dict, input_source: str, exclude: List[str] = None
+) -> str:
+    """Select a random protein PDB ID to fold from a specified source."""
     while True:
-        family = random.choice(list(PDB_IDS.keys()))
-        choices = PDB_IDS[family]
+        choices = PDB_IDS[input_source]["pdbs"]  # Corrected this line
         if not len(choices):
             continue
         selected_pdb_id = random.choice(choices)
-        if exclude is not None and selected_pdb_id not in exclude:
+        if exclude is None or selected_pdb_id not in exclude:
             return selected_pdb_id
 
 
@@ -188,7 +193,11 @@ def run_cmd_commands(
 
 
 def check_and_download_pdbs(
-    pdb_directory: str, pdb_id: str, download: bool = True, force: bool = False
+    pdb_directory: str,
+    pdb_id: str,
+    input_source: str,
+    download: bool = True,
+    force: bool = False,
 ) -> bool:
     """Check the status and optionally download a PDB file from the RCSB PDB database.
 
@@ -203,30 +212,68 @@ def check_and_download_pdbs(
         Exception: If download fails.
 
     """
-    url = f"https://files.rcsb.org/download/{pdb_id}"
     path = os.path.join(pdb_directory, f"{pdb_id}")
 
-    r = requests.get(url)
-    if r.status_code == 200:
-        is_complete = is_pdb_complete(r.text)
-        if is_complete or force:
-            if download:
-                check_if_directory_exists(output_directory=pdb_directory)
-                with open(path, "w") as file:
-                    file.write(r.text)
+    if input_source == "rcsb":
+        url = f"https://files.rcsb.org/download/{pdb_id}"
+        r = requests.get(url)
+        if r.status_code == 200:
+            is_complete = is_pdb_complete(r.text)
+            if is_complete or force:
+                if download:
+                    check_if_directory_exists(output_directory=pdb_directory)
+                    with open(path, "w") as file:
+                        file.write(r.text)
 
-            message = " but contains missing values." if not is_complete else ""
-            bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+                message = " but contains missing values." if not is_complete else ""
+                bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
 
-            return True
+                return True
+            else:
+                bt.logging.warning(
+                    f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+                )
+                return False
         else:
-            bt.logging.warning(
-                f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+            bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+            raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+
+    elif input_source == "pdbe":
+        # strip the string of the extension
+        id = pdb_id[0:4]
+        substr = pdb_id[1:3]
+        # Run the rsync command using subprocess
+        rsync_command = [
+            "rsync",
+            "-rlpt",
+            "-v",
+            "-z",
+            f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substr}/{id}.cif.gz",
+            f"./{pdb_directory}/",
+        ]
+        try:
+            subprocess.run(rsync_command, check=True)
+            bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
+
+            decompress_gz_file(
+                gz_file_path=f"{pdb_directory}/{id}.cif.gz",
+                output_file_path=f"{pdb_directory}/{id}.cif",
             )
-            return False
+            convert_cif_to_pdb(
+                cif_file=f"{pdb_directory}/{id}.cif",
+                pdb_file=f"{pdb_directory}/{id}.pdb",
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            bt.logging.error(
+                f"Failed to download PDB file with ID {pdb_id} using rsync: {e}"
+            )
+            raise Exception(
+                f"Failed to download PDB file with ID {pdb_id} using rsync."
+            )
     else:
-        bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
-        raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+        bt.logging.error(f"Unknown input source: {input_source}")
+        raise ValueError(f"Unknown input source: {input_source}")
 
 
 def is_pdb_complete(pdb_text: str) -> bool:
@@ -309,3 +356,20 @@ def get_last_step_time(log_file: str) -> float:
                     break
 
     return last_step_time
+
+
+def decompress_gz_file(gz_file_path: str, output_file_path: str):
+    with gzip.open(gz_file_path, "rb") as f_in:
+        with open(output_file_path, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+
+def convert_cif_to_pdb(cif_file: str, pdb_file: str):
+    """Convert a CIF file to a PDB file using the `parmed` library."""
+    try:
+        structure = pmd.load_file(cif_file)
+        # Write the structure to a PDB file
+        structure.write_pdb(pdb_file)
+        print(f"Successfully converted {cif_file} to {pdb_file}")
+    except Exception as e:
+        print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
