@@ -266,13 +266,16 @@ class FoldingMiner(BaseMinerNeuron):
                         lines = f.readlines()
                         state = lines[-1].strip()
                         state = "md_0_1" if state == "finished" else state
-                    
+
                     # If the state is failed, we should not return the files.
                     if state == "failed":
                         synapse.miner_state = state
                         synapse.miner_serving = False
                         event["condition"] = "failed_simulation"
                         event["state"] = state
+                        bt.logging.warning(
+                            f"❗Returning previous simulation data for failed simulation: {pdb_id}❗"
+                        )
                         return check_synapse(self=self, synapse=synapse, event=event)
 
                     with open(seed_file, "r") as f:
@@ -435,6 +438,10 @@ class SimulationManager:
         with open(file_path, "w") as f:
             pass
 
+    def write_state(self, state: str, state_file_name: str, output_dir: str):
+        with open(os.path.join(output_dir, state_file_name), "w") as f:
+            f.write(f"{state}\n")
+
     def run(
         self,
         mock: bool = False,
@@ -466,8 +473,11 @@ class SimulationManager:
             for state, simulation in simulations.items():
                 bt.logging.info(f"Running {state} commands")
 
-                with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
-                    f.write(f"{state}\n")
+                self.write_state(
+                    state=state,
+                    state_file_name=self.state_file_name,
+                    output_dir=self.output_dir,
+                )
 
                 simulation.loadCheckpoint(self.cpt_file_mapper[state])
                 simulation.step(steps[state])
@@ -477,35 +487,49 @@ class SimulationManager:
             bt.logging.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
 
             state = "finished"
-            with open(self.state_file_name, "w") as f:
-                f.write(f"{state}\n")
+            self.write_state(
+                state=state,
+                state_file_name=self.state_file_name,
+                output_dir=self.output_dir,
+            )
             return state, None
+
         # This is the exception that is raised when the simulation fails.
         except mm.OpenMMException as e:
-            state="failed"
+            state = "failed"
             error_info = {
                 "type": "OpenMMException",
                 "message": str(e),
-                "traceback": trceback.format_exc(), # This is the traceback of the exception
+                "traceback": traceback.format_exc(),  # This is the traceback of the exception
             }
             try:
-                platform = mm.Platform.getPlatformByName('CUDA')
-                error_info["cuda_version"] = platform.getPropertyDefaultValue('CudaCompiler')
+                platform = mm.Platform.getPlatformByName("CUDA")
+                error_info["cuda_version"] = platform.getPropertyDefaultValue(
+                    "CudaCompiler"
+                )
             except:
                 error_info["cuda_version"] = "Unable to get CUDA information"
-            with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
-                f.write(f"{state}\n")
-            return state, error_info
-        
+            finally:
+                self.write_state(
+                    state=state,
+                    state_file_name=self.state_file_name,
+                    output_dir=self.output_dir,
+                )
+                return state, error_info
+
+        # Generic Exception
         except Exception as e:
             state = "failed"
             error_info = {
                 "type": "UnexpectedException",
                 "message": str(e),
-                "traceback": traceback.format_exc()
+                "traceback": traceback.format_exc(),
             }
-            with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
-                f.write(f"{state}\n")
+            self.write_state(
+                state=state,
+                state_file_name=self.state_file_name,
+                output_dir=self.output_dir,
+            )
             return state, error_info
 
     def get_state(self) -> str:
