@@ -1,8 +1,8 @@
-from typing import Literal, Optional
 from openmm import app
 import openmm as mm
 from enum import Enum
 from pydantic import BaseModel
+from typing import Literal, Optional
 
 
 class NonbondedMethod(Enum):
