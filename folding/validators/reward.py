@@ -48,12 +48,10 @@ def get_energies(
             if energy == 0:
                 continue
 
-            is_valid = protein.is_run_valid()
+            is_valid, checked_energy, miner_energy = protein.is_run_valid()
 
-            if isinstance(is_valid, tuple):
-                is_valid, checked_energy, miner_energy = is_valid
-                event["checked_energy"][i] = checked_energy
-                event["miner_energy"][i] = miner_energy
+            event["checked_energy"][i] = checked_energy
+            event["miner_energy"][i] = miner_energy
 
             energies[i] = energy if is_valid else 0
 

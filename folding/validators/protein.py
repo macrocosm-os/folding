@@ -29,6 +29,7 @@ from folding.utils.ops import (
 )
 from folding.store import Job
 from folding.base.simulation import OpenMMSimulation
+from folding.utils.ops import OpenMMException
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -552,7 +553,7 @@ class Protein(OpenMMSimulation):
         # We want to save all the information to the local filesystem so we can index them later.
 
         if percent_anomalies_detected > ANOMALY_THRESHOLD:
-            return False
+            return False, check_energies.tolist(), miner_energies.tolist()
         return True, check_energies.tolist(), miner_energies.tolist()
 
     def get_energy(self):
@@ -579,17 +580,17 @@ class Protein(OpenMMSimulation):
         pass
 
     def calc_init_energy(self):
-        """Calculate the potential energy from an edr file using gmx energy.
-        Args:
-            output_dir (str): directory containing the edr file
-            edr_name (str): name of the edr file
-            xvg_name (str): name of the xvg file
-
-        Returns:
-            float: potential energy
+        """
+        Calculate the initial energy of the system so we have a baseline.
         """
 
-        return (
+        init_energy = (
             self.simulation.context.getState(getEnergy=True).getPotentialEnergy()
             / unit.kilojoules_per_mole
         )
+
+        if np.isnan(init_energy):
+            raise OpenMMException(
+                message="Initial energy of the system is NaN... Skipping"
+            )
+        return init_energy
