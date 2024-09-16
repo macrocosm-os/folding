@@ -165,6 +165,7 @@ class Validator(BaseValidatorNeuron):
         Returns:
             List[int]: A list of responding and free uids.
         """
+        return [76]
         active_uids = self.ping_all_miners(exclude_uids=exclude_uids)
 
         if len(active_uids) > num_uids_to_sample:
@@ -203,7 +204,10 @@ class Validator(BaseValidatorNeuron):
 
             uid_search_time = time.time() - start_time
 
-            if len(valid_uids) >= self.config.neuron.sample_size and len(valid_uids)<10:
+            if (
+                len(valid_uids) >= self.config.neuron.sample_size
+                and len(valid_uids) < 10
+            ):
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
                 job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
@@ -291,11 +295,6 @@ class Validator(BaseValidatorNeuron):
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
-        # If the job is finished, remove the pdb directory
-        if job.active is False:
-            protein = Protein.from_job(job=job, config=self.config.protein)
-            self.remove_wandb_id(job.pdb)
-            protein.remove_pdb_directory()
 
         def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
@@ -312,7 +311,18 @@ class Validator(BaseValidatorNeuron):
         )  # add the rewards to the logging event.
 
         bt.logging.success(f"Event information: {merged_events}")
-        log_event(self, event=prepare_event_for_logging(merged_events))
+        event = prepare_event_for_logging(merged_events)
+
+        # If the job is finished, remove the pdb directory
+        pdb_location = None
+        protein = Protein.from_job(job=job, config=self.config.protein)
+        if job.active is False:
+            self.remove_wandb_id(job.pdb)
+            protein.remove_pdb_directory()
+        elif event["updated_count"] == 1:
+            pdb_location = protein.pdb_location
+
+        log_event(self, event=event, pdb_location=pdb_location)
 
 
 # The main function parses the configuration and runs the validator.

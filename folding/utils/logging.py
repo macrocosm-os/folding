@@ -89,7 +89,17 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     return run
 
 
-def log_event(self, event, failed=False):
+def log_protein(run, pdb_id_path: str):
+    """Logs the protein visualization to wandb.
+    pdb_id_path: str: path to the pdb file on disk.
+    """
+    try:
+        run.log({"protein_vis": wandb.Molecule(pdb_id_path)})
+    except:
+        bt.logging.warning("Failed to log protein visualization")
+
+
+def log_event(self, event, failed=False, pdb_location: str = None):
     if not self.config.neuron.dont_save_events:
         logger.log("EVENTS", "events", **event)
 
@@ -101,4 +111,8 @@ def log_event(self, event, failed=False):
 
     # Log the event to wandb.
     run.log(event)
+
+    if pdb_location is not None:
+        log_protein(run, pdb_id_path=pdb_location)
+
     run.finish()
