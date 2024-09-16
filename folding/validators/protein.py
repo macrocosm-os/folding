@@ -127,12 +127,14 @@ class Protein:
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self):
+    def gather_pdb_id(self, input_source: str = "pdbe"):
         if self.pdb_id is None:
             PDB_IDS = load_pdb_ids(
-                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+                root_dir=ROOT_DIR, filename="combined_sources.pkl"
             )  # TODO: This should be a class variable via config
-            self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
+            self.pdb_id = select_random_pdb_id(
+                PDB_IDS=PDB_IDS, input_source=self.config.protein.input_source
+            )
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
         self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
@@ -147,6 +149,7 @@ class Protein:
             if not check_and_download_pdbs(
                 pdb_directory=self.pdb_directory,
                 pdb_id=self.pdb_file,
+                input_source=self.config.protein.input_source,
                 download=True,
                 force=self.config.force_use_pdb,
             ):
@@ -197,7 +200,7 @@ class Protein:
         )
 
         ## Setup the protein directory and sample a random pdb_id if not provided
-        self.gather_pdb_id()
+        self.gather_pdb_id(input_source=self.config.protein.input_source)
         self.setup_pdb_directory()
 
         # TODO: Enable this to send checkpoints rather than only the initial set of files
