@@ -15,15 +15,12 @@ from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(
-    root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+    root_dir=ROOT_DIR, filename="combined_sources.pkl"
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
-def run_ping_step(
-        self, 
-        uids: List[int], 
-        timeout: float
-) -> Dict:
-    """ Report a dictionary of ping information from all miners that were
+
+def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
+    """Report a dictionary of ping information from all miners that were
     randomly sampled for this batch.
     """
     axons = [self.metagraph.axons[uid] for uid in uids]
@@ -38,8 +35,8 @@ def run_ping_step(
 
     ping_report = defaultdict(list)
     for resp in responses:
-        ping_report['miner_status'].append(resp.can_serve)
-        ping_report['reported_compute'].append(resp.available_compute)
+        ping_report["miner_status"].append(resp.can_serve)
+        ping_report["reported_compute"].append(resp.available_compute)
 
     return ping_report
 
@@ -77,7 +74,7 @@ def run_step(
         if state:
             responses_serving.append(responses[ii])
             active_uids.append(uids[ii])
-    
+
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
@@ -87,7 +84,9 @@ def run_step(
     }
 
     if len(responses_serving) == 0:
-        bt.logging.warning(f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗")
+        bt.logging.warning(
+            f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗"
+        )
         return event
 
     energies, energy_event = get_energies(
@@ -95,12 +94,7 @@ def run_step(
     )
 
     # Log the step event.
-    event.update(
-        {
-            "energies": energies.tolist(),
-            **energy_event
-        }
-    )
+    event.update({"energies": energies.tolist(), **energy_event})
 
     if len(protein.md_inputs) > 0:
         event["md_inputs"] = list(protein.md_inputs.keys())
@@ -144,7 +138,9 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
         # Select a random pdb
         pdb_id = self.config.protein.pdb_id or select_random_pdb_id(
-            PDB_IDS=PDB_IDS, exclude=exclude
+            PDB_IDS=PDB_IDS,
+            input_source=self.config.protein.input_source,
+            exclude=exclude,
         )
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
