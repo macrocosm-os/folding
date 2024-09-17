@@ -413,10 +413,11 @@ class SimulationManager:
         self.pdb_id = pdb_id
         self.state: str = None
         self.seed = seed
-        self.pdb_obj = app.PDBFile(f"{output_dir}/{pdb_id}.pdb")
+        self.pdb_obj = app.PDBFile(os.path.join(output_dir, f"{pdb_id}.pdb"))
 
         self.state_file_name = f"{pdb_id}_state.txt"
         self.seed_file_name = f"{pdb_id}_seed.txt"
+        self.simulation_steps: dict = system_config["simulation_steps"]
         self.system_config = SimulationConfig(**system_config)
 
         self.output_dir = output_dir
@@ -463,8 +464,6 @@ class SimulationManager:
         check_if_directory_exists(output_directory=self.output_dir)
         os.chdir(self.output_dir)
 
-        steps = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
-
         # Write the seed so that we always know what was used.
         with open(self.seed_file_name, "w") as f:
             f.write(f"{self.seed}\n")
@@ -480,7 +479,7 @@ class SimulationManager:
                 )
 
                 simulation.loadCheckpoint(self.cpt_file_mapper[state])
-                simulation.step(steps[state])
+                simulation.step(self.simulation_steps[state])
 
                 # TODO: Add a Mock pipeline for the new OpenMM simulation here.
 

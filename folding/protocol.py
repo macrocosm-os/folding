@@ -37,7 +37,11 @@ class JobSubmissionSynapse(bt.Synapse):
     Attributes:
     - pdb_id: A Protein id, which contains the necessary details of the protein to be folded.
     - md_inputs: A dictionary containing the input files for the openmm simulation.
-    - mdrun_args: A string containing the arguments to be passed to the openmm mdrun command.
+    - system_config: A dictionary containing the system configuration for the simulation.
+    - miner_serving: A boolean value which determines if the miner can serve the request.
+    - md_output: A dictionary containing the output files of the openmm simulation.
+    - miner_seed: An integer value which is the seed for the simulation.
+    - miner_state: A string value which is the state of the miner.
     """
 
     pdb_id: str
@@ -78,7 +82,7 @@ class JobSubmissionSynapse(bt.Synapse):
                     md_output[k] = None
 
             self.md_output = md_output
-            
+
         if not isinstance(self.md_inputs, dict):
             self.md_inputs = {}
         else:
