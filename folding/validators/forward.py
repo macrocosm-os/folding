@@ -15,7 +15,7 @@ from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(
-    root_dir=ROOT_DIR, filename="combined_sources.pkl"
+    root_dir=ROOT_DIR, filename="combined_sources.pkl", input_source = 'pdbe'
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 
@@ -139,7 +139,6 @@ def create_new_challenge(self, exclude: List) -> Dict:
         # Select a random pdb
         pdb_id = self.config.protein.pdb_id or select_random_pdb_id(
             PDB_IDS=PDB_IDS,
-            input_source=self.config.protein.input_source,
             exclude=exclude,
         )
 
