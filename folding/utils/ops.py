@@ -53,14 +53,14 @@ def delete_directory(directory: str):
 
 
 def load_pdb_ids(
-    root_dir: str, filename: str = "combined_sources.pkl"
+    root_dir: str, input_source: str = "pdbe", filename: str = "combined_sources.pkl", 
 ) -> Dict[str, List[str]]:
     """If you want to randomly sample pdb_ids, you need to load in
     the data that was computed via the gather_pdbs.py script.
 
     Args:
         root_dir (str): location of the file that contains all the names of pdb_ids
-        filename (str, optional): name of the pdb_id file. Defaults to "pdb_ids.pkl".
+        filename (str, optional): name of the pdb_id file. Defaults to "combined_sources.pkl".
     """
     PDB_PATH = os.path.join(root_dir, filename)
 
@@ -70,16 +70,21 @@ def load_pdb_ids(
         )
 
     with open(PDB_PATH, "rb") as f:
-        PDB_IDS = pkl.load(f)
+        file = pkl.load(f)
+    if input_source =="rcsb":
+        PDB_IDS=file['rcsb']
+    else:
+        PDB_IDS=file['pdbe']
+
     return PDB_IDS
 
 
 def select_random_pdb_id(
-    PDB_IDS: Dict, input_source: str, exclude: List[str] = None
+    PDB_IDS: Dict, exclude: List[str] = None
 ) -> str:
     """Select a random protein PDB ID to fold from a specified source."""
     while True:
-        choices = PDB_IDS[input_source]["pdbs"]  # Corrected this line
+        choices = PDB_IDS["pdbs"]  # Corrected this line
         if not len(choices):
             continue
         selected_pdb_id = random.choice(choices)
@@ -241,24 +246,22 @@ def check_and_download_pdbs(
     elif input_source == "pdbe":
         # strip the string of the extension
         id = pdb_id[0:4]
-        substr = pdb_id[1:3]
+        substring = pdb_id[1:3]
         # Run the rsync command using subprocess
         rsync_command = [
             "rsync",
             "-rlpt",
             "-v",
             "-z",
-            f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substr}/{id}.cif.gz",
-            f"./{pdb_directory}/",
+            f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{id}.cif.gz",
+            f"{pdb_directory}/",
         ]
+        unzip_command = ["gunzip", f"{pdb_directory}/{id}.cif.gz"]
         try:
             subprocess.run(rsync_command, check=True)
+            subprocess.run(unzip_command, check=True)
             bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
 
-            decompress_gz_file(
-                gz_file_path=f"{pdb_directory}/{id}.cif.gz",
-                output_file_path=f"{pdb_directory}/{id}.cif",
-            )
             convert_cif_to_pdb(
                 cif_file=f"{pdb_directory}/{id}.cif",
                 pdb_file=f"{pdb_directory}/{id}.pdb",
@@ -356,12 +359,6 @@ def get_last_step_time(log_file: str) -> float:
                     break
 
     return last_step_time
-
-
-def decompress_gz_file(gz_file_path: str, output_file_path: str):
-    with gzip.open(gz_file_path, "rb") as f_in:
-        with open(output_file_path, "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
 
 
 def convert_cif_to_pdb(cif_file: str, pdb_file: str):
