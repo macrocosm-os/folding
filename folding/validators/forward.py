@@ -178,13 +178,10 @@ def create_random_modifications_to_system_config(config) -> Dict:
 
     system_kwargs = {"temperature": sampler(200, 400), "friction": sampler(0.9, 1.1)}
 
-    for param, values in system_kwargs.items():
+    for param in system_kwargs.keys():
         if config.protein[param] is not None:
             system_kwargs[param] = config.protein[param]
             continue
-
-        minimum, maximum = values
-        system_kwargs[param] = sampler(minimum, maximum)
 
     return system_kwargs
 
