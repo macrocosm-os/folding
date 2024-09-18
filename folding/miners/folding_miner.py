@@ -25,6 +25,7 @@ from folding.utils.ops import (
     check_if_directory_exists,
     get_tracebacks,
     write_pkl,
+    load_pkl,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
 
@@ -171,8 +172,9 @@ class FoldingMiner(BaseMinerNeuron):
         if len(self.simulations) > 0:
             sims_to_delete = []
 
-            for pdb_id, simulation in self.simulations.items():
+            for pdb_hash, simulation in self.simulations.items():
                 current_executor_state = simulation["executor"].get_state()
+                pdb_id = simulation[pdb_id]
 
                 if current_executor_state == "finished":
                     bt.logging.warning(
@@ -180,13 +182,55 @@ class FoldingMiner(BaseMinerNeuron):
                     )
                     sims_to_delete.append(pdb_id)
 
-            for pdb_id in sims_to_delete:
-                del self.simulations[pdb_id]
+            for pdb_hash in sims_to_delete:
+                del self.simulations[pdb_hash]
 
-            event["running_simulations"] = list(self.simulations.keys())
-            bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
+            running_simulations = [sim["pdb_id"] for sim in self.simulations]
+
+            event["running_simulations"] = running_simulations
+            bt.logging.warning(f"Simulations Running: {running_simulations}")
 
         return event
+
+    def get_simulation_hash(pdb_id: str, system_config: Dict) -> int:
+        """Creates a simulation hash based on the pdb_id and the system_config given.
+
+        Returns:
+            int: A value that describes the system
+        """
+        system_hash = pdb_id
+        for key, value in system_config.items():
+            system_hash += str(key) + str(value)
+
+        return hash(system_hash)
+
+    def is_unique_job(
+        self, pdb_id: str, submitted_system_config: Dict, system_config_filepath: str
+    ):
+        """Determines if a job is completely unique based on the previously saved system config
+        and the new system config that was given.
+
+        Args:
+            system_config (Dict): from SimulationConfig
+            system_config_filepath (str): saved SimulationConfig dictionary
+
+        Returns:
+            bool
+        """
+        if os.path.exists(system_config_filepath):
+            local_system_config: Dict = load_pkl(path=system_config_filepath)
+
+            local_hash = self.get_simulation_hash(
+                pdb_id=pdb_id, system_config=local_system_config
+            )
+            submitted_hash = self.get_simulation_hash(
+                pdb_id=pdb_id, system_config=submitted_system_config
+            )
+
+            if local_hash == submitted_hash:
+                return False, submitted_hash
+
+        return True, submitted_hash
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
@@ -216,14 +260,40 @@ class FoldingMiner(BaseMinerNeuron):
         event["pdb_id"] = pdb_id
 
         output_dir = os.path.join(self.base_data_path, pdb_id)
+        system_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
+        submitted_job_is_unique, pdb_hash = self.is_unique_job(
+            submitted_system_config=synapse.system_config,
+            system_config_filepath=system_config_filepath,
+        )
+
+        if submitted_job_is_unique:
+            if len(self.simulations) < self.max_workers:
+                return self.submit_simulation(
+                    synapse=synapse,
+                    output_dir=output_dir,
+                    system_config_filepath=system_config_filepath,
+                    event=event,
+                )
+
+            elif len(self.simulations) == self.max_workers:
+                bt.logging.warning(
+                    f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
+                )
+
+                bt.logging.warning(f"❗ Removing miner from job pool ❗")
+
+                event["condition"] = "cpu_limit_reached"
+                synapse.miner_serving = False
+
+                return check_synapse(self=self, synapse=synapse, event=event)
 
         # The set of RUNNING simulations.
-        if pdb_id in self.simulations:
-            self.simulations[pdb_id]["queried_at"] = time.time()
-            simulation = self.simulations[pdb_id]
+        elif pdb_hash in self.simulations:
+            self.simulations[pdb_hash]["queried_at"] = time.time()
+            simulation = self.simulations[pdb_hash]
             current_executor_state = simulation["executor"].get_state()
             current_seed = simulation["executor"].seed
 
@@ -281,22 +351,22 @@ class FoldingMiner(BaseMinerNeuron):
 
                 return check_synapse(self=self, synapse=synapse, event=event)
 
-            elif len(self.simulations) >= self.max_workers:
-                bt.logging.warning(
-                    f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
-                )
-
-                bt.logging.warning(f"❗ Removing miner from job pool ❗")
-
-                event["condition"] = "cpu_limit_reached"
-                synapse.miner_serving = False
-
-                return check_synapse(self=self, synapse=synapse, event=event)
-
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(self=self, synapse=synapse, event=event)
+
+    def submit_simulation(
+        self,
+        synapse: JobSubmissionSynapse,
+        output_dir: str,
+        pdb_id: str,
+        system_config_filepath: str,
+        event: Dict,
+    ):
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=output_dir)
+
+        # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
+        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=system_config)
 
         # The following files are required for openmm simulations and are received from the validator
         for filename, content in synapse.md_inputs.items():
@@ -317,7 +387,7 @@ class FoldingMiner(BaseMinerNeuron):
             f.write(synapse.pdb_contents)
 
         system_config = SimulationConfig(**synapse.system_config)
-        write_pkl(system_config, os.path.join(output_dir, f"config_{pdb_id}.pkl"))
+        write_pkl(system_config, system_config_filepath)
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
@@ -334,10 +404,11 @@ class FoldingMiner(BaseMinerNeuron):
             self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
         )
 
-        self.simulations[pdb_id]["executor"] = simulation_manager
-        self.simulations[pdb_id]["future"] = future
-        self.simulations[pdb_id]["output_dir"] = simulation_manager.output_dir
-        self.simulations[pdb_id]["queried_at"] = time.time()
+        self.simulations[pdb_hash]["pdb_id"] = pdb_id
+        self.simulations[pdb_hash]["executor"] = simulation_manager
+        self.simulations[pdb_hash]["future"] = future
+        self.simulations[pdb_hash]["output_dir"] = simulation_manager.output_dir
+        self.simulations[pdb_hash]["queried_at"] = time.time()
 
         bt.logging.success(f"✅ New pdb_id {pdb_id} submitted to job executor ✅ ")
 
