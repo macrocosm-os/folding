@@ -204,33 +204,18 @@ class FoldingMiner(BaseMinerNeuron):
 
         return hash(system_hash)
 
-    def is_unique_job(
-        self, pdb_id: str, submitted_system_config: Dict, system_config_filepath: str
-    ):
-        """Determines if a job is completely unique based on the previously saved system config
-        and the new system config that was given.
+    def is_unique_job(self, system_config_filepath: str) -> bool:
+        """Check to see if a submitted job is unique by checking to see if the folder exists.
 
         Args:
-            system_config (Dict): from SimulationConfig
-            system_config_filepath (str): saved SimulationConfig dictionary
+            system_config_filepath (str): filepath for the config file that specifies the simulation
 
         Returns:
             bool
         """
         if os.path.exists(system_config_filepath):
-            local_system_config: Dict = load_pkl(path=system_config_filepath)
-
-            local_hash = self.get_simulation_hash(
-                pdb_id=pdb_id, system_config=local_system_config
-            )
-            submitted_hash = self.get_simulation_hash(
-                pdb_id=pdb_id, system_config=submitted_system_config
-            )
-
-            if local_hash == submitted_hash:
-                return False, submitted_hash
-
-        return True, submitted_hash
+            return False
+        return True
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
@@ -259,14 +244,16 @@ class FoldingMiner(BaseMinerNeuron):
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
 
-        output_dir = os.path.join(self.base_data_path, pdb_id)
+        pdb_hash = self.get_simulation_hash(
+            pdb_id=pdb_id, system_config=synapse.system_config
+        )
+        output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
         system_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
-        submitted_job_is_unique, pdb_hash = self.is_unique_job(
-            submitted_system_config=synapse.system_config,
-            system_config_filepath=system_config_filepath,
+        submitted_job_is_unique = self.is_unique_job(
+            system_config_filepath=system_config_filepath
         )
 
         if submitted_job_is_unique:
@@ -346,10 +333,11 @@ class FoldingMiner(BaseMinerNeuron):
                     )
                     state = None
 
-                event["condition"] = "found_existing_data"
-                event["state"] = state
+                finally:
+                    event["condition"] = "found_existing_data"
+                    event["state"] = state
 
-                return check_synapse(self=self, synapse=synapse, event=event)
+                    return check_synapse(self=self, synapse=synapse, event=event)
 
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(self=self, synapse=synapse, event=event)
