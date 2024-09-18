@@ -48,6 +48,7 @@ class Protein(OpenMMSimulation):
         water: str,
         box: Literal["cube", "dodecahedron", "octahedron"],
         config: Dict,
+        system_kwargs: Dict,
         load_md_inputs: bool = False,
         epsilon: float = 0.01,
     ) -> None:
@@ -63,7 +64,13 @@ class Protein(OpenMMSimulation):
         self.box: Literal["cube", "dodecahedron", "octahedron"] = box
         self.water: str = water
 
-        self.system_config = self.setup_system_config()
+        self.system_config = SimulationConfig(
+            ff=self.ff,
+            water=self.water,
+            box=self.box,
+            seed=self.gen_seed(),
+            **system_kwargs,
+        )
 
         self.config = config
         self.simulation: app.Simulation = None
@@ -83,21 +90,6 @@ class Protein(OpenMMSimulation):
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
-
-    def setup_system_config(self):
-        # TODO: Add logic to parse parameters to change this...
-
-        def create_random_modifications() -> Dict:
-            sampler = lambda min_val, max_val: round(
-                np.random.uniform(min_val, max_val), 2
-            )
-            kwargs = {"temperature": sampler(100, 500), "friction": sampler(0.8, 1.2)}
-            return kwargs
-
-        kwargs = create_random_modifications()
-        return SimulationConfig(
-            ff=self.ff, water=self.water, box=self.box, seed=self.gen_seed(), **kwargs
-        )
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
