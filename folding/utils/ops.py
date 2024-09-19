@@ -8,6 +8,8 @@ import subprocess
 import sys
 import traceback
 from typing import Dict, List
+import gzip
+import parmed as pmd
 
 import bittensor as bt
 import requests
@@ -42,7 +44,9 @@ def load_pkl(path: str, read_mode="rb"):
     return data
 
 
-def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
+def load_pdb_ids(
+    root_dir: str, input_source: str = "pdbe", filename: str = "pdb_ids.pkl"
+) -> Dict[str, List[str]]:
     """If you want to randomly sample pdb_ids, you need to load in
     the data that was computed via the gather_pdbs.py script.
 
@@ -58,19 +62,22 @@ def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List
         )
 
     with open(PDB_PATH, "rb") as f:
-        PDB_IDS = pkl.load(f)
+        file = pkl.load(f)
+    if input_source == "rcsb":
+        PDB_IDS = file["rcsb"]
+    else:
+        PDB_IDS = file["pdbe"]
     return PDB_IDS
 
 
-def select_random_pdb_id(PDB_IDS: Dict, exclude: list = None) -> str:
-    """This function is really important as its where you select the protein you want to fold"""
+def select_random_pdb_id(PDB_IDS: Dict, exclude: List[str] = None) -> str:
+    """Select a random protein PDB ID to fold from a specified source."""
     while True:
-        family = random.choice(list(PDB_IDS.keys()))
-        choices = PDB_IDS[family]
+        choices = PDB_IDS["pdbs"]
         if not len(choices):
             continue
         selected_pdb_id = random.choice(choices)
-        if exclude is not None and selected_pdb_id not in exclude:
+        if exclude is None or selected_pdb_id not in exclude:
             return selected_pdb_id
 
 
@@ -156,7 +163,11 @@ def run_cmd_commands(
 
 
 def check_and_download_pdbs(
-    pdb_directory: str, pdb_id: str, download: bool = True, force: bool = False
+    pdb_directory: str,
+    pdb_id: str,
+    input_source: str,
+    download: bool = True,
+    force: bool = False,
 ) -> bool:
     """Check the status and optionally download a PDB file from the RCSB PDB database.
 
@@ -171,30 +182,68 @@ def check_and_download_pdbs(
         Exception: If download fails.
 
     """
-    url = f"https://files.rcsb.org/download/{pdb_id}"
     path = os.path.join(pdb_directory, f"{pdb_id}")
 
-    r = requests.get(url)
-    if r.status_code == 200:
-        is_complete = is_pdb_complete(r.text)
-        if is_complete or force:
-            if download:
-                check_if_directory_exists(output_directory=pdb_directory)
-                with open(path, "w") as file:
-                    file.write(r.text)
+    if input_source == "rcsb":
+        url = f"https://files.rcsb.org/download/{pdb_id}"
+        r = requests.get(url)
+        if r.status_code == 200:
+            is_complete = is_pdb_complete(r.text)
+            if is_complete or force:
+                if download:
+                    check_if_directory_exists(output_directory=pdb_directory)
+                    with open(path, "w") as file:
+                        file.write(r.text)
 
-            message = " but contains missing values." if not is_complete else ""
-            bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+                message = " but contains missing values." if not is_complete else ""
+                bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
 
-            return True
+                return True
+            else:
+                bt.logging.warning(
+                    f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+                )
+                return False
         else:
-            bt.logging.warning(
-                f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+            bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+            raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+
+    elif input_source == "pdbe":
+        # strip the string of the extension
+        id = pdb_id[0:4]
+        substring = pdb_id[1:3]
+
+        unzip_command = ["gunzip", f"{pdb_directory}/{id}.cif.gz"]
+
+        rsync_command = [
+            "rsync",
+            "-rlpt",
+            "-v",
+            "-z",
+            f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{id}.cif.gz",
+            f"{pdb_directory}/",
+        ]
+
+        try:
+            subprocess.run(rsync_command, check=True)
+            subprocess.run(unzip_command, check=True)
+            bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
+
+            convert_cif_to_pdb(
+                cif_file=f"{pdb_directory}/{id}.cif",
+                pdb_file=f"{pdb_directory}/{id}.pdb",
             )
-            return False
+            return True
+        except subprocess.CalledProcessError as e:
+            bt.logging.error(
+                f"Failed to download PDB file with ID {pdb_id} using rsync: {e}"
+            )
+            raise Exception(
+                f"Failed to download PDB file with ID {pdb_id} using rsync."
+            )
     else:
-        bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
-        raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+        bt.logging.error(f"Unknown input source: {input_source}")
+        raise ValueError(f"Unknown input source: {input_source}")
 
 
 def is_pdb_complete(pdb_text: str) -> bool:
@@ -242,3 +291,49 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
         "response_returned_files_sizes": response_returned_files_sizes,
         "response_miners_serving": response_miners_serving,
     }
+
+
+def get_last_step_time(log_file: str) -> float:
+    """Validators need to know where miners are in the simulation procedure to ensure that
+    the gro file that is computed is done on the most recent step of the simulation. The easiest
+    way to do this is by checking a log file and parsing it such that it finds the Step Time header.
+
+    args:
+        log_file (str): location of the log file that contains the step time header
+    """
+    step_pattern = re.compile(r"^\s*Step\s+Time$")
+    step_value_pattern = re.compile(r"^\s*(\d+)\s+([\d.]+)$")
+
+    num_matches = 0
+    last_step_time = 0  # default incase we don't have more than 1 log.
+
+    # Open and read the log file
+    with open(log_file, "r") as file:
+        lines = file.readlines()
+
+    # Reverse iterate over the lines for efficiency
+    for i, line in enumerate(reversed(lines)):
+        if step_pattern.match(line.strip()):  # Check for "Step Time" header
+            # Check the previous line in the original order for step value
+            value_line = lines[-1 + (-i + 1)]
+            match = step_value_pattern.match(value_line.strip())
+            if match:
+                num_matches += 1
+                if num_matches > 1:  # get second last line. Most stable.
+                    last_step_time = float(
+                        match.group(2)
+                    )  # group looks like:   191   0.3200
+                    break
+
+    return last_step_time
+
+
+def convert_cif_to_pdb(cif_file: str, pdb_file: str):
+    """Convert a CIF file to a PDB file using the `parmed` library."""
+    try:
+        structure = pmd.load_file(cif_file)
+        # Write the structure to a PDB file
+        structure.write_pdb(pdb_file)
+        print(f"Successfully converted {cif_file} to {pdb_file}")
+    except Exception as e:
+        print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
