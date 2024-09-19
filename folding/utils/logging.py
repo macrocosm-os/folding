@@ -35,16 +35,26 @@ def should_reinit_wandb(self):
 
 def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     """Starts a new wandb run."""
+    project = self.config.wandb.project_name
+    id = None if pdb_id not in self.wandb_ids.keys() else self.wandb_ids[pdb_id]
+
+    if pdb_id in self.wandb_ids.keys():
+        id = self.wandb_ids[pdb_id]["wandb_id"]
+        run_status = self.wandb_ids[pdb_id]["status"]
+    else:
+        id = None
+        run_status = "active"
+
     tags = [
         self.wallet.hotkey.ss58_address,
         folding.__version__,
         str(folding.__spec_version__),
         f"netuid_{self.metagraph.netuid}",
+        run_status,
     ]
-    project = self.config.wandb.project_name
+
     if failed:
         tags.append("failed")
-
     if self.config.mock:
         tags.append("mock")
     if self.config.neuron.disable_set_weights:
@@ -55,8 +65,6 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
         for key in ("neuron", "reward", "netuid", "wandb")
     }
     wandb_config["neuron"].pop("full_path", None)
-
-    id = None if pdb_id not in self.wandb_ids.keys() else self.wandb_ids[pdb_id]
 
     run = wandb.init(
         anonymous="allow",
@@ -73,7 +81,8 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
         resume="allow",
     )
 
-    self.add_wandb_id(pdb_id, run.id)
+    if run_status == "active":
+        self.add_wandb_id(pdb_id, run.id)
 
     if id is None:
         bt.logging.success(
