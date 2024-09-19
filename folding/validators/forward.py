@@ -10,18 +10,18 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
+from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
     select_random_pdb_id,
     load_pdb_ids,
     get_response_info,
     load_pkl,
 )
-from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
-from folding.validators.hyperparameters import HyperParameters
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PDB_IDS = load_pdb_ids(
-    root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+    root_dir=ROOT_DIR, filename="pdb_ids.pkl", input_source="pdbe"
 )  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 

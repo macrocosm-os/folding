@@ -142,10 +142,10 @@ class Protein(OpenMMSimulation):
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self):
+    def gather_pdb_id(self, input_source: str = "pdbe"):
         if self.pdb_id is None:
             PDB_IDS = load_pdb_ids(
-                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+                root_dir=ROOT_DIR, filename="pdb_ids.pkl", input_source=input_source
             )  # TODO: This should be a class variable via config
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
@@ -159,6 +159,7 @@ class Protein(OpenMMSimulation):
             if not check_and_download_pdbs(
                 pdb_directory=self.pdb_directory,
                 pdb_id=self.pdb_file,
+                input_source=self.config.input_source,
                 download=True,
                 force=self.config.force_use_pdb,
             ):
@@ -206,7 +207,7 @@ class Protein(OpenMMSimulation):
         )
 
         ## Setup the protein directory and sample a random pdb_id if not provided
-        self.gather_pdb_id()
+        self.gather_pdb_id(input_source=self.config.input_source)
         self.setup_pdb_directory()
 
         self.generate_input_files()
