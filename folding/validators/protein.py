@@ -171,17 +171,6 @@ class Protein(OpenMMSimulation):
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
-    def check_for_missing_files(self, required_files: List[str]):
-        missing_files = [
-            filename
-            for filename in required_files
-            if not os.path.exists(os.path.join(self.pdb_directory, filename))
-        ]
-
-        if len(missing_files) > 0:
-            return missing_files
-        return None
-
     def read_and_return_files(self, filenames: List) -> Dict:
         """Read the files and return them as a dictionary."""
         files_to_return = {}
@@ -220,10 +209,7 @@ class Protein(OpenMMSimulation):
         self.gather_pdb_id()
         self.setup_pdb_directory()
 
-        missing_files = self.check_for_missing_files(required_files=self.input_files)
-
-        if missing_files is not None:
-            self.generate_input_files()
+        self.generate_input_files()
 
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -285,6 +271,13 @@ class Protein(OpenMMSimulation):
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
     def generate_input_files(self):
+        """Generate_input_files method defines the following:
+        1. Load the pdb file and create the simulation object.
+        2. Minimize the energy of the system.
+        3. Save the checkpoint file.
+        4. Save the system config to the validator directory.
+        5. Move all files except the pdb file to the validator directory.
+        """
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
@@ -319,9 +312,6 @@ class Protein(OpenMMSimulation):
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
         bt.logging.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
-
-        # We want to catch any errors that occur in the above steps and then return the error to the user
-        return True
 
     def gen_seed(self):
         """Generate a random seed"""
