@@ -7,6 +7,7 @@ import hashlib
 import concurrent.futures
 from collections import defaultdict
 from typing import Dict, List, Tuple
+import copy
 
 import bittensor as bt
 import openmm.app as app
@@ -187,7 +188,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         return event
 
-    def get_simulation_hash(pdb_id: str, system_config: Dict) -> str:
+    def get_simulation_hash(self, pdb_id: str, system_config: Dict) -> str:
         """Creates a simulation hash based on the pdb_id and the system_config given.
 
         Returns:
@@ -256,6 +257,7 @@ class FoldingMiner(BaseMinerNeuron):
             if len(self.simulations) < self.max_workers:
                 return self.submit_simulation(
                     synapse=synapse,
+                    pdb_id=pdb_id,
                     output_dir=output_dir,
                     system_config_filepath=system_config_filepath,
                     event=event,
@@ -350,7 +352,7 @@ class FoldingMiner(BaseMinerNeuron):
         check_if_directory_exists(output_directory=output_dir)
 
         # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
-        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=system_config)
+        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=synapse.system_config)
 
         # The following files are required for openmm simulations and are received from the validator
         for filename, content in synapse.md_inputs.items():
