@@ -169,7 +169,7 @@ class FoldingMiner(BaseMinerNeuron):
 
             for pdb_hash, simulation in self.simulations.items():
                 current_executor_state = simulation["executor"].get_state()
-                pdb_id = simulation[pdb_id]
+                pdb_id = simulation["pdb_id"]
 
                 if current_executor_state == "finished":
                     bt.logging.warning(
