@@ -116,3 +116,6 @@ def log_event(self, event, failed=False, pdb_location: str = None):
         log_protein(run, pdb_id_path=pdb_location)
 
     run.finish()
+    if event['active'] == False:
+        self.remove_wandb_id(pdb_id)
+
