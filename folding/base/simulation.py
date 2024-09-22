@@ -149,9 +149,9 @@ class OpenMMSimulation(GenericSimulation):
             f"Setting positions took {time.time() - start_time:.4f} seconds"
         )
 
-        # Converting the system config into a Dict[str,str]
+        # Converting the system config into a Dict[str,str] and ensure all values in system_config are of the correct type
         for k, v in system_config.items():
-            if not isinstance(v, str) or not isinstance(v, int):
+            if not isinstance(v, (str, int, float, dict)):
                 system_config[k] = str(v)
 
         return simulation, SimulationConfig(**system_config)
