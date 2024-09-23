@@ -459,7 +459,8 @@ class Protein(OpenMMSimulation):
         between the current simulation and a reference log file.
 
         Returns:
-            bool: True if the run is valid, False otherwise.
+            Tuple[bool, list, list]: True if the run is valid, False otherwise.
+                The two lists contain the potential energy values from the current simulation and the reference log file.
         """
 
         # The percentage that we allow the energy to differ from the miner to the validator.
