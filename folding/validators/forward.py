@@ -214,6 +214,11 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
         try:
             protein.setup_simulation()
 
+            if protein.init_energy > 0:
+                raise ValueError(
+                    f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                )
+
         except Exception:
             # full traceback
             bt.logging.error(traceback.format_exc())
