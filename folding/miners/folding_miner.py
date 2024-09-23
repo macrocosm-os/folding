@@ -212,12 +212,6 @@ class FoldingMiner(BaseMinerNeuron):
         self.step += 1
         self.query_start_time = time.time()
 
-        if (
-            synapse.dendrite.hotkey
-            != "5GRDsru2BDD8UBasfKDsHBKmHLxaPcbuwcug3f7AaByLXizn"
-        ):
-            return check_synapse(self=self, synapse=synapse, event={})
-
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
 
