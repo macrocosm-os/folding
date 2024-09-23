@@ -312,15 +312,20 @@ class Validator(BaseValidatorNeuron):
         bt.logging.success(f"Event information: {merged_events}")
         event = prepare_event_for_logging(merged_events)
 
-        # If the job is finished, remove the pdb directory
         pdb_location = None
         protein = Protein.from_job(job=job, config=self.config.protein)
-        if job.active is False:
-            protein.remove_pdb_directory()
-        elif event["updated_count"] == 1:
+
+        if event["updated_count"] == 1:
+            # We want to visualize the protein only once.
             pdb_location = protein.pdb_location
 
+        if job.active is False:
+            self.wandb_ids[job.pdb]["status"] = "inactive"
+
         log_event(self, event=event, pdb_location=pdb_location)
+
+        if job.active is False:
+            protein.remove_pdb_directory()
 
 
 # The main function parses the configuration and runs the validator.
