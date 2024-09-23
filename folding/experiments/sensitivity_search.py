@@ -1,3 +1,6 @@
+### This script is used to run a sensitivity search for a protein folding simulation. 
+### Used for benchmarking. 
+
 import os
 import time
 import wandb
@@ -7,7 +10,7 @@ from pathlib import Path
 import bittensor as bt
 
 import pandas as pd 
-from box import Box
+from box import Box #install using pip install box
 import copy 
 
 import plotly.express as px
