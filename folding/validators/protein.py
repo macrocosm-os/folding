@@ -589,8 +589,4 @@ class Protein(OpenMMSimulation):
             / unit.kilojoules_per_mole
         )
 
-        if np.isnan(init_energy):
-            raise OpenMMException(
-                message="Initial energy of the system is NaN... Skipping"
-            )
         return init_energy
