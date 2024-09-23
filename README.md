@@ -38,7 +38,7 @@ This repository is the official codebase for Bittensor Subnet Folding (SN25), wh
 # Introduction
 The protein folding subnet is Bittensors’ first venture into academic use cases, built and maintained by [Macrocosmos AI](https://www.macrocosmos.ai). While the current subnet landscape consists of mainly AI and web-scraping protocols, we believe that it is important to highlight to the world how Bittensor is flexible enough to solve almost any problem.
 
-This subnet is designed to produce valuable academic research in Bittensor. Researchers and universities can use this subnet to solve almost any protein, on demand, for free. It is our hope that this subnet will empower researchers to conduct world-class research and publish in top journals while demonstrating that decentralized systems are an economic and efficient alternative to traditional approaches.
+This subnet is designed to produce valuable academic research in Bittensor. Researchers and universities can use this subnet to simulate almost any protein, on demand, for free. It is our hope that this subnet will empower researchers to conduct world-class research and publish in top journals while demonstrating that decentralized systems are an economic and efficient alternative to traditional approaches.
 
   
 # What is Protein Folding?  
@@ -123,6 +123,7 @@ python neurons/validator.py
     --neuron.queue_size <number of pdb_ids to submit>
     --neuron.sample_size <number of miners per pdb_id>
     --protein.max_steps <number of steps for the simulation>
+    --protein.input_source <database of proteins to choose from>
     --logging.debug # Run in debug mode, alternatively --logging.trace for trace mode
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
 ```
@@ -156,7 +157,7 @@ Keep in mind that you will need to change the default parameters for either the 
 
 ## How does the Subnet Work?
 
-In this subnet, validators create protein folding challenges for miners, who in turn run simulations based using OpenMM to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
+In this subnet, validators create protein folding challenges for miners, who in turn run simulations using OpenMM to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
 
 ### Validation
 
