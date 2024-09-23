@@ -1,19 +1,17 @@
-import base64
-import concurrent.futures
-import glob
 import os
-import random
 import time
+import glob
+import base64
+import random
+import hashlib
+import concurrent.futures
 from collections import defaultdict
 from typing import Dict, List, Tuple
-from sys import stdout
 import copy
 import traceback
 
 import bittensor as bt
-import openmm as mm
 import openmm.app as app
-import openmm.unit as unit
 
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
@@ -171,8 +169,11 @@ class FoldingMiner(BaseMinerNeuron):
         if len(self.simulations) > 0:
             sims_to_delete = []
 
-            for pdb_id, simulation in self.simulations.items():
+
+            for pdb_hash, simulation in self.simulations.items():
                 future = simulation["future"]
+                pdb_id = simulation["pdb_id"]
+
                 # Check if the future is done
                 if future.done():
                     state, error_info = future.result()
@@ -187,15 +188,43 @@ class FoldingMiner(BaseMinerNeuron):
                             f"❗ {pdb_id} failed simulation... Removing from execution stack ❗"
                         )
                         bt.logging.error(f"Error info: {error_info}")
-                    sims_to_delete.append(pdb_id)
+                    sims_to_delete.append(pdb_hash)
 
-            for pdb_id in sims_to_delete:
-                del self.simulations[pdb_id]
+            for pdb_hash in sims_to_delete:
+                del self.simulations[pdb_hash]
 
-            event["running_simulations"] = list(self.simulations.keys())
-            bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
+            running_simulations = [sim["pdb_id"] for sim in self.simulations.values()]
+
+            event["running_simulations"] = running_simulations
+            bt.logging.warning(f"Simulations Running: {running_simulations}")
 
         return event
+
+    def get_simulation_hash(self, pdb_id: str, system_config: Dict) -> str:
+        """Creates a simulation hash based on the pdb_id and the system_config given.
+
+        Returns:
+            str: first 6 characters of a sha256 hash
+        """
+        system_hash = pdb_id
+        for key, value in system_config.items():
+            system_hash += str(key) + str(value)
+
+        hash_object = hashlib.sha256(system_hash.encode("utf-8"))
+        return hash_object.hexdigest()[:6]
+
+    def is_unique_job(self, system_config_filepath: str) -> bool:
+        """Check to see if a submitted job is unique by checking to see if the folder exists.
+
+        Args:
+            system_config_filepath (str): filepath for the config file that specifies the simulation
+
+        Returns:
+            bool
+        """
+        if os.path.exists(system_config_filepath):
+            return False
+        return True
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
@@ -224,15 +253,45 @@ class FoldingMiner(BaseMinerNeuron):
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
 
-        output_dir = os.path.join(self.base_data_path, pdb_id)
+        pdb_hash = self.get_simulation_hash(
+            pdb_id=pdb_id, system_config=synapse.system_config
+        )
+        output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
+        system_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
+        submitted_job_is_unique = self.is_unique_job(
+            system_config_filepath=system_config_filepath
+        )
+
+        if submitted_job_is_unique:
+            if len(self.simulations) < self.max_workers:
+                return self.submit_simulation(
+                    synapse=synapse,
+                    pdb_id=pdb_id,
+                    pdb_hash=pdb_hash,
+                    output_dir=output_dir,
+                    system_config_filepath=system_config_filepath,
+                    event=event,
+                )
+
+            elif len(self.simulations) == self.max_workers:
+                bt.logging.warning(
+                    f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
+                )
+
+                bt.logging.warning(f"❗ Removing miner from job pool ❗")
+
+                event["condition"] = "cpu_limit_reached"
+                synapse.miner_serving = False
+
+                return check_synapse(self=self, synapse=synapse, event=event)
 
         # The set of RUNNING simulations.
-        if pdb_id in self.simulations:
-            self.simulations[pdb_id]["queried_at"] = time.time()
-            simulation = self.simulations[pdb_id]
+        elif pdb_hash in self.simulations:
+            self.simulations[pdb_hash]["queried_at"] = time.time()
+            simulation = self.simulations[pdb_hash]
             current_executor_state = simulation["executor"].get_state()
             current_seed = simulation["executor"].seed
 
@@ -296,27 +355,28 @@ class FoldingMiner(BaseMinerNeuron):
                     )
                     state = None
 
-                event["condition"] = "found_existing_data"
-                event["state"] = state
+                finally:
+                    event["condition"] = "found_existing_data"
+                    event["state"] = state
 
-                return check_synapse(self=self, synapse=synapse, event=event)
-
-            elif len(self.simulations) >= self.max_workers:
-                bt.logging.warning(
-                    f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
-                )
-
-                bt.logging.warning(f"❗ Removing miner from job pool ❗")
-
-                event["condition"] = "cpu_limit_reached"
-                synapse.miner_serving = False
-
-                return check_synapse(self=self, synapse=synapse, event=event)
+                    return check_synapse(self=self, synapse=synapse, event=event)
 
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(self=self, synapse=synapse, event=event)
+
+    def submit_simulation(
+        self,
+        synapse: JobSubmissionSynapse,
+        output_dir: str,
+        pdb_id: str,
+        pdb_hash: str,
+        system_config_filepath: str,
+        event: Dict,
+    ):
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=output_dir)
+
+        # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
 
         # The following files are required for openmm simulations and are received from the validator
         for filename, content in synapse.md_inputs.items():
@@ -337,7 +397,7 @@ class FoldingMiner(BaseMinerNeuron):
             f.write(synapse.pdb_contents)
 
         system_config = SimulationConfig(**synapse.system_config)
-        write_pkl(system_config, os.path.join(output_dir, f"config_{pdb_id}.pkl"))
+        write_pkl(system_config, system_config_filepath)
 
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
@@ -354,10 +414,11 @@ class FoldingMiner(BaseMinerNeuron):
             self.config.mock or self.mock,  # self.mock is inside of MockFoldingMiner
         )
 
-        self.simulations[pdb_id]["executor"] = simulation_manager
-        self.simulations[pdb_id]["future"] = future
-        self.simulations[pdb_id]["output_dir"] = simulation_manager.output_dir
-        self.simulations[pdb_id]["queried_at"] = time.time()
+        self.simulations[pdb_hash]["pdb_id"] = pdb_id
+        self.simulations[pdb_hash]["executor"] = simulation_manager
+        self.simulations[pdb_hash]["future"] = future
+        self.simulations[pdb_hash]["output_dir"] = simulation_manager.output_dir
+        self.simulations[pdb_hash]["queried_at"] = time.time()
 
         bt.logging.success(f"✅ New pdb_id {pdb_id} submitted to job executor ✅ ")
 
