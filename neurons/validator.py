@@ -316,7 +316,6 @@ class Validator(BaseValidatorNeuron):
         pdb_location = None
         protein = Protein.from_job(job=job, config=self.config.protein)
         if job.active is False:
-            self.remove_wandb_id(job.pdb)
             protein.remove_pdb_directory()
         elif event["updated_count"] == 1:
             pdb_location = protein.pdb_location
