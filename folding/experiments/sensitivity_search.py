@@ -1,5 +1,5 @@
-### This script is used to run a sensitivity search for a protein folding simulation. 
-### Used for benchmarking. 
+### This script is used to run a sensitivity search for a protein folding simulation.
+### Used for benchmarking.
 
 import os
 import time
@@ -9,9 +9,9 @@ from tqdm import tqdm
 from pathlib import Path
 import bittensor as bt
 
-import pandas as pd 
-from box import Box #install using pip install box
-import copy 
+import pandas as pd
+from box import Box  # install using pip install box
+import copy
 
 import plotly.express as px
 import openmm as mm
@@ -139,7 +139,7 @@ def try_prepare_challenge(pdb_id: str) -> Dict:
             "box": sampled_combination["BOX"],
         }
 
-        config = Box({"force_use_pdb" : False})
+        config = Box({"force_use_pdb": False})
         protein = Protein(pdb_id=pdb_id, config=config, **hps)
 
         try:
@@ -172,24 +172,25 @@ def try_prepare_challenge(pdb_id: str) -> Dict:
 def sample_pdb(exclude: List = [], pdb_id: str = None):
     return pdb_id or select_random_pdb_id(PDB_IDS, exclude=exclude)
 
-def extact_energies(state:str, data_directory:str):
-    check_log_file = pd.read_csv(
-        os.path.join(data_directory, f"{state}.log")
-    )
+
+def extact_energies(state: str, data_directory: str):
+    check_log_file = pd.read_csv(os.path.join(data_directory, f"{state}.log"))
 
     return check_log_file["Potential Energy (kJ/mole)"].values
 
-def cpt_file_mapper(output_dir:str, state:str):
+
+def cpt_file_mapper(output_dir: str, state: str):
     if state == "nvt":
         return f"{output_dir}/em.cpt"
 
     if "npt" in state:
-       state = "nvt" + state.split("npt")[-1]
+        state = "nvt" + state.split("npt")[-1]
 
     if "md" in state:
         state = "npt" + state.split("md_0_1")[-1]
 
     return f"{output_dir}/{state}.cpt"
+
 
 if __name__ == "__main__":
     create_wandb_run(project="folding-openmm", entity="macrocosmos")
@@ -203,21 +204,21 @@ if __name__ == "__main__":
         pdb_id = sample_pdb(exclude=pdbs_to_exclude)
 
         try:
-            protein, event = create_new_challenge(pdb_id = pdb_id)
+            protein, event = create_new_challenge(pdb_id=pdb_id)
         except Exception as e:
             bt.logging.error(f"Error occurred for pdb_id {pdb_id}: {e}")
             pdbs_to_exclude.append(pdb_id)
             continue
 
-        pdb_obj : app.PDBFile = protein.load_pdb_file(protein.pdb_location)
+        pdb_obj: app.PDBFile = protein.load_pdb_file(protein.pdb_location)
         output_dir = protein.validator_directory
-        
+
         for temperature in temperatures:
             system_config = copy.deepcopy(protein.system_config)
             system_config.temperature = float(temperature)
 
             for state, steps_to_run in SIMULATION_STEPS.items():
-                #Creates the simulation object needed for the stage.
+                # Creates the simulation object needed for the stage.
 
                 temp_state = state + f"_temp_{temperature}"
 
@@ -225,25 +226,29 @@ if __name__ == "__main__":
                     state=temp_state,
                     seed=protein.system_config.seed,
                     system_config=system_config,
-                    pdb_obj = pdb_obj, 
-                    output_dir = protein.validator_directory
+                    pdb_obj=pdb_obj,
+                    output_dir=protein.validator_directory,
                 )
 
-                bt.logging.info(f"Running {state} for {steps_to_run} steps for pdb {pdb_id}")
+                bt.logging.info(
+                    f"Running {state} for {steps_to_run} steps for pdb {pdb_id}"
+                )
 
                 if state == "nvt":
-                    mapper_state = state 
+                    mapper_state = state
                 else:
                     mapper_state = temp_state
-                
+
                 simulation.loadCheckpoint(cpt_file_mapper(output_dir, mapper_state))
 
-                start_time = time.time() 
+                start_time = time.time()
                 simulation.step(steps_to_run)
                 simulation_time = time.time() - start_time
                 event[f"{state}_time"] = simulation_time
 
-                energy_array = extact_energies(state = temp_state, data_directory= protein.validator_directory)
+                energy_array = extact_energies(
+                    state=temp_state, data_directory=protein.validator_directory
+                )
                 event[f"{state}_energies_temp_{temperature}"] = energy_array.tolist()
 
                 fig = px.scatter(
@@ -253,9 +258,7 @@ if __name__ == "__main__":
                     height=600,
                     width=1400,
                 )
-                fig.write_image(
-                    os.path.join(output_dir, f"{mapper_state}_energy.png")
-                )
+                fig.write_image(os.path.join(output_dir, f"{mapper_state}_energy.png"))
 
         log_event(event)
         num_experiments = num_experiments - 1

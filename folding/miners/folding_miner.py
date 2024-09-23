@@ -187,15 +187,6 @@ class FoldingMiner(BaseMinerNeuron):
             bt.logging.warning(f"Simulations Running: {list(self.simulations.keys())}")
 
         return event
-    
-    def alter_system_config(self, system_config: SimulationConfig) -> SimulationConfig:
-        """
-        Alter the system config based on the miner's requirements.
-        """
-        system_config = copy.deepcopy(system_config)
-        system_config["temperature"] = 150.0
-        system_config["friction"] = 0.5
-        return system_config
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
@@ -221,7 +212,10 @@ class FoldingMiner(BaseMinerNeuron):
         self.step += 1
         self.query_start_time = time.time()
 
-        if synapse.dendrite.hotkey != "5GRDsru2BDD8UBasfKDsHBKmHLxaPcbuwcug3f7AaByLXizn":
+        if (
+            synapse.dendrite.hotkey
+            != "5GRDsru2BDD8UBasfKDsHBKmHLxaPcbuwcug3f7AaByLXizn"
+        ):
             return check_synapse(self=self, synapse=synapse, event={})
 
         event = self.create_default_dict()
@@ -327,8 +321,6 @@ class FoldingMiner(BaseMinerNeuron):
         # Write the contents of the pdb file to the output directory
         with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
             f.write(synapse.pdb_contents)
-
-        system_config = self.alter_system_config(system_config = synapse.system_config)
 
         system_config = SimulationConfig(**system_config)
         write_pkl(system_config, os.path.join(output_dir, f"config_{pdb_id}.pkl"))
@@ -450,13 +442,15 @@ class SimulationManager:
         os.chdir(self.output_dir)
 
         steps = {"nvt": 50000, "npt": 75000, "md_0_1": 100000}
-        
+
         # Write the seed so that we always know what was used.
         with open(self.seed_file_name, "w") as f:
             f.write(f"{self.seed}\n")
 
-        for state in self.STATES: 
-            simulation = self.configure_commands(state = state, seed = self.seed, system_config = self.system_config)
+        for state in self.STATES:
+            simulation = self.configure_commands(
+                state=state, seed=self.seed, system_config=self.system_config
+            )
 
             with open(os.path.join(self.output_dir, self.state_file_name), "w") as f:
                 f.write(f"{state}\n")
@@ -486,9 +480,8 @@ class SimulationManager:
             return lines[-1].strip() if lines else None
 
     def configure_commands(
-        self, state:str, seed: int, system_config: dict
+        self, state: str, seed: int, system_config: dict
     ) -> Dict[str, List[str]]:
-
         simulation, _ = OpenMMSimulation().create_simulation(
             pdb=self.pdb_obj,
             system_config=system_config.get_config(),
