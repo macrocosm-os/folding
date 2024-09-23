@@ -66,6 +66,8 @@ class HyperParameters:
 
             initial_search.append(field.recommended_configuration)
 
+        # Shuffle the initial search and all combinations to ensure randomness.
+        random.shuffle(initial_search)
         random.shuffle(self.all_combinations)
 
         # If we want to exclude a parameter from the search, we will remove the recommended configs.
