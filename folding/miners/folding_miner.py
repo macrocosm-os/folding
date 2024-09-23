@@ -545,7 +545,7 @@ class SimulationManager:
             return lines[-1].strip() if lines else None
 
     def configure_commands(
-        self, seed: int, system_config: dict
+        self, seed: int, system_config: SimulationConfig
     ) -> Dict[str, List[str]]:
         state_commands = {}
 

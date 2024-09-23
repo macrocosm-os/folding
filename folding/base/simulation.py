@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import time
-from typing import Union
+from typing import Tuple
 import functools
 import openmm as mm
 from openmm import app
@@ -35,7 +35,7 @@ class OpenMMSimulation(GenericSimulation):
     @GenericSimulation.timeit
     def create_simulation(
         self, pdb: app.PDBFile, system_config: dict, state: str, seed: int = None
-    ) -> Union[app.Simulation, SimulationConfig]:
+    ) -> Tuple[app.Simulation, SimulationConfig]:
         """Recreates a simulation object based on the provided parameters.
 
         This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
