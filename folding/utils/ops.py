@@ -70,7 +70,7 @@ def select_random_pdb_id(PDB_IDS: Dict, exclude: list = None) -> str:
         if not len(choices):
             continue
         selected_pdb_id = random.choice(choices)
-        if exclude is not None and selected_pdb_id not in exclude:
+        if exclude is None or selected_pdb_id not in exclude:
             return selected_pdb_id
 
 
