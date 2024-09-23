@@ -176,12 +176,12 @@ class FoldingMiner(BaseMinerNeuron):
                     bt.logging.warning(
                         f"✅ {pdb_id} finished simulation... Removing from execution stack ✅"
                     )
-                    sims_to_delete.append(pdb_id)
+                    sims_to_delete.append(pdb_hash)
 
             for pdb_hash in sims_to_delete:
                 del self.simulations[pdb_hash]
 
-            running_simulations = [sim["pdb_id"] for sim in self.simulations]
+            running_simulations = [sim["pdb_id"] for sim in self.simulations.values()]
 
             event["running_simulations"] = running_simulations
             bt.logging.warning(f"Simulations Running: {running_simulations}")
@@ -258,6 +258,7 @@ class FoldingMiner(BaseMinerNeuron):
                 return self.submit_simulation(
                     synapse=synapse,
                     pdb_id=pdb_id,
+                    pdb_hash=pdb_hash,
                     output_dir=output_dir,
                     system_config_filepath=system_config_filepath,
                     event=event,
@@ -345,6 +346,7 @@ class FoldingMiner(BaseMinerNeuron):
         synapse: JobSubmissionSynapse,
         output_dir: str,
         pdb_id: str,
+        pdb_hash: str,
         system_config_filepath: str,
         event: Dict,
     ):
@@ -352,7 +354,6 @@ class FoldingMiner(BaseMinerNeuron):
         check_if_directory_exists(output_directory=output_dir)
 
         # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
-        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=synapse.system_config)
 
         # The following files are required for openmm simulations and are received from the validator
         for filename, content in synapse.md_inputs.items():
