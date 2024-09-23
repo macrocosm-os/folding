@@ -1,6 +1,6 @@
 ## Reproducibility
 
-The biggest challenge for this subnetwork is verifying if miner are running simulations with the correct system parameters. This is important so we can secure the future of the network by being able to create a product that is reliable and accurate. The biggest reason we moved to OpenMM is due to the feature called `DeterministicForces` which allows us to run the same simulation on different machines and get the same results. This is a huge step forward in the right direction. There is a caveat though, reproducibility is not 100% consistent yet as of our testing. It can differ depending on the exact pdb as well as the hardware it is run on. With that in mind, if we find that your run was not reproducible, your submission WILL NOT be accepted.
+The biggest challenge for this subnetwork is verifying if miners are running simulations with the correct system parameters. This is important so we can secure the future of the network by being able to create a product that is reliable and accurate. The biggest reason we moved to OpenMM is due to the feature called `DeterministicForces` which allows us to run the same simulation on different machines and get the same results. This is a huge step forward in the right direction. There is a caveat though, reproducibility is not 100% consistent yet as of our testing. It can differ depending on the exact pdb as well as the hardware it is run on. With that in mind, if we find that your run was not reproducible, your submission WILL NOT be accepted.
 
 In order to make this more stable we will require ALL validators to run the same exact GPUs, 1 guaranteed way to have 100% chance of reproducible simulations is to run the same exact hardware although this is not necessary. Below I provide some analysis that we did during our testnet phase to show how reproducibility can be affected by different hardware.
 
@@ -39,7 +39,7 @@ In this case, the simulations are not reproducible and the percentage difference
 Percentage difference:
 ![alt text](assets/bad_reproducibility_big_deviation_percentage_diff.png)
 
-Such major deviations are very weird and suggest some major issue is at hand.
+Such major deviations are unusual and indicate the presence of a major underlying issue. 
 
 ### Conclusion
-We are still investigating the cause of these failures. We will be requiring all validators to run the same exact GPUs to ensure that the simulations are reproducible. If you notice that as a miner you're runs are falsely marked as invalid due to a lack of reproducibility please reach out to us. We will not accept submissions that are not reproducible.
+We are still investigating the cause of these failures. We will be requiring all validators to run the same exact GPUs to ensure simulation reproducability. If you notice that as a miner you're runs are falsely marked as invalid due to a lack of reproducibility please reach out to us. We will not accept submissions that are not reproducible.
