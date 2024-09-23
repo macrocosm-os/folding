@@ -64,7 +64,7 @@ class Protein(OpenMMSimulation):
         self.water: str = water
 
         self.system_config = SimulationConfig(
-            ff=self.ff, water=self.water, box=self.box, seed=self.gen_seed()
+            ff=self.ff, water=self.water, box=self.box, seed=25
         )
 
         self.config = config
