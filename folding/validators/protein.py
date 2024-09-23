@@ -459,7 +459,8 @@ class Protein(OpenMMSimulation):
         between the current simulation and a reference log file.
 
         Returns:
-            bool: True if the run is valid, False otherwise.
+            Tuple[bool, list, list]: True if the run is valid, False otherwise.
+                The two lists contain the potential energy values from the current simulation and the reference log file.
         """
 
         # The percentage that we allow the energy to differ from the miner to the validator.
@@ -536,8 +537,8 @@ class Protein(OpenMMSimulation):
         # We want to save all the information to the local filesystem so we can index them later.
 
         if average_percent_diff > ANOMALY_THRESHOLD:
-            return False
-        return True
+            return False, check_energies.tolist(), miner_energies.tolist()
+        return True, check_energies.tolist(), miner_energies.tolist()
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)

@@ -22,6 +22,7 @@ def get_energies(
     event["is_valid"] = [False] * len(uids)
     event["checked_energy"] = [0] * len(uids)
     event["reported_energy"] = [0] * len(uids)
+    event["miner_energy"] = [0] * len(uids)
     event["rmsds"] = [0] * len(uids)
     energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
@@ -47,8 +48,10 @@ def get_energies(
             if energy == 0:
                 continue
 
-            is_valid = protein.is_run_valid()
-            energies[i] = energy if is_valid else 0
+            is_valid, checked_energy, miner_energy = protein.is_run_valid()
+
+            event["checked_energy"][i] = checked_energy
+            event["miner_energy"][i] = miner_energy
 
             event["is_valid"][i] = is_valid
             event["reported_energy"][i] = float(energy)
