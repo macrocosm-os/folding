@@ -463,7 +463,7 @@ class Protein(OpenMMSimulation):
         """
 
         # The percentage that we allow the energy to differ from the miner to the validator.
-        ANOMALY_THRESHOLD = 20
+        ANOMALY_THRESHOLD = 0.5
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
@@ -531,17 +531,11 @@ class Protein(OpenMMSimulation):
             os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
         )
 
-        # Compare the entries up to the length of the shorter array
-        anomalies_detected = percent_diff > self.upper_bounds[:min_length]
-
-        # Calculate the percentage of True values
-        percent_anomalies_detected = (
-            sum(anomalies_detected) / len(anomalies_detected)
-        ) * 100
+        average_percent_diff = np.mean(percent_diff)
 
         # We want to save all the information to the local filesystem so we can index them later.
 
-        if percent_anomalies_detected > ANOMALY_THRESHOLD:
+        if average_percent_diff > ANOMALY_THRESHOLD:
             return False
         return True
 

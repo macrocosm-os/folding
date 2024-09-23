@@ -11,6 +11,7 @@ import copy
 import traceback
 
 import bittensor as bt
+import openmm as mm
 import openmm.app as app
 
 # import base miner class which takes care of most of the boilerplate
@@ -168,7 +169,6 @@ class FoldingMiner(BaseMinerNeuron):
         """
         if len(self.simulations) > 0:
             sims_to_delete = []
-
 
             for pdb_hash, simulation in self.simulations.items():
                 future = simulation["future"]
