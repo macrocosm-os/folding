@@ -528,11 +528,11 @@ class Protein(OpenMMSimulation):
             os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
         )
 
-        average_percent_diff = np.mean(percent_diff)
+        median_percent_diff = np.median(percent_diff)
 
         # We want to save all the information to the local filesystem so we can index them later.
 
-        if average_percent_diff > ANOMALY_THRESHOLD:
+        if median_percent_diff > ANOMALY_THRESHOLD:
             return False, check_energies.tolist(), miner_energies.tolist()
         return True, check_energies.tolist(), miner_energies.tolist()
 
