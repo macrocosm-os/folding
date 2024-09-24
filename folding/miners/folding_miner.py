@@ -118,7 +118,6 @@ def check_synapse(
 
     event["query_forward_time"] = time.time() - self.query_start_time
 
-    log_event(self=self, event=event)
     return synapse
 
 
