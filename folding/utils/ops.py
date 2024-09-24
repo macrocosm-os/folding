@@ -15,27 +15,8 @@ import tqdm
 
 from folding.protocol import JobSubmissionSynapse
 
-# Recommended force field-water pairs, retrieved from gromacs-2024.1/share/top
-FF_WATER_PAIRS = {
-    "amber03": "tip3p",  # AMBER force fields
-    "amber94": "tip3p",
-    "amber96": "tip3p",
-    "amber99": "tip3p",
-    "amber99sb-ildn": "tip3p",
-    "amber99sb": "tip3p",
-    "amberGS": "tip3p",
-    "charmm27": "tip3p",  # CHARMM all-atom force field
-    "gromos43a1": "spc",  # GROMOS force fields
-    "gromos43a2": "spc",
-    "gromos45a3": "spc",
-    "gromos53a5": "spc",
-    "gromos53a6": "spc",
-    "gromos54a7": "spc",
-    "oplsaa": "tip4p",  # OPLS all-atom force field
-}
 
-
-class GromacsException(Exception):
+class OpenMMException(Exception):
     """Exception raised for errors in the versioning."""
 
     def __init__(self, message="Version error occurred"):
@@ -48,6 +29,17 @@ def delete_directory(directory: str):
     Therefore, we want to delete the directory after we are done with the tests.
     """
     shutil.rmtree(directory)
+
+
+def write_pkl(data, path: str, write_mode="wb"):
+    with open(path, write_mode) as f:
+        pkl.dump(data, f)
+
+
+def load_pkl(path: str, read_mode="rb"):
+    with open(path, read_mode) as f:
+        data = pkl.load(f)
+    return data
 
 
 def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
@@ -119,30 +111,6 @@ def gro_hash(gro_path: str):
         buf += match.group(1) + match.group(2).replace(" ", "")
 
     return hashlib.md5(name + buf.encode()).hexdigest()
-
-
-def calc_potential_from_edr(
-    output_dir: str = None, edr_name: str = "em.edr", xvg_name: str = "_tmp.xvg"
-):
-    """Calculate the potential energy from an edr file using gmx energy.
-    Args:
-        output_dir (str): directory containing the edr file
-        edr_name (str): name of the edr file
-        xvg_name (str): name of the xvg file
-
-    Returns:
-        float: potential energy
-    """
-    edr_file = os.path.join(output_dir, edr_name)
-    xvg_file = os.path.join(output_dir, xvg_name)
-    command = [f"echo 'Potential' | gmx energy -f {edr_file} -o {xvg_file} -nobackup"]
-
-    run_cmd_commands(command, verbose=True)
-
-    # Just take the last line of the 2 column xvg file (step, energy) and report the energy
-    with open(xvg_file, "r") as f:
-        lines = [line.strip("\n") for line in f.readlines()]
-        return float(lines[-1].split()[-1])
 
 
 def check_if_directory_exists(output_directory):
@@ -274,38 +242,3 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
         "response_returned_files_sizes": response_returned_files_sizes,
         "response_miners_serving": response_miners_serving,
     }
-
-
-def get_last_step_time(log_file: str) -> float:
-    """Validators need to know where miners are in the simulation procedure to ensure that
-    the gro file that is computed is done on the most recent step of the simulation. The easiest
-    way to do this is by checking a log file and parsing it such that it finds the Step Time header.
-
-    args:
-        log_file (str): location of the log file that contains the step time header
-    """
-    step_pattern = re.compile(r"^\s*Step\s+Time$")
-    step_value_pattern = re.compile(r"^\s*(\d+)\s+([\d.]+)$")
-
-    num_matches = 0
-    last_step_time = 0  # default incase we don't have more than 1 log.
-
-    # Open and read the log file
-    with open(log_file, "r") as file:
-        lines = file.readlines()
-
-    # Reverse iterate over the lines for efficiency
-    for i, line in enumerate(reversed(lines)):
-        if step_pattern.match(line.strip()):  # Check for "Step Time" header
-            # Check the previous line in the original order for step value
-            value_line = lines[-1 + (-i + 1)]
-            match = step_value_pattern.match(value_line.strip())
-            if match:
-                num_matches += 1
-                if num_matches > 1:  # get second last line. Most stable.
-                    last_step_time = float(
-                        match.group(2)
-                    )  # group looks like:   191   0.3200
-                    break
-
-    return last_step_time

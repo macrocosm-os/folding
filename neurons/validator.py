@@ -27,18 +27,16 @@ import torch
 import pandas as pd
 import bittensor as bt
 
-from folding.store import PandasJobStore
+
 from folding.utils.uids import get_random_uids
 from folding.rewards.reward_pipeline import reward_pipeline
 from folding.validators.forward import create_new_challenge, run_step, run_ping_step
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
-from folding.store import Job
+from folding.store import Job, PandasJobStore
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
-
-os.environ["GMX_MAXBACKUP"] = "-1"
 
 
 class Validator(BaseValidatorNeuron):
@@ -113,9 +111,8 @@ class Validator(BaseValidatorNeuron):
         protein = Protein.from_job(job=job, config=self.config.protein)
 
         uids = self.get_uids(hotkeys=job.hotkeys)
-        # query the miners and get the rewards for their responses
-        # Check check_uid_availability to ensure that the hotkeys are valid and active
-        bt.logging.info("⏰ Waiting for miner responses ⏰")
+
+        bt.logging.info("Running run_step...⏳")
         return run_step(
             self,
             protein=protein,
@@ -207,7 +204,10 @@ class Validator(BaseValidatorNeuron):
 
             uid_search_time = time.time() - start_time
 
-            if len(valid_uids) == self.config.neuron.sample_size:
+            if (
+                len(valid_uids) >= self.config.neuron.sample_size
+                and len(valid_uids) < 10
+            ):
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
                 job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
@@ -296,11 +296,6 @@ class Validator(BaseValidatorNeuron):
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
 
-        # If the job is finished, remove the pdb directory
-        if job.active is False:
-            protein = Protein.from_job(job=job, config=self.config.protein)
-            protein.remove_pdb_directory()
-
         def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
                 if isinstance(value, pd.Timedelta):
@@ -316,7 +311,17 @@ class Validator(BaseValidatorNeuron):
         )  # add the rewards to the logging event.
 
         bt.logging.success(f"Event information: {merged_events}")
-        log_event(self, event=prepare_event_for_logging(merged_events))
+        event = prepare_event_for_logging(merged_events)
+
+        # If the job is finished, remove the pdb directory
+        pdb_location = None
+        protein = Protein.from_job(job=job, config=self.config.protein)
+        if job.active is False:
+            protein.remove_pdb_directory()
+        elif event["updated_count"] == 1:
+            pdb_location = protein.pdb_location
+
+        log_event(self, event=event, pdb_location=pdb_location)
 
 
 # The main function parses the configuration and runs the validator.

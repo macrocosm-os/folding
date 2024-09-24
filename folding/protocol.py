@@ -22,10 +22,11 @@ import bittensor as bt
 
 
 class PingSynapse(bt.Synapse):
-    """ Responsible for determining if a miner can accept a request """
+    """Responsible for determining if a miner can accept a request"""
+
     can_serve: bool = False
-    available_compute: typing.Optional[int] = None #TODO: number of threads / gpus? 
-    
+    available_compute: typing.Optional[int] = None  # TODO: number of threads / gpus?
+
 
 class JobSubmissionSynapse(bt.Synapse):
     """
@@ -35,22 +36,26 @@ class JobSubmissionSynapse(bt.Synapse):
 
     Attributes:
     - pdb_id: A Protein id, which contains the necessary details of the protein to be folded.
-    - md_inputs: A dictionary containing the input files for the gromacs simulation.
-    - mdrun_args: A string containing the arguments to be passed to the gromacs mdrun command.
+    - md_inputs: A dictionary containing the input files for the openmm simulation.
+    - system_config: A dictionary containing the system configuration for the simulation.
+    - miner_serving: A boolean value which determines if the miner can serve the request.
+    - md_output: A dictionary containing the output files of the openmm simulation.
+    - miner_seed: An integer value which is the seed for the simulation.
+    - miner_state: A string value which is the state of the miner.
     """
 
-    # Required request input, filled by sending dendrite caller.
     pdb_id: str
-    md_inputs: dict
+    pdb_contents: str
+    md_inputs: dict  # Right now this is just a "em.cpt" file.
+    system_config: dict = {}
 
-    # Optional runtime args for gromacs
-    mdrun_args: str = ""
-    
     # Miner can decide if they are serving the request or not.
     miner_serving: bool = True
 
-    # Optional request output, filled by recieving axon.
+    # Optional request output, filled by receiving axon.
     md_output: typing.Optional[dict] = None
+    miner_seed: typing.Optional[int] = None
+    miner_state: typing.Optional[str] = None
 
     def deserialize(self) -> int:
         """
@@ -64,7 +69,7 @@ class JobSubmissionSynapse(bt.Synapse):
         bt.logging.info(
             f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
-        # Right here we perform validation that the reponse has expected hash
+        # Right here we perform validation that the response has expected hash
         if not isinstance(self.md_output, dict):
             self.md_output = {}
         else:
@@ -77,4 +82,17 @@ class JobSubmissionSynapse(bt.Synapse):
                     md_output[k] = None
 
             self.md_output = md_output
+
+        if not isinstance(self.md_inputs, dict):
+            self.md_inputs = {}
+        else:
+            md_inputs = {}
+            for k, v in self.md_inputs.items():
+                try:
+                    md_inputs[k] = base64.b64decode(v)
+                except Exception as e:
+                    bt.logging.error(f"Error decoding {k} from md_inputs: {e}")
+                    md_inputs[k] = None
+
+            self.md_inputs = md_inputs
         return self

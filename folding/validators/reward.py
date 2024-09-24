@@ -22,13 +22,17 @@ def get_energies(
     event["is_valid"] = [False] * len(uids)
     event["checked_energy"] = [0] * len(uids)
     event["reported_energy"] = [0] * len(uids)
+    event["miner_energy"] = [0] * len(uids)
     event["rmsds"] = [0] * len(uids)
     energies = np.zeros(len(uids))
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         # Ensures that the md_outputs from the miners are parsed correctly
         try:
             if not protein.process_md_output(
-                md_output=resp.md_output, hotkey=resp.axon.hotkey
+                md_output=resp.md_output,
+                hotkey=resp.axon.hotkey,
+                state=resp.miner_state,
+                seed=resp.miner_seed,
             ):
                 continue
 
@@ -37,17 +41,20 @@ def get_energies(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
-            energy = protein.get_energy(data_type="Potential").iloc[-1]["energy"]
-            rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
+            energy = protein.get_energy()
+            # rmsd = protein.get_rmsd().iloc[-1]["rmsd"]
+            rmsd = protein.get_rmsd()
 
             if energy == 0:
                 continue
 
-            is_valid, checked_energy = protein.is_run_valid(energy, resp.axon.hotkey)
+            is_valid, checked_energy, miner_energy = protein.is_run_valid()
+
             energies[i] = energy if is_valid else 0
 
+            event["checked_energy"][i] = checked_energy
+            event["miner_energy"][i] = miner_energy
             event["is_valid"][i] = is_valid
-            event["checked_energy"][i] = float(checked_energy)
             event["reported_energy"][i] = float(energy)
             event["rmsds"][i] = float(rmsd)
 

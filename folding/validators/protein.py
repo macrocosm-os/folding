@@ -1,35 +1,40 @@
-import os
+import time
 import glob
-import re
+import os
+import pickle
 import random
+import re
 import shutil
-from typing import List, Dict
-from pathlib import Path
 from collections import defaultdict
-
-import bittensor as bt
-import pandas as pd
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Literal
+import base64
 
+import plotly.express as px
+import bittensor as bt
+import openmm as mm
+import pandas as pd
+import numpy as np
+from openmm import app, unit
+from pdbfixer import PDBFixer
+from folding.store import Job
+from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
-    FF_WATER_PAIRS,
-    run_cmd_commands,
-    check_if_directory_exists,
-    gro_hash,
-    load_pdb_ids,
-    calc_potential_from_edr,
-    select_random_pdb_id,
     check_and_download_pdbs,
-    get_last_step_time,
+    check_if_directory_exists,
+    load_pdb_ids,
+    select_random_pdb_id,
+    write_pkl,
 )
 from folding.store import Job
+from folding.base.simulation import OpenMMSimulation
 
-# root level directory for the project (I HATE THIS)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 @dataclass
-class Protein:
+class Protein(OpenMMSimulation):
     PDB_RECORDS = ("ATOM", "ANISOU", "REMARK", "HETATM", "CONECT")
 
     @property
@@ -38,43 +43,41 @@ class Protein:
 
     def __init__(
         self,
+        pdb_id: str,
         ff: str,
-        box: str,
+        water: str,
+        box: Literal["cube", "dodecahedron", "octahedron"],
         config: Dict,
-        pdb_id: str = None,
-        water: str = None,
         load_md_inputs: bool = False,
-        epsilon: float = 0.01,
-    ):
+        epsilon: float = 0.05,
+    ) -> None:
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
-        self.pdb_id = pdb_id.lower()
+        self.pdb_id: str = pdb_id.lower()
+        self.simulation_cpt = "em.cpt"
+        self.simulation_pkl = f"config_{self.pdb_id}.pkl"
+
         self.setup_filepaths()
 
-        self.ff = ff
-        self.box = box
+        self.ff: str = ff
+        self.box: Literal["cube", "dodecahedron", "octahedron"] = box
+        self.water: str = water
 
-        if water is not None:
-            self.water = water
-        else:
-            self.water = FF_WATER_PAIRS[self.ff]
+        self.system_config = SimulationConfig(
+            ff=self.ff, water=self.water, box=self.box, seed=25
+        )
 
         self.config = config
-
-        self.mdp_files = ["nvt.mdp", "npt.mdp", "md.mdp", "emin.mdp"]
-        self.other_files = [
-            "em.gro",
-            "posre*",
-            "topol*",
-        ]  # capture all possible topol or posre chains
+        self.simulation: app.Simulation = None
+        self.input_files = [self.em_cpt_location]
 
         self.md_inputs = (
-            self.read_and_return_files(filenames=self.other_files + self.mdp_files)
+            self.read_and_return_files(filenames=self.input_files)
             if load_md_inputs
             else {}
         )
 
-        # set to an arbitrarilly high number to ensure that the first miner is always accepted.
+        # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
@@ -85,13 +88,15 @@ class Protein:
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
-        self.gro_path = os.path.join(self.validator_directory, "em.gro")
-        self.topol_path = os.path.join(self.validator_directory, "topol.top")
+        self.em_cpt_location = os.path.join(
+            self.validator_directory, self.simulation_cpt
+        )
+        self.simulation_pkl_location = os.path.join(
+            self.validator_directory, self.simulation_pkl
+        )
 
     @staticmethod
     def from_job(job: Job, config: Dict):
-        # TODO: This must be called after the protein has already been downloaded etc.
-        bt.logging.warning(f"sampling pdb job {job.pdb}")
         # Load_md_inputs is set to True to ensure that miners get files every query.
         protein = Protein(
             pdb_id=job.pdb,
@@ -105,15 +110,21 @@ class Protein:
 
         try:
             protein.pdb_complexity = Protein._get_pdb_complexity(protein.pdb_location)
-            protein.init_energy = calc_potential_from_edr(
-                output_dir=protein.validator_directory, edr_name="em.edr"
-            )
+            protein._calculate_epsilon()
+
+            protein.pdb_contents = protein.load_pdb_as_string(protein.pdb_location)
+
         except Exception as E:
             bt.logging.error(
-                f"pdb_complexity or init_energy failed for {protein.pdb_id} with Exception {E}."
+                f"from_job failed for {protein.pdb_id} with Exception {E}."
             )
         finally:
             return protein
+
+    @staticmethod
+    def load_pdb_as_string(pdb_path: str) -> str:
+        with open(pdb_path, "r") as f:
+            return f.read()
 
     @staticmethod
     def _get_pdb_complexity(pdb_path):
@@ -135,9 +146,6 @@ class Protein:
             self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
-        self.pdb_file_tmp = f"{self.pdb_id}_protein_tmp.pdb"
-        self.pdb_file_cleaned = f"{self.pdb_id}_protein.pdb"
-
     def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
@@ -153,34 +161,31 @@ class Protein:
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
-
+            self.fix_pdb_file()
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
-    def check_for_missing_files(self, required_files: List[str]):
-        missing_files = [
-            filename
-            for filename in required_files
-            if not os.path.exists(os.path.join(self.pdb_directory, filename))
-        ]
-
-        if len(missing_files) > 0:
-            return missing_files
-        return None
-
     def read_and_return_files(self, filenames: List) -> Dict:
         """Read the files and return them as a dictionary."""
         files_to_return = {}
-        for file in filenames:
-            for f in glob.glob(os.path.join(self.validator_directory, file)):
+        for filename in filenames:
+            for file in glob.glob(os.path.join(self.validator_directory, filename)):
                 try:
-                    files_to_return[f.split("/")[-1]] = open(f, "r").read()
+                    # A bit of a hack to load in the data correctly depending on the file ext
+                    name = file.split("/")[-1]
+                    with open(file, "rb") as f:
+                        if "cpt" in name:
+                            files_to_return[name] = base64.b64encode(f.read()).decode(
+                                "utf-8"
+                            )
+                        else:
+                            files_to_return[
+                                name
+                            ] = f.read()  # This would be the pdb file.
+
                 except Exception as E:
-                    # bt.logging.warning(
-                    #     f"Attempted to put file {file} in md_inputs.\nError: {E}"
-                    # )
                     continue
         return files_to_return
 
@@ -200,33 +205,13 @@ class Protein:
         self.gather_pdb_id()
         self.setup_pdb_directory()
 
-        # TODO: Enable this to send checkpoints rather than only the initial set of files
-
-        required_files = self.mdp_files + self.other_files
-        missing_files = self.check_for_missing_files(required_files=required_files)
-
-        if missing_files is not None:
-            self.generate_input_files()
+        self.generate_input_files()
 
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
 
         # Read the files that should exist now based on generate_input_files.
-        self.md_inputs = self.read_and_return_files(filenames=self.other_files)
-        params_to_change = [
-            "nstvout",  # Save velocities every 0 steps
-            "nstfout",  # Save forces every 0 steps
-            "nstxout-compressed",  # Save coordinates to trajectory every 50,000 steps
-            "nstenergy",  # Save energies every 50,000 steps
-            "nstlog",  # Update log file every 50,000 steps
-        ]
-
-        # Check if the files need to be changed based on the config, and then save.
-        self.edit_files(
-            mdp_files=self.mdp_files,
-            params_to_change=params_to_change,
-            seed=self.config.seed,
-        )
+        self.md_inputs = self.read_and_return_files(filenames=self.input_files)
 
         self.save_files(
             files=self.md_inputs,
@@ -234,11 +219,9 @@ class Protein:
             write_mode="w",
         )
 
-        self.remaining_steps = []
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
-        self.init_energy = calc_potential_from_edr(
-            output_dir=self.validator_directory, edr_name="em.edr"
-        )
+        self.init_energy = self.calc_init_energy()
+        self._calculate_epsilon()
 
     def __str__(self):
         return f"Protein(pdb_id={self.pdb_id}, ff={self.ff}, box={self.box}, water={self.water})"
@@ -246,47 +229,51 @@ class Protein:
     def __repr__(self):
         return self.__str__()
 
-    def calculate_params_save_interval(self):
-        # TODO Define what this function should do. Placeholder for now.
-        return self.config.save_interval
+    def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
+        """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
+        return app.PDBFile(pdb_file)
 
-    def check_configuration_file_commands(self) -> List[str]:
+    def fix_pdb_file(self):
         """
-        There are a set of configuration files that are used to setup the simulation
-        environment. These are typically denoted by the force field name. If they do
-        not exist, then we default to the same names without the force field included.
+        Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems
+        that must be fixed before they can be used in a molecular dynamics simulation.
+
+        The fixer will remove metadata that is contained in the header of the original pdb, and we might
+        want to keep this. Therefore, we will rename the original pdb file to *_original.pdb and make a new
+        pdb file using the PDBFile.writeFile method.
+
+        Reference docs for the PDBFixer class can be found here:
+            https://htmlpreview.github.io/?https://github.com/openmm/pdbfixer/blob/master/Manual.html
         """
-        # strip away trailing number in forcefield name e.g charmm27 -> charmm, and
-        ff_base = "".join([c for c in self.ff if not c.isdigit()])
 
-        filepaths = [
-            f"{self.base_directory}/nvt_{ff_base}.mdp",
-            f"{self.base_directory}/npt_{ff_base}.mdp",
-            f"{self.base_directory}/md_{ff_base}.mdp",
-            f"{self.base_directory}/emin_{ff_base}.mdp",
-        ]
+        fixer = PDBFixer(filename=self.pdb_location)
+        fixer.findMissingResidues()
+        fixer.findNonstandardResidues()
+        fixer.replaceNonstandardResidues()
+        fixer.removeHeterogens(True)
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(pH=7.0)
 
-        commands = []
+        original_pdb = self.pdb_location.split(".")[0] + "_original.pdb"
+        os.rename(self.pdb_location, original_pdb)
 
-        for file_path in filepaths:
-            match = re.search(
-                r"/([^/]+)_" + re.escape(ff_base) + r"\.mdp", file_path
-            )  # extract the nvt, npt...
-            config_name = match.group(1)
+        app.PDBFile.writeFile(
+            topology=fixer.topology,
+            positions=fixer.positions,
+            file=open(self.pdb_location, "w"),
+        )
 
-            if os.path.exists(file_path):
-                commands.append(
-                    f"cp {file_path} {self.pdb_directory}/{config_name}.mdp"
-                )
-            else:
-                # If the file with the _ff suffix doesn't exist, remove it from the base filepath.
-                path = re.sub(r"_" + re.escape(ff_base), "", file_path)
-                commands.append(f"cp {path} {self.pdb_directory}/{config_name}.mdp")
-
-        return commands
-
-    # Function to generate GROMACS input files
+    # Function to generate the OpenMM simulation state.
+    @OpenMMSimulation.timeit
     def generate_input_files(self):
+        """Generate_input_files method defines the following:
+        1. Load the pdb file and create the simulation object.
+        2. Minimize the energy of the system.
+        3. Save the checkpoint file.
+        4. Save the system config to the validator directory.
+        5. Move all files except the pdb file to the validator directory.
+        """
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
@@ -294,31 +281,26 @@ class Protein:
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        commands = self.check_configuration_file_commands()
-
-        # Commands to generate GROMACS input files
-        commands += [
-            f"grep -v HETATM {self.pdb_file} > {self.pdb_file_tmp}",  # remove lines with HETATM
-            f"grep -v CONECT {self.pdb_file_tmp} > {self.pdb_file_cleaned}",  # remove lines with CONECT
-            f"gmx pdb2gmx -f {self.pdb_file_cleaned} -ff {self.ff} -o processed.gro -water {self.water}",  # Input the file into GROMACS and get three output files: topology, position restraint, and a post-processed structure file
-            f"gmx editconf -f processed.gro -o newbox.gro -c -d 1.0 -bt {self.box}",  # Build the "box" to run our simulation of one protein molecule
-            "gmx solvate -cp newbox.gro -cs spc216.gro -o solvated.gro -p topol.top",
-            "touch ions.mdp",  # Create a file to add ions to the system
-            "gmx grompp -f ions.mdp -c solvated.gro -p topol.top -o ions.tpr",
-            'echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral',
-        ]
-
-        # Validator does the first step of the energy minimization
-        commands += [
-            f"gmx grompp -f {self.pdb_directory}/emin.mdp -c solv_ions.gro -p topol.top -o em.tpr",
-            "gmx mdrun -v -deffnm em",
-        ]
-
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
+        self.simulation, self.system_config = self.create_simulation(
+            pdb=self.load_pdb_file(pdb_file=self.pdb_file),
+            system_config=self.system_config.get_config(),
+            state="em",
         )
+
+        bt.logging.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
+
+        start_time = time.time()
+        self.simulation.minimizeEnergy(
+            maxIterations=100
+        )  # TODO: figure out the right number for this
+        bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
+        self.simulation.step(1000)
+
+        self.simulation.saveCheckpoint("em.cpt")
+
+        # This is only for the validators, as they need to open the right config later.
+        # Only save the config if the simulation was successful.
+        write_pkl(data=self.system_config, path=self.simulation_pkl, write_mode="wb")
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -327,72 +309,9 @@ class Protein:
         bt.logging.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
 
-        # We want to catch any errors that occur in the above steps and then return the error to the user
-        return True
-
     def gen_seed(self):
         """Generate a random seed"""
         return random.randint(1000, 999999)
-
-    def edit_files(self, mdp_files: List, params_to_change: List, seed: int = None):
-        """Edit the files that are needed for simulation and attach them to md_inputs.
-
-        Args:
-            mdp_files (List): Files that contain parameters to change.
-            params_to_change (List): List of parameters to change in the desired file(s)
-            seed (int): Seed to use for the simulation. Defaults to None.
-        """
-
-        seed = self.gen_seed() if seed is None else seed
-
-        def mapper(content: str, param_name: str, value: int) -> str:
-            """change the parameter value to the desired value in the content of the file."""
-            content = re.sub(
-                f"{param_name}\\s+=\\s+-?\\d+", f"{param_name} = {value}", content
-            )
-            return content
-
-        for file in mdp_files:
-            filepath = os.path.join(self.validator_directory, file)
-            content = open(filepath, "r").read()
-
-            # Set the value of nsteps based on the config, orders of magnitude smaller than max_steps.
-            # Set the value of gen_seed, ld-seed based on the current instance.
-            if file == "emin.mdp":
-                params_values = {"ld-seed": seed}
-            elif file == "nvt.mdp":
-                params_values = {
-                    "nsteps": self.config.nvt_steps
-                    if self.config.nvt_steps is not None
-                    else self.config.max_steps // 100,
-                    "gen_seed": seed,
-                    "ld-seed": seed,
-                }
-            elif file == "npt.mdp":
-                params_values = {
-                    "nsteps": self.config.npt_steps
-                    if self.config.npt_steps is not None
-                    else self.config.max_steps // 10,
-                    "ld-seed": seed,
-                }
-            elif file == "md.mdp":
-                params_values = {"nsteps": self.config.max_steps, "ld-seed": seed}
-
-            # Specific implementation for each file
-            for param_name, value in params_values.items():
-                content = mapper(content=content, param_name=param_name, value=value)
-
-            save_interval = self.calculate_params_save_interval()
-            for param in params_to_change:
-                if param in content:
-                    bt.logging.debug(
-                        f"Changing {param} in {file} to {save_interval}..."
-                    )
-                    content = mapper(
-                        content=content, param_name=param, value=save_interval
-                    )
-
-            self.md_inputs[file] = content
 
     def save_files(
         self, files: Dict, output_directory: str, write_mode: str = "wb"
@@ -413,6 +332,11 @@ class Protein:
         filetypes = {}
         for filename, content in files.items():
             filetypes[filename.split(".")[-1]] = filename
+
+            bt.logging.info(f"Saving file {filename} to {output_directory}")
+            if "em.cpt" in filename:
+                filename = "em_binary.cpt"
+
             # loop over all of the output files and save to local disk
             with open(os.path.join(output_directory, filename), write_mode) as f:
                 f.write(content)
@@ -428,92 +352,26 @@ class Protein:
     def get_miner_data_directory(self, hotkey: str):
         self.miner_data_directory = os.path.join(self.validator_directory, hotkey[:8])
 
-    def compute_intermediate_gro(
-        self,
-        output_directory: str,
-        md_outputs_exts: Dict,  # mapping from file extension to filename in md_output
-        simulation_step_time: float,  # A step (frame) of the simulation that you want to compute the gro file on.
-    ) -> str:
-        """
-        Compute the intermediate gro file from the xtc and tpr file from the miner.
-        We do this because we need to ensure that the miners are running the correct protein.
-
-        Args:
-            md_output (Dict): dictionary of information from the miner.
-        """
-
-        # Make times to 1 decimal place for gromacs stability.
-        simulation_step_time = round(simulation_step_time, 1)
-
-        gro_file_location = os.path.join(output_directory, "intermediate.gro")
-        tpr_file = os.path.join(output_directory, md_outputs_exts["tpr"])
-        xtc_file = os.path.join(output_directory, md_outputs_exts["xtc"])
-
-        command = [
-            f"echo System | gmx trjconv -s {tpr_file} -f {xtc_file} -o {gro_file_location} -nobackup -b {simulation_step_time} -e {simulation_step_time}"
-        ]
-
-        bt.logging.warning(f"Computing an intermediate gro...")
-        run_cmd_commands(
-            commands=command,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
-        )
-
-        return gro_file_location
-
-    def rerun(self, output_directory: str, gro_file_location: str):
-        """Rerun method is to rerun a step of a miner simulation to ensure that
-        the miner is running the correct protein.
-
-        Args:
-            output_directory: The directory where the files are stored and where the rerun files will be written to.
-                output location will be the miner directory held on the validator side, from get_miner_data_directory
-            gro_file_name: The name of the .gro file that will be rerun. This is calculated by the *validator* beforehand.
-        """
-        rerun_mdp = os.path.join(
-            self.base_directory, "rerun.mdp"
-        )  # rerun file is a base config that we never change.
-        topol_path = os.path.join(
-            self.validator_directory, "topol.top"
-        )  # all miners get the same topol file.
-        tpr_path = os.path.join(output_directory, "rerun.tpr")
-
-        commands = [
-            f"gmx grompp -f {rerun_mdp} -c {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -s {tpr_path} -rerun {gro_file_location} -deffnm {output_directory}/rerun_energy",  # -s specifies the file.
-        ]
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
-        )
-
-    def process_md_output(self, md_output: Dict, hotkey: str) -> bool:
-        """
-        1. Check md_output for the required files, if unsuccessful return False
-        2. Save files if above is valid
-        3. Check the hash of the .gro file to ensure miners are running the correct protein.
-        4.
-        """
-
-        required_files_extensions = ["xtc", "tpr", "log"]
+    def process_md_output(
+        self, md_output: dict, seed: int, state: str, hotkey: str
+    ) -> bool:
+        required_files_extensions = ["cpt", "log"]
+        hotkey_alias = hotkey[:8]
+        self.current_state = state
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
-        md_outputs_exts = {
-            k.split(".")[-1]: k
-            for k, v in md_output.items()
-            if len(v) > 0 and "center" not in k
+        self.md_outputs_exts = {
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
         }
 
         if len(md_output.keys()) == 0:
             bt.logging.warning(
-                f"Miner {hotkey[:8]} returned empty md_output... Skipping!"
+                f"Miner {hotkey_alias} returned empty md_output... Skipping!"
             )
             return False
 
         for ext in required_files_extensions:
-            if ext not in md_outputs_exts:
+            if ext not in self.md_outputs_exts:
                 bt.logging.error(f"Missing file with extension {ext} in md_output")
                 return False
 
@@ -524,108 +382,172 @@ class Protein:
             files=md_output,
             output_directory=self.miner_data_directory,
         )
+        try:
+            # NOTE: The seed written in the self.system_config is not used here
+            # because the miner could have used something different and we want to
+            # make sure that we are using the correct seed.
 
-        last_miner_simulation_step_time = get_last_step_time(
-            os.path.join(self.miner_data_directory, md_outputs_exts["log"])
-        )
-
-        # We need to generate the gro file from the miner to ensure they are not cheating.
-        gro_file_location = self.compute_intermediate_gro(
-            output_directory=self.miner_data_directory,
-            md_outputs_exts=md_outputs_exts,
-            simulation_step_time=last_miner_simulation_step_time,
-        )
-
-        # Check that the md_output contains the right protein through gro_hash
-        if gro_hash(gro_path=self.gro_path) != gro_hash(gro_path=gro_file_location):
-            bt.logging.warning(
-                f"The hash for .gro file from hotkey {hotkey} is incorrect, so reward is zero!"
+            bt.logging.info(
+                f"Recreating miner {hotkey_alias} simulation in state: {self.current_state}"
             )
-            self.delete_files(directory=self.miner_data_directory)
-            return False
-        bt.logging.debug(f"The hash for .gro file is correct!")
+            self.simulation, self.system_config = self.create_simulation(
+                pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+                system_config=self.system_config.get_config(),
+                seed=seed,
+                state=state,
+            )
 
-        # Once we have confirmed that the gro-file is correct, then we rerun a single-step simulation to acquire the energy.
-        # .gro -> .edr
-        self.rerun(
-            output_directory=self.miner_data_directory,
-            gro_file_location=gro_file_location,
-        )
+            checkpoint_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.cpt"
+            )
+
+            log_file_path = os.path.join(
+                self.miner_data_directory, self.md_outputs_exts["log"]
+            )
+
+            self.simulation.loadCheckpoint(checkpoint_path)
+            self.log_file = pd.read_csv(log_file_path)
+            self.log_step = self.log_file['#"Step"'].iloc[-1]
+
+            ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+            if (
+                self.log_step - self.simulation.currentStep
+            ) < 5000:  # Right now, needs at least 5000 steps.
+                checkpoint_path = os.path.join(
+                    self.miner_data_directory, f"{self.current_state}_old.cpt"
+                )
+                if os.path.exists(checkpoint_path):
+                    bt.logging.warning(
+                        f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
+                    )
+                    self.simulation.loadCheckpoint(checkpoint_path)
+                else:
+                    bt.logging.warning(
+                        f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
+                    )
+                    return False
+            else:
+                self.simulation.loadCheckpoint(checkpoint_path)
+
+            self.cpt_step = self.simulation.currentStep
+            self.checkpoint_path = checkpoint_path
+
+            # Save the system config to the miner data directory
+            system_config_path = os.path.join(
+                self.miner_data_directory, f"miner_system_config_{seed}.pkl"
+            )
+            if not os.path.exists(system_config_path):
+                write_pkl(
+                    data=self.system_config,
+                    path=system_config_path,
+                    write_mode="wb",
+                )
+
+        except Exception as e:
+            bt.logging.error(f"Failed to recreate simulation: {e}")
+            return False
+
         return True
 
-    def is_run_valid(self, energy: float, hotkey: str):
-        self.get_miner_data_directory(hotkey=hotkey)
-        gro_file_location = os.path.join(self.miner_data_directory, "intermediate.gro")
+    def is_run_valid(self):
+        """
+        Checks if the run is valid by comparing the potential energy values
+        between the current simulation and a reference log file.
 
-        md_mdp = os.path.join(
-            self.validator_directory, "md.mdp"
-        )  # md.mdp file is a base config that we never change.
-        topol_path = os.path.join(
-            self.validator_directory, "topol.top"
-        )  # all miners get the same topol file.
-        tpr_path = os.path.join(self.miner_data_directory, "check.tpr")
+        Returns:
+            Tuple[bool, list, list]: True if the run is valid, False otherwise.
+                The two lists contain the potential energy values from the current simulation and the reference log file.
+        """
 
-        # computing 10 steps of the simulation with production parameters
-        commands = [
-            f"gmx grompp -f {md_mdp} -c {gro_file_location} -r {gro_file_location} -p {topol_path} -o {tpr_path}",
-            f"gmx mdrun -s {tpr_path} -deffnm {self.miner_data_directory}/check -ntmpi 1 -nsteps 10",
-        ]
+        # The percentage that we allow the energy to differ from the miner to the validator.
+        ANOMALY_THRESHOLD = 0.5
 
-        # computing the energy after the 10 step production run
-        commands += [
-            f"echo Potential | gmx energy -f {self.miner_data_directory}/check.edr -o {self.miner_data_directory}/check.xvg"
-        ]
+        # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
+        if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
+            return False
 
-        run_cmd_commands(
-            commands=commands,
-            suppress_cmd_output=self.config.suppress_cmd_output,
-            verbose=self.config.verbose,
+        steps_to_run = min(
+            10000, self.log_step - self.cpt_step
+        )  # run at most 10000 steps
+
+        self.simulation.reporters.append(
+            app.StateDataReporter(
+                os.path.join(
+                    self.miner_data_directory, f"check_{self.current_state}.log"
+                ),
+                10,
+                step=True,
+                potentialEnergy=True,
+            )
         )
-        df_check = pd.read_csv(
-            f"{self.miner_data_directory}/check.xvg",
-            skiprows=24,
-            delim_whitespace=True,
-            names=["Time", "Energy"],
+        bt.logging.info(
+            f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
+        )
+        self.simulation.step(steps_to_run)
+
+        check_log_file = pd.read_csv(
+            os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
         )
 
-        check_energy = df_check["Energy"].iloc[-1]
-        percentage_change = abs(((check_energy - energy) / energy))
-        cmd = f"rm {self.miner_data_directory}/check* "
-        os.system(cmd)
-        if check_energy > energy and percentage_change > 0.01:
-            return False, check_energy
-        return True, check_energy
+        max_step = self.cpt_step + steps_to_run
 
-    def get_energy(
-        self,
-        data_type: str,
-        output_path: str = None,
-        base_command: str = "gmx energy",
-        xvg_command: str = "-xvg none",
-    ):
-        if output_path is None:
-            output_path = self.miner_data_directory
+        check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
+        miner_energies: np.ndarray = self.log_file[
+            (self.log_file['#"Step"'] > self.cpt_step)
+            & (self.log_file['#"Step"'] <= max_step)
+        ]["Potential Energy (kJ/mole)"].values
 
-        xvg_name = "rerun_energy_extracted.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"printf '{data_type}\n0\n' | {base_command} -f {output_path}/rerun_energy.edr -o {output_data_location} {xvg_command}"
-        ]
-        run_cmd_commands(command)
-        return self.extract(filepath=output_data_location, names=["step", "energy"])
+        # calculating absolute percent difference per step
+        percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
+        min_length = len(percent_diff)
+
+        # This is some debugging information for plotting the information from the miner.
+        df = pd.DataFrame([check_energies, miner_energies]).T
+        df.columns = ["validator", "miner"]
+
+        fig = px.scatter(
+            df,
+            title=f"Energy: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+            labels={"index": "Step", "value": "Energy (kJ/mole)"},
+            height=600,
+            width=1400,
+        )
+        filename = f"{self.pdb_id}_cpt_step_{self.cpt_step}_state_{self.current_state}"
+        fig.write_image(
+            os.path.join(self.miner_data_directory, filename + "_energy.png")
+        )
+
+        fig = px.scatter(
+            percent_diff,
+            title=f"Percent Diff: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
+            labels={"index": "Step", "value": "Percent Diff"},
+            height=600,
+            width=1400,
+        )
+        fig.write_image(
+            os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
+        )
+
+        median_percent_diff = np.median(percent_diff)
+
+        # We want to save all the information to the local filesystem so we can index them later.
+
+        if median_percent_diff > ANOMALY_THRESHOLD:
+            return False, check_energies.tolist(), miner_energies.tolist()
+        return True, check_energies.tolist(), miner_energies.tolist()
+
+    def get_energy(self):
+        state = self.simulation.context.getState(getEnergy=True)
+
+        return state.getPotentialEnergy() / unit.kilojoules_per_mole
 
     def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
-        if output_path is None:
-            output_path = self.miner_data_directory
+        """TODO: Implement the RMSD calculation"""
+        return -1
 
-        xvg_name = "rmsd_xray.xvg"
-        output_data_location = os.path.join(output_path, xvg_name)
-        command = [
-            f"echo '4 4' | gmx rms -s {self.validator_directory}/em.tpr -f {output_path}/rerun_energy.trr -o {output_data_location} -tu ns {xvg_command}"
-        ]
-        run_cmd_commands(command)
-
-        return self.extract(filepath=output_data_location, names=["step", "rmsd"])
+    def _calculate_epsilon(self):
+        # TODO: Make this a better relationship?
+        return self.epsilon
 
     def extract(self, filepath: str, names=["step", "default-name"]):
         return pd.read_csv(filepath, sep="\s+", header=None, names=names)
@@ -635,3 +557,19 @@ class Protein:
         Temp. method before we know what we want to keep.
         """
         shutil.rmtree(self.pdb_directory)
+
+    def calc_init_energy(self):
+        """Calculate the potential energy from an edr file using gmx energy.
+        Args:
+            output_dir (str): directory containing the edr file
+            edr_name (str): name of the edr file
+            xvg_name (str): name of the xvg file
+
+        Returns:
+            float: potential energy
+        """
+
+        return (
+            self.simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            / unit.kilojoules_per_mole
+        )

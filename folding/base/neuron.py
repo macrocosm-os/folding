@@ -15,19 +15,19 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import re
 import copy
-import subprocess
 import bittensor as bt
-
 from abc import ABC, abstractmethod
+import os
+
+import openmm
 
 # Sync calls set weights and also resyncs the metagraph.
 from folding.utils.config import check_config, add_args, config
 from folding.utils.misc import ttl_get_block
 from folding import __spec_version__ as spec_version
-from folding import __GROMACS_VERSION_TAG__
-from folding.utils.ops import GromacsException
+from folding import __OPENMM_VERSION_TAG__
+from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
 
 
@@ -88,8 +88,9 @@ class BaseNeuron(ABC):
             self.subtensor = bt.subtensor(config=self.config)
             self.metagraph = self.subtensor.metagraph(self.config.netuid)
 
-            # Check gromacs version if we are not in mock mode.
-            self.check_gromacs_version()
+            # Check OpenMM version if we are not in mock mode.
+            self.check_openmm_version()
+            self.setup_wandb_logging()
 
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
@@ -105,39 +106,36 @@ class BaseNeuron(ABC):
         )
         self.step = 0
 
-    def check_gromacs_version(self):
+    def check_openmm_version(self):
         """
-        A method that enforces that the gromacs version that is running the version specified in the __GROMACS_VERSION_TAG__.
+        A method that enforces that the OpenMM version that is running the version specified in the __OPENMM_VERSION_TAG__.
         """
         try:
-            result = subprocess.run(
-                ["gmx", "--version"], capture_output=True, text=True
-            )
-            version_output = result.stdout.strip()
+            self.openmm_version = openmm.__version__
 
-            version_pattern = r"GROMACS version:\s+(\d{4}\.\d+)"
-            version_match = re.search(version_pattern, version_output)
-            self.gromacs_version = version_match.group(1) if version_match else None
-
-            is_gpu_pattern = r"GPU support:\s*(.+)"
-            is_gpu_match = re.search(is_gpu_pattern, version_output)
-            
-            try:
-                self.gpu_status = is_gpu_match.group(0).split()[-1]
-            except:
-                self.gpu_status = 'unknown'
-
-            if (self.gromacs_version is None) or (
-                __GROMACS_VERSION_TAG__ not in self.gromacs_version
-            ):
-                raise GromacsException(
-                    f"GROMACS version mismatch. Installed == {self.gromacs_version}. Please install GROMACS {__GROMACS_VERSION_TAG__}.*"
+            if __OPENMM_VERSION_TAG__ != self.openmm_version:
+                raise OpenMMException(
+                    f"OpenMM version mismatch. Installed == {self.openmm_version}. Please install OpenMM {__OPENMM_VERSION_TAG__}.*"
                 )
 
         except Exception as e:
             raise e
 
-        bt.logging.success(f"Running GROMACS version: {self.gromacs_version} with GPU status: {self.gpu_status}")
+        bt.logging.success(f"Running OpenMM version: {self.openmm_version}")
+        
+    def setup_wandb_logging(self):
+        if os.path.isfile(f"{self.config.neuron.full_path}/wandb_ids.pkl"):
+            self.wandb_ids = load_pkl(f"{self.config.neuron.full_path}/wandb_ids.pkl", "rb")
+        else:
+            self.wandb_ids = {}
+            
+    def add_wandb_id(self, pdb_id: str, wandb_id: str):
+        self.wandb_ids[pdb_id] = wandb_id
+        write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")
+        
+    def remove_wandb_id(self, pdb_id: str):
+        self.wandb_ids.pop(pdb_id)
+        write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:

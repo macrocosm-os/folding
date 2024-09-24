@@ -34,7 +34,7 @@ def should_reinit_wandb(self):
     )
 
 
-def init_wandb(self, reinit=False):
+def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     """Starts a new wandb run."""
 
     tags = [
@@ -43,6 +43,9 @@ def init_wandb(self, reinit=False):
         str(folding.__spec_version__),
         f"netuid_{self.metagraph.netuid}",
     ]
+    project = self.config.wandb.project_name
+    if failed:
+        tags.append("failed")
 
     if self.config.mock:
         tags.append("mock")
@@ -55,38 +58,65 @@ def init_wandb(self, reinit=False):
     }
     wandb_config["neuron"].pop("full_path", None)
 
-    self.wandb = wandb.init(
+    id = None if pdb_id not in self.wandb_ids.keys() else self.wandb_ids[pdb_id]
+
+    run = wandb.init(
         anonymous="allow",
+        name=pdb_id,
         reinit=reinit,
-        project=self.config.wandb.project_name,
+        project=project,
+        id=id,
         entity=self.config.wandb.entity,
         config=wandb_config,
         mode="offline" if self.config.wandb.offline else "online",
         dir=self.config.neuron.full_path,
         tags=tags,
         notes=self.config.wandb.notes,
-    )
-    self.wandb_run_start = dt.datetime.now()
-    bt.logging.success(
-        prefix="Started a new wandb run",
-        sufix=f"<blue> {self.wandb.name} </blue>",
+        resume="allow",
     )
 
+    self.add_wandb_id(pdb_id, run.id)
 
-def log_event(self, event):
+    if id is None:
+        bt.logging.success(
+            prefix="Started a new wandb run",
+            sufix=f"<blue> {pdb_id} </blue>",
+        )
+    else:
+        bt.logging.success(
+            prefix="updated a wandb run",
+            sufix=f"<blue> {pdb_id} </blue>",
+        )
+
+    return run
+
+
+def log_protein(run, pdb_id_path: str):
+    """Logs the protein visualization to wandb.
+    pdb_id_path: str: path to the pdb file on disk.
+    """
+    try:
+        run.log({"protein_vis": wandb.Molecule(pdb_id_path)})
+    except:
+        bt.logging.warning("Failed to log protein visualization")
+
+
+def log_event(self, event, failed=False, pdb_location: str = None):
     if not self.config.neuron.dont_save_events:
         logger.log("EVENTS", "events", **event)
 
     if self.config.wandb.off:
         return
+    pdb_id = event["pdb_id"]
 
-    if not getattr(self, "wandb", None):
-        init_wandb(self)
-
-    if (dt.datetime.now() - self.wandb_run_start) >= dt.timedelta(days=1):
-        bt.logging.info("Current wandb run is more than 1 day old. Starting a new run.")
-        self.wandb.finish()
-        init_wandb(self)
+    run = init_wandb(self, pdb_id=pdb_id, failed=failed)
 
     # Log the event to wandb.
-    self.wandb.log(event)
+    run.log(event)
+
+    if pdb_location is not None:
+        log_protein(run, pdb_id_path=pdb_location)
+
+    run.finish()
+    if event["active"] == False:
+        self.remove_wandb_id(pdb_id)

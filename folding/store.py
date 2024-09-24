@@ -153,9 +153,9 @@ class Job:
     gro_hash: str = None
     update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
     updated_count: int = 0
-    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
+    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=20)
     min_updates: int = 10
-    epsilon: float = 0.01  # percentage.
+    epsilon: float = 0.05  # percentage.
     event: dict = None
 
     def to_dict(self):
@@ -186,20 +186,15 @@ class Job:
         if hotkey not in self.hotkeys:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
-        # Check to see if the loss has improved by a certain percentage.
-        if not np.isinf(self.best_loss) and not self.best_loss == 0:
-            percent_improvement = (self.best_loss - loss) / abs(self.best_loss)
-
-        elif self.best_loss == 0 and loss < 0:
-            percent_improvement = self.epsilon
-
-        else:
-            percent_improvement = -1
-
+        percent_improvement = (
+            (self.best_loss - loss) / self.best_loss
+            if not np.isinf(self.best_loss) and not self.best_loss == 0
+            else 1
+        )
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if np.isinf(self.best_loss) or (percent_improvement >= self.epsilon):
+        if (np.isinf(self.best_loss)) or percent_improvement >= self.epsilon:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
@@ -242,7 +237,7 @@ class MockJob(Job):
     def __init__(self, n_hotkeys=5, update_seconds=5, stop_after_seconds=10):
         self.pdb = self._make_pdb()
         self.ff = "charmm27"
-        self.box = "cubic"
+        self.box = "cube"
         self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
         self.created_at = (

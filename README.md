@@ -38,7 +38,7 @@ This repository is the official codebase for Bittensor Subnet Folding (SN25), wh
 # Introduction
 The protein folding subnet is Bittensors’ first venture into academic use cases, built and maintained by [Macrocosmos AI](https://www.macrocosmos.ai). While the current subnet landscape consists of mainly AI and web-scraping protocols, we believe that it is important to highlight to the world how Bittensor is flexible enough to solve almost any problem.
 
-This subnet is designed to produce valuable academic research in Bittensor. Researchers and universities can use this subnet to solve almost any protein, on demand, for free. It is our hope that this subnet will empower researchers to conduct world-class research and publish in top journals while demonstrating that decentralized systems are an economic and efficient alternative to traditional approaches.
+This subnet is designed to produce valuable academic research in Bittensor. Researchers and universities can use this subnet to simulate almost any protein, on demand, for free. It is our hope that this subnet will empower researchers to conduct world-class research and publish in top journals while demonstrating that decentralized systems are an economic and efficient alternative to traditional approaches.
 
   
 # What is Protein Folding?  
@@ -51,6 +51,11 @@ This subnet is designed to produce valuable academic research in Bittensor. Rese
 An ideal incentive mechanism defines an asymmetric workload between the validators and miners. The necessary proof of work (PoW) for the miners must require substantial effort and should be impossible to circumvent. On the other hand, the validation and rewarding process should benefit from some kind of privileged position or vantage point so that an objective score can be assigned without excess work. Put simply, **rewarding should be objective and adversarially robust**.
 
 Protein folding is also a research topic that is of incredibly high value. Research groups all over the world dedicate their time to solving particular niches within this space. Providing a solution to attack this problem at scale is what Bittensor is meant to provide to the global community. 
+
+# Simulation Backend and Reproducability
+Moleccular dynamics (MD) simulations require a physics-based engine to run them, and SN25 utilizes the open-source project [OpenMM](https://openmm.org). As their tagline suggests, they are a "high performance, customizable molecular simulation" package. 
+
+One of the key advantages of using OpenMM for MD-simulations is the built-in capabilities for *reproducability*. This is a key component in the reward stack and all miners should be intimately familiar with this. For more information, please read this [document](./documentation/reproducibility.md). 
 
 # Reward Mechanism
 Protein folding is a textbook example of this kind of asymmetry; the molecular dynamics simulation involves long and arduous calculations which apply the laws of physics to the system over and over again until an optimized configuration is obtained. There are no reasonable shortcuts. 
@@ -69,13 +74,13 @@ When the simulations finally converge (ΔE/t < threshold), they produce the form
 
 # Running the Subnet
 ## Requirements 
-Protein folding utilizes a standardized package called [GROMACS](https://www.gromacs.org). To run, you will need:
+Protein folding utilizes an open-source package called [OpenMM](https://openmm.org). To run, you will need:
 1. A Linux-based machine 
-2. Multiple high-performance CPU cores. 
+2. At least 1 CUDA-compatible GPU
+3. Conda Distribution (we recommend [Miniconda](https://docs.anaconda.com/miniconda/)). Using conda is an [OpenMM requirement](http://docs.openmm.org/latest/userguide/application/01_getting_started.html#installing-openmm). 
 
-Out of the box, **we do not require miners to run GPU compatible GROMACS packages**. For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
+For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
 
-**IMPORTANT**: GROMACS is a large package, and take anywhere between 1h to 1.5h to download. 
 
 ## Installation
 This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
@@ -87,18 +92,6 @@ bash install.sh
 
 This will also create a virtual environment in which the repo can be run inside of.
 
-Sometimes, there can be problems with the install so to ensure that gromacs is installed correctly, please check the .bashrc. Importantly, these lines MUST be run:
-```bash
-echo "source /usr/local/gromacs/bin/GMXRC" >> ~/.bashrc
-source ~/.bashrc
-``` 
-
-The above commands will install the necessary requirements, as well as download GROMACS and add it to your `.bashrc`. To ensure that installation is complete, running `gmx` in the terminal should print
-```
- :-) GROMACS - gmx, 2024.1 (-:
-```
-
-If not, there is a problem with your installation, or with your `.bashrc`
 
 ## Registering on Mainnet
 ```
@@ -135,6 +128,7 @@ python neurons/validator.py
     --neuron.queue_size <number of pdb_ids to submit>
     --neuron.sample_size <number of miners per pdb_id>
     --protein.max_steps <number of steps for the simulation>
+    --protein.input_source <database of proteins to choose from>
     --logging.debug # Run in debug mode, alternatively --logging.trace for trace mode
     --axon.port <your axon port> #VERY IMPORTANT: set the port to be one of the open TCP ports on your machine
 ```
@@ -168,7 +162,7 @@ Keep in mind that you will need to change the default parameters for either the 
 
 ## How does the Subnet Work?
 
-In this subnet, validators create protein folding challenges for miners, who in turn run simulations based on GROMACS to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
+In this subnet, validators create protein folding challenges for miners, who in turn run simulations using OpenMM to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
 
 ### Validation
 
@@ -183,15 +177,6 @@ For more detailed information, look at [validation.md](./documentation/validatio
 Miners are expected to run many parallel processes, each executing an energy minimization routine for a particular `pdb_id`. The number of protein jobs a miner can handle is determined via the `config.neuron.max_workers` parameter. 
 
 For detailed information, read [mining.md](./documentation/mining.md).
-
-## Notes
-
-**Miner** simulations will output a projected time. The first two runs will be about the same length, with the third taking about an order of magnitude longer using a default number of steps = 50,000. The number of steps (`steps`) and the maximum allowed runtime (`maxh`) are easily configurable and should be employed by miners to prevent timing out. We also encourage miners to take advantage of 'early stopping' techniques so that simulations do not run past convergence.
-
-Furthermore, we want to support the use of ML-based mining so that recent algorithmic advances (e.g. AlphaFold) can be leveraged. At present, this subnet is effectively a **specialized compute subnet** (rather than an algorithmic subnet). For now, we leave this work to motivated miners.
-
-GROMACS itself is a rather robust package and is widely used within the research community. There are specific guides and functions if you wish to parallelize your processing or run these computations off of a GPU to speed things up.
-
 
 
 ## License
