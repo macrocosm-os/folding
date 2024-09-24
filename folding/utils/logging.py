@@ -111,11 +111,6 @@ def log_event(self, event, failed=False, pdb_location: str = None):
 
     run = init_wandb(self, pdb_id=pdb_id, failed=failed)
 
-    if (dt.datetime.now() - self.wandb_run_start) >= dt.timedelta(days=1):
-        bt.logging.info("Current wandb run is more than 1 day old. Starting a new run.")
-        self.wandb.finish()
-        init_wandb(self)
-
     # Log the event to wandb.
     run.log(event)
 
