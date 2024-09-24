@@ -77,10 +77,6 @@ class Protein(OpenMMSimulation):
             else {}
         )
 
-        # Historic data that specifies the upper bounds of the energy as a function of steps.
-        with open(os.path.join(ROOT_DIR, "upper_bounds_interpolated.pkl"), "rb") as f:
-            self.upper_bounds: List = pickle.load(f)
-
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
