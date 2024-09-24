@@ -153,7 +153,7 @@ class Job:
     gro_hash: str = None
     update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
     updated_count: int = 0
-    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
+    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=20)
     min_updates: int = 10
     epsilon: float = 0.05  # percentage.
     event: dict = None
@@ -189,7 +189,7 @@ class Job:
         percent_improvement = (
             (self.best_loss - loss) / self.best_loss
             if not np.isinf(self.best_loss) and not self.best_loss == 0
-            else -1
+            else 1
         )
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
