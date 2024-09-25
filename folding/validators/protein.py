@@ -497,13 +497,13 @@ class Protein(OpenMMSimulation):
             & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
-        # calculating absolute percent difference per step
-        percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
-        min_length = len(percent_diff)
 
         # This is some debugging information for plotting the information from the miner.
         df = pd.DataFrame([check_energies, miner_energies]).T
         df.columns = ["validator", "miner"]
+
+        # calculating absolute percent difference per step
+        percent_diff = abs(((df['validator'] - df['miner'].fillna(0)) / df['validator']) * 100)
 
         fig = px.scatter(
             df,
