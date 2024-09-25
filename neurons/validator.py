@@ -167,6 +167,7 @@ class Validator(BaseValidatorNeuron):
             List[int]: A list of responding and free uids.
         """
         active_uids = self.ping_all_miners(exclude_uids=exclude_uids)
+        return active_uids
 
         if len(active_uids) > num_uids_to_sample:
             return random.sample(active_uids, num_uids_to_sample)
@@ -206,7 +207,7 @@ class Validator(BaseValidatorNeuron):
 
             if (
                 len(valid_uids) >= self.config.neuron.sample_size
-                and len(valid_uids) < 10
+                and len(valid_uids) <= 10
             ):
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
