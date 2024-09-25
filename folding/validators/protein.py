@@ -409,10 +409,11 @@ class Protein(OpenMMSimulation):
             self.log_file = pd.read_csv(log_file_path)
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
-            ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+            # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+            # Checks if log_file is 5000 steps ahead of checkpoint AND that the log_file has at least 5000 steps
             if (
                 self.log_step - self.simulation.currentStep
-            ) < 5000:  # Right now, needs at least 5000 steps.
+            ) < 5000 and len(self.log_file) >= 5000:
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
