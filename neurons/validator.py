@@ -167,7 +167,6 @@ class Validator(BaseValidatorNeuron):
             List[int]: A list of responding and free uids.
         """
         active_uids = self.ping_all_miners(exclude_uids=exclude_uids)
-        return active_uids
 
         if len(active_uids) > num_uids_to_sample:
             return random.sample(active_uids, num_uids_to_sample)
