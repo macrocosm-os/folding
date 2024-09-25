@@ -206,7 +206,7 @@ class Validator(BaseValidatorNeuron):
 
             if (
                 len(valid_uids) >= self.config.neuron.sample_size
-                and len(valid_uids) < 10
+                and len(valid_uids) <= 10
             ):
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
