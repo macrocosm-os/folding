@@ -247,10 +247,6 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
-        # TODO: we need to get the commit and gro hashes from the best hotkey
-        commit_hash = ""  # For next time
-        gro_hash = ""  # For next time
-
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
         best_hotkey = serving_hotkeys[best_index]
@@ -259,8 +255,6 @@ class Validator(BaseValidatorNeuron):
             hotkeys=serving_hotkeys,
             loss=best_loss,
             hotkey=best_hotkey,
-            commit_hash=commit_hash,
-            gro_hash=gro_hash,
         )
 
         # If no miners respond appropriately, the energies will be all zeros
@@ -316,10 +310,14 @@ class Validator(BaseValidatorNeuron):
         # If the job is finished, remove the pdb directory
         pdb_location = None
         protein = Protein.from_job(job=job, config=self.config.protein)
-        if job.active is False:
-            protein.remove_pdb_directory()
-        elif event["updated_count"] == 1:
-            pdb_location = protein.pdb_location
+
+        if protein is not None:
+            if job.active is False:
+                protein.remove_pdb_directory()
+            elif event["updated_count"] == 1:
+                pdb_location = protein.pdb_location
+        else:
+            bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         log_event(self, event=event, pdb_location=pdb_location)
 
