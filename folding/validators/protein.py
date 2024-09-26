@@ -27,7 +27,6 @@ from folding.utils.ops import (
     select_random_pdb_id,
     write_pkl,
 )
-from folding.store import Job
 from folding.base.simulation import OpenMMSimulation
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -118,8 +117,8 @@ class Protein(OpenMMSimulation):
             bt.logging.error(
                 f"from_job failed for {protein.pdb_id} with Exception {E}."
             )
-        finally:
-            return protein
+            return None
+        return protein
 
     @staticmethod
     def load_pdb_as_string(pdb_path: str) -> str:
@@ -411,9 +410,9 @@ class Protein(OpenMMSimulation):
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
             # Checks if log_file is 5000 steps ahead of checkpoint AND that the log_file has at least 5000 steps
-            if (
-                self.log_step - self.simulation.currentStep
-            ) < 5000 and len(self.log_file) >= 5000:
+            if (self.log_step - self.simulation.currentStep) < 5000 and len(
+                self.log_file
+            ) >= 5000:
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
