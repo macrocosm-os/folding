@@ -221,6 +221,12 @@ class Protein(OpenMMSimulation):
 
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
         self.init_energy = self.calc_init_energy()
+        # Checking if init energy is nan
+        if self.init_energy != self.init_energy:
+            bt.logging.error(
+                f"Failed to calculate initial energy for {self.pdb_id}... Exiting!"
+            )
+            raise ValueError(f"Failed to calculate initial energy for {self.pdb_id}")
         self._calculate_epsilon()
 
     def __str__(self):
@@ -411,9 +417,9 @@ class Protein(OpenMMSimulation):
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
             # Checks if log_file is 5000 steps ahead of checkpoint AND that the log_file has at least 5000 steps
-            if (
-                self.log_step - self.simulation.currentStep
-            ) < 5000 and len(self.log_file) >= 5000:
+            if (self.log_step - self.simulation.currentStep) < 5000 and len(
+                self.log_file
+            ) >= 5000:
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
