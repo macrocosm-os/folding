@@ -49,12 +49,20 @@ def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
 
 def run_step(
     self,
-    protein: Protein,
+    protein: Protein | None,
     uids: List[int],
     timeout: float,
     mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
 ) -> Dict:
     start_time = time.time()
+    if protein is None:
+        event = {
+            "block": self.block,
+            "step_length": time.time() - start_time,
+            "energies": [],
+            "active": False,
+        }
+        return event
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]

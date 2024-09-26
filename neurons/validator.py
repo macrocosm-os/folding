@@ -316,10 +316,14 @@ class Validator(BaseValidatorNeuron):
         # If the job is finished, remove the pdb directory
         pdb_location = None
         protein = Protein.from_job(job=job, config=self.config.protein)
-        if job.active is False:
-            protein.remove_pdb_directory()
-        elif event["updated_count"] == 1:
-            pdb_location = protein.pdb_location
+
+        if protein is not None:
+            if job.active is False:
+                protein.remove_pdb_directory()
+            elif event["updated_count"] == 1:
+                pdb_location = protein.pdb_location
+        else:
+            bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         log_event(self, event=event, pdb_location=pdb_location)
 

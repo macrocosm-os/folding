@@ -117,8 +117,8 @@ class Protein(OpenMMSimulation):
             bt.logging.error(
                 f"from_job failed for {protein.pdb_id} with Exception {E}."
             )
-        finally:
-            return protein
+            return None
+        return protein
 
     @staticmethod
     def load_pdb_as_string(pdb_path: str) -> str:
