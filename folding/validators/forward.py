@@ -49,12 +49,13 @@ def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
 
 def run_step(
     self,
-    protein: Protein | None,
+    protein: Protein,
     uids: List[int],
     timeout: float,
-    mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
+    mdrun_args="",  # TODO: Remove this
 ) -> Dict:
     start_time = time.time()
+
     if protein is None:
         event = {
             "block": self.block,
