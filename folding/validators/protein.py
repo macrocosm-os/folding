@@ -1,34 +1,32 @@
-import time
+import base64
 import glob
 import os
-import pickle
 import random
-import re
 import shutil
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
-import base64
 
-import plotly.express as px
 import bittensor as bt
-import openmm as mm
-import pandas as pd
 import numpy as np
+import pandas as pd
+import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
+
+from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
+    ValidationError,
     check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
     write_pkl,
 )
-from folding.store import Job
-from folding.base.simulation import OpenMMSimulation
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -185,7 +183,7 @@ class Protein(OpenMMSimulation):
                                 name
                             ] = f.read()  # This would be the pdb file.
 
-                except Exception as E:
+                except Exception:
                     continue
         return files_to_return
 
@@ -355,6 +353,9 @@ class Protein(OpenMMSimulation):
     def process_md_output(
         self, md_output: dict, seed: int, state: str, hotkey: str
     ) -> bool:
+        MIN_LOGGING_ENTRIES = 500
+        MIN_SIMULATION_STEPS = 5000
+
         required_files_extensions = ["cpt", "log"]
         hotkey_alias = hotkey[:8]
         self.current_state = state
@@ -409,11 +410,16 @@ class Protein(OpenMMSimulation):
             self.log_file = pd.read_csv(log_file_path)
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
+            # Checks to see if we have enough steps in the log file to start validation
+            if len(self.log_file) < MIN_LOGGING_ENTRIES:
+                raise ValidationError(
+                    f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                )
+
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-            # Checks if log_file is 5000 steps ahead of checkpoint AND that the log_file has at least 5000 steps
-            if (
-                self.log_step - self.simulation.currentStep
-            ) < 5000 and len(self.log_file) >= 5000:
+            # Checks if log_file is MIN_STEPS steps ahead of checkpoint
+            if (self.log_step - self.simulation.currentStep) < MIN_SIMULATION_STEPS:
+                # If the miner did not run enough steps, we will load the old checkpoint
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
@@ -422,13 +428,17 @@ class Protein(OpenMMSimulation):
                         f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
+                    # Checking to see if the old checkpoint has enough steps to validate
+                    if (
+                        self.log_step - self.simulation.currentStep
+                    ) < MIN_SIMULATION_STEPS:
+                        raise ValidationError(
+                            f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                        )
                 else:
-                    bt.logging.warning(
+                    raise ValidationError(
                         f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
-                    return False
-            else:
-                self.simulation.loadCheckpoint(checkpoint_path)
 
             self.cpt_step = self.simulation.currentStep
             self.checkpoint_path = checkpoint_path
@@ -443,6 +453,10 @@ class Protein(OpenMMSimulation):
                     path=system_config_path,
                     write_mode="wb",
                 )
+
+        except ValidationError as E:
+            bt.logging.warning(f"{E}")
+            return False
 
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
@@ -500,7 +514,6 @@ class Protein(OpenMMSimulation):
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
-        min_length = len(percent_diff)
 
         # This is some debugging information for plotting the information from the miner.
         df = pd.DataFrame([check_energies, miner_energies]).T
