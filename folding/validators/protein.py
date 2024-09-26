@@ -21,6 +21,7 @@ from pdbfixer import PDBFixer
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
+    OpenMMException,
     check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
@@ -221,12 +222,13 @@ class Protein(OpenMMSimulation):
 
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
         self.init_energy = self.calc_init_energy()
+
         # Checking if init energy is nan
         if self.init_energy != self.init_energy:
-            bt.logging.error(
-                f"Failed to calculate initial energy for {self.pdb_id}... Exiting!"
+            raise OpenMMException(
+                f"Failed to calculate initial energy for {self.pdb_id}"
             )
-            raise ValueError(f"Failed to calculate initial energy for {self.pdb_id}")
+
         self._calculate_epsilon()
 
     def __str__(self):
