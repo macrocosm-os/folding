@@ -353,7 +353,9 @@ class Protein(OpenMMSimulation):
     def process_md_output(
         self, md_output: dict, seed: int, state: str, hotkey: str
     ) -> bool:
-        MIN_STEPS = 5000
+        MIN_LOGGING_ENTRIES = 500
+        MIN_SIMULATION_STEPS = 5000
+
         required_files_extensions = ["cpt", "log"]
         hotkey_alias = hotkey[:8]
         self.current_state = state
@@ -409,14 +411,14 @@ class Protein(OpenMMSimulation):
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
             # Checks to see if we have enough steps in the log file to start validation
-            if len(self.log_file) < MIN_STEPS:
+            if len(self.log_file) < MIN_LOGGING_ENTRIES:
                 raise ValidationError(
                     f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
                 )
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
             # Checks if log_file is MIN_STEPS steps ahead of checkpoint
-            if (self.log_step - self.simulation.currentStep) < MIN_STEPS:
+            if (self.log_step - self.simulation.currentStep) < MIN_SIMULATION_STEPS:
                 # If the miner did not run enough steps, we will load the old checkpoint
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
@@ -427,7 +429,9 @@ class Protein(OpenMMSimulation):
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
                     # Checking to see if the old checkpoint has enough steps to validate
-                    if (self.log_step - self.simulation.currentStep) < MIN_STEPS:
+                    if (
+                        self.log_step - self.simulation.currentStep
+                    ) < MIN_SIMULATION_STEPS:
                         raise ValidationError(
                             f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
