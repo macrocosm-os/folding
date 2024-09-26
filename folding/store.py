@@ -173,8 +173,6 @@ class Job:
         self,
         loss: float,
         hotkey: str,
-        commit_hash: str,
-        gro_hash: str,
         hotkeys: List[str] = None,
     ):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
@@ -198,8 +196,6 @@ class Job:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
-            self.commit_hash = commit_hash
-            self.gro_hash = gro_hash
         elif (  # if loss has been improved but not recently enough, trigger early stopping
             pd.Timestamp.now().floor("s") - self.best_loss_at
             > self.max_time_no_improvement
