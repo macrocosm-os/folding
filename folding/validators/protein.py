@@ -1,9 +1,9 @@
-import base64
-import glob
 import os
+import time
+import glob
+import base64
 import random
 import shutil
-import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -222,7 +222,7 @@ class Protein(OpenMMSimulation):
         self.init_energy = self.calc_init_energy()
 
         # Checking if init energy is nan
-        if self.init_energy != self.init_energy:
+        if np.isnan(self.init_energy):
             raise OpenMMException(
                 f"Failed to calculate initial energy for {self.pdb_id}"
             )
@@ -580,7 +580,7 @@ class Protein(OpenMMSimulation):
         """
         shutil.rmtree(self.pdb_directory)
 
-    def calc_init_energy(self):
+    def calc_init_energy(self) -> float:
         """Calculate the potential energy from an edr file using gmx energy.
         Args:
             output_dir (str): directory containing the edr file
