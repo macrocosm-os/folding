@@ -20,6 +20,7 @@ from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
+    ValidationError,
     check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
@@ -409,14 +410,14 @@ class Protein(OpenMMSimulation):
 
             # Checks to see if we have enough steps in the log file to start validation
             if len(self.log_file) < MIN_STEPS:
-                bt.logging.warning(
+                raise ValidationError(
                     f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
                 )
-                return False
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
             # Checks if log_file is MIN_STEPS steps ahead of checkpoint
             if (self.log_step - self.simulation.currentStep) < MIN_STEPS:
+                # If the miner did not run enough steps, we will load the old checkpoint
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
@@ -427,14 +428,13 @@ class Protein(OpenMMSimulation):
                     self.simulation.loadCheckpoint(checkpoint_path)
                     # Checking to see if the old checkpoint has enough steps to validate
                     if (self.log_step - self.simulation.currentStep) < MIN_STEPS:
-                        bt.logging.warning(
+                        raise ValidationError(
                             f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
                 else:
-                    bt.logging.warning(
+                    raise ValidationError(
                         f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
-                    return False
 
             self.cpt_step = self.simulation.currentStep
             self.checkpoint_path = checkpoint_path
@@ -449,6 +449,10 @@ class Protein(OpenMMSimulation):
                     path=system_config_path,
                     write_mode="wb",
                 )
+
+        except ValidationError as E:
+            bt.logging.warning(f"{E}")
+            return False
 
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")

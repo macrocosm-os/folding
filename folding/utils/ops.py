@@ -24,6 +24,14 @@ class OpenMMException(Exception):
         super().__init__(self.message)
 
 
+class ValidationError(Exception):
+    """Exception raised for errors in the versioning."""
+
+    def __init__(self, message="Version error occurred"):
+        self.message = message
+        super().__init__(self.message)
+
+
 def delete_directory(directory: str):
     """We create a lot of files in the process of tracking pdb files.
     Therefore, we want to delete the directory after we are done with the tests.
