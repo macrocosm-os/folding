@@ -185,7 +185,7 @@ class Job:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
         percent_improvement = (
-            (self.best_loss - loss) / self.best_loss
+            (loss - self.best_loss) / self.best_loss
             if not np.isinf(self.best_loss) and not self.best_loss == 0
             else 1
         )
