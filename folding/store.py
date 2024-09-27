@@ -187,12 +187,19 @@ class Job:
         percent_improvement = (
             (loss - self.best_loss) / self.best_loss
             if not np.isinf(self.best_loss) and not self.best_loss == 0
-            else 1
+            else np.nan
         )
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if (np.isinf(self.best_loss)) or percent_improvement >= self.epsilon:
+        never_updated_better_loss = (
+            np.isnan(percent_improvement) and loss < self.best_loss
+        )  # only happens if best_loss is 0 or inf
+        better_loss = (
+            percent_improvement >= self.epsilon
+        )  # only happens if best_loss is not 0 or inf
+
+        if never_updated_better_loss or better_loss:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
