@@ -118,5 +118,8 @@ def log_event(self, event, failed=False, pdb_location: str = None):
         log_protein(run, pdb_id_path=pdb_location)
 
     run.finish()
-    if event["active"] == False:
+
+    if (event["validator_search_status"] == False) or (
+        "active" in event and event["active"] == False
+    ):
         self.remove_wandb_id(pdb_id)

@@ -81,6 +81,16 @@ Protein folding utilizes an open-source package called [OpenMM](https://openmm.o
 
 For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
 
+## Weights and Biases
+As a validator, you are **required** to have Weights and Biases (Wandb) active on your machine. We open-source our logging to the community, so this is a necessary component. The repo will not work without Wandb. 
+
+Simply:
+```bash
+pip install wandb 
+wandb login
+```
+
+As a miner, this is an optional include. As such, we do not have logic for logging natively in the base miner, but can be easily added. 
 
 ## Installation
 This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
