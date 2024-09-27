@@ -154,7 +154,7 @@ class Job:
     update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
     updated_count: int = 0
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=20)
-    min_updates: int = 10
+    min_updates: int = 5
     epsilon: float = 0.05  # percentage.
     event: dict = None
 
