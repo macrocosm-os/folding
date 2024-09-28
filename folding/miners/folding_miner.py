@@ -395,7 +395,11 @@ class FoldingMiner(BaseMinerNeuron):
         with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
             f.write(synapse.pdb_contents)
 
-        system_config = SimulationConfig(**synapse.system_config)
+        system_config = copy.deepcopy(synapse.system_config)
+        if system_config["seed"] is None:
+            system_config["seed"] = self.generate_random_seed()
+
+        system_config = SimulationConfig(**system_config)
         write_pkl(system_config, system_config_filepath)
 
         # Create the job and submit it to the executor
@@ -403,9 +407,7 @@ class FoldingMiner(BaseMinerNeuron):
             pdb_id=pdb_id,
             output_dir=output_dir,
             system_config=system_config.to_dict(),
-            seed=self.generate_random_seed()
-            if system_config.seed is None
-            else system_config.seed,
+            seed=system_config.seed,
         )
 
         future = self.executor.submit(

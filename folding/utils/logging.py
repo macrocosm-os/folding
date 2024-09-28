@@ -4,6 +4,7 @@ from typing import List
 from loguru import logger
 from dataclasses import asdict, dataclass
 import datetime as dt
+import os
 
 import folding
 import bittensor as bt
@@ -113,6 +114,7 @@ def log_event(self, event, failed=False, pdb_location: str = None):
 
     # Log the event to wandb.
     run.log(event)
+    wandb.save(os.path.join(self.config.neuron.full_path, f"events.log"))
 
     if pdb_location is not None:
         log_protein(run, pdb_id_path=pdb_location)

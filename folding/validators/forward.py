@@ -68,11 +68,14 @@ def run_step(
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
 
+    system_config = protein.system_config.to_dict()
+    system_config["seed"] = None  # We don't want to pass the seed to miners.
+
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
-        system_config=protein.system_config.to_dict(),
+        system_config=system_config,
     )
 
     # Make calls to the network with the prompt - this is synchronous.
