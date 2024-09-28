@@ -11,13 +11,15 @@ from folding.validators.protein import Protein
 def get_energies(
     protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]
 ):
-    """Takes all the data from reponse synapses, applies the reward pipeline, and aggregates the rewards
-    into a single torch.FloatTensor. Also aggregates the RMSDs for logging.
+    """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
+
+    Args:
+        protein (Protein): instance of the Protein class
+        responses (List[JobSubmissionSynapse]): list of JobSubmissionSynapse objects
+        uids (List[int]): list of uids
 
     Returns:
-        tuple:
-            torch.FloatTensor: A tensor of rewards for each miner.
-            torch.FloatTensor: A tensor of RMSDs for each miner.
+        Tuple: Tuple containing the energies and the event dictionary
     """
     event = {}
     event["is_valid"] = [False] * len(uids)
