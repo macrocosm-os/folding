@@ -304,7 +304,6 @@ class Validator(BaseValidatorNeuron):
             rewards.numpy()
         )  # add the rewards to the logging event.
 
-        bt.logging.success(f"Event information: {merged_events}")
         event = prepare_event_for_logging(merged_events)
 
         # If the job is finished, remove the pdb directory
@@ -319,6 +318,11 @@ class Validator(BaseValidatorNeuron):
         else:
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
+        # Remove these keys from the log because they polute the terminal.
+        merged_events.pop("checked_energy")
+        merged_events.pop("miner_energy")
+
+        bt.logging.success(f"Event information: {merged_events}")
         log_event(self, event=event, pdb_location=pdb_location)
 
 
