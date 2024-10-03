@@ -311,10 +311,21 @@ class Validator(BaseValidatorNeuron):
         protein = Protein.from_job(job=job, config=self.config.protein)
 
         if protein is not None:
+            if event["updated_count"] == 1:
+                pdb_location = protein.pdb_location
+
+            protein.get_miner_data_directory(event["best_hotkey"])
+            folded_protein_location = os.path.join(
+                protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb"
+            )
+            log_event(
+                self,
+                event=event,
+                pdb_location=pdb_location,
+                folded_protein_location=folded_protein_location,
+            )
             if job.active is False:
                 protein.remove_pdb_directory()
-            elif event["updated_count"] == 1:
-                pdb_location = protein.pdb_location
         else:
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
@@ -323,7 +334,6 @@ class Validator(BaseValidatorNeuron):
         merged_events.pop("miner_energy")
 
         bt.logging.success(f"Event information: {merged_events}")
-        log_event(self, event=event, pdb_location=pdb_location)
 
 
 # The main function parses the configuration and runs the validator.
