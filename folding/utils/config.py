@@ -48,11 +48,11 @@ def check_config(cls, config: "bt.Config"):
             logger.add(
                 os.path.join(config.neuron.full_path, "events.log"),
                 rotation=config.neuron.events_retention_size,
-                serialize=True,
+                serialize=False,
                 enqueue=True,
-                backtrace=False,
+                backtrace=True,
                 diagnose=False,
-                level="EVENTS",
+                level="TRACE",
                 format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
             )
 
