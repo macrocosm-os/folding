@@ -68,7 +68,7 @@ class Protein(OpenMMSimulation):
             water=self.water,
             box=self.box,
             seed=1337,
-            **system_kwargs,
+            **eval(system_kwargs),
         )
 
         self.config = config
