@@ -135,6 +135,20 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.temperature",
+        type=float,
+        help="Temperature of the simulation. Typically between 200-400K",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.friction",
+        type=float,
+        help="Friction of the simulation. Typically between 0.9-1.1",
+        default=None,
+    )
+
+    parser.add_argument(
         "--protein.max_steps",
         type=int,
         help="Maximum number of steps for protein folding.",
