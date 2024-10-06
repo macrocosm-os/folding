@@ -62,13 +62,15 @@ class Protein(OpenMMSimulation):
         self.ff: str = ff
         self.box: Literal["cube", "dodecahedron", "octahedron"] = box
         self.water: str = water
+        if isinstance(system_kwargs, str):
+            system_kwargs = eval(system_kwargs)
 
         self.system_config = SimulationConfig(
             ff=self.ff,
             water=self.water,
             box=self.box,
             seed=1337,
-            **eval(system_kwargs),
+            **system_kwargs,
         )
 
         self.config = config
