@@ -16,7 +16,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 import re
-import copy
 import time
 import random
 import numpy as np
