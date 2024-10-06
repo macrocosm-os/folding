@@ -15,12 +15,11 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import os
 import re
 import time
 import random
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from itertools import chain
 
 import torch
@@ -195,7 +194,6 @@ class Validator(BaseValidatorNeuron):
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
-            # Sample uids in a recursive manner until we have enough (or other condition is met.)
             start_time = time.time()
             valid_uids = self.sample_random_uids(
                 num_uids_to_sample=self.config.neuron.sample_size,
@@ -204,10 +202,7 @@ class Validator(BaseValidatorNeuron):
 
             uid_search_time = time.time() - start_time
 
-            if (
-                len(valid_uids) >= self.config.neuron.sample_size
-                and len(valid_uids) <= 10
-            ):
+            if len(valid_uids) >= self.config.neuron.sample_size:
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
                 job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
@@ -320,11 +315,11 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
+        log_event(self, event=event, pdb_location=pdb_location)
+
         merged_events.pop("checked_energy")
         merged_events.pop("miner_energy")
-
         bt.logging.success(f"Event information: {merged_events}")
-        log_event(self, event=event, pdb_location=pdb_location)
 
 
 # The main function parses the configuration and runs the validator.
