@@ -270,6 +270,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
             event["init_energy"] = protein.init_energy
             event["epsilon"] = protein.epsilon
+            event["system_kwargs"] = system_kwargs
 
             if "validator_search_status" not in event:
                 bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")

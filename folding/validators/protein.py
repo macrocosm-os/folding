@@ -110,6 +110,7 @@ class Protein(OpenMMSimulation):
             config=config,
             load_md_inputs=True,
             epsilon=job.epsilon,
+            system_kwargs=job.system_kwargs,
         )
 
         try:

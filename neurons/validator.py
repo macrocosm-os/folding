@@ -222,6 +222,7 @@ class Validator(BaseValidatorNeuron):
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
                     epsilon=job_event["epsilon"],
+                    system_kwargs=job_event["system_kwargs"],
                     event=job_event,
                 )
             else:
