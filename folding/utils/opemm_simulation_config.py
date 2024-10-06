@@ -33,9 +33,7 @@ class SimulationConfig(BaseModel):
     constraints: str = "HBonds"
     cutoff: Optional[float] = 1.0
     pressure: float = 1.0
-    max_steps_nvt: int = 50000
     emtol: float = 1000.0
-    nsteps_minimize: int = 100
     rvdw: float = 1.2
     rcoulomb: float = 1.2
     fourier_spacing: float = 0.15
@@ -43,6 +41,10 @@ class SimulationConfig(BaseModel):
     ref_p: float = 1.0
     ref_t: float = 300.0
     gen_temp: float = 300.0
+
+    max_steps_nvt: int = 50000
+    nsteps_minimize: int = 100
+    simulation_steps: dict = {"nvt": 50000, "npt": 75000, "md_0_1": 500000}
 
     def get_config(self) -> dict:
         attributes = self.dict()

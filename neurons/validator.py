@@ -58,6 +58,7 @@ class Validator(BaseValidatorNeuron):
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
+        self.wandb_run_start = None
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
@@ -203,7 +204,10 @@ class Validator(BaseValidatorNeuron):
 
             uid_search_time = time.time() - start_time
 
-            if len(valid_uids) >= self.config.neuron.sample_size and len(valid_uids)<10:
+            if (
+                len(valid_uids) >= self.config.neuron.sample_size
+                and len(valid_uids) <= 10
+            ):
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
                 job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
@@ -243,10 +247,6 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
-        # TODO: we need to get the commit and gro hashes from the best hotkey
-        commit_hash = ""  # For next time
-        gro_hash = ""  # For next time
-
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
         best_hotkey = serving_hotkeys[best_index]
@@ -255,8 +255,6 @@ class Validator(BaseValidatorNeuron):
             hotkeys=serving_hotkeys,
             loss=best_loss,
             hotkey=best_hotkey,
-            commit_hash=commit_hash,
-            gro_hash=gro_hash,
         )
 
         # If no miners respond appropriately, the energies will be all zeros
@@ -291,11 +289,6 @@ class Validator(BaseValidatorNeuron):
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
-        # If the job is finished, remove the pdb directory
-        if job.active is False:
-            protein = Protein.from_job(job=job, config=self.config.protein)
-            self.remove_wandb_id(job.pdb)
-            protein.remove_pdb_directory()
 
         def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
@@ -311,8 +304,26 @@ class Validator(BaseValidatorNeuron):
             rewards.numpy()
         )  # add the rewards to the logging event.
 
+        event = prepare_event_for_logging(merged_events)
+
+        # If the job is finished, remove the pdb directory
+        pdb_location = None
+        protein = Protein.from_job(job=job, config=self.config.protein)
+
+        if protein is not None:
+            if job.active is False:
+                protein.remove_pdb_directory()
+            elif event["updated_count"] == 1:
+                pdb_location = protein.pdb_location
+        else:
+            bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
+
+        # Remove these keys from the log because they polute the terminal.
+        merged_events.pop("checked_energy")
+        merged_events.pop("miner_energy")
+
         bt.logging.success(f"Event information: {merged_events}")
-        log_event(self, event=prepare_event_for_logging(merged_events))
+        log_event(self, event=event, pdb_location=pdb_location)
 
 
 # The main function parses the configuration and runs the validator.

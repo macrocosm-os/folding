@@ -53,18 +53,30 @@ def run_step(
     protein: Protein,
     uids: List[int],
     timeout: float,
-    mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
+    mdrun_args="",  # TODO: Remove this
 ) -> Dict:
     start_time = time.time()
 
+    if protein is None:
+        event = {
+            "block": self.block,
+            "step_length": time.time() - start_time,
+            "energies": [],
+            "active": False,
+        }
+        return event
+
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
+
+    system_config = protein.system_config.to_dict()
+    system_config["seed"] = None  # We don't want to pass the seed to miners.
 
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
-        system_config=protein.system_config.to_dict(),
+        system_config=system_config,
     )
 
     # Make calls to the network with the prompt - this is synchronous.
@@ -240,6 +252,11 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
 
         try:
             protein.setup_simulation()
+
+            if protein.init_energy > 0:
+                raise ValueError(
+                    f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                )
 
         except Exception:
             # full traceback

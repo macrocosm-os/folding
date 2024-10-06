@@ -1,34 +1,33 @@
+import os
 import time
 import glob
-import os
-import pickle
+import base64
 import random
-import re
 import shutil
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
-import base64
 
-import plotly.express as px
 import bittensor as bt
-import openmm as mm
-import pandas as pd
 import numpy as np
+import pandas as pd
+import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
+
+from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
+    OpenMMException,
+    ValidationError,
     check_and_download_pdbs,
     check_if_directory_exists,
     load_pdb_ids,
     select_random_pdb_id,
     write_pkl,
 )
-from folding.store import Job
-from folding.base.simulation import OpenMMSimulation
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -68,7 +67,7 @@ class Protein(OpenMMSimulation):
             ff=self.ff,
             water=self.water,
             box=self.box,
-            seed=self.gen_seed(),
+            seed=1337,
             **system_kwargs,
         )
 
@@ -81,10 +80,6 @@ class Protein(OpenMMSimulation):
             if load_md_inputs
             else {}
         )
-
-        # Historic data that specifies the upper bounds of the energy as a function of steps.
-        with open(os.path.join(ROOT_DIR, "upper_bounds_interpolated.pkl"), "rb") as f:
-            self.upper_bounds: List = pickle.load(f)
 
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
@@ -127,8 +122,8 @@ class Protein(OpenMMSimulation):
             bt.logging.error(
                 f"from_job failed for {protein.pdb_id} with Exception {E}."
             )
-        finally:
-            return protein
+            return None
+        return protein
 
     @staticmethod
     def load_pdb_as_string(pdb_path: str) -> str:
@@ -176,17 +171,6 @@ class Protein(OpenMMSimulation):
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
-    def check_for_missing_files(self, required_files: List[str]):
-        missing_files = [
-            filename
-            for filename in required_files
-            if not os.path.exists(os.path.join(self.pdb_directory, filename))
-        ]
-
-        if len(missing_files) > 0:
-            return missing_files
-        return None
-
     def read_and_return_files(self, filenames: List) -> Dict:
         """Read the files and return them as a dictionary."""
         files_to_return = {}
@@ -205,7 +189,7 @@ class Protein(OpenMMSimulation):
                                 name
                             ] = f.read()  # This would be the pdb file.
 
-                except Exception as E:
+                except Exception:
                     continue
         return files_to_return
 
@@ -225,10 +209,7 @@ class Protein(OpenMMSimulation):
         self.gather_pdb_id()
         self.setup_pdb_directory()
 
-        missing_files = self.check_for_missing_files(required_files=self.input_files)
-
-        if missing_files is not None:
-            self.generate_input_files()
+        self.generate_input_files()
 
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -244,6 +225,13 @@ class Protein(OpenMMSimulation):
 
         self.pdb_complexity = Protein._get_pdb_complexity(self.pdb_location)
         self.init_energy = self.calc_init_energy()
+
+        # Checking if init energy is nan
+        if np.isnan(self.init_energy):
+            raise OpenMMException(
+                f"Failed to calculate initial energy for {self.pdb_id}"
+            )
+
         self._calculate_epsilon()
 
     def __str__(self):
@@ -290,6 +278,13 @@ class Protein(OpenMMSimulation):
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
     def generate_input_files(self):
+        """Generate_input_files method defines the following:
+        1. Load the pdb file and create the simulation object.
+        2. Minimize the energy of the system.
+        3. Save the checkpoint file.
+        4. Save the system config to the validator directory.
+        5. Move all files except the pdb file to the validator directory.
+        """
         bt.logging.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
@@ -324,9 +319,6 @@ class Protein(OpenMMSimulation):
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
         bt.logging.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
-
-        # We want to catch any errors that occur in the above steps and then return the error to the user
-        return True
 
     def gen_seed(self):
         """Generate a random seed"""
@@ -374,6 +366,9 @@ class Protein(OpenMMSimulation):
     def process_md_output(
         self, md_output: dict, seed: int, state: str, hotkey: str
     ) -> bool:
+        MIN_LOGGING_ENTRIES = 500
+        MIN_SIMULATION_STEPS = 5000
+
         required_files_extensions = ["cpt", "log"]
         hotkey_alias = hotkey[:8]
         self.current_state = state
@@ -428,10 +423,16 @@ class Protein(OpenMMSimulation):
             self.log_file = pd.read_csv(log_file_path)
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
-            ## Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
-            if (
-                self.log_step - self.simulation.currentStep
-            ) < 5000:  # Right now, needs at least 5000 steps.
+            # Checks to see if we have enough steps in the log file to start validation
+            if len(self.log_file) < MIN_LOGGING_ENTRIES:
+                raise ValidationError(
+                    f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                )
+
+            # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
+            # Checks if log_file is MIN_STEPS steps ahead of checkpoint
+            if (self.log_step - self.simulation.currentStep) < MIN_SIMULATION_STEPS:
+                # If the miner did not run enough steps, we will load the old checkpoint
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
@@ -440,13 +441,17 @@ class Protein(OpenMMSimulation):
                         f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
+                    # Checking to see if the old checkpoint has enough steps to validate
+                    if (
+                        self.log_step - self.simulation.currentStep
+                    ) < MIN_SIMULATION_STEPS:
+                        raise ValidationError(
+                            f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                        )
                 else:
-                    bt.logging.warning(
+                    raise ValidationError(
                         f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
-                    return False
-            else:
-                self.simulation.loadCheckpoint(checkpoint_path)
 
             self.cpt_step = self.simulation.currentStep
             self.checkpoint_path = checkpoint_path
@@ -462,6 +467,10 @@ class Protein(OpenMMSimulation):
                     write_mode="wb",
                 )
 
+        except ValidationError as E:
+            bt.logging.warning(f"{E}")
+            return False
+
         except Exception as e:
             bt.logging.error(f"Failed to recreate simulation: {e}")
             return False
@@ -474,11 +483,12 @@ class Protein(OpenMMSimulation):
         between the current simulation and a reference log file.
 
         Returns:
-            bool: True if the run is valid, False otherwise.
+            Tuple[bool, list, list]: True if the run is valid, False otherwise.
+                The two lists contain the potential energy values from the current simulation and the reference log file.
         """
 
         # The percentage that we allow the energy to differ from the miner to the validator.
-        ANOMALY_THRESHOLD = 20
+        ANOMALY_THRESHOLD = 0.5
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
@@ -517,7 +527,6 @@ class Protein(OpenMMSimulation):
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
-        min_length = len(percent_diff)
 
         # This is some debugging information for plotting the information from the miner.
         df = pd.DataFrame([check_energies, miner_energies]).T
@@ -546,19 +555,13 @@ class Protein(OpenMMSimulation):
             os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
         )
 
-        # Compare the entries up to the length of the shorter array
-        anomalies_detected = percent_diff > self.upper_bounds[:min_length]
-
-        # Calculate the percentage of True values
-        percent_anomalies_detected = (
-            sum(anomalies_detected) / len(anomalies_detected)
-        ) * 100
+        median_percent_diff = np.median(percent_diff)
 
         # We want to save all the information to the local filesystem so we can index them later.
 
-        if percent_anomalies_detected > ANOMALY_THRESHOLD:
-            return False
-        return True
+        if median_percent_diff > ANOMALY_THRESHOLD:
+            return False, check_energies.tolist(), miner_energies.tolist()
+        return True, check_energies.tolist(), miner_energies.tolist()
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)
@@ -582,7 +585,7 @@ class Protein(OpenMMSimulation):
         """
         shutil.rmtree(self.pdb_directory)
 
-    def calc_init_energy(self):
+    def calc_init_energy(self) -> float:
         """Calculate the potential energy from an edr file using gmx energy.
         Args:
             output_dir (str): directory containing the edr file
