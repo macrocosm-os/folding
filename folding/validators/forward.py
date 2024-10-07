@@ -156,12 +156,13 @@ def create_new_challenge(self, exclude: List) -> Dict:
         if self.config.protein.pdb_id is not None:
             pdb_id = self.config.protein.pdb_id
         else:
-            pdb_id = load_and_sample_random_pdb_ids(
+            pdb_id, input_source = load_and_sample_random_pdb_ids(
                 root_dir=ROOT_DIR,
                 filename="pdb_ids.pkl",
                 input_source=self.config.protein.input_source,
                 exclude=exclude,
             )
+            self.config.protein.input_source = input_source
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
