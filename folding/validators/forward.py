@@ -163,7 +163,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
         )
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
-        bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
+        bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
 
         if event.get("validator_search_status"):
@@ -174,7 +174,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
             # only log the event if the simulation was not successful
             log_event(self, event, failed=True)
-            bt.logging.error(
+            bt.logging.debug(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
             exclude.append(pdb_id)
@@ -273,13 +273,13 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["system_kwargs"] = system_kwargs
 
             if "validator_search_status" not in event:
-                bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
+                bt.logging.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break
 
             if tries == 10:
-                bt.logging.error(f"Max tries reached for pdb_id {pdb_id} ❌❌")
+                bt.logging.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")
                 return event
 
     return event
