@@ -96,7 +96,8 @@ def load_and_sample_random_pdb_ids(
     else:  # randomly sample all pdbs from all sources
         ids = {}
         for source in VALID_SOURCES:
-            ids[file[source]["pdbs"]] = source
+            for pdb_id in file[source]["pdbs"]:
+                ids[pdb_id] = source
 
         pdb_ids = list(ids.keys())
         pdb_id = select_random_pdb_id(PDB_IDS=pdb_ids, exclude=exclude)
