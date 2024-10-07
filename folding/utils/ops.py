@@ -1,19 +1,18 @@
-import hashlib
-import os
-import pickle as pkl
-import random
 import re
-import shutil
-import subprocess
+import os
 import sys
-import traceback
-from typing import Dict, List
-import gzip
-import parmed as pmd
-
-import bittensor as bt
-import requests
 import tqdm
+import random
+import shutil
+import hashlib
+import requests
+import traceback
+import subprocess
+import pickle as pkl
+from typing import Dict, List
+
+import parmed as pmd
+import bittensor as bt
 
 from folding.protocol import JobSubmissionSynapse
 
@@ -52,8 +51,11 @@ def load_pkl(path: str, read_mode="rb"):
     return data
 
 
-def load_pdb_ids(
-    root_dir: str, filename: str = "pdb_ids.pkl", input_source: str = None
+def load_and_sample_random_pdb_ids(
+    root_dir: str,
+    filename: str = "pdb_ids.pkl",
+    input_source: str = None,
+    exclude: List = None,
 ) -> List[str]:
     """load pdb ids from the specified source, or from all sources if None is provided.
 
@@ -86,13 +88,21 @@ def load_pdb_ids(
                 f"Invalid input source: {input_source}. Valid sources are {VALID_SOURCES}"
             )
 
-        ids = file[input_source]["pdbs"]  # get the pdb_ids from the specified source
-    else:  # None case
-        ids = []
-        for source in VALID_SOURCES:
-            ids.extend(file[source]["pdbs"])
+        pdb_ids = file[input_source][
+            "pdbs"
+        ]  # get the pdb_ids from the specified source
+        pdb_id = select_random_pdb_id(PDB_IDS=pdb_ids, exclude=exclude)
 
-    return ids
+    else:  # randomly sample all pdbs from all sources
+        ids = {}
+        for source in VALID_SOURCES:
+            ids[file[source]["pdbs"]] = source
+
+        pdb_ids = list(ids.keys())
+        pdb_id = select_random_pdb_id(PDB_IDS=pdb_ids, exclude=exclude)
+        input_source = ids[pdb_id]
+
+    return pdb_id, input_source
 
 
 def select_random_pdb_id(PDB_IDS: List[str], exclude: List[str] = None) -> str:
@@ -103,45 +113,6 @@ def select_random_pdb_id(PDB_IDS: List[str], exclude: List[str] = None) -> str:
         selected_pdb_id = random.choice(PDB_IDS)
         if exclude is None or selected_pdb_id not in exclude:
             return selected_pdb_id
-
-
-def gro_hash(gro_path: str):
-    """Generates the hash for a specific gro file.
-    Enables validators to ensure that miners are running the correct
-    protein, and not generating fake data.
-
-    Connects the (residue name, atom name, and residue number) from each line
-    together into a single string. This way, we can ensure that the protein is the same.
-
-    Example:
-    10LYS  N  1
-    10LYS  H1 2
-
-    Output: 10LYSN1LYSH12
-
-    Args:
-        gro_path (str): location to the gro file
-    """
-    bt.logging.info(f"Calculating hash for path {gro_path!r}")
-    pattern = re.compile(r"\s*(-?\d+\w+)\s+(\w+'?\d*\s*\d+)\s+(\-?\d+\.\d+)")
-
-    with open(gro_path, "rb") as f:
-        name, length, *lines, _ = f.readlines()
-        name = (
-            name.decode().split(" t=")[0].strip("\n").encode()
-        )  # if we are rerunning the gro file using trajectory, we need to include this
-        length = int(length)
-        bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
-
-    buf = ""
-    for line in lines:
-        line = line.decode().strip()
-        match = pattern.match(line)
-        if not match:
-            raise Exception(f"Error parsing line in {gro_path!r}: {line!r}")
-        buf += match.group(1) + match.group(2).replace(" ", "")
-
-    return hashlib.md5(name + buf.encode()).hexdigest()
 
 
 def check_if_directory_exists(output_directory):
@@ -206,10 +177,9 @@ def check_and_download_pdbs(
         Exception: If download fails.
 
     """
-    if input_source == None:
-        choices = ["pdbe", "rcsb"]
-        input_source = random.choice(choices)
-        bt.logging.info(f"No input source specified. Randomly selected: {input_source}")
+
+    if input_source not in ["rcsb", "pdbe"]:
+        raise ValueError(f"Unknown input source for pdb sampling: {input_source}")
 
     path = os.path.join(pdb_directory, f"{pdb_id}")
 
