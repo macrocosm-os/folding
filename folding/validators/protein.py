@@ -62,6 +62,8 @@ class Protein(OpenMMSimulation):
         self.ff: str = ff
         self.box: Literal["cube", "dodecahedron", "octahedron"] = box
         self.water: str = water
+
+        # The dict is saved as a string in the event, so it needs to be evaluated.
         if isinstance(system_kwargs, str):
             system_kwargs = eval(system_kwargs)
 
@@ -498,7 +500,7 @@ class Protein(OpenMMSimulation):
             return False
 
         steps_to_run = min(
-            10000, self.log_step - self.cpt_step
+            3000, self.log_step - self.cpt_step
         )  # run at most 10000 steps
 
         self.simulation.reporters.append(
