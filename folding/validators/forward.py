@@ -12,18 +12,14 @@ from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
-from folding.utils.ops import (
-    select_random_pdb_id,
-    load_pdb_ids,
-    get_response_info,
-)
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
+from folding.utils.ops import (
+    load_and_sample_random_pdb_ids,
+    get_response_info,
+)
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-PDB_IDS = load_pdb_ids(
-    root_dir=ROOT_DIR, filename="pdb_ids.pkl"
-)  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 
 def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
@@ -157,10 +153,16 @@ def create_new_challenge(self, exclude: List) -> Dict:
     while True:
         forward_start_time = time.time()
 
-        # Select a random pdb
-        pdb_id = self.config.protein.pdb_id or select_random_pdb_id(
-            PDB_IDS=PDB_IDS, exclude=exclude
-        )
+        if self.config.protein.pdb_id is not None:
+            pdb_id = self.config.protein.pdb_id
+        else:
+            pdb_id, input_source = load_and_sample_random_pdb_ids(
+                root_dir=ROOT_DIR,
+                filename="pdb_ids.pkl",
+                input_source=self.config.protein.input_source,
+                exclude=exclude,
+            )
+            self.config.protein.input_source = input_source
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")

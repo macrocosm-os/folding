@@ -205,6 +205,14 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--protein.input_source",
+        type=str,
+        help="Specifies the input source for selecting a new protein for simulation.",
+        default=None,
+        choices=["rcsb", "pdbe"],
+    )
+
+    parser.add_argument(
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",

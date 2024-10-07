@@ -1,17 +1,18 @@
-import hashlib
-import os
-import pickle as pkl
-import random
 import re
-import shutil
-import subprocess
+import os
 import sys
+import tqdm
+import random
+import shutil
+import hashlib
+import requests
 import traceback
+import subprocess
+import pickle as pkl
 from typing import Dict, List
 
+import parmed as pmd
 import bittensor as bt
-import requests
-import tqdm
 
 from folding.protocol import JobSubmissionSynapse
 
@@ -50,75 +51,69 @@ def load_pkl(path: str, read_mode="rb"):
     return data
 
 
-def load_pdb_ids(root_dir: str, filename: str = "pdb_ids.pkl") -> Dict[str, List[str]]:
-    """If you want to randomly sample pdb_ids, you need to load in
-    the data that was computed via the gather_pdbs.py script.
+def load_and_sample_random_pdb_ids(
+    root_dir: str,
+    filename: str = "pdb_ids.pkl",
+    input_source: str = None,
+    exclude: List = None,
+) -> List[str]:
+    """load pdb ids from the specified source, or from all sources if None is provided.
 
     Args:
-        root_dir (str): location of the file that contains all the names of pdb_ids
-        filename (str, optional): name of the pdb_id file. Defaults to "pdb_ids.pkl".
+        root_dir (str): location of the pdb_ids.pkl file
+        filename (str, optional): Defaults to "pdb_ids.pkl".
+        input_source (str, optional): A valid input source name. Defaults to None.
+
+    Raises:
+        ValueError: if the pdb file is not found
+        ValueError: if the input source is not valid when not None
+
+    Returns:
+        List[str]: list of pdb ids
     """
+    VALID_SOURCES = ["rcsb", "pdbe"]
     PDB_PATH = os.path.join(root_dir, filename)
 
     if not os.path.exists(PDB_PATH):
         raise ValueError(
-            f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
+            f"Required pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
         )
 
     with open(PDB_PATH, "rb") as f:
-        PDB_IDS = pkl.load(f)
-    return PDB_IDS
+        file = pkl.load(f)
+
+    if input_source is not None:
+        if input_source not in VALID_SOURCES:
+            raise ValueError(
+                f"Invalid input source: {input_source}. Valid sources are {VALID_SOURCES}"
+            )
+
+        pdb_ids = file[input_source][
+            "pdbs"
+        ]  # get the pdb_ids from the specified source
+        pdb_id = select_random_pdb_id(PDB_IDS=pdb_ids, exclude=exclude)
+
+    else:  # randomly sample all pdbs from all sources
+        ids = {}
+        for source in VALID_SOURCES:
+            for pdb_id in file[source]["pdbs"]:
+                ids[pdb_id] = source
+
+        pdb_ids = list(ids.keys())
+        pdb_id = select_random_pdb_id(PDB_IDS=pdb_ids, exclude=exclude)
+        input_source = ids[pdb_id]
+
+    return pdb_id, input_source
 
 
-def select_random_pdb_id(PDB_IDS: Dict, exclude: list = None) -> str:
-    """This function is really important as its where you select the protein you want to fold"""
+def select_random_pdb_id(PDB_IDS: List[str], exclude: List[str] = None) -> str:
+    """Select a random protein PDB ID to fold from a specified source."""
     while True:
-        family = random.choice(list(PDB_IDS.keys()))
-        choices = PDB_IDS[family]
-        if not len(choices):
+        if not len(PDB_IDS):
             continue
-        selected_pdb_id = random.choice(choices)
-        if exclude is not None and selected_pdb_id not in exclude:
+        selected_pdb_id = random.choice(PDB_IDS)
+        if exclude is None or selected_pdb_id not in exclude:
             return selected_pdb_id
-
-
-def gro_hash(gro_path: str):
-    """Generates the hash for a specific gro file.
-    Enables validators to ensure that miners are running the correct
-    protein, and not generating fake data.
-
-    Connects the (residue name, atom name, and residue number) from each line
-    together into a single string. This way, we can ensure that the protein is the same.
-
-    Example:
-    10LYS  N  1
-    10LYS  H1 2
-
-    Output: 10LYSN1LYSH12
-
-    Args:
-        gro_path (str): location to the gro file
-    """
-    bt.logging.info(f"Calculating hash for path {gro_path!r}")
-    pattern = re.compile(r"\s*(-?\d+\w+)\s+(\w+'?\d*\s*\d+)\s+(\-?\d+\.\d+)")
-
-    with open(gro_path, "rb") as f:
-        name, length, *lines, _ = f.readlines()
-        name = (
-            name.decode().split(" t=")[0].strip("\n").encode()
-        )  # if we are rerunning the gro file using trajectory, we need to include this
-        length = int(length)
-        bt.logging.info(f"{name=}, {length=}, {len(lines)=}")
-
-    buf = ""
-    for line in lines:
-        line = line.decode().strip()
-        match = pattern.match(line)
-        if not match:
-            raise Exception(f"Error parsing line in {gro_path!r}: {line!r}")
-        buf += match.group(1) + match.group(2).replace(" ", "")
-
-    return hashlib.md5(name + buf.encode()).hexdigest()
 
 
 def check_if_directory_exists(output_directory):
@@ -164,7 +159,11 @@ def run_cmd_commands(
 
 
 def check_and_download_pdbs(
-    pdb_directory: str, pdb_id: str, download: bool = True, force: bool = False
+    pdb_directory: str,
+    pdb_id: str,
+    input_source: str,
+    download: bool = True,
+    force: bool = False,
 ) -> bool:
     """Check the status and optionally download a PDB file from the RCSB PDB database.
 
@@ -179,30 +178,72 @@ def check_and_download_pdbs(
         Exception: If download fails.
 
     """
-    url = f"https://files.rcsb.org/download/{pdb_id}"
+
+    if input_source not in ["rcsb", "pdbe"]:
+        raise ValueError(f"Unknown input source for pdb sampling: {input_source}")
+
     path = os.path.join(pdb_directory, f"{pdb_id}")
 
-    r = requests.get(url)
-    if r.status_code == 200:
-        is_complete = is_pdb_complete(r.text)
-        if is_complete or force:
-            if download:
-                check_if_directory_exists(output_directory=pdb_directory)
-                with open(path, "w") as file:
-                    file.write(r.text)
+    if input_source == "rcsb":
+        url = f"https://files.rcsb.org/download/{pdb_id}"
+        r = requests.get(url)
+        if r.status_code == 200:
+            is_complete = is_pdb_complete(r.text)
+            if is_complete or force:
+                if download:
+                    check_if_directory_exists(output_directory=pdb_directory)
+                    with open(path, "w") as file:
+                        file.write(r.text)
 
-            message = " but contains missing values." if not is_complete else ""
-            bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+                message = " but contains missing values." if not is_complete else ""
+                bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
 
-            return True
+                return True
+            else:
+                bt.logging.warning(
+                    f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+                )
+                return False
         else:
-            bt.logging.warning(
-                f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
+            bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+            raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+
+    elif input_source == "pdbe":
+        # strip the string of the extension
+        id = pdb_id[0:4]
+        substring = pdb_id[1:3]
+
+        unzip_command = ["gunzip", f"{pdb_directory}/{id}.cif.gz"]
+
+        rsync_command = [
+            "rsync",
+            "-rlpt",
+            "-v",
+            "-z",
+            f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{id}.cif.gz",
+            f"{pdb_directory}/",
+        ]
+
+        try:
+            subprocess.run(rsync_command, check=True)
+            subprocess.run(unzip_command, check=True)
+            bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
+
+            convert_cif_to_pdb(
+                cif_file=f"{pdb_directory}/{id}.cif",
+                pdb_file=f"{pdb_directory}/{id}.pdb",
             )
-            return False
+            return True
+        except subprocess.CalledProcessError as e:
+            bt.logging.error(
+                f"Failed to download PDB file with ID {pdb_id} using rsync: {e}"
+            )
+            raise Exception(
+                f"Failed to download PDB file with ID {pdb_id} using rsync."
+            )
     else:
-        bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
-        raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
+        bt.logging.error(f"Unknown input source: {input_source}")
+        raise ValueError(f"Unknown input source: {input_source}")
 
 
 def is_pdb_complete(pdb_text: str) -> bool:
@@ -250,3 +291,14 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
         "response_returned_files_sizes": response_returned_files_sizes,
         "response_miners_serving": response_miners_serving,
     }
+
+
+def convert_cif_to_pdb(cif_file: str, pdb_file: str):
+    """Convert a CIF file to a PDB file using the `parmed` library."""
+    try:
+        structure = pmd.load_file(cif_file)
+        structure.write_pdb(pdb_file)  # Write the structure to a PDB file
+        bt.logging.debug(f"Successfully converted {cif_file} to {pdb_file}")
+
+    except Exception as e:
+        bt.logging.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")

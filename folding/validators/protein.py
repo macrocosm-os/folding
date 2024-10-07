@@ -24,9 +24,8 @@ from folding.utils.ops import (
     ValidationError,
     check_and_download_pdbs,
     check_if_directory_exists,
-    load_pdb_ids,
-    select_random_pdb_id,
     write_pkl,
+    load_and_sample_random_pdb_ids,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -149,10 +148,9 @@ class Protein(OpenMMSimulation):
 
     def gather_pdb_id(self):
         if self.pdb_id is None:
-            PDB_IDS = load_pdb_ids(
+            self.pdb_id = load_and_sample_random_pdb_ids(
                 root_dir=ROOT_DIR, filename="pdb_ids.pkl"
             )  # TODO: This should be a class variable via config
-            self.pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS)
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
     def setup_pdb_directory(self):
@@ -164,6 +162,7 @@ class Protein(OpenMMSimulation):
             if not check_and_download_pdbs(
                 pdb_directory=self.pdb_directory,
                 pdb_id=self.pdb_file,
+                input_source=self.config.input_source,
                 download=True,
                 force=self.config.force_use_pdb,
             ):
@@ -499,9 +498,8 @@ class Protein(OpenMMSimulation):
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
             return False
 
-        steps_to_run = min(
-            3000, self.log_step - self.cpt_step
-        )  # run at most 10000 steps
+        # Run the simulation at most 3000 steps
+        steps_to_run = min(3000, self.log_step - self.cpt_step)
 
         self.simulation.reporters.append(
             app.StateDataReporter(
@@ -513,9 +511,11 @@ class Protein(OpenMMSimulation):
                 potentialEnergy=True,
             )
         )
+
         bt.logging.info(
             f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
         )
+
         self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(
