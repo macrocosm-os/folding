@@ -564,7 +564,19 @@ class Protein(OpenMMSimulation):
 
         if median_percent_diff > ANOMALY_THRESHOLD:
             return False, check_energies.tolist(), miner_energies.tolist()
+        self.save_pdb(
+            output_path=os.path.join(
+                self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
+            )
+        )
         return True, check_energies.tolist(), miner_energies.tolist()
+
+    def save_pdb(self, output_path: str):
+        """Save the pdb file to the output path."""
+        positions = self.simulation.context.getState(getPositions=True).getPositions()
+        topology = self.simulation.topology
+        with open(output_path, "w") as f:
+            app.PDBFile.writeFile(topology, positions, f)
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)
