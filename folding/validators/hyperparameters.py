@@ -2,6 +2,7 @@ import random
 from itertools import product
 from typing import List, Dict
 
+import numpy as np
 import bittensor as bt
 
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
@@ -66,11 +67,14 @@ class HyperParameters:
 
             initial_search.append(field.recommended_configuration)
 
+        # Shuffle the initial search and all combinations to ensure randomness.
+        random.shuffle(initial_search)
         random.shuffle(self.all_combinations)
 
         # If we want to exclude a parameter from the search, we will remove the recommended configs.
         # This is simply because we want to avoid the edge cases and additional logic needed to handle this.
         if not len(self.exclude):
+            np.random.shuffle(initial_search)  # inplace: to unbias the initial samples.
             self.all_combinations = initial_search + self.all_combinations
 
         self.TOTAL_COMBINATIONS = len(self.all_combinations)

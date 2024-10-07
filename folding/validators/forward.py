@@ -1,10 +1,12 @@
 import time
+import traceback
 from tqdm import tqdm
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
-import traceback
+
+import numpy as np
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
@@ -48,18 +50,30 @@ def run_step(
     protein: Protein,
     uids: List[int],
     timeout: float,
-    mdrun_args="",  #'-ntomp 64' #limit the number of threads to 64
+    mdrun_args="",  # TODO: Remove this
 ) -> Dict:
     start_time = time.time()
 
+    if protein is None:
+        event = {
+            "block": self.block,
+            "step_length": time.time() - start_time,
+            "energies": [],
+            "active": False,
+        }
+        return event
+
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
+
+    system_config = protein.system_config.to_dict()
+    system_config["seed"] = None  # We don't want to pass the seed to miners.
 
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
-        system_config=protein.system_config.to_dict(),
+        system_config=system_config,
     )
 
     # Make calls to the network with the prompt - this is synchronous.
@@ -151,7 +165,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
             pdb_id = select_random_pdb_id(PDB_IDS=PDB_IDS, exclude=exclude)
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
-        bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
+        bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
 
         if event.get("validator_search_status"):
@@ -162,21 +176,42 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
             # only log the event if the simulation was not successful
             log_event(self, event, failed=True)
-            bt.logging.error(
+            bt.logging.debug(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
             exclude.append(pdb_id)
+
+
+def create_random_modifications_to_system_config(config) -> Dict:
+    """create modifications of the desired parameters.
+
+    Looks at the base bittensor config and parses parameters that we have deemed to be
+    valid for random sampling. This is to increase the problem space for miners.
+    """
+    sampler = lambda min_val, max_val: round(np.random.uniform(min_val, max_val), 2)
+
+    system_kwargs = {"temperature": sampler(200, 400), "friction": sampler(0.9, 1.1)}
+
+    for param in system_kwargs.keys():
+        if config.protein[param] is not None:
+            system_kwargs[param] = config.protein[param]
+            continue
+
+    return system_kwargs
 
 
 def try_prepare_challenge(config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
+    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
 
     exclude_in_hp_search = parse_config(config)
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    # Create random modifications of parameters that are inside the function.
+    system_kwargs = create_random_modifications_to_system_config(config=config)
+
     protein = None
     for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
@@ -210,10 +245,20 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             "box": config.protein.box or sampled_combination["BOX"],
         }
 
-        protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
+        protein = Protein(
+            pdb_id=pdb_id,
+            config=config.protein,
+            system_kwargs=system_kwargs,
+            **hps,
+        )
 
         try:
             protein.setup_simulation()
+
+            if protein.init_energy > 0:
+                raise ValueError(
+                    f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                )
 
         except Exception:
             # full traceback
@@ -227,15 +272,16 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
             event["init_energy"] = protein.init_energy
             event["epsilon"] = protein.epsilon
+            event["system_kwargs"] = system_kwargs
 
             if "validator_search_status" not in event:
-                bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
+                bt.logging.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break
 
             if tries == 10:
-                bt.logging.error(f"Max tries reached for pdb_id {pdb_id} ❌❌")
+                bt.logging.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")
                 return event
 
     return event

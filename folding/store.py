@@ -96,6 +96,7 @@ class PandasJobStore:
         water: str,
         hotkeys: List[str],
         epsilon: float,
+        system_kwargs: dict,
         **kwargs,
     ):
         """Adds a new job to the database."""
@@ -112,6 +113,7 @@ class PandasJobStore:
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
+            system_kwargs=system_kwargs,
             **kwargs,
         ).to_frame()
 
@@ -153,10 +155,11 @@ class Job:
     gro_hash: str = None
     update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
     updated_count: int = 0
-    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=60)
-    min_updates: int = 10
+    min_updates: int = 5
+    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=25)
     epsilon: float = 0.05  # percentage.
     event: dict = None
+    system_kwargs: dict = None
 
     def to_dict(self):
         return asdict(self)
@@ -173,8 +176,6 @@ class Job:
         self,
         loss: float,
         hotkey: str,
-        commit_hash: str,
-        gro_hash: str,
         hotkeys: List[str] = None,
     ):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
@@ -187,19 +188,24 @@ class Job:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
         percent_improvement = (
-            (self.best_loss - loss) / self.best_loss
+            (loss - self.best_loss) / self.best_loss
             if not np.isinf(self.best_loss) and not self.best_loss == 0
-            else -1
+            else np.nan
         )
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        if (np.isinf(self.best_loss)) or percent_improvement >= self.epsilon:
+        never_updated_better_loss = (
+            np.isnan(percent_improvement) and loss < self.best_loss
+        )  # only happens if best_loss is 0 or inf
+        better_loss = (
+            percent_improvement >= self.epsilon
+        )  # only happens if best_loss is not 0 or inf
+
+        if never_updated_better_loss or better_loss:
             self.best_loss = loss
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
-            self.commit_hash = commit_hash
-            self.gro_hash = gro_hash
         elif (  # if loss has been improved but not recently enough, trigger early stopping
             pd.Timestamp.now().floor("s") - self.best_loss_at
             > self.max_time_no_improvement

@@ -1,7 +1,8 @@
 # Validation Procedure 
 
-Similarly to other subnets, the protein folding validator is responsible for submitting jobs to the set of miners that are on the network. However, there are some key differences that make this validator special:
-1. It is a CPU-bound operation, meaning that we do not require validators to run an expensive GPU. 
+Similarly to other subnets, the protein folding validator is responsible for submitting jobs to the set of miners that are on the network.
+
+1. We require validators to run an on a specific GPU (A5000) to enforce reproducability. 
 2. The validator has the non-trival task of scheduling, monitoring, and closing jobs that have been submitted to miners. More on this below.
 
 ## Searching for Protein Folding Configurations 
