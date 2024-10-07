@@ -142,7 +142,7 @@ class Protein(OpenMMSimulation):
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self, input_source: str = "pdbe"):
+    def gather_pdb_id(self, input_source: str = None):
         if self.pdb_id is None:
             PDB_IDS = load_pdb_ids(
                 root_dir=ROOT_DIR, filename="pdb_ids.pkl", input_source=input_source

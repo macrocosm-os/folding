@@ -45,38 +45,54 @@ def load_pkl(path: str, read_mode="rb"):
 
 
 def load_pdb_ids(
-    root_dir: str, input_source: str = "pdbe", filename: str = "pdb_ids.pkl"
-) -> Dict[str, List[str]]:
-    """If you want to randomly sample pdb_ids, you need to load in
-    the data that was computed via the gather_pdbs.py script.
+    root_dir: str, filename: str = "pdb_ids.pkl", input_source: str = None
+) -> List[str]:
+    """load pdb ids from the specified source, or from all sources if None is provided.
 
     Args:
-        root_dir (str): location of the file that contains all the names of pdb_ids
-        filename (str, optional): name of the pdb_id file. Defaults to "pdb_ids.pkl".
+        root_dir (str): location of the pdb_ids.pkl file
+        filename (str, optional): Defaults to "pdb_ids.pkl".
+        input_source (str, optional): A valid input source name. Defaults to None.
+
+    Raises:
+        ValueError: if the pdb file is not found
+        ValueError: if the input source is not valid when not None
+
+    Returns:
+        List[str]: list of pdb ids
     """
+    VALID_SOURCES = ["rcsb", "pdbe"]
     PDB_PATH = os.path.join(root_dir, filename)
 
     if not os.path.exists(PDB_PATH):
         raise ValueError(
-            f"Required Pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
+            f"Required pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
         )
 
     with open(PDB_PATH, "rb") as f:
         file = pkl.load(f)
-    if input_source == "rcsb":
-        PDB_IDS = file["rcsb"]
-    else:
-        PDB_IDS = file["pdbe"]
-    return PDB_IDS
+
+    if input_source is not None:
+        if input_source not in VALID_SOURCES:
+            raise ValueError(
+                f"Invalid input source: {input_source}. Valid sources are {VALID_SOURCES}"
+            )
+
+        ids = file[input_source]["pdbs"]  # get the pdb_ids from the specified source
+    else:  # None case
+        ids = []
+        for source in VALID_SOURCES:
+            ids.extend(file[source]["pdbs"])
+
+    return ids
 
 
-def select_random_pdb_id(PDB_IDS: Dict, exclude: List[str] = None) -> str:
+def select_random_pdb_id(PDB_IDS: List[str], exclude: List[str] = None) -> str:
     """Select a random protein PDB ID to fold from a specified source."""
     while True:
-        choices = PDB_IDS["pdbs"]
-        if not len(choices):
+        if not len(PDB_IDS):
             continue
-        selected_pdb_id = random.choice(choices)
+        selected_pdb_id = random.choice(PDB_IDS)
         if exclude is None or selected_pdb_id not in exclude:
             return selected_pdb_id
 
@@ -293,47 +309,12 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
     }
 
 
-def get_last_step_time(log_file: str) -> float:
-    """Validators need to know where miners are in the simulation procedure to ensure that
-    the gro file that is computed is done on the most recent step of the simulation. The easiest
-    way to do this is by checking a log file and parsing it such that it finds the Step Time header.
-
-    args:
-        log_file (str): location of the log file that contains the step time header
-    """
-    step_pattern = re.compile(r"^\s*Step\s+Time$")
-    step_value_pattern = re.compile(r"^\s*(\d+)\s+([\d.]+)$")
-
-    num_matches = 0
-    last_step_time = 0  # default incase we don't have more than 1 log.
-
-    # Open and read the log file
-    with open(log_file, "r") as file:
-        lines = file.readlines()
-
-    # Reverse iterate over the lines for efficiency
-    for i, line in enumerate(reversed(lines)):
-        if step_pattern.match(line.strip()):  # Check for "Step Time" header
-            # Check the previous line in the original order for step value
-            value_line = lines[-1 + (-i + 1)]
-            match = step_value_pattern.match(value_line.strip())
-            if match:
-                num_matches += 1
-                if num_matches > 1:  # get second last line. Most stable.
-                    last_step_time = float(
-                        match.group(2)
-                    )  # group looks like:   191   0.3200
-                    break
-
-    return last_step_time
-
-
 def convert_cif_to_pdb(cif_file: str, pdb_file: str):
     """Convert a CIF file to a PDB file using the `parmed` library."""
     try:
         structure = pmd.load_file(cif_file)
-        # Write the structure to a PDB file
-        structure.write_pdb(pdb_file)
-        print(f"Successfully converted {cif_file} to {pdb_file}")
+        structure.write_pdb(pdb_file)  # Write the structure to a PDB file
+        bt.logging.debug(f"Successfully converted {cif_file} to {pdb_file}")
+
     except Exception as e:
-        print(f"Failed to convert {cif_file} to PDB format. Error: {e}")
+        bt.logging.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")
