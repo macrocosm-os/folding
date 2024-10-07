@@ -48,11 +48,11 @@ def check_config(cls, config: "bt.Config"):
             logger.add(
                 os.path.join(config.neuron.full_path, "events.log"),
                 rotation=config.neuron.events_retention_size,
-                serialize=True,
+                serialize=False,
                 enqueue=True,
-                backtrace=False,
+                backtrace=True,
                 diagnose=False,
-                level="EVENTS",
+                level="TRACE",
                 format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
             )
 
@@ -132,6 +132,20 @@ def add_args(cls, parser):
         type=int,
         help="How many steps before saving values to files.",
         default=2000,
+    )
+
+    parser.add_argument(
+        "--protein.temperature",
+        type=float,
+        help="Temperature of the simulation. Typically between 200-400K",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--protein.friction",
+        type=float,
+        help="Friction of the simulation. Typically between 0.9-1.1",
+        default=None,
     )
 
     parser.add_argument(

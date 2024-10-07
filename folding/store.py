@@ -96,6 +96,7 @@ class PandasJobStore:
         water: str,
         hotkeys: List[str],
         epsilon: float,
+        system_kwargs: dict,
         **kwargs,
     ):
         """Adds a new job to the database."""
@@ -112,6 +113,7 @@ class PandasJobStore:
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
+            system_kwargs=system_kwargs,
             **kwargs,
         ).to_frame()
 
@@ -157,6 +159,7 @@ class Job:
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=25)
     epsilon: float = 0.05  # percentage.
     event: dict = None
+    system_kwargs: dict = None
 
     def to_dict(self):
         return asdict(self)
