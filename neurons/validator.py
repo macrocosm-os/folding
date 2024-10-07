@@ -304,6 +304,7 @@ class Validator(BaseValidatorNeuron):
 
         # If the job is finished, remove the pdb directory
         pdb_location = None
+        folded_protein_location = None
         protein = Protein.from_job(job=job, config=self.config.protein)
 
         if protein is not None:
@@ -314,19 +315,18 @@ class Validator(BaseValidatorNeuron):
             folded_protein_location = os.path.join(
                 protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb"
             )
-            log_event(
-                self,
-                event=event,
-                pdb_location=pdb_location,
-                folded_protein_location=folded_protein_location,
-            )
             if job.active is False:
                 protein.remove_pdb_directory()
         else:
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
-        log_event(self, event=event, pdb_location=pdb_location)
+        log_event(
+            self,
+            event=event,
+            pdb_location=pdb_location,
+            folded_protein_location=folded_protein_location,
+        )
 
         merged_events.pop("checked_energy")
         merged_events.pop("miner_energy")
