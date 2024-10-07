@@ -198,6 +198,11 @@ def check_and_download_pdbs(
         Exception: If download fails.
 
     """
+    if input_source == None:
+        choices = ["pdbe", "rcsb"]
+        input_source = random.choice(choices)
+        bt.logging.info(f"No input source specified. Randomly selected: {input_source}")
+
     path = os.path.join(pdb_directory, f"{pdb_id}")
 
     if input_source == "rcsb":
