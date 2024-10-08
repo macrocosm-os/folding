@@ -167,6 +167,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
+        event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
             return event
