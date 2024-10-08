@@ -15,13 +15,13 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import os
 import re
 import time
 import random
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from itertools import chain
+import os
 
 import torch
 import pandas as pd
@@ -195,7 +195,6 @@ class Validator(BaseValidatorNeuron):
             active_hotkeys = list(chain.from_iterable(active_hotkeys))
             exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
-            # Sample uids in a recursive manner until we have enough (or other condition is met.)
             start_time = time.time()
             valid_uids = self.sample_random_uids(
                 num_uids_to_sample=self.config.neuron.sample_size,
@@ -204,10 +203,7 @@ class Validator(BaseValidatorNeuron):
 
             uid_search_time = time.time() - start_time
 
-            if (
-                len(valid_uids) >= self.config.neuron.sample_size
-                and len(valid_uids) <= 10
-            ):
+            if len(valid_uids) >= self.config.neuron.sample_size:
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
                 job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
@@ -222,6 +218,7 @@ class Validator(BaseValidatorNeuron):
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
                     epsilon=job_event["epsilon"],
+                    system_kwargs=job_event["system_kwargs"],
                     event=job_event,
                 )
             else:
@@ -308,22 +305,35 @@ class Validator(BaseValidatorNeuron):
 
         # If the job is finished, remove the pdb directory
         pdb_location = None
+        folded_protein_location = None
         protein = Protein.from_job(job=job, config=self.config.protein)
 
         if protein is not None:
-            if job.active is False:
-                protein.remove_pdb_directory()
-            elif event["updated_count"] == 1:
-                pdb_location = protein.pdb_location
+            if job.active is True:
+                if event["updated_count"] == 1:
+                    pdb_location = protein.pdb_location
+
+                protein.get_miner_data_directory(event["best_hotkey"])
+                folded_protein_location = os.path.join(
+                    protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb"
+                )
         else:
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
+        log_event(
+            self,
+            event=event,
+            pdb_location=pdb_location,
+            folded_protein_location=folded_protein_location,
+        )
+
         merged_events.pop("checked_energy")
         merged_events.pop("miner_energy")
-
         bt.logging.success(f"Event information: {merged_events}")
-        log_event(self, event=event, pdb_location=pdb_location)
+
+        if protein is not None and job.active is False:
+            protein.remove_pdb_directory()
 
 
 # The main function parses the configuration and runs the validator.

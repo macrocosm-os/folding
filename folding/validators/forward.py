@@ -1,28 +1,25 @@
 import time
+import traceback
 from tqdm import tqdm
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
-import traceback
+
+import numpy as np
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
 
-from folding.utils.ops import (
-    select_random_pdb_id,
-    load_pdb_ids,
-    get_response_info,
-    load_pkl,
-)
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
+from folding.utils.ops import (
+    load_and_sample_random_pdb_ids,
+    get_response_info,
+)
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-PDB_IDS = load_pdb_ids(
-    root_dir=ROOT_DIR, filename="pdb_ids.pkl"
-)  # TODO: Currently this is a small list of PDBs without MISSING flags.
 
 
 def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
@@ -156,14 +153,21 @@ def create_new_challenge(self, exclude: List) -> Dict:
     while True:
         forward_start_time = time.time()
 
-        # Select a random pdb
-        pdb_id = self.config.protein.pdb_id or select_random_pdb_id(
-            PDB_IDS=PDB_IDS, exclude=exclude
-        )
+        if self.config.protein.pdb_id is not None:
+            pdb_id = self.config.protein.pdb_id
+        else:
+            pdb_id, input_source = load_and_sample_random_pdb_ids(
+                root_dir=ROOT_DIR,
+                filename="pdb_ids.pkl",
+                input_source=self.config.protein.input_source,
+                exclude=exclude,
+            )
+            self.config.protein.input_source = input_source
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
-        bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
+        bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
+        event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
             return event
@@ -173,21 +177,42 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
             # only log the event if the simulation was not successful
             log_event(self, event, failed=True)
-            bt.logging.error(
+            bt.logging.debug(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
             exclude.append(pdb_id)
+
+
+def create_random_modifications_to_system_config(config) -> Dict:
+    """create modifications of the desired parameters.
+
+    Looks at the base bittensor config and parses parameters that we have deemed to be
+    valid for random sampling. This is to increase the problem space for miners.
+    """
+    sampler = lambda min_val, max_val: round(np.random.uniform(min_val, max_val), 2)
+
+    system_kwargs = {"temperature": sampler(200, 400), "friction": sampler(0.9, 1.1)}
+
+    for param in system_kwargs.keys():
+        if config.protein[param] is not None:
+            system_kwargs[param] = config.protein[param]
+            continue
+
+    return system_kwargs
 
 
 def try_prepare_challenge(config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
+    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
 
     exclude_in_hp_search = parse_config(config)
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
 
-    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    # Create random modifications of parameters that are inside the function.
+    system_kwargs = create_random_modifications_to_system_config(config=config)
+
     protein = None
     for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
@@ -221,7 +246,12 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             "box": config.protein.box or sampled_combination["BOX"],
         }
 
-        protein = Protein(pdb_id=pdb_id, config=config.protein, **hps)
+        protein = Protein(
+            pdb_id=pdb_id,
+            config=config.protein,
+            system_kwargs=system_kwargs,
+            **hps,
+        )
 
         try:
             protein.setup_simulation()
@@ -243,15 +273,16 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
             event["init_energy"] = protein.init_energy
             event["epsilon"] = protein.epsilon
+            event["system_kwargs"] = system_kwargs
 
             if "validator_search_status" not in event:
-                bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
+                bt.logging.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break
 
             if tries == 10:
-                bt.logging.error(f"Max tries reached for pdb_id {pdb_id} ❌❌")
+                bt.logging.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")
                 return event
 
     return event
