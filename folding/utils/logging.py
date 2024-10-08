@@ -103,13 +103,13 @@ def log_protein(run, pdb_id_path: str):
 
 
 def log_folded_protein(run, pdb_id_path: str):
-    """Logs the protein visualization to wandb.
+    """Logs the folded protein visualization to wandb.
     pdb_id_path: str: path to the pdb file on disk.
     """
     try:
         run.log({"folded_protein_vis": wandb.Molecule(pdb_id_path)})
     except:
-        bt.logging.warning("Failed to log protein visualization")
+        bt.logging.warning("Failed to log folded protein visualization")
 
 
 def log_event(

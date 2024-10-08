@@ -235,14 +235,10 @@ def check_and_download_pdbs(
             )
             return True
         except subprocess.CalledProcessError as e:
-            bt.logging.error(
-                f"Failed to download PDB file with ID {pdb_id} using rsync: {e}"
-            )
             raise Exception(
                 f"Failed to download PDB file with ID {pdb_id} using rsync."
             )
     else:
-        bt.logging.error(f"Unknown input source: {input_source}")
         raise ValueError(f"Unknown input source: {input_source}")
 
 
