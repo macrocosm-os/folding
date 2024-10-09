@@ -1,3 +1,5 @@
+from typing import List
+
 import Bio
 from Bio.PDB.vectors import rotaxis
 
@@ -15,7 +17,7 @@ def rotate_atoms(atoms: List[Bio.PDB.Atom.Atom], rotation_axis, rotation_point, 
         atom.set_coord(new_coord.get_array())
 
 
-def modify_phi_angle(self, residue, pp, position, delta_phi):
+def modify_phi_angle(residue, pp, position, delta_phi):
     # Modify phi angle
     if residue.has_id("N") and residue.has_id("CA"):
         N = residue["N"].get_vector()
@@ -35,7 +37,7 @@ def modify_phi_angle(self, residue, pp, position, delta_phi):
         )
 
 
-def modify_psi_angle(self, residue, pp, position, delta_psi):
+def modify_psi_angle(residue, pp, position, delta_psi):
     # Modify psi angle
     if residue.has_id("CA") and residue.has_id("C"):
         CA = residue["CA"].get_vector()
