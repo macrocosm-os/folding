@@ -15,6 +15,8 @@ import pandas as pd
 import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
+from Bio.PDB import PDBParser, PDBIO, PPBuilder
+
 
 from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
@@ -27,6 +29,7 @@ from folding.utils.ops import (
     write_pkl,
     load_and_sample_random_pdb_ids,
 )
+from folding.utils.pdb_utils import modify_phi_angle, modify_psi_angle
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -170,6 +173,7 @@ class Protein(OpenMMSimulation):
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
             self.fix_pdb_file()
+            self.unfold_protein()
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -278,6 +282,43 @@ class Protein(OpenMMSimulation):
             positions=fixer.positions,
             file=open(self.pdb_location, "w"),
         )
+
+    def unfold_protein(self):
+        """Method to unfold the protein"""
+        parser = PDBParser()
+        structure = parser.get_structure(id="protein", file=self.pdb_location)
+        ppb = PPBuilder()
+        peptides = ppb.build_peptides(entity=structure, aa_only=1)
+        # Iterate over all peptides
+        for peptide in peptides:
+            phi_psi = peptide.get_phi_psi_list()
+            for i, residue in enumerate(peptide):
+                phi, psi = phi_psi[i]
+                # Skip residues where phi or psi is None
+                if phi is None or psi is None:
+                    continue
+
+                # Define new angles to simulate unfolding (e.g., set to 180 degrees)
+                new_phi = np.deg2rad(180)
+                new_psi = np.deg2rad(180)
+
+                # Calculate angle differences
+                delta_phi = new_phi - phi
+                delta_psi = new_psi - psi
+
+                # Modify phi angle
+                modify_phi_angle(
+                    residue=residue, pp=peptide, position=i, delta_phi=delta_phi
+                )
+
+                # Modify psi angle
+                modify_psi_angle(
+                    residue=residue, pp=peptide, position=i, delta_psi=delta_psi
+                )
+
+            io = PDBIO()
+            io.set_structure(structure)
+            io.save(self.pdb_location)
 
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
