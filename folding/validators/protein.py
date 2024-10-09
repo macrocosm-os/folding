@@ -573,6 +573,11 @@ class Protein(OpenMMSimulation):
         )
         return True, check_energies.tolist(), miner_energies.tolist()
 
+    def get_ns_computed(self):
+        """Calculate the number of nanoseconds computed by the miner."""
+
+        return (self.cpt_step * self.system_config.time_step_size) / 1e6
+
     def save_pdb(self, output_path: str):
         """Save the pdb file to the output path."""
         positions = self.simulation.context.getState(getPositions=True).getPositions()
