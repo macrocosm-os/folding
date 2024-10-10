@@ -375,7 +375,7 @@ class Protein(OpenMMSimulation):
         MIN_SIMULATION_STEPS = 5000
 
         required_files_extensions = ["cpt", "log"]
-        hotkey_alias = hotkey[:8]
+        self.hotkey_alias = hotkey[:8]
         self.current_state = state
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
@@ -385,7 +385,7 @@ class Protein(OpenMMSimulation):
 
         if len(md_output.keys()) == 0:
             bt.logging.warning(
-                f"Miner {hotkey_alias} returned empty md_output... Skipping!"
+                f"Miner {self.hotkey_alias} returned empty md_output... Skipping!"
             )
             return False
 
@@ -407,7 +407,7 @@ class Protein(OpenMMSimulation):
             # make sure that we are using the correct seed.
 
             bt.logging.info(
-                f"Recreating miner {hotkey_alias} simulation in state: {self.current_state}"
+                f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}"
             )
             self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_location),
@@ -431,7 +431,7 @@ class Protein(OpenMMSimulation):
             # Checks to see if we have enough steps in the log file to start validation
             if len(self.log_file) < MIN_LOGGING_ENTRIES:
                 raise ValidationError(
-                    f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                    f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                 )
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
@@ -443,7 +443,7 @@ class Protein(OpenMMSimulation):
                 )
                 if os.path.exists(checkpoint_path):
                     bt.logging.warning(
-                        f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
+                        f"Miner {self.hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
                     # Checking to see if the old checkpoint has enough steps to validate
@@ -451,11 +451,11 @@ class Protein(OpenMMSimulation):
                         self.log_step - self.simulation.currentStep
                     ) < MIN_SIMULATION_STEPS:
                         raise ValidationError(
-                            f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                            f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
                 else:
                     raise ValidationError(
-                        f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
+                        f"Miner {self.hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
 
             self.cpt_step = self.simulation.currentStep
@@ -538,6 +538,9 @@ class Protein(OpenMMSimulation):
         ]["Potential Energy (kJ/mole)"].values
 
         if not self.check_gradient(miner_energies=miner_energies):
+            bt.logging.warning(
+                f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!"
+            )
             return False, [], []
 
         self.simulation.step(steps_to_run)
