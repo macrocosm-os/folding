@@ -14,6 +14,7 @@ from typing import Dict, List
 import parmed as pmd
 import bittensor as bt
 
+from openmm import app, unit
 from folding.protocol import JobSubmissionSynapse
 
 
@@ -298,3 +299,8 @@ def convert_cif_to_pdb(cif_file: str, pdb_file: str):
 
     except Exception as e:
         bt.logging.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")
+
+
+def get_energy_from_simulation(simulation: app.Simulation):
+    state = simulation.context.getState(getEnergy=True)
+    return state.getPotentialEnergy() / unit.kilojoules_per_mole
