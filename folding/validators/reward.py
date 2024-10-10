@@ -5,6 +5,7 @@ import numpy as np
 import bittensor as bt
 
 from folding.validators.protein import Protein
+from folding.utils.ops import get_energy_from_simulation
 from folding.protocol import JobSubmissionSynapse
 
 
@@ -56,7 +57,7 @@ class RewardPipeline:
                     )
                     continue
 
-                energy = self.protein.get_energy()
+                energy = get_energy_from_simulation(package["simulation"])
 
                 # Catching edge case where energy is 0
                 if energy == 0:

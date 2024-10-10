@@ -582,10 +582,6 @@ class Protein(OpenMMSimulation):
 
         return True, check_energies.tolist(), miner_energies.tolist()
 
-    def get_energy(self):
-        state = self.simulation.context.getState(getEnergy=True)
-        return state.getPotentialEnergy() / unit.kilojoules_per_mole
-
     def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
         """TODO: Implement the RMSD calculation"""
         return -1
