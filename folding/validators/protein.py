@@ -26,6 +26,7 @@ from folding.utils.ops import (
     check_if_directory_exists,
     write_pkl,
     load_and_sample_random_pdb_ids,
+    plot_miner_validator_curves,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -374,7 +375,7 @@ class Protein(OpenMMSimulation):
         MIN_SIMULATION_STEPS = 5000
 
         required_files_extensions = ["cpt", "log"]
-        hotkey_alias = hotkey[:8]
+        self.hotkey_alias = hotkey[:8]
         self.current_state = state
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
@@ -384,7 +385,7 @@ class Protein(OpenMMSimulation):
 
         if len(md_output.keys()) == 0:
             bt.logging.warning(
-                f"Miner {hotkey_alias} returned empty md_output... Skipping!"
+                f"Miner {self.hotkey_alias} returned empty md_output... Skipping!"
             )
             return False
 
@@ -406,7 +407,7 @@ class Protein(OpenMMSimulation):
             # make sure that we are using the correct seed.
 
             bt.logging.info(
-                f"Recreating miner {hotkey_alias} simulation in state: {self.current_state}"
+                f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}"
             )
             self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_location),
@@ -430,7 +431,7 @@ class Protein(OpenMMSimulation):
             # Checks to see if we have enough steps in the log file to start validation
             if len(self.log_file) < MIN_LOGGING_ENTRIES:
                 raise ValidationError(
-                    f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                    f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                 )
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
@@ -442,7 +443,7 @@ class Protein(OpenMMSimulation):
                 )
                 if os.path.exists(checkpoint_path):
                     bt.logging.warning(
-                        f"Miner {hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
+                        f"Miner {self.hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
                     # Checking to see if the old checkpoint has enough steps to validate
@@ -450,11 +451,11 @@ class Protein(OpenMMSimulation):
                         self.log_step - self.simulation.currentStep
                     ) < MIN_SIMULATION_STEPS:
                         raise ValidationError(
-                            f"Miner {hotkey_alias} did not run enough steps in the simulation... Skipping!"
+                            f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
                 else:
                     raise ValidationError(
-                        f"Miner {hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
+                        f"Miner {self.hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
 
             self.cpt_step = self.simulation.currentStep
@@ -481,6 +482,19 @@ class Protein(OpenMMSimulation):
 
         return True
 
+    def check_gradient(self, miner_energies: np.ndarray) -> True:
+        """This method checks the gradient of the potential energy within the first
+        WINODW size of the miner_energies array. Miners that return gradients that are too high,
+        there is a *high* probability that they have not run the simulation as the validator specified.
+        """
+        WINDOW = 50  # Number of steps to calculate the gradient over
+        GRADIENT_THRESHOLD = 10  # kJ/mol/nm
+
+        mean_gradient = np.diff(miner_energies[:WINDOW]).mean().item()
+        return (
+            mean_gradient <= GRADIENT_THRESHOLD
+        )  # includes large negative gradients is passible
+
     def is_run_valid(self):
         """
         Checks if the run is valid by comparing the potential energy values
@@ -496,7 +510,7 @@ class Protein(OpenMMSimulation):
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
-            return False
+            return False, [], []
 
         # Run the simulation at most 3000 steps
         steps_to_run = min(3000, self.log_step - self.cpt_step)
@@ -516,61 +530,52 @@ class Protein(OpenMMSimulation):
             f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
         )
 
+        max_step = self.cpt_step + steps_to_run
+
+        miner_energies: np.ndarray = self.log_file[
+            (self.log_file['#"Step"'] > self.cpt_step)
+            & (self.log_file['#"Step"'] <= max_step)
+        ]["Potential Energy (kJ/mole)"].values
+
+        if not self.check_gradient(miner_energies=miner_energies):
+            bt.logging.warning(
+                f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!"
+            )
+            return False, [], []
+
         self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(
             os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
         )
 
-        max_step = self.cpt_step + steps_to_run
-
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
-        miner_energies: np.ndarray = self.log_file[
-            (self.log_file['#"Step"'] > self.cpt_step)
-            & (self.log_file['#"Step"'] <= max_step)
-        ]["Potential Energy (kJ/mole)"].values
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
-
-        # This is some debugging information for plotting the information from the miner.
-        df = pd.DataFrame([check_energies, miner_energies]).T
-        df.columns = ["validator", "miner"]
-
-        fig = px.scatter(
-            df,
-            title=f"Energy: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
-            labels={"index": "Step", "value": "Energy (kJ/mole)"},
-            height=600,
-            width=1400,
-        )
-        filename = f"{self.pdb_id}_cpt_step_{self.cpt_step}_state_{self.current_state}"
-        fig.write_image(
-            os.path.join(self.miner_data_directory, filename + "_energy.png")
-        )
-
-        fig = px.scatter(
-            percent_diff,
-            title=f"Percent Diff: {self.pdb_id} for state {self.current_state} starting at checkpoint step: {self.cpt_step}",
-            labels={"index": "Step", "value": "Percent Diff"},
-            height=600,
-            width=1400,
-        )
-        fig.write_image(
-            os.path.join(self.miner_data_directory, filename + "_percent_diff.png")
-        )
-
         median_percent_diff = np.median(percent_diff)
 
-        # We want to save all the information to the local filesystem so we can index them later.
+        # Plot and save miner/validator energy curves for logging
+        plot_miner_validator_curves(
+            miner_energies=miner_energies,
+            check_energies=check_energies,
+            percent_diff=percent_diff,
+            miner_data_directory=self.miner_data_directory,
+            pdb_id=self.pdb_id,
+            current_state=self.current_state,
+            cpt_step=self.cpt_step,
+        )
 
         if median_percent_diff > ANOMALY_THRESHOLD:
             return False, check_energies.tolist(), miner_energies.tolist()
+
+        # Save the folded pdb file if the run is valid
         self.save_pdb(
             output_path=os.path.join(
                 self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
             )
         )
+
         return True, check_energies.tolist(), miner_energies.tolist()
 
     def save_pdb(self, output_path: str):
