@@ -512,7 +512,7 @@ class Protein(OpenMMSimulation):
             return False, [], []
 
         # Run the simulation at most 3000 steps
-        steps_to_run = min(3000, log_step - self.simulation.currentStep)
+        steps_to_run = min(3000, log_step - simulation.currentStep)
 
         simulation.reporters.append(
             app.StateDataReporter(
