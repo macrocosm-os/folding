@@ -4,15 +4,17 @@ import sys
 import tqdm
 import random
 import shutil
-import hashlib
 import requests
 import traceback
 import subprocess
 import pickle as pkl
 from typing import Dict, List
 
+import numpy as np
+import pandas as pd
 import parmed as pmd
 import bittensor as bt
+import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
 
@@ -298,3 +300,38 @@ def convert_cif_to_pdb(cif_file: str, pdb_file: str):
 
     except Exception as e:
         bt.logging.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")
+
+
+def plot_miner_validator_curves(
+    check_energies: np.ndarray,
+    miner_energies: np.ndarray,
+    percent_diff: np.ndarray,
+    miner_data_directory: str,
+    pdb_id: str,
+    current_state: str,
+    cpt_step: int,
+):
+    """plotting utility function for the Protein class. Used for validator-side checking of plots.
+    Saves the data to the miner_data_directory.
+    """
+    df = pd.DataFrame([check_energies, miner_energies]).T
+    df.columns = ["validator", "miner"]
+
+    fig = px.scatter(
+        df,
+        title=f"Energy: {pdb_id} for state {current_state} starting at checkpoint step: {cpt_step}",
+        labels={"index": "Step", "value": "Energy (kJ/mole)"},
+        height=600,
+        width=1400,
+    )
+    filename = f"{pdb_id}_cpt_step_{cpt_step}_state_{current_state}"
+    fig.write_image(os.path.join(miner_data_directory, filename + "_energy.png"))
+
+    fig = px.scatter(
+        percent_diff,
+        title=f"Percent Diff: {pdb_id} for state {current_state} starting at checkpoint step: {cpt_step}",
+        labels={"index": "Step", "value": "Percent Diff"},
+        height=600,
+        width=1400,
+    )
+    fig.write_image(os.path.join(miner_data_directory, filename + "_percent_diff.png"))
