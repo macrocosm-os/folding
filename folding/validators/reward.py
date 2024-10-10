@@ -1,81 +1,103 @@
 import time
-from typing import List
+from typing import List, Dict
 
-import bittensor as bt
 import numpy as np
+import bittensor as bt
 
-from folding.protocol import JobSubmissionSynapse
 from folding.validators.protein import Protein
+from folding.protocol import JobSubmissionSynapse
 
 
-def get_energies(
-    protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]
-):
-    """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
+class RewardPipeline:
+    def __init__(
+        self, protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]
+    ):
+        self.protein = protein
+        self.responses = responses
+        self.uids = uids
 
-    Args:
-        protein (Protein): instance of the Protein class
-        responses (List[JobSubmissionSynapse]): list of JobSubmissionSynapse objects
-        uids (List[int]): list of uids
+        self.energies = np.zeros(len(uids))
 
-    Returns:
-        Tuple: Tuple containing the energies and the event dictionary
-    """
-    event = {}
-    event["is_valid"] = [False] * len(uids)
-    event["checked_energy"] = [0] * len(uids)
-    event["reported_energy"] = [0] * len(uids)
-    event["miner_energy"] = [0] * len(uids)
-    event["rmsds"] = [0] * len(uids)
-    event["process_md_output_time"] = [0] * len(uids)
-    event["is_run_valid"] = [0] * len(uids)
+        self.event = {}
+        self.event["is_valid"] = [False] * len(uids)
+        self.event["checked_energy"] = [0] * len(uids)
+        self.event["reported_energy"] = [0] * len(uids)
+        self.event["miner_energy"] = [0] * len(uids)
+        self.event["rmsds"] = [0] * len(uids)
+        self.event["process_md_output_time"] = [0] * len(uids)
+        self.event["is_run_valid"] = [0] * len(uids)
 
-    energies = np.zeros(len(uids))
+        self.packages = [None] * len(uids)
+        self.miner_states = [None] * len(uids)
 
-    for i, (uid, resp) in enumerate(zip(uids, responses)):
-        # Ensures that the md_outputs from the miners are parsed correctly
-        try:
-            start_time = time.time()
-            can_process = protein.process_md_output(
-                md_output=resp.md_output,
-                hotkey=resp.axon.hotkey,
-                state=resp.miner_state,
-                seed=resp.miner_seed,
-            )
-            event["process_md_output_time"][i] = time.time() - start_time
+    def process_energies(self):
+        for i, (uid, resp) in enumerate(zip(self.uids, self.responses)):
+            try:
+                start_time = time.time()
 
-            if not can_process:
-                continue
+                can_process, package = self.protein.process_md_output(
+                    md_output=resp.md_output,
+                    hotkey=resp.axon.hotkey,
+                    state=resp.miner_state,
+                    seed=resp.miner_seed,
+                )
 
-            if resp.dendrite.status_code != 200:
-                bt.logging.info(
-                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
+                self.packages[i] = package
+                self.miner_states[i] = resp.miner_state
+
+                self.event["process_md_output_time"][i] = time.time() - start_time
+
+                if not can_process:
+                    continue
+
+                if resp.dendrite.status_code != 200:
+                    bt.logging.info(
+                        f"uid {uid} responded with status code {resp.dendrite.status_code}"
+                    )
+                    continue
+
+                energy = self.protein.get_energy()
+
+                # Catching edge case where energy is 0
+                if energy == 0:
+                    continue
+
+                self.energies[i] = energy
+
+            except Exception as E:
+                # If any of the above methods have an error, we will catch here.
+                bt.logging.error(
+                    f"Failed to parse miner data for uid {uid} with error: {E}"
                 )
                 continue
 
-            energy = protein.get_energy()
-            rmsd = protein.get_rmsd()
+    def check_run_validities(self):
+        start_time = time.time()
 
-            if energy == 0:
+        # Checking the naive case where all energies are 0.
+        if sum(self.energies) == 0:
+            return False
+
+        # Iterate over the energies from lowest to highest.
+        for index in np.argsort(self.energies):
+            package = self.packages[index]
+
+            if package is None:
                 continue
 
-            start_time = time.time()
-            is_valid, checked_energy, miner_energy = protein.is_run_valid()
-            event["is_run_valid"][i] = time.time() - start_time
-
-            energies[i] = energy if is_valid else 0
-
-            event["checked_energy"][i] = checked_energy
-            event["miner_energy"][i] = miner_energy
-            event["is_valid"][i] = is_valid
-            event["reported_energy"][i] = float(energy)
-            event["rmsds"][i] = float(rmsd)
-
-        except Exception as E:
-            # If any of the above methods have an error, we will catch here.
-            bt.logging.error(
-                f"Failed to parse miner data for uid {uid} with error: {E}"
+            is_valid, checked_energy, miner_energy = self.protein.is_run_valid(
+                state=self.miner_states[index], **package
             )
-            continue
+            self.event["is_run_valid_time"][index] = time.time() - start_time
 
-    return energies, event
+            self.event["checked_energy"][index] = checked_energy
+            self.event["miner_energy"][index] = miner_energy
+            self.event["is_valid"][index] = is_valid
+            self.event["reported_energy"][index] = float(self.energies[index])
+
+            # If the run is valid, then we can presume that all other simulations do not need to be considered for competition.
+            if not is_valid:
+                self.energies[index] = 0
+                continue
+            else:
+                break

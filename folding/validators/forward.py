@@ -14,6 +14,7 @@ from folding.protocol import PingSynapse, JobSubmissionSynapse
 
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
+from folding.validators.reward import RewardPipeline
 from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     get_response_info,
@@ -108,12 +109,12 @@ def run_step(
         )
         return event
 
-    energies, energy_event = get_energies(
-        protein=protein, responses=responses_serving, uids=active_uids
-    )
+    RP = RewardPipeline(protein=protein, responses=responses_serving, uids=active_uids)
+    RP.process_energies()
+    RP.check_run_validities()
 
     # Log the step event.
-    event.update({"energies": energies.tolist(), **energy_event})
+    event.update({"energies": RP.energies.tolist(), **RP.event})
 
     if len(protein.md_inputs) > 0:
         event["md_inputs"] = list(protein.md_inputs.keys())
