@@ -482,15 +482,15 @@ class Protein(OpenMMSimulation):
 
         return True
 
-    def check_gradient(self, miner_energies: np.ndarray) -> True:
+    def check_gradient(self, check_energies: np.ndarray) -> True:
         """This method checks the gradient of the potential energy within the first
-        WINODW size of the miner_energies array. Miners that return gradients that are too high,
+        WINODW size of the check_energies array. Miners that return gradients that are too high,
         there is a *high* probability that they have not run the simulation as the validator specified.
         """
         WINDOW = 50  # Number of steps to calculate the gradient over
         GRADIENT_THRESHOLD = 10  # kJ/mol/nm
 
-        mean_gradient = np.diff(miner_energies[:WINDOW]).mean().item()
+        mean_gradient = np.diff(check_energies[:WINDOW]).mean().item()
         return (
             mean_gradient <= GRADIENT_THRESHOLD
         )  # includes large negative gradients is passible
@@ -537,12 +537,6 @@ class Protein(OpenMMSimulation):
             & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
-        if not self.check_gradient(miner_energies=miner_energies):
-            bt.logging.warning(
-                f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!"
-            )
-            return False, [], []
-
         self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(
@@ -550,6 +544,12 @@ class Protein(OpenMMSimulation):
         )
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
+
+        if not self.check_gradient(check_energies=check_energies):
+            bt.logging.warning(
+                f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!"
+            )
+            return False, [], []
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
