@@ -63,7 +63,7 @@ def get_energies(
             is_valid, checked_energy, miner_energy = protein.is_run_valid()
             event["is_run_valid"][i] = time.time() - start_time
 
-            energies[i] = energy if is_valid else 0
+            energies[i] = np.median(checked_energy[-10:]) if is_valid else 0
 
             event["checked_energy"][i] = checked_energy
             event["miner_energy"][i] = miner_energy
