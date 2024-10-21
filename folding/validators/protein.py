@@ -16,6 +16,7 @@ import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
+
 from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
@@ -28,6 +29,7 @@ from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
 )
+from folding.unfolding.unfold import unfold_protein
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -154,6 +156,15 @@ class Protein(OpenMMSimulation):
             )  # TODO: This should be a class variable via config
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
+    def get_pbc(self):
+        with open(self.pdb_location, "r") as file:
+            for line in file:
+                if line.startswith("CRYST1"):
+                    return (
+                        line.strip()
+                    )  # Return the line without leading/trailing whitespace
+        return None
+
     def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
@@ -171,6 +182,9 @@ class Protein(OpenMMSimulation):
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
             self.fix_pdb_file()
+            pbc = self.get_pbc()
+            unfold_protein(pdb_location=self.pdb_location, pbc=pbc)
+
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
