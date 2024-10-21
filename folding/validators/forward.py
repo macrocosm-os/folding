@@ -17,6 +17,7 @@ from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     get_response_info,
+    OpenMMException,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -260,6 +261,10 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
                 raise ValueError(
                     f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                 )
+
+        except OpenMMException as e:
+            bt.logging.error(f"OpenMMException occurred: init_energy is NaN {e}")
+            event["validator_search_status"] = False
 
         except Exception:
             # full traceback

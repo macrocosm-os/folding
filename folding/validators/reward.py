@@ -29,6 +29,7 @@ def get_energies(
     event["rmsds"] = [0] * len(uids)
     event["process_md_output_time"] = [0] * len(uids)
     event["is_run_valid"] = [0] * len(uids)
+    event["ns_computed"] = [0] * len(uids)
 
     energies = np.zeros(len(uids))
 
@@ -52,7 +53,7 @@ def get_energies(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
-
+            ns_computed = protein.get_ns_computed()
             energy = protein.get_energy()
             rmsd = protein.get_rmsd()
 
@@ -70,6 +71,7 @@ def get_energies(
             event["is_valid"][i] = is_valid
             event["reported_energy"][i] = float(energy)
             event["rmsds"][i] = float(rmsd)
+            event["ns_computed"][i] = float(ns_computed)
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
