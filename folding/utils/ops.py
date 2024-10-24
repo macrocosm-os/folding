@@ -34,6 +34,11 @@ class ValidationError(Exception):
         self.message = message
         super().__init__(self.message)
 
+class RsyncException(Exception):
+    def __init__(self, message="Rsync error occurred"):
+        self.message = message
+        super().__init__(self.message)
+
 
 def delete_directory(directory: str):
     """We create a lot of files in the process of tracking pdb files.
@@ -167,7 +172,7 @@ def check_and_download_pdbs(
     download: bool = True,
     force: bool = False,
 ) -> bool:
-    """Check the status and optionally download a PDB file from the RCSB PDB database.
+    """Check the status and optionally download a PDB file from the specified input source.
 
     Args:
         pdb_directory (str): Directory to save the downloaded PDB file.
@@ -177,8 +182,8 @@ def check_and_download_pdbs(
         bool: True if the PDB file is downloaded successfully and doesn't contain missing values, False otherwise.
 
     Raises:
-        Exception: If download fails.
-
+        Exception: If download fails for rcsb source
+        RsyncException: If download fails for pdbe input source 
     """
 
     if input_source not in ["rcsb", "pdbe"]:
@@ -222,7 +227,7 @@ def check_and_download_pdbs(
             "-rlpt",
             "-v",
             "-z",
-            f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{id}.cif.gz",
+            f"rsync.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{id}.cif.gz",
             f"{pdb_directory}/",
         ]
 
@@ -237,9 +242,10 @@ def check_and_download_pdbs(
             )
             return True
         except subprocess.CalledProcessError as e:
-            raise Exception(
+            raise RsyncException(
                 f"Failed to download PDB file with ID {pdb_id} using rsync."
             )
+
     else:
         raise ValueError(f"Unknown input source: {input_source}")
 
