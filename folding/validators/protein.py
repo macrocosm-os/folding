@@ -22,6 +22,7 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
+    RsyncException,
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
@@ -30,7 +31,7 @@ from folding.utils.ops import (
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-
+rsync_exception_count = 0
 
 @dataclass
 class Protein(OpenMMSimulation):
@@ -148,29 +149,53 @@ class Protein(OpenMMSimulation):
         return pdb_complexity
 
     def gather_pdb_id(self):
-        if self.pdb_id is None:
+        global rsync_exception_count
+        # Sample only from rcsb if there are rsync issues
+        if rsync_exception_count > 10:
+            input_source = "rcsb"
+            self.pdb_id = None
             self.pdb_id = load_and_sample_random_pdb_ids(
-                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
+                root_dir=ROOT_DIR, filename="pdb_ids.pkl", input_source = input_source, exclude = None
+                )
+            bt.logging.debug(f"Selected random pdb id from rcsb: {self.pdb_id!r}")
+
+        else: 
+            # Randomly sample from either source 
+            self.pdb_id = load_and_sample_random_pdb_ids(
+                root_dir=ROOT_DIR, filename="pdb_ids.pkl", input_source = None, exclude = None
             )  # TODO: This should be a class variable via config
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
     def setup_pdb_directory(self):
+        global rsync_exception_count
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
             os.makedirs(self.pdb_directory)
+            
+        if rsync_exception_count > 10:
+            input_source = "rcsb"
+        else:
+            input_source = self.config.input_source
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
-            if not check_and_download_pdbs(
-                pdb_directory=self.pdb_directory,
-                pdb_id=self.pdb_file,
-                input_source=self.config.input_source,
-                download=True,
-                force=self.config.force_use_pdb,
-            ):
-                raise Exception(
-                    f"Failed to download {self.pdb_file} to {self.pdb_directory}"
-                )
-            self.fix_pdb_file()
+            try:
+                if not check_and_download_pdbs(
+                    pdb_directory=self.pdb_directory,
+                    pdb_id=self.pdb_file,
+                    input_source=input_source,
+                    download=True,
+                    force=self.config.force_use_pdb,
+                ):
+                    raise RsyncException(
+                        f"Failed to download {self.pdb_file} to {self.pdb_directory}"
+                    )
+                self.fix_pdb_file()
+            except RsyncException as e:
+                rsync_exception_count +=1
+                raise e
+            except (Exception, ValueError) as e:
+                bt.logging.error(f"Failed to download pdb file: {e}")
+                raise e
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
