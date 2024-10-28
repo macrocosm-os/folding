@@ -76,28 +76,29 @@ When the simulations finally converge (ΔE/t < threshold), they produce the form
 ## Requirements 
 Protein folding utilizes an open-source package called [OpenMM](https://openmm.org). To run, you will need:
 1. A Linux-based machine 
-2. At least 1 CUDA-compatible GPU
+2. At least 1 CUDA-compatible GPU. We recommend an RXT 4090. 
 3. Conda Distribution (we recommend [Miniconda](https://docs.anaconda.com/miniconda/)). Using conda is an [OpenMM requirement](http://docs.openmm.org/latest/userguide/application/01_getting_started.html#installing-openmm). 
 
 For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
 
-## Weights and Biases
+## Installation 
+### Weights and Biases
 As a validator, you are **required** to have Weights and Biases (Wandb) active on your machine. We open-source our logging to the community, so this is a necessary component. The repo will not work without Wandb. 
-
-Simply:
-```bash
-pip install wandb 
-wandb login
-```
 
 As a miner, this is an optional include. As such, we do not have logic for logging natively in the base miner, but can be easily added. 
 
-## Installation
-This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script.
+This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script. Below are all the steps needed to ensure that your machine is running properly:
+
 ```bash
+pip install wandb 
+wandb login
+
 git clone https://github.com/macrocosm-os/folding.git
 cd folding
 bash install.sh
+
+conda activate folding
+pip install -e .
 ```
 
 This will also create a virtual environment in which the repo can be run inside of.
