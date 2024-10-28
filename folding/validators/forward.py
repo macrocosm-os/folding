@@ -18,6 +18,7 @@ from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     get_response_info,
     OpenMMException,
+    RsyncException,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -152,8 +153,12 @@ def create_new_challenge(self, exclude: List) -> Dict:
         Dict: event dictionary containing the results of the hyperparameter search
     """
     while True:
+        
         forward_start_time = time.time()
-
+        if self.RSYNC_EXCEPTION_COUNT >10:
+            self.config.protein.pdb_id = None
+            self.config.protein.input_source = "rcsb"
+            
         if self.config.protein.pdb_id is not None:
             pdb_id = self.config.protein.pdb_id
         else:
@@ -167,7 +172,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
+        event = try_prepare_challenge(self=self, config=self.config, pdb_id=pdb_id)
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
@@ -202,7 +207,7 @@ def create_random_modifications_to_system_config(config) -> Dict:
     return system_kwargs
 
 
-def try_prepare_challenge(config, pdb_id: str) -> Dict:
+def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
@@ -247,6 +252,9 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             "box": config.protein.box or sampled_combination["BOX"],
         }
 
+        if self.RSYNC_EXCEPTION_COUNT > 10:
+            self.config.protein.input_source = "rcsb"
+
         protein = Protein(
             pdb_id=pdb_id,
             config=config.protein,
@@ -266,6 +274,10 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             bt.logging.error(f"OpenMMException occurred: init_energy is NaN {e}")
             event["validator_search_status"] = False
 
+        except RsyncException as e:
+            self.RSYNC_EXCEPTION_COUNT +=1
+            event["validator_search_status"] = False
+        
         except Exception:
             # full traceback
             bt.logging.error(traceback.format_exc())
