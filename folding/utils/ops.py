@@ -227,7 +227,7 @@ def check_and_download_pdbs(
             "-rlpt",
             "-v",
             "-z",
-            f"rsync.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{id}.cif.gz",
+            f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{id}.cif.gz",
             f"{pdb_directory}/",
         ]
 
