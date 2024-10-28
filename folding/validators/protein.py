@@ -32,6 +32,7 @@ from folding.utils.ops import (
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
+
 @dataclass
 class Protein(OpenMMSimulation):
     PDB_RECORDS = ("ATOM", "ANISOU", "REMARK", "HETATM", "CONECT")
@@ -62,7 +63,7 @@ class Protein(OpenMMSimulation):
         self.ff: str = ff
         self.box: Literal["cube", "dodecahedron", "octahedron"] = box
         self.water: str = water
-        
+
         # The dict is saved as a string in the event, so it needs to be evaluated.
         if isinstance(system_kwargs, str):
             system_kwargs = eval(system_kwargs)
@@ -148,9 +149,11 @@ class Protein(OpenMMSimulation):
         return pdb_complexity
 
     def gather_pdb_id(self):
-
         self.pdb_id, self.config.input_source = load_and_sample_random_pdb_ids(
-            root_dir=ROOT_DIR, filename="pdb_ids.pkl", input_source = self.config.input_source, exclude = None
+            root_dir=ROOT_DIR,
+            filename="pdb_ids.pkl",
+            input_source=self.config.input_source,
+            exclude=None,
         )  # TODO: This should be a class variable via config
         bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
@@ -168,7 +171,6 @@ class Protein(OpenMMSimulation):
                     download=True,
                     force=self.config.force_use_pdb,
                 ):
-
                     self.fix_pdb_file()
 
             except (Exception, ValueError, RsyncException) as e:

@@ -153,12 +153,11 @@ def create_new_challenge(self, exclude: List) -> Dict:
         Dict: event dictionary containing the results of the hyperparameter search
     """
     while True:
-        
         forward_start_time = time.time()
-        if self.RSYNC_EXCEPTION_COUNT >10:
+        if self.RSYNC_EXCEPTION_COUNT > 10:
             self.config.protein.pdb_id = None
             self.config.protein.input_source = "rcsb"
-            
+
         if self.config.protein.pdb_id is not None:
             pdb_id = self.config.protein.pdb_id
         else:
@@ -275,9 +274,9 @@ def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
             event["validator_search_status"] = False
 
         except RsyncException as e:
-            self.RSYNC_EXCEPTION_COUNT +=1
+            self.RSYNC_EXCEPTION_COUNT += 1
             event["validator_search_status"] = False
-        
+
         except Exception:
             # full traceback
             bt.logging.error(traceback.format_exc())

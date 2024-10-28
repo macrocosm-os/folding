@@ -34,6 +34,7 @@ class ValidationError(Exception):
         self.message = message
         super().__init__(self.message)
 
+
 class RsyncException(Exception):
     def __init__(self, message="Rsync error occurred"):
         self.message = message
@@ -183,7 +184,7 @@ def check_and_download_pdbs(
 
     Raises:
         Exception: If download fails for rcsb source
-        RsyncException: If download fails for pdbe input source 
+        RsyncException: If download fails for pdbe input source
     """
 
     if input_source not in ["rcsb", "pdbe"]:
