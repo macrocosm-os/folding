@@ -134,31 +134,6 @@ def get_tracebacks():
     bt.logging.warning(" ---------------- End of Traceback ----------------\n")
 
 
-def run_cmd_commands(
-    commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
-):
-    for cmd in tqdm.tqdm(commands):
-        bt.logging.debug(f"Running command: {cmd}")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                check=True,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            if not suppress_cmd_output:
-                bt.logging.info(result.stdout.decode())
-
-        except subprocess.CalledProcessError as e:
-            bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            if verbose:
-                bt.logging.error(f"Output: {e.stdout.decode()}")
-                bt.logging.error(f"Error: {e.stderr.decode()}")
-                get_tracebacks()
-            raise
-
 
 def check_and_download_pdbs(
     pdb_directory: str,
