@@ -251,9 +251,6 @@ def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
             "box": config.protein.box or sampled_combination["BOX"],
         }
 
-        if self.RSYNC_EXCEPTION_COUNT > 10:
-            self.config.protein.input_source = "rcsb"
-
         protein = Protein(
             pdb_id=pdb_id,
             config=config.protein,
