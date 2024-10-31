@@ -21,7 +21,20 @@ import torch
 import argparse
 import bittensor as bt
 from loguru import logger
+import re
 
+def log_filter(record: dict, config):
+    log_exclude_pattern = config.wandb.log_exclude_pattern
+    try:
+        with open(log_exclude_pattern, "r") as f:
+            log_exclude_pattern = f.read().splitlines()
+    except FileNotFoundError:
+        log_exclude_pattern = [log_exclude_pattern]
+
+    for pattern in log_exclude_pattern:
+        if re.search(pattern, record["message"]):
+            return False
+    return True
 
 def check_config(cls, config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
@@ -54,6 +67,7 @@ def check_config(cls, config: "bt.Config"):
                 diagnose=False,
                 level="TRACE",
                 format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
+                filter= lambda record: log_filter(record, config)
             )
 
 
@@ -244,6 +258,13 @@ def add_args(cls, parser):
         "--wandb.notes",
         type=str,
         help="Notes to add to the wandb run.",
+        default="",
+    )
+
+    parser.add_argument(
+        "--wandb.log_exclude_pattern",
+        type=str,
+        help="Regex pattern or file containing delimited by new line regex patterns to be excluded from logging for wandb.",
         default="",
     )
 
