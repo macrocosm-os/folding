@@ -208,7 +208,7 @@ def add_args(cls, parser):
         "--protein.input_source",
         type=str,
         help="Specifies the input source for selecting a new protein for simulation.",
-        default="rcsb",
+        default=None,
         choices=["rcsb", "pdbe"],
     )
 
