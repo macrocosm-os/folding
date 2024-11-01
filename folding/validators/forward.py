@@ -263,12 +263,12 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
                 )
 
         except OpenMMException as e:
-            bt.logging.error(f"OpenMMException occurred: init_energy is NaN {e}")
+            bt.logging.warning(f"OpenMMException occurred: init_energy is NaN {e}")
             event["validator_search_status"] = False
 
         except Exception:
             # full traceback
-            bt.logging.error(traceback.format_exc())
+            bt.logging.warning(traceback.format_exc())
             event["validator_search_status"] = False
 
         finally:
