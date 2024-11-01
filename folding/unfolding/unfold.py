@@ -60,7 +60,7 @@ def modify_psi_angle(residue, pp, position, delta_psi):
         )
 
 
-def unfold_protein(pdb_location: str, pbc: str = None):
+def unfold_protein(pdb_location: str, output_location: str, pbc: str = None, angle: int = 180,):
     """Method to unfold the protein"""
     parser = PDBParser()
     structure = parser.get_structure(id="protein", file=pdb_location)
@@ -76,8 +76,8 @@ def unfold_protein(pdb_location: str, pbc: str = None):
                 continue
 
             # Define new angles to simulate unfolding (e.g., set to 180 degrees)
-            new_phi = np.deg2rad(180)
-            new_psi = np.deg2rad(180)
+            new_phi = np.deg2rad(angle)
+            new_psi = np.deg2rad(angle)
 
             # Calculate angle differences
             delta_phi = new_phi - phi

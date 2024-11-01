@@ -182,7 +182,7 @@ class Protein(OpenMMSimulation):
                 )
             self.fix_pdb_file()
             pbc = self.get_pbc()
-            unfold_protein(pdb_location=self.pdb_location, pbc=pbc)
+            unfold_protein(pdb_location=self.pdb_location, output_location=self.pdb_location, pbc=pbc)
 
         else:
             bt.logging.info(
