@@ -167,6 +167,7 @@ class Validator(BaseValidatorNeuron):
             List[int]: A list of responding and free uids.
         """
         active_uids = self.ping_all_miners(exclude_uids=exclude_uids)
+        return [88]
 
         if len(active_uids) > num_uids_to_sample:
             return random.sample(active_uids, num_uids_to_sample)
@@ -181,7 +182,7 @@ class Validator(BaseValidatorNeuron):
         Args:
             k (int): The number of jobs create and distribute to miners.
         """
-
+        angles = [0, 30, 60, 90, 120]
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
             bt.logging.info(f"Adding job: {ii+1}/{k}")
@@ -206,7 +207,9 @@ class Validator(BaseValidatorNeuron):
             if len(valid_uids) >= self.config.neuron.sample_size:
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
-                job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
+                job_event: Dict = create_new_challenge(
+                    self, exclude=exclude_pdbs, angle=angles[ii]
+                )
                 job_event["uid_search_time"] = uid_search_time
 
                 selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]

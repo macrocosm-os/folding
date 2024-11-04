@@ -34,7 +34,7 @@ SEED = 42
 SIMULATION_STEPS = {"nvt": 1_000_000}
 
 
-def log_event(event = None, protein_vis = None):
+def log_event(event=None, protein_vis=None):
     """Log the event to the console and to the wandb logger."""
     # bt.logging.info(f"Event: {event}")
     if event:
@@ -43,7 +43,12 @@ def log_event(event = None, protein_vis = None):
         wandb.log({"protein_vis": wandb.Molecule(protein_vis)})
 
 
-def create_wandb_run(pdb_id: str, project: str = "folding-openmm", entity: str = "macrocosmos", tags: List = []):
+def create_wandb_run(
+    pdb_id: str,
+    project: str = "folding-openmm",
+    entity: str = "macrocosmos",
+    tags: List = [],
+):
     wandb.init(project=project, entity=entity, tags=tags, name=pdb_id)
 
 
@@ -91,9 +96,10 @@ def configure_commands(
             file=f"{output_dir}/folded_{angle}_{seed}.pdb",
             reportInterval=CHECKPOINT_INTERVAL,
         )
-    ) 
+    )
 
     return simulation
+
 
 def create_random_modifications_to_system_config() -> Dict:
     """create modifications of the desired parameters.
@@ -105,10 +111,10 @@ def create_random_modifications_to_system_config() -> Dict:
 
     system_kwargs = {"temperature": sampler(200, 400), "friction": sampler(0.9, 1.1)}
 
-
     return system_kwargs
 
-def create_new_challenge(pdb_id: str, angles=(180,180)) -> Dict:
+
+def create_new_challenge(pdb_id: str, angles=(180, 180)) -> Dict:
     """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
     using the try_prepare_challenge function.
     Args:
@@ -135,7 +141,7 @@ def create_new_challenge(pdb_id: str, angles=(180,180)) -> Dict:
     return protein, event
 
 
-def try_prepare_challenge(pdb_id: str, angles=(180,180)) -> Dict:
+def try_prepare_challenge(pdb_id: str, angles=(180, 180)) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
@@ -144,7 +150,7 @@ def try_prepare_challenge(pdb_id: str, angles=(180,180)) -> Dict:
     hp_sampler = HyperParameters()
 
     bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
-    
+
     system_kwargs = create_random_modifications_to_system_config()
 
     for tries in tqdm(
@@ -163,7 +169,9 @@ def try_prepare_challenge(pdb_id: str, angles=(180,180)) -> Dict:
 
         config = Box({"force_use_pdb": False, "input_source": "rcsb"})
 
-        protein = Protein(pdb_id=pdb_id, config=config, system_kwargs=system_kwargs, **hps)
+        protein = Protein(
+            pdb_id=pdb_id, config=config, system_kwargs=system_kwargs, **hps
+        )
 
         try:
             protein.setup_simulation(angles=angles)
@@ -179,8 +187,7 @@ def try_prepare_challenge(pdb_id: str, angles=(180,180)) -> Dict:
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
             event["init_energy"] = protein.init_energy
             event["angle"] = angles[0]
-            event['system_kwargs'] = system_kwargs
-
+            event["system_kwargs"] = system_kwargs
 
             if "validator_search_status" not in event:
                 bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
@@ -199,7 +206,9 @@ def sample_pdb(exclude: List = [], pdb_id: str = None):
 
 
 def extact_energies(state: str, data_directory: str, num_experiments: int):
-    check_log_file = pd.read_csv(os.path.join(data_directory, f"{state}_{num_experiments}.log"))
+    check_log_file = pd.read_csv(
+        os.path.join(data_directory, f"{state}_{num_experiments}.log")
+    )
 
     return check_log_file["Potential Energy (kJ/mole)"].values
 
@@ -218,26 +227,28 @@ def cpt_file_mapper(output_dir: str, state: str, angles: tuple):
 
 
 if __name__ == "__main__":
-
-    angles = [(0,0), (30,30), (60,60), (90,90), (120,120), (150,150)]
+    angles = [(0, 0), (30, 30), (60, 60), (90, 90), (120, 120), (150, 150)]
 
     pdbs_to_exclude = []
-    pdb_ids = ['5kxs', '6qdy']
+    pdb_ids = ["5kxs", "6qdy"]
     for pdb_id in pdb_ids:
-        create_wandb_run(project="folding-openmm", entity="macrocosmos", tags=["unfolding"], pdb_id=pdb_id)
+        create_wandb_run(
+            project="folding-openmm",
+            entity="macrocosmos",
+            tags=["unfolding"],
+            pdb_id=pdb_id,
+        )
 
         for angle in angles:
             num_experiments = 3
             while num_experiments > 0:
-                
-
                 try:
                     protein, event = create_new_challenge(pdb_id=pdb_id, angles=angle)
                 except Exception as e:
                     bt.logging.error(f"Error occurred for pdb_id {pdb_id}: {e}")
                     continue
 
-                event['num_experiment'] = num_experiments
+                event["num_experiment"] = num_experiments
                 pdb_obj: app.PDBFile = protein.load_pdb_file(protein.pdb_location)
                 output_dir = protein.validator_directory
 
@@ -246,7 +257,6 @@ if __name__ == "__main__":
                 for state, steps_to_run in SIMULATION_STEPS.items():
                     # Creates the simulation object needed for the stage.
                     partitions = steps_to_run // 100_000
-                    
 
                     temp_state = state + f"_angle_{angle}"
 
@@ -257,7 +267,7 @@ if __name__ == "__main__":
                         pdb_obj=pdb_obj,
                         output_dir=protein.validator_directory,
                         pdb_id=pdb_id,
-                        angle=angle[0]
+                        angle=angle[0],
                     )
 
                     bt.logging.info(
@@ -268,21 +278,32 @@ if __name__ == "__main__":
                     else:
                         mapper_state = temp_state
 
+                    simulation.loadCheckpoint(
+                        cpt_file_mapper(output_dir, mapper_state, angle)
+                    )
 
-                    simulation.loadCheckpoint(cpt_file_mapper(output_dir, mapper_state, angle))
-                    
                     start_time = time.time()
                     for _ in range(partitions):
                         simulation.step(100_000)
-                        event['energy'] = simulation.context.getState(getEnergy=True).getPotentialEnergy() / unit.kilojoules_per_mole
-                        event['time'] = time.time() - start_time
-                        event['step'] = simulation.currentStep
-                        log_event(event, protein_vis=f"{protein.validator_directory}/folded_{angle[0]}_{num_experiments}.pdb")
+                        event["energy"] = (
+                            simulation.context.getState(
+                                getEnergy=True
+                            ).getPotentialEnergy()
+                            / unit.kilojoules_per_mole
+                        )
+                        event["time"] = time.time() - start_time
+                        event["step"] = simulation.currentStep
+                        log_event(
+                            event,
+                            protein_vis=f"{protein.validator_directory}/folded_{angle[0]}_{num_experiments}.pdb",
+                        )
                     simulation_time = time.time() - start_time
                     event[f"{state}_time"] = simulation_time
 
                     energy_array = extact_energies(
-                        state=temp_state, data_directory=protein.validator_directory, num_experiments=num_experiments
+                        state=temp_state,
+                        data_directory=protein.validator_directory,
+                        num_experiments=num_experiments,
                     )
                     # event[f"{state}_energies_angle_{angle}"] = energy_array.tolist()
 
@@ -293,7 +314,9 @@ if __name__ == "__main__":
                         height=600,
                         width=1400,
                     )
-                    fig.write_image(os.path.join(output_dir, f"{mapper_state}_energy.png"))
+                    fig.write_image(
+                        os.path.join(output_dir, f"{mapper_state}_energy.png")
+                    )
 
                 log_event(event)
                 num_experiments = num_experiments - 1

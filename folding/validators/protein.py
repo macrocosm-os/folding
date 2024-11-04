@@ -164,7 +164,7 @@ class Protein(OpenMMSimulation):
                     )  # Return the line without leading/trailing whitespace
         return None
 
-    def setup_pdb_directory(self):
+    def setup_pdb_directory(self, angle=180):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
             os.makedirs(self.pdb_directory)
@@ -182,7 +182,12 @@ class Protein(OpenMMSimulation):
                 )
             self.fix_pdb_file()
             pbc = self.get_pbc()
-            unfold_protein(pdb_location=self.pdb_location, output_location=self.pdb_location, pbc=pbc)
+            unfold_protein(
+                pdb_location=self.pdb_location,
+                output_location=self.pdb_location,
+                pbc=pbc,
+                angle=angle,
+            )
 
         else:
             bt.logging.info(
@@ -211,7 +216,7 @@ class Protein(OpenMMSimulation):
                     continue
         return files_to_return
 
-    def setup_simulation(self):
+    def setup_simulation(self, angle=180):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
         2. setup the pdb directory and download the pdb file if it doesn't exist.
@@ -225,7 +230,7 @@ class Protein(OpenMMSimulation):
 
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
-        self.setup_pdb_directory()
+        self.setup_pdb_directory(angle=angle)
 
         self.generate_input_files()
 

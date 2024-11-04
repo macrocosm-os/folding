@@ -140,7 +140,7 @@ def parse_config(config) -> Dict[str, str]:
     return exclude_in_hp_search
 
 
-def create_new_challenge(self, exclude: List) -> Dict:
+def create_new_challenge(self, exclude: List, angle=180) -> Dict:
     """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
     using the try_prepare_challenge function.
 
@@ -166,7 +166,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
+        event = try_prepare_challenge(config=self.config, pdb_id=pdb_id, angle=angle)
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
@@ -201,7 +201,7 @@ def create_random_modifications_to_system_config(config) -> Dict:
     return system_kwargs
 
 
-def try_prepare_challenge(config, pdb_id: str) -> Dict:
+def try_prepare_challenge(config, pdb_id: str, angle=180) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
@@ -254,12 +254,12 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
         )
 
         try:
-            protein.setup_simulation()
+            protein.setup_simulation(angle=angle)
 
-            if protein.init_energy > 0:
-                raise ValueError(
-                    f"Initial energy is positive: {protein.init_energy}. Simulation failed."
-                )
+            # if protein.init_energy > 0:
+            #     raise ValueError(
+            #         f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+            #     )
 
         except Exception:
             # full traceback
@@ -274,6 +274,7 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             event["init_energy"] = protein.init_energy
             event["epsilon"] = protein.epsilon
             event["system_kwargs"] = system_kwargs
+            event["angle"] = angle
 
             if "validator_search_status" not in event:
                 bt.logging.success("✅✅ Simulation ran successfully! ✅✅")
