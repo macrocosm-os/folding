@@ -27,6 +27,7 @@ from folding.utils.ops import (
     write_pkl,
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
+    timeout,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -198,6 +199,7 @@ class Protein(OpenMMSimulation):
                     continue
         return files_to_return
 
+    @timeout(180)
     def setup_simulation(self):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.

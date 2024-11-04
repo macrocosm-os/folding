@@ -2,14 +2,15 @@ import re
 import os
 import sys
 import tqdm
+import signal
 import random
 import shutil
 import requests
+import functools
 import traceback
 import subprocess
 import pickle as pkl
 from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 import parmed as pmd
@@ -17,6 +18,10 @@ import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
+
+
+class TimeoutException(Exception):
+    pass
 
 
 class OpenMMException(Exception):
@@ -33,6 +38,33 @@ class ValidationError(Exception):
     def __init__(self, message="Version error occurred"):
         self.message = message
         super().__init__(self.message)
+
+
+def timeout_handler(seconds, func_name):
+    raise TimeoutException(f"Function '{func_name}' timed out after {seconds} seconds")
+
+
+# Decorator to apply the timeout
+def timeout(seconds):
+    def decorator(func):
+        @functools.wraps(func)  # Retain original function metadata
+        def wrapper(*args, **kwargs):
+            # Set the signal alarm with the function name
+            signal.signal(
+                signal.SIGALRM,
+                lambda signum, frame: timeout_handler(seconds, func.__name__),
+            )
+            signal.alarm(seconds)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                # Disable the alarm
+                signal.alarm(0)
+            return result
+
+        return wrapper
+
+    return decorator
 
 
 def delete_directory(directory: str):
