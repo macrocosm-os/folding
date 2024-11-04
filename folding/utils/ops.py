@@ -24,8 +24,24 @@ class TimeoutException(Exception):
     pass
 
 
-def timeout_handler(signum, frame):
-    raise TimeoutException("Function timed out")
+class OpenMMException(Exception):
+    """Exception raised for errors in the versioning."""
+
+    def __init__(self, message="Version error occurred"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ValidationError(Exception):
+    """Exception raised for errors in the versioning."""
+
+    def __init__(self, message="Version error occurred"):
+        self.message = message
+        super().__init__(self.message)
+
+
+def timeout_handler(seconds, func_name):
+    raise TimeoutException(f"Function '{func_name}' timed out after {seconds} seconds")
 
 
 # Decorator to apply the timeout
@@ -49,22 +65,6 @@ def timeout(seconds):
         return wrapper
 
     return decorator
-
-
-class OpenMMException(Exception):
-    """Exception raised for errors in the versioning."""
-
-    def __init__(self, message="Version error occurred"):
-        self.message = message
-        super().__init__(self.message)
-
-
-class ValidationError(Exception):
-    """Exception raised for errors in the versioning."""
-
-    def __init__(self, message="Version error occurred"):
-        self.message = message
-        super().__init__(self.message)
 
 
 def delete_directory(directory: str):
