@@ -27,6 +27,7 @@ from folding.utils.ops import (
     write_pkl,
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
+    timeout,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -198,6 +199,7 @@ class Protein(OpenMMSimulation):
                     continue
         return files_to_return
 
+    @timeout(180)
     def setup_simulation(self):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
@@ -577,6 +579,11 @@ class Protein(OpenMMSimulation):
         )
 
         return True, check_energies.tolist(), miner_energies.tolist()
+
+    def get_ns_computed(self):
+        """Calculate the number of nanoseconds computed by the miner."""
+
+        return (self.cpt_step * self.system_config.time_step_size) / 1e6
 
     def save_pdb(self, output_path: str):
         """Save the pdb file to the output path."""

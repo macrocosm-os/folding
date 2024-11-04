@@ -2,14 +2,15 @@ import re
 import os
 import sys
 import tqdm
+import signal
 import random
 import shutil
 import requests
+import functools
 import traceback
 import subprocess
 import pickle as pkl
 from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 import parmed as pmd
@@ -17,6 +18,10 @@ import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
+
+
+class TimeoutException(Exception):
+    pass
 
 
 class OpenMMException(Exception):
@@ -33,6 +38,33 @@ class ValidationError(Exception):
     def __init__(self, message="Version error occurred"):
         self.message = message
         super().__init__(self.message)
+
+
+def timeout_handler(seconds, func_name):
+    raise TimeoutException(f"Function '{func_name}' timed out after {seconds} seconds")
+
+
+# Decorator to apply the timeout
+def timeout(seconds):
+    def decorator(func):
+        @functools.wraps(func)  # Retain original function metadata
+        def wrapper(*args, **kwargs):
+            # Set the signal alarm with the function name
+            signal.signal(
+                signal.SIGALRM,
+                lambda signum, frame: timeout_handler(seconds, func.__name__),
+            )
+            signal.alarm(seconds)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                # Disable the alarm
+                signal.alarm(0)
+            return result
+
+        return wrapper
+
+    return decorator
 
 
 def delete_directory(directory: str):
@@ -133,31 +165,6 @@ def get_tracebacks():
     bt.logging.warning("".join(formatted_traceback))
     bt.logging.warning(" ---------------- End of Traceback ----------------\n")
 
-
-def run_cmd_commands(
-    commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
-):
-    for cmd in tqdm.tqdm(commands):
-        bt.logging.debug(f"Running command: {cmd}")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                check=True,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            if not suppress_cmd_output:
-                bt.logging.info(result.stdout.decode())
-
-        except subprocess.CalledProcessError as e:
-            bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            if verbose:
-                bt.logging.error(f"Output: {e.stdout.decode()}")
-                bt.logging.error(f"Error: {e.stderr.decode()}")
-                get_tracebacks()
-            raise
 
 
 def check_and_download_pdbs(
