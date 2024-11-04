@@ -112,6 +112,16 @@ def log_folded_protein(run, pdb_id_path: str):
         bt.logging.warning("Failed to log folded protein visualization")
 
 
+def log_original_protein(run, pdb_id_path: str):
+    """Logs the folded protein visualization to wandb.
+    pdb_id_path: str: path to the pdb file on disk.
+    """
+    try:
+        run.log({"original_protein_vis": wandb.Molecule(pdb_id_path)})
+    except:
+        bt.logging.warning("Failed to log original protein visualization")
+
+
 def log_event(
     self,
     event,
@@ -134,6 +144,9 @@ def log_event(
 
     if pdb_location is not None:
         log_protein(run, pdb_id_path=pdb_location)
+        log_original_protein(
+            run, pdb_id_path=pdb_location.replace(".pdb", "_original.pdb")
+        )
     if folded_protein_location is not None:
         log_folded_protein(run, pdb_id_path=folded_protein_location)
         wandb.save(folded_protein_location)

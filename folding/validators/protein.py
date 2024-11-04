@@ -16,6 +16,7 @@ import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
+
 from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
@@ -28,6 +29,7 @@ from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
 )
+from folding.unfolding.unfold import unfold_protein
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -154,7 +156,16 @@ class Protein(OpenMMSimulation):
             )  # TODO: This should be a class variable via config
             bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
-    def setup_pdb_directory(self):
+    def get_pbc(self):
+        with open(self.pdb_location, "r") as file:
+            for line in file:
+                if line.startswith("CRYST1"):
+                    return (
+                        line.strip()
+                    )  # Return the line without leading/trailing whitespace
+        return None
+
+    def setup_pdb_directory(self, angle=180):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
             os.makedirs(self.pdb_directory)
@@ -171,6 +182,14 @@ class Protein(OpenMMSimulation):
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
             self.fix_pdb_file()
+            pbc = self.get_pbc()
+            unfold_protein(
+                pdb_location=self.pdb_location,
+                output_location=self.pdb_location,
+                pbc=pbc,
+                angle=angle,
+            )
+
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -198,7 +217,7 @@ class Protein(OpenMMSimulation):
                     continue
         return files_to_return
 
-    def setup_simulation(self):
+    def setup_simulation(self, angle=180):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
         2. setup the pdb directory and download the pdb file if it doesn't exist.
@@ -212,7 +231,7 @@ class Protein(OpenMMSimulation):
 
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
-        self.setup_pdb_directory()
+        self.setup_pdb_directory(angle=angle)
 
         self.generate_input_files()
 
