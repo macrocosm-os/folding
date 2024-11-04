@@ -8,6 +8,7 @@ import requests
 import traceback
 import subprocess
 import pickle as pkl
+import signal
 from typing import Dict, List
 
 import numpy as np
@@ -17,6 +18,33 @@ import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
+
+
+class TimeoutException(Exception):
+    pass
+
+
+def timeout_handler(signum, frame):
+    raise TimeoutException("Function timed out")
+
+
+# Decorator to apply the timeout
+def timeout(seconds):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            # Set the signal alarm
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(seconds)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                # Disable the alarm
+                signal.alarm(0)
+            return result
+
+        return wrapper
+
+    return decorator
 
 
 class OpenMMException(Exception):
