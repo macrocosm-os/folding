@@ -18,6 +18,7 @@ from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     get_response_info,
     TimeoutException,
+    OpenMMException,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -266,6 +267,10 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
             bt.logging.info(e)
             event["validator_search_status"] = False
             tries = 10
+            
+        except OpenMMException as e:
+            bt.logging.info(f"OpenMMException occurred: init_energy is NaN {e}")
+            event["validator_search_status"] = False
 
         except Exception as e:
             # full traceback
