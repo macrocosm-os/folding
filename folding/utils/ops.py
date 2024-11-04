@@ -2,15 +2,15 @@ import re
 import os
 import sys
 import tqdm
+import signal
 import random
 import shutil
 import requests
+import functools
 import traceback
 import subprocess
 import pickle as pkl
-import signal
 from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 import parmed as pmd
@@ -31,9 +31,13 @@ def timeout_handler(signum, frame):
 # Decorator to apply the timeout
 def timeout(seconds):
     def decorator(func):
+        @functools.wraps(func)  # Retain original function metadata
         def wrapper(*args, **kwargs):
-            # Set the signal alarm
-            signal.signal(signal.SIGALRM, timeout_handler)
+            # Set the signal alarm with the function name
+            signal.signal(
+                signal.SIGALRM,
+                lambda signum, frame: timeout_handler(seconds, func.__name__),
+            )
             signal.alarm(seconds)
             try:
                 result = func(*args, **kwargs)
