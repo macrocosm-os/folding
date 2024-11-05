@@ -192,9 +192,6 @@ class BaseValidatorNeuron(BaseNeuron):
                 if self.should_exit:
                     break
 
-                # Sync metagraph and potentially set weights.
-                self.sync()
-
                 self.step += 1
                 bt.logging.warning(
                     f"Sleeping for {self.config.neuron.update_interval} before resampling..."
@@ -228,11 +225,7 @@ class BaseValidatorNeuron(BaseNeuron):
             
     def sync_loop(self):
         while True:
-            if self.should_set_weights():
-                self.set_weights()
-
-            # Always save state.
-            self.save_state()
+            self.sync()
             time.sleep(self.config.neuron.epoch_length*12)
 
     def stop_run_thread(self):
@@ -245,12 +238,13 @@ class BaseValidatorNeuron(BaseNeuron):
             self.thread.join(5)
             self.is_running = False
             bt.logging.debug("Stopped")
+
     def sync_background_thread(self):
         """
         Starts the validator's sync operations in a background thread upon entering the context.
         """
 
-        bt.logging.debug("Starting validator in background thread.")
+        bt.logging.debug("Starting syncing in background thread.")
 
         self.sync_thread = threading.Thread(target=self.sync_loop, daemon=True)
         self.sync_thread.start()
