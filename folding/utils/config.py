@@ -23,13 +23,12 @@ import bittensor as bt
 from loguru import logger
 import re
 
-def log_filter(record: dict, config):
-    log_exclude_pattern = config.wandb.log_exclude_pattern
+def log_filter(record: dict, log_exclude_pattern):
     try:
         with open(log_exclude_pattern, "r") as f:
-            log_exclude_pattern = f.read().splitlines()
+            log_exclude_pattern = [pattern.strip() for pattern in f.read().splitlines()]
     except FileNotFoundError:
-        log_exclude_pattern = [log_exclude_pattern]
+        log_exclude_pattern = [log_exclude_pattern.strip()]
 
     for pattern in log_exclude_pattern:
         if re.search(pattern, record["message"]):
@@ -67,7 +66,7 @@ def check_config(cls, config: "bt.Config"):
                 diagnose=False,
                 level="TRACE",
                 format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
-                filter= lambda record: log_filter(record, config)
+                filter= lambda record: log_filter(record, config.wandb.log_exclude_pattern)
             )
 
 
