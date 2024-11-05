@@ -1,8 +1,8 @@
 from typing import Any, override
 
-from folding.protocol import OrganicSynapse
 from atom.organic_scoring import OrganicScoringBase
 
+from folding.protocol import OrganicSynapse
 from folding.utils.opemm_simulation_config import SimulationConfig
 
 
