@@ -99,6 +99,9 @@ class BaseValidatorNeuron(BaseNeuron):
                 "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_disabled'"
             )
 
+        if self._organic_scoring is not None:
+            self.loop.create_task(self._organic_scoring.start_loop())
+
         self.load_and_merge_configs()
 
     def serve_axon(self):
