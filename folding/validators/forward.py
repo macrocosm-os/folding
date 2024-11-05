@@ -17,6 +17,7 @@ from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     get_response_info,
+    TimeoutException,
     OpenMMException,
     RsyncException,
 )
@@ -266,17 +267,22 @@ def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
                     f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                 )
 
+        except TimeoutException as e:
+            bt.logging.info(e)
+            event["validator_search_status"] = False
+            tries = 10
+            
         except OpenMMException as e:
-            bt.logging.error(f"OpenMMException occurred: init_energy is NaN {e}")
+            bt.logging.info(f"OpenMMException occurred: init_energy is NaN {e}")
             event["validator_search_status"] = False
 
         except RsyncException as e:
             self.RSYNC_EXCEPTION_COUNT += 1
             event["validator_search_status"] = False
 
-        except Exception:
+        except Exception as e:
             # full traceback
-            bt.logging.error(traceback.format_exc())
+            bt.logging.info(e)
             event["validator_search_status"] = False
 
         finally:
