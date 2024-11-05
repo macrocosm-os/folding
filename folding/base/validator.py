@@ -239,12 +239,6 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug("Starting validator in background thread.")
             self.should_exit = False
             self.thread = threading.Thread(target=self.run, daemon=True)
-
-            self.loop.create_task(self.create_synthetic_jobs())
-            self.loop.create_task(self.organic_jobs())
-
-            self.loop.create_task(self.validate_jobs())
-
             self.thread.start()
             self.is_running = True
             bt.logging.debug("Started")
