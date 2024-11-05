@@ -27,7 +27,7 @@ def log_filter(record: dict, log_exclude_pattern):
     try:
         with open(log_exclude_pattern, "r") as f:
             log_exclude_pattern = [pattern.strip() for pattern in f.read().splitlines()]
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError): # OSError when log_exclude_pattern is too long
         log_exclude_pattern = [pattern.strip() for pattern in log_exclude_pattern.splitlines()]
 
     for pattern in log_exclude_pattern:
