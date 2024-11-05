@@ -28,7 +28,7 @@ def log_filter(record: dict, log_exclude_pattern):
         with open(log_exclude_pattern, "r") as f:
             log_exclude_pattern = [pattern.strip() for pattern in f.read().splitlines()]
     except FileNotFoundError:
-        log_exclude_pattern = [log_exclude_pattern.strip()]
+        log_exclude_pattern = [pattern.strip() for pattern in log_exclude_pattern.splitlines()]
 
     for pattern in log_exclude_pattern:
         if re.search(pattern, record["message"]):
@@ -263,7 +263,7 @@ def add_args(cls, parser):
     parser.add_argument(
         "--wandb.log_exclude_pattern",
         type=str,
-        help="Regex pattern or file containing delimited by new line regex patterns to be excluded from logging for wandb.",
+        help="Regex pattern or file containing regex patterns delimited by new line to be excluded from logging for wandb.",
         default="",
     )
 
