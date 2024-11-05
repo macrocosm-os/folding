@@ -226,7 +226,8 @@ class BaseValidatorNeuron(BaseNeuron):
     async def sync_loop(self):
         while True:
             self.sync()
-            await asyncio.sleep(1*12)
+            seconds_per_block = 12
+            await asyncio.sleep(self.neuron.epoch_length * seconds_per_block)
 
     def stop_run_thread(self):
         """
