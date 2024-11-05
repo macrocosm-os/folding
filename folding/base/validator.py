@@ -33,9 +33,7 @@ from traceback import print_exception
 from folding.mock import MockDendrite
 from folding.base.neuron import BaseNeuron
 from folding.utils.config import add_validator_args
-
-from atom.organic_scoring import OrganicScoringBase
-
+from folding.organic.validator import OrganicValidator
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -87,7 +85,19 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
-        self._organic_scoring: Optional[OrganicScoringPrompting] = None
+        self._organic_scoring: Optional[OrganicValidator] = None
+        if self.axon is not None and not self.config.neuron.organic_disabled:
+            self._organic_scoring = OrganicValidator(
+                axon=self.axon,
+                synth_dataset=None,
+                trigger_frequency=self.config.neuron.organic_trigger_frequency,
+                trigger_frequency_min=self.config.neuron.organic_trigger_frequency_min,
+                trigger=self.config.neuron.organic_trigger,
+            )
+        else:
+            bt.logging.warning(
+                "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_disabled'"
+            )
 
         self.load_and_merge_configs()
 
