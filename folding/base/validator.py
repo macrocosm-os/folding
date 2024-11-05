@@ -219,7 +219,6 @@ class BaseValidatorNeuron(BaseNeuron):
     async def update_jobs(self):
         while True:
             await asyncio.sleep(self.config.neuron.update_interval)
-            bt.logging.info("Updating jobs!!!")
             for job in self.store.get_queue(ready=False).queue:
                 # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
                 if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
