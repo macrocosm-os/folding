@@ -86,13 +86,13 @@ class BaseValidatorNeuron(BaseNeuron):
         self.lock = asyncio.Lock()
 
         self._organic_scoring: Optional[OrganicValidator] = None
-        if self.axon is not None and not self.config.neuron.organic_disabled:
+        if not self.config.neuron.axon_off and not self.config.neuron.organic_disabled:
             self._organic_scoring = OrganicValidator(
                 axon=self.axon,
                 synth_dataset=None,
+                trigger=self.config.neuron.organic_trigger,
                 trigger_frequency=self.config.neuron.organic_trigger_frequency,
                 trigger_frequency_min=self.config.neuron.organic_trigger_frequency_min,
-                trigger=self.config.neuron.organic_trigger,
             )
         else:
             bt.logging.warning(
