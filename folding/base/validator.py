@@ -222,11 +222,11 @@ class BaseValidatorNeuron(BaseNeuron):
             self.thread.start()
             self.is_running = True
             bt.logging.debug("Started")
-            
-    def sync_loop(self):
+    
+    async def sync_loop(self):
         while True:
             self.sync()
-            time.sleep(self.config.neuron.epoch_length*12)
+            await asyncio.sleep(1*12)
 
     def stop_run_thread(self):
         """
@@ -239,29 +239,10 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
 
-    def sync_background_thread(self):
-        """
-        Starts the validator's sync operations in a background thread upon entering the context.
-        """
-
-        bt.logging.debug("Starting syncing in background thread.")
-
-        self.sync_thread = threading.Thread(target=self.sync_loop, daemon=True)
-        self.sync_thread.start()
-        bt.logging.debug("Started syncing")
-        
-    def stop_sync_thread(self):
-        """
-        Stops the validator's sync operations that are running in the background thread.
-        """
-        # if self.is_syncing:
-        bt.logging.debug("Stopping validator in background thread.")
-        self.sync_thread.join(5)
-        bt.logging.debug("Stopped syncing")
 
     def __enter__(self):
         # self.run_in_background_thread()
-        self.sync_background_thread()
+        self.loop.create_task(self.sync_loop())
         self.run()
         return self
 
@@ -278,7 +259,6 @@ class BaseValidatorNeuron(BaseNeuron):
             traceback: A traceback object encoding the stack trace.
                        None if the context was exited without an exception.
         """
-        self.stop_sync_thread()
         if self.is_running:
             bt.logging.debug("Stopping validator in background thread.")
             self.should_exit = True
