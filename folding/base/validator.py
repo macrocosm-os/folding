@@ -25,15 +25,17 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
+from pathlib import Path
 
-from typing import List
+from typing import List, Optional
 from traceback import print_exception
 
-from folding.base.neuron import BaseNeuron
 from folding.mock import MockDendrite
+from folding.base.neuron import BaseNeuron
 from folding.utils.config import add_validator_args
 
-from pathlib import Path
+from atom.organic_scoring import OrganicScoringBase
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -84,6 +86,8 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
+
+        self._organic_scoring: Optional[OrganicScoringPrompting] = None
 
         self.load_and_merge_configs()
 
@@ -222,6 +226,12 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug("Starting validator in background thread.")
             self.should_exit = False
             self.thread = threading.Thread(target=self.run, daemon=True)
+
+            self.loop.create_task(self.create_synthetic_jobs())
+            self.loop.create_task(self.organic_jobs())
+
+            self.loop.create_task(self.validate_jobs())
+
             self.thread.start()
             self.is_running = True
             bt.logging.debug("Started")
