@@ -166,7 +166,6 @@ def get_tracebacks():
     bt.logging.warning(" ---------------- End of Traceback ----------------\n")
 
 
-
 def check_and_download_pdbs(
     pdb_directory: str,
     pdb_id: str,
