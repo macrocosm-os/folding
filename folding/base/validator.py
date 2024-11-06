@@ -151,9 +151,6 @@ class BaseValidatorNeuron(BaseNeuron):
                 if self.should_exit:
                     break
 
-                # Sync metagraph and potentially set weights.
-                self.sync()
-
                 self.step += 1
                 bt.logging.warning(
                     f"Sleeping for {self.config.neuron.update_interval} before resampling..."
@@ -184,6 +181,12 @@ class BaseValidatorNeuron(BaseNeuron):
             self.thread.start()
             self.is_running = True
             bt.logging.debug("Started")
+    
+    async def sync_loop(self):
+        while True:
+            self.sync()
+            seconds_per_block = 12
+            await asyncio.sleep(self.neuron.epoch_length * seconds_per_block)
 
     def stop_run_thread(self):
         """
@@ -246,7 +249,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.update_job(job)
 
     def __enter__(self):
-        # self.run_in_background_thread()
+        self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.create_jobs())
         self.loop.create_task(self.update_jobs())
         self.run()
