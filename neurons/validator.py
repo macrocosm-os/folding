@@ -121,10 +121,6 @@ class Validator(BaseValidatorNeuron):
             mdrun_args=self.mdrun_args,
         )
 
-    def get_pdbs_to_exclude(self) -> List[str]:
-        # Set of pdbs that are currently in the process of running + old submitted simulations.
-        return list(self.store._db.index)
-
     def ping_all_miners(
         self,
         exclude_uids: List[int],
