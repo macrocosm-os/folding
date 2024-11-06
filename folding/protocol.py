@@ -111,13 +111,5 @@ class OrganicSynapse(bt.Synapse):
     temperature: float
     friction: float
 
-    def deserialize(self) -> SimulationConfig:
-        return SimulationConfig(
-            pdb_id=self.pdb_id,
-            ff=self.ff,
-            box=self.box,
-            water=self.water,
-            seed=self.seed,
-            temperature=self.temperature,
-            friction=self.friction,
-        )
+    def deserialize(self) -> dict:
+        return self.dict()
