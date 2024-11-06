@@ -335,13 +335,107 @@ class Validator(BaseValidatorNeuron):
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
+
+    async def sync_loop(self):
+        bt.logging.info("Starting sync loop.")
+        while True:
+            self.sync()
+            seconds_per_block = 12
+            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+
+    async def create_jobs(self):
+        """
+        Creates jobs and adds them to the queue.
+        """
+
+        while True:
+            bt.logging.info("Starting job creation loop.")
+            queue = self.store.get_queue(ready=False)
+            if queue.qsize() < self.config.neuron.queue_size:
+                # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
+                # Therefore, this product must be less than the number of uids on the metagraph.
+                if (
+                    self.config.neuron.sample_size * self.config.neuron.queue_size
+                ) > self.metagraph.n:
+                    raise ValueError(
+                        f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
+                    )
+
+                bt.logging.debug(f"✅ Creating jobs! ✅")
+                # Here is where we select, download and preprocess a pdb
+                # We also assign the pdb to a group of workers (miners), based on their workloads
+                self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
+            bt.logging.info(
+                f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop."
+            )
+            await asyncio.sleep(self.config.neuron.update_interval)
+
+    async def update_jobs(self):
+        while True:
+            bt.logging.info(f"step({self.step}) block({self.block})")
+
+            await asyncio.sleep(self.config.neuron.update_interval)
+            bt.logging.info("Updating jobs.")
+            for job in self.store.get_queue(ready=False).queue:
+                # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
+                if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
+                    self.store.update(job=job)
+                    continue
+
+                # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
+                job_event = self.forward(job=job)
+
+                # If we don't have any miners reply to the query, we will make it inactive.
+                if len(job_event["energies"]) == 0:
+                    job.active = False
+                    self.store.update(job=job)
+                    continue
+
+                if isinstance(job.event, str):
+                    job.event = eval(job.event)  # if str, convert to dict.
+
+                job.event.update(job_event)
+                # Determine the status of the job based on the current energy and the previous values (early stopping)
+                # Update the DB with the current status
+                self.update_job(job)
+            self.step += 1
+            bt.logging.info(
+                f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
+            )
+
+    async def __aenter__(self):
+        self.loop.create_task(self.sync_loop())
+        self.loop.create_task(self.create_jobs())
+        self.loop.create_task(self.update_jobs())
+        self.is_running = True
+        bt.logging.debug("Starting validator in background thread.")
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        """
+        Stops the validator's background operations upon exiting the context.
+        This method facilitates the use of the validator in a 'with' statement.
+
+        Args:
+            exc_type: The type of the exception that caused the context to be exited.
+                      None if the context was exited without an exception.
+            exc_value: The instance of the exception that caused the context to be exited.
+                       None if the context was exited without an exception.
+            traceback: A traceback object encoding the stack trace.
+                       None if the context was exited without an exception.
+        """
+        if self.is_running:
+            bt.logging.debug("Stopping validator in background thread.")
+            self.should_exit = True
+            self.is_running = False
+            bt.logging.debug("Stopped")
+
+
 async def main():
     async with Validator() as v:
         while v.is_running and not v.should_exit:
-            # bt.logging.info(
-            #     f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
-            # )
             await asyncio.sleep(30)
+
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
