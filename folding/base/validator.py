@@ -195,7 +195,30 @@ class BaseValidatorNeuron(BaseNeuron):
             self.thread.join(5)
             self.is_running = False
             bt.logging.debug("Stopped")
-            
+
+    async def create_jobs(self):
+        """
+        Creates jobs and adds them to the queue.
+        """
+
+        while True:
+            queue = self.store.get_queue(ready=False)
+            if queue.qsize() < self.config.neuron.queue_size:
+                # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
+                # Therefore, this product must be less than the number of uids on the metagraph.
+                if (
+                    self.config.neuron.sample_size * self.config.neuron.queue_size
+                ) > self.metagraph.n:
+                    raise ValueError(
+                        f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
+                    )
+
+                bt.logging.debug(f"✅ Creating jobs! ✅")
+                # Here is where we select, download and preprocess a pdb
+                # We also assign the pdb to a group of workers (miners), based on their workloads
+                self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
+            await asyncio.sleep(self.config.neuron.update_interval)
+
     async def update_jobs(self):
         while True:
             await asyncio.sleep(self.config.neuron.update_interval)
@@ -222,31 +245,9 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Update the DB with the current status
                 self.update_job(job)
 
-    async def create_jobs(self):
-        """
-        Creates jobs and adds them to the queue.
-        """
-
-        while True:
-            queue = self.store.get_queue(ready=False)
-            if queue.qsize() < self.config.neuron.queue_size:
-                # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
-                # Therefore, this product must be less than the number of uids on the metagraph.
-                if (
-                    self.config.neuron.sample_size * self.config.neuron.queue_size
-                ) > self.metagraph.n:
-                    raise ValueError(
-                        f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
-                    )
-
-                bt.logging.debug(f"✅ Creating jobs! ✅")
-                # Here is where we select, download and preprocess a pdb
-                # We also assign the pdb to a group of workers (miners), based on their workloads
-                self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
-            await asyncio.sleep(self.config.neuron.update_interval)
-            
     def __enter__(self):
         # self.run_in_background_thread()
+        self.loop.create_task(self.create_jobs())
         self.loop.create_task(self.update_jobs())
         self.run()
         return self
