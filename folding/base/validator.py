@@ -147,29 +147,6 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Our BaseValidator logic is intentionally as generic as possible so that the Validator neuron can apply problem-specific logic
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                for job in self.store.get_queue(ready=False).queue:
-                    # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
-                    if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
-                        self.store.update(job=job)
-                        continue
-
-                    # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
-                    job_event = self.forward(job=job)
-
-                    # If we don't have any miners reply to the query, we will make it inactive.
-                    if len(job_event["energies"]) == 0:
-                        job.active = False
-                        self.store.update(job=job)
-                        continue
-
-                    if isinstance(job.event, str):
-                        job.event = eval(job.event)  # if str, convert to dict.
-
-                    job.event.update(job_event)
-                    # Determine the status of the job based on the current energy and the previous values (early stopping)
-                    # Update the DB with the current status
-                    self.update_job(job)
-
                 # Check if we should exit.
                 if self.should_exit:
                     break
@@ -219,6 +196,32 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
             
+    async def update_jobs(self):
+        while True:
+            await asyncio.sleep(self.config.neuron.update_interval)
+            for job in self.store.get_queue(ready=False).queue:
+                # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
+                if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
+                    self.store.update(job=job)
+                    continue
+
+                # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
+                job_event = self.forward(job=job)
+
+                # If we don't have any miners reply to the query, we will make it inactive.
+                if len(job_event["energies"]) == 0:
+                    job.active = False
+                    self.store.update(job=job)
+                    continue
+
+                if isinstance(job.event, str):
+                    job.event = eval(job.event)  # if str, convert to dict.
+
+                job.event.update(job_event)
+                # Determine the status of the job based on the current energy and the previous values (early stopping)
+                # Update the DB with the current status
+                self.update_job(job)
+
     async def create_jobs(self):
         """
         Creates jobs and adds them to the queue.
@@ -243,7 +246,8 @@ class BaseValidatorNeuron(BaseNeuron):
             await asyncio.sleep(self.config.neuron.update_interval)
             
     def __enter__(self):
-        self.loop.create_task(self.create_jobs())
+        # self.run_in_background_thread()
+        self.loop.create_task(self.update_jobs())
         self.run()
         return self
 
