@@ -182,11 +182,6 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = True
             bt.logging.debug("Started")
     
-    async def sync_loop(self):
-        while True:
-            self.sync()
-            seconds_per_block = 12
-            await asyncio.sleep(self.neuron.epoch_length * seconds_per_block)
 
     def stop_run_thread(self):
         """
@@ -198,6 +193,13 @@ class BaseValidatorNeuron(BaseNeuron):
             self.thread.join(5)
             self.is_running = False
             bt.logging.debug("Stopped")
+    
+    async def sync_loop(self):
+        bt.logging.info("Starting sync loop.")
+        while True:
+            self.sync()
+            seconds_per_block = 12
+            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
 
     async def create_jobs(self):
         """
@@ -205,6 +207,7 @@ class BaseValidatorNeuron(BaseNeuron):
         """
 
         while True:
+            bt.logging.info("Starting job creation loop.")
             queue = self.store.get_queue(ready=False)
             if queue.qsize() < self.config.neuron.queue_size:
                 # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
@@ -220,11 +223,15 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Here is where we select, download and preprocess a pdb
                 # We also assign the pdb to a group of workers (miners), based on their workloads
                 self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
+            bt.logging.info(f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop.")
             await asyncio.sleep(self.config.neuron.update_interval)
 
     async def update_jobs(self):
         while True:
+            bt.logging.info(f"step({self.step}) block({self.block})")
+
             await asyncio.sleep(self.config.neuron.update_interval)
+            bt.logging.info("Updating jobs.")
             for job in self.store.get_queue(ready=False).queue:
                 # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
                 if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
@@ -247,15 +254,18 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Determine the status of the job based on the current energy and the previous values (early stopping)
                 # Update the DB with the current status
                 self.update_job(job)
+            self.step+=1
+            bt.logging.info(f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop.")
 
-    def __enter__(self):
+    async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.create_jobs())
         self.loop.create_task(self.update_jobs())
-        self.run()
+        self.is_running = True
+        bt.logging.debug("Starting validator in background thread.")
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    async def __aexit__(self, exc_type, exc_value, traceback):
         """
         Stops the validator's background operations upon exiting the context.
         This method facilitates the use of the validator in a 'with' statement.
@@ -271,7 +281,6 @@ class BaseValidatorNeuron(BaseNeuron):
         if self.is_running:
             bt.logging.debug("Stopping validator in background thread.")
             self.should_exit = True
-            self.thread.join(5)
             self.is_running = False
             bt.logging.debug("Stopped")
 
