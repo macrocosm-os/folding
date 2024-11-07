@@ -1,4 +1,3 @@
-from typing import Any
 from folding.protocol import OrganicSynapse
 from atom.organic_scoring import OrganicScoringBase
 
