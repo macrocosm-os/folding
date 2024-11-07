@@ -35,7 +35,7 @@ from folding.validators.forward import create_new_challenge, run_step, run_ping_
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
-from folding.store import Job, PandasJobStore
+from folding.store import Job, SQLiteJobStore
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
 
@@ -51,7 +51,7 @@ class Validator(BaseValidatorNeuron):
         self.load_state()
 
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
-        self.store = PandasJobStore()
+        self.store = SQLiteJobStore()
         self.mdrun_args = self.parse_mdrun_args()
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
@@ -122,10 +122,6 @@ class Validator(BaseValidatorNeuron):
             mdrun_args=self.mdrun_args,
         )
 
-    def get_pdbs_to_exclude(self) -> List[str]:
-        # Set of pdbs that are currently in the process of running + old submitted simulations.
-        return list(self.store._db.index)
-
     async def ping_all_miners(
         self,
         exclude_uids: List[int],
@@ -189,7 +185,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(f"Adding job: {ii+1}/{k}")
 
             # This will change on each loop since we are submitting a new pdb to the batch of miners
-            exclude_pdbs = self.get_pdbs_to_exclude()
+            exclude_pdbs = self.store.get_all_pdbs()
 
             # assign workers to the job (hotkeys)
             active_jobs = self.store.get_queue(ready=False).queue
