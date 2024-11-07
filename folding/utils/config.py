@@ -339,13 +339,6 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.num_concurrent_forwards",
-        type=int,
-        help="The number of concurrent forwards running at any time.",
-        default=1,
-    )
-
-    parser.add_argument(
         "--neuron.queue_size",
         type=int,
         help="The number of jobs to keep in the queue.",
