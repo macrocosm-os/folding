@@ -5,6 +5,7 @@ import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
+from async_timeout import timeout
 
 import numpy as np
 from folding.validators.protein import Protein
@@ -24,7 +25,7 @@ from folding.utils.ops import (
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
-def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
+async def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
     """Report a dictionary of ping information from all miners that were
     randomly sampled for this batch.
     """
@@ -32,7 +33,7 @@ def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
     synapse = PingSynapse()
 
     bt.logging.info(f"Pinging {len(axons)} uids")
-    responses: List[PingSynapse] = self.dendrite.query(
+    responses: List[PingSynapse] = await self.dendrite.forward(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
@@ -46,7 +47,7 @@ def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
     return ping_report
 
 
-def run_step(
+async def run_step(
     self,
     protein: Protein,
     uids: List[int],
@@ -79,7 +80,7 @@ def run_step(
 
     # Make calls to the network with the prompt - this is synchronous.
     bt.logging.info("⏰ Waiting for miner responses ⏰")
-    responses: List[JobSubmissionSynapse] = self.dendrite.query(
+    responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
         axons=axons,
         synapse=synapse,
         timeout=timeout,
@@ -142,7 +143,7 @@ def parse_config(config) -> Dict[str, str]:
     return exclude_in_hp_search
 
 
-def create_new_challenge(self, exclude: List) -> Dict:
+async def create_new_challenge(self, exclude: List) -> Dict:
     """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
     using the try_prepare_challenge function.
 
@@ -168,7 +169,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = try_prepare_challenge(config=self.config, pdb_id=pdb_id)
+        event = await try_prepare_challenge(config=self.config, pdb_id=pdb_id)
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
@@ -178,7 +179,7 @@ def create_new_challenge(self, exclude: List) -> Dict:
             event["hp_search_time"] = time.time() - forward_start_time
 
             # only log the event if the simulation was not successful
-            log_event(self, event, failed=True)
+            await log_event(self, event, failed=True)
             bt.logging.debug(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
@@ -203,7 +204,7 @@ def create_random_modifications_to_system_config(config) -> Dict:
     return system_kwargs
 
 
-def try_prepare_challenge(config, pdb_id: str) -> Dict:
+async def try_prepare_challenge(config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
@@ -256,7 +257,8 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
         )
 
         try:
-            protein.setup_simulation()
+            async with timeout(180):
+                await protein.setup_simulation()
 
             if protein.init_energy > 0:
                 raise ValueError(

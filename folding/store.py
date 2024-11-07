@@ -172,7 +172,7 @@ class Job:
     def to_frame(self):
         return pd.DataFrame([self.to_series()])
 
-    def update(
+    async def update(
         self,
         loss: float,
         hotkey: str,
