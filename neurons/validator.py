@@ -26,6 +26,7 @@ import os
 import torch
 import pandas as pd
 import bittensor as bt
+import asyncio
 
 
 from folding.utils.uids import get_random_uids
@@ -94,7 +95,7 @@ class Validator(BaseValidatorNeuron):
             and self.metagraph.axons[self.metagraph.hotkeys.index(hotkey)].is_serving
         ]
 
-    def forward(self, job: Job) -> dict:
+    async def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
         Validator forward pass. Consists of:
@@ -108,12 +109,12 @@ class Validator(BaseValidatorNeuron):
             job (Job): Job object containing the pdb and hotkeys
         """
 
-        protein = Protein.from_job(job=job, config=self.config.protein)
+        protein = await Protein.from_job(job=job, config=self.config.protein)
 
         uids = self.get_uids(hotkeys=job.hotkeys)
 
         bt.logging.info("Running run_step...⏳")
-        return run_step(
+        return await run_step(
             self,
             protein=protein,
             uids=uids,
@@ -121,7 +122,7 @@ class Validator(BaseValidatorNeuron):
             mdrun_args=self.mdrun_args,
         )
 
-    def ping_all_miners(
+    async def ping_all_miners(
         self,
         exclude_uids: List[int],
     ) -> Tuple[List[int], List[int]]:
@@ -139,7 +140,7 @@ class Validator(BaseValidatorNeuron):
             set(self.all_miner_uids).difference(set(exclude_uids))
         )
 
-        ping_report = run_ping_step(
+        ping_report = await run_ping_step(
             self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout
         )
         can_serve = ping_report["miner_status"]  # list of booleans
@@ -147,7 +148,7 @@ class Validator(BaseValidatorNeuron):
         active_uids = np.array(current_miner_uids)[can_serve].tolist()
         return active_uids
 
-    def sample_random_uids(
+    async def sample_random_uids(
         self,
         num_uids_to_sample: int,
         exclude_uids: List[int],
@@ -162,7 +163,8 @@ class Validator(BaseValidatorNeuron):
         Returns:
             List[int]: A list of responding and free uids.
         """
-        active_uids = self.ping_all_miners(exclude_uids=exclude_uids)
+        exclude_uids = []
+        active_uids = await self.ping_all_miners(exclude_uids=exclude_uids)
 
         if len(active_uids) > num_uids_to_sample:
             return random.sample(active_uids, num_uids_to_sample)
@@ -170,7 +172,7 @@ class Validator(BaseValidatorNeuron):
         elif len(active_uids) <= num_uids_to_sample:
             return active_uids
 
-    def add_jobs(self, k: int):
+    async def add_jobs(self, k: int):
         """Creates new jobs and assigns them to available workers. Updates DB with new records.
         Each "job" is an individual protein folding challenge that is distributed to the miners.
 
@@ -192,7 +194,7 @@ class Validator(BaseValidatorNeuron):
             exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
             start_time = time.time()
-            valid_uids = self.sample_random_uids(
+            valid_uids = await self.sample_random_uids(
                 num_uids_to_sample=self.config.neuron.sample_size,
                 exclude_uids=exclude_uids,
             )
@@ -202,7 +204,7 @@ class Validator(BaseValidatorNeuron):
             if len(valid_uids) >= self.config.neuron.sample_size:
                 # With the above logic, we know we have a valid set of uids.
                 # selects a new pdb, downloads data, preprocesses and gets hyperparams.
-                job_event: Dict = create_new_challenge(self, exclude=exclude_pdbs)
+                job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
                 job_event["uid_search_time"] = uid_search_time
 
                 selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
@@ -221,8 +223,9 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning(
                     f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
                 )
+            await asyncio.sleep(0.01)
 
-    def update_job(self, job: Job):
+    async def update_job(self, job: Job):
         """Updates the job status based on the event information
 
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
@@ -244,7 +247,7 @@ class Validator(BaseValidatorNeuron):
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
         best_hotkey = serving_hotkeys[best_index]
 
-        job.update(
+        await job.update(
             hotkeys=serving_hotkeys,
             loss=best_loss,
             hotkey=best_hotkey,
@@ -263,7 +266,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            rewards: torch.Tensor = reward_pipeline(
+            rewards: torch.Tensor = await reward_pipeline(
                 energies=energies,
                 rewards=rewards,
                 top_reward=top_reward,
@@ -271,7 +274,7 @@ class Validator(BaseValidatorNeuron):
             )
 
             uids = self.get_uids(hotkeys=job.hotkeys)
-            self.update_scores(
+            await self.update_scores(
                 rewards=rewards,
                 uids=uids,  # pretty confident these are in the correct order.
             )
@@ -283,7 +286,7 @@ class Validator(BaseValidatorNeuron):
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
 
-        def prepare_event_for_logging(event: Dict):
+        async def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
                 if isinstance(value, pd.Timedelta):
                     event[key] = value.total_seconds()
@@ -297,12 +300,12 @@ class Validator(BaseValidatorNeuron):
             rewards.numpy()
         )  # add the rewards to the logging event.
 
-        event = prepare_event_for_logging(merged_events)
+        event = await prepare_event_for_logging(merged_events)
 
         # If the job is finished, remove the pdb directory
         pdb_location = None
         folded_protein_location = None
-        protein = Protein.from_job(job=job, config=self.config.protein)
+        protein = await Protein.from_job(job=job, config=self.config.protein)
 
         if protein is not None:
             if job.active is True:
@@ -317,7 +320,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
-        log_event(
+        await log_event(
             self,
             event=event,
             pdb_location=pdb_location,
@@ -331,12 +334,107 @@ class Validator(BaseValidatorNeuron):
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
 
+    async def sync_loop(self):
+        bt.logging.info("Starting sync loop.")
+        while True:
+            self.sync
+            seconds_per_block = 12
+            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+
+    async def create_jobs(self):
+        """
+        Creates jobs and adds them to the queue.
+        """
+
+        while True:
+            bt.logging.info("Starting job creation loop.")
+            queue = self.store.get_queue(ready=False)
+            if queue.qsize() < self.config.neuron.queue_size:
+                # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
+                # Therefore, this product must be less than the number of uids on the metagraph.
+                if (
+                    self.config.neuron.sample_size * self.config.neuron.queue_size
+                ) > self.metagraph.n:
+                    raise ValueError(
+                        f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
+                    )
+
+                bt.logging.debug(f"✅ Creating jobs! ✅")
+                # Here is where we select, download and preprocess a pdb
+                # We also assign the pdb to a group of workers (miners), based on their workloads
+                await self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
+            bt.logging.info(
+                f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop."
+            )
+            await asyncio.sleep(self.config.neuron.update_interval)
+
+    async def update_jobs(self):
+        while True:
+            bt.logging.info(f"step({self.step}) block({self.block})")
+
+            await asyncio.sleep(self.config.neuron.update_interval)
+            bt.logging.info("Updating jobs.")
+            for job in self.store.get_queue(ready=False).queue:
+                # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
+                if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
+                    self.store.update(job=job)
+                    continue
+
+                # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
+                job_event = await self.forward(job=job)
+
+                # If we don't have any miners reply to the query, we will make it inactive.
+                if len(job_event["energies"]) == 0:
+                    job.active = False
+                    self.store.update(job=job)
+                    continue
+
+                if isinstance(job.event, str):
+                    job.event = eval(job.event)  # if str, convert to dict.
+
+                job.event.update(job_event)
+                # Determine the status of the job based on the current energy and the previous values (early stopping)
+                # Update the DB with the current status
+                await self.update_job(job=job)
+            self.step += 1
+            bt.logging.info(
+                f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
+            )
+
+    async def __aenter__(self):
+        self.loop.create_task(self.sync_loop())
+        self.loop.create_task(self.create_jobs())
+        self.loop.create_task(self.update_jobs())
+        self.is_running = True
+        bt.logging.debug("Starting validator in background thread.")
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        """
+        Stops the validator's background operations upon exiting the context.
+        This method facilitates the use of the validator in a 'with' statement.
+
+        Args:
+            exc_type: The type of the exception that caused the context to be exited.
+                      None if the context was exited without an exception.
+            exc_value: The instance of the exception that caused the context to be exited.
+                       None if the context was exited without an exception.
+            traceback: A traceback object encoding the stack trace.
+                       None if the context was exited without an exception.
+        """
+        if self.is_running:
+            bt.logging.debug("Stopping validator in background thread.")
+            self.should_exit = True
+            self.is_running = False
+            bt.logging.debug("Stopped")
+
+
+async def main():
+    async with Validator() as v:
+        while v.is_running and not v.should_exit:
+            await asyncio.sleep(30)
+
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
-    with Validator() as v:
-        while v.is_running and not v.should_exit:
-            # bt.logging.info(
-            #     f"Validator running:: network: {v.subtensor.network} | block: {v.block} | step: {v.step} | uid: {v.uid} | last updated: {v.block-v.metagraph.last_update[v.uid]} | vtrust: {v.metagraph.validator_trust[v.uid]:.3f} | emission {v.metagraph.emission[v.uid]:.3f}"
-            # )
-            time.sleep(30)
+    asyncio.run(main())

@@ -225,7 +225,7 @@ class Job:
     def to_dict(self):
         return asdict(self)
 
-    def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
+    async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
         if hotkeys is not None:
             assert len(hotkeys) > 0, "hotkeys must be a non-empty list"
