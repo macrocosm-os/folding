@@ -113,3 +113,14 @@ class OrganicSynapse(bt.Synapse):
 
     def deserialize(self) -> dict:
         return self.dict()
+
+    def get_simulation_params(self):
+        return {
+            "pdb_id": self.pdb_id,
+            "ff": self.ff,
+            "water": self.water,
+            "box": self.box,
+            "seed": self.seed,
+            "temperature": self.temperature,
+            "friction": self.friction,
+        }
