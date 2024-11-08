@@ -5,6 +5,7 @@ from loguru import logger
 from dataclasses import asdict, dataclass
 import datetime as dt
 import os
+import asyncio
 
 import folding
 import bittensor as bt
@@ -61,7 +62,7 @@ async def init_wandb(self, pdb_id: str, reinit=True, failed=False):
 
     id = None if pdb_id not in self.wandb_ids.keys() else self.wandb_ids[pdb_id]
 
-    run = wandb.init(
+    run = await asyncio.to_thread(wandb.init,
         anonymous="allow",
         name=pdb_id,
         reinit=reinit,
@@ -97,7 +98,7 @@ async def log_protein(run, pdb_id_path: str):
     pdb_id_path: str: path to the pdb file on disk.
     """
     try:
-        run.log({"protein_vis": wandb.Molecule(pdb_id_path)})
+        await asyncio.to_thread(run.log,{"protein_vis": wandb.Molecule(pdb_id_path)})
     except:
         bt.logging.warning("Failed to log protein visualization")
 
@@ -107,7 +108,7 @@ async def log_folded_protein(run, pdb_id_path: str):
     pdb_id_path: str: path to the pdb file on disk.
     """
     try:
-        run.log({"folded_protein_vis": wandb.Molecule(pdb_id_path)})
+        await asyncio.to_thread(run.log,{"folded_protein_vis": wandb.Molecule(pdb_id_path)})
     except:
         bt.logging.warning("Failed to log folded protein visualization")
 
