@@ -24,7 +24,9 @@ import torch
 import asyncio
 import argparse
 import threading
+import datetime as dt
 import bittensor as bt
+from pathlib import Path
 
 from typing import List
 from traceback import print_exception
@@ -33,7 +35,7 @@ from folding.base.neuron import BaseNeuron
 from folding.mock import MockDendrite
 from folding.utils.config import add_validator_args
 
-from pathlib import Path
+from atom.chain.chain import ChainStore
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -213,6 +215,42 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug(print_exception(type(err), err, err.__traceback__))
             self.should_exit = True
 
+    def chain_loop(self):
+        last_update = None
+        while not self.should_exit:
+            try:
+                current_datetime = dt.datetime.now(dt.timezone.utc)
+
+                bt.logging.info(
+                    f"Checking for update. Last update: {last_update}, Current time: {current_datetime}"
+                )
+
+                # Update the lookup on a cadence of per-day.
+                if last_update is None or current_datetime.date() > last_update.date():
+                    bt.logging.info("Retrieving the latest dynamic lookup...")
+                    model = sync_run_retrieval(self.config)
+                    bt.logging.info("Model retrieved, updating value calculator...")
+                    self.evaluator.scorer.value_calculator = DataValueCalculator(
+                        model=model
+                    )
+                    bt.logging.info(f"Desirable data list: {model}")
+                    bt.logging.info(
+                        f"Evaluator: {self.evaluator.scorer.value_calculator}"
+                    )
+                    last_update = current_datetime
+                    bt.logging.info(f"Updated dynamic lookup at {last_update}")
+                else:
+                    bt.logging.info("No update needed at this time.")
+
+                # Sleep for 5 minutes before checking again
+                bt.logging.info("Sleeping for 5 minutes...")
+                time.sleep(300)
+
+            except Exception as e:
+                bt.logging.error(f"Error in get_updated_lookup: {str(e)}")
+                bt.logging.exception("Exception details:")
+                time.sleep(300)  # Wait 5 minutes before trying again
+
     def run_in_background_thread(self):
         """
         Starts the validator's operations in a background thread upon entering the context.
@@ -221,6 +259,9 @@ class BaseValidatorNeuron(BaseNeuron):
         if not self.is_running:
             bt.logging.debug("Starting validator in background thread.")
             self.should_exit = False
+
+            self.chain_thread = threading.Thread(target=self.chain_loop, daemon=True)
+
             self.thread = threading.Thread(target=self.run, daemon=True)
             self.thread.start()
             self.is_running = True
@@ -238,8 +279,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug("Stopped")
 
     def __enter__(self):
-        # self.run_in_background_thread()
-        self.run()
+        self.run_in_background_thread()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
