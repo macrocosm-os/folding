@@ -341,7 +341,7 @@ class Validator(BaseValidatorNeuron):
     async def sync_loop(self):
         bt.logging.info("Starting sync loop.")
         while True:
-            self.sync
+            self.sync()
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
 
@@ -351,55 +351,61 @@ class Validator(BaseValidatorNeuron):
         """
 
         while True:
-            bt.logging.info("Starting job creation loop.")
-            queue = self.store.get_queue(ready=False)
-            if queue.qsize() < self.config.neuron.queue_size:
-                # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
-                # Therefore, this product must be less than the number of uids on the metagraph.
-                if (
-                    self.config.neuron.sample_size * self.config.neuron.queue_size
-                ) > self.metagraph.n:
-                    raise ValueError(
-                        f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
-                    )
+            try:
+                bt.logging.info("Starting job creation loop.")
+                queue = self.store.get_queue(ready=False)
+                if queue.qsize() < self.config.neuron.queue_size:
+                    # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
+                    # Therefore, this product must be less than the number of uids on the metagraph.
+                    if (
+                        self.config.neuron.sample_size * self.config.neuron.queue_size
+                    ) > self.metagraph.n:
+                        raise ValueError(
+                            f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
+                        )
 
-                bt.logging.debug(f"✅ Creating jobs! ✅")
-                # Here is where we select, download and preprocess a pdb
-                # We also assign the pdb to a group of workers (miners), based on their workloads
-                await self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
-            bt.logging.info(
-                f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop."
-            )
+                    bt.logging.debug(f"✅ Creating jobs! ✅")
+                    # Here is where we select, download and preprocess a pdb
+                    # We also assign the pdb to a group of workers (miners), based on their workloads
+                    await self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
+                bt.logging.info(
+                    f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop."
+                )
+            except Exception as e:
+                bt.logging.error(f"Error in create_jobs: {e}")
             await asyncio.sleep(self.config.neuron.update_interval)
 
     async def update_jobs(self):
         while True:
-            bt.logging.info(f"step({self.step}) block({self.block})")
+            try:
+                bt.logging.info(f"step({self.step}) block({self.block})")
 
-            await asyncio.sleep(self.config.neuron.update_interval)
-            bt.logging.info("Updating jobs.")
-            for job in self.store.get_queue(ready=False).queue:
-                # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
-                if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
-                    self.store.update(job=job)
-                    continue
+                await asyncio.sleep(self.config.neuron.update_interval)
+                bt.logging.info("Updating jobs.")
+                for job in self.store.get_queue(ready=False).queue:
+                    # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
+                    if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
+                        self.store.update(job=job)
+                        continue
 
-                # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
-                job_event = await self.forward(job=job)
+                    # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
+                    job_event = await self.forward(job=job)
 
-                # If we don't have any miners reply to the query, we will make it inactive.
-                if len(job_event["energies"]) == 0:
-                    job.active = False
-                    self.store.update(job=job)
-                    continue
+                    # If we don't have any miners reply to the query, we will make it inactive.
+                    if len(job_event["energies"]) == 0:
+                        job.active = False
+                        self.store.update(job=job)
+                        continue
 
-                if isinstance(job.event, str):
-                    job.event = eval(job.event)  # if str, convert to dict.
+                    if isinstance(job.event, str):
+                        job.event = eval(job.event)  # if str, convert to dict.
 
-                job.event.update(job_event)
-                # Determine the status of the job based on the current energy and the previous values (early stopping)
-                # Update the DB with the current status
-                await self.update_job(job=job)
+                    job.event.update(job_event)
+                    # Determine the status of the job based on the current energy and the previous values (early stopping)
+                    # Update the DB with the current status
+                    await self.update_job(job=job)
+            except Exception as e:
+                bt.logging.error(f"Error in update_jobs: {e}")
             self.step += 1
             bt.logging.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
