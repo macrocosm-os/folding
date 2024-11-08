@@ -22,6 +22,7 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
+    RsyncException,
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
@@ -149,11 +150,13 @@ class Protein(OpenMMSimulation):
         return pdb_complexity
 
     def gather_pdb_id(self):
-        if self.pdb_id is None:
-            self.pdb_id = load_and_sample_random_pdb_ids(
-                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
-            )  # TODO: This should be a class variable via config
-            bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
+        self.pdb_id, self.config.input_source = load_and_sample_random_pdb_ids(
+            root_dir=ROOT_DIR,
+            filename="pdb_ids.pkl",
+            input_source=self.config.input_source,
+            exclude=None,
+        )  # TODO: This should be a class variable via config
+        bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
     def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
@@ -161,17 +164,19 @@ class Protein(OpenMMSimulation):
             os.makedirs(self.pdb_directory)
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
-            if not check_and_download_pdbs(
-                pdb_directory=self.pdb_directory,
-                pdb_id=self.pdb_file,
-                input_source=self.config.input_source,
-                download=True,
-                force=self.config.force_use_pdb,
-            ):
-                raise Exception(
-                    f"Failed to download {self.pdb_file} to {self.pdb_directory}"
-                )
-            self.fix_pdb_file()
+            try:
+                if not check_and_download_pdbs(
+                    pdb_directory=self.pdb_directory,
+                    pdb_id=self.pdb_file,
+                    input_source=self.config.input_source,
+                    download=True,
+                    force=self.config.force_use_pdb,
+                ):
+                    self.fix_pdb_file()
+
+            except (Exception, ValueError, RsyncException) as e:
+                bt.logging.error(f"Error in setup_pdb_directory: {e}")
+                raise e
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -208,6 +213,7 @@ class Protein(OpenMMSimulation):
         4. edit the necessary config files and add them to the synapse object self.md_inputs[file] = content
         4. save the files to the validator directory for record keeping.
         """
+
         bt.logging.info(
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
