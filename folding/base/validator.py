@@ -94,13 +94,12 @@ class BaseValidatorNeuron(BaseNeuron):
                 trigger_frequency=self.config.neuron.organic_trigger_frequency,
                 trigger_frequency_min=self.config.neuron.organic_trigger_frequency_min,
             )
+
+            self.loop.create_task(self._organic_scoring.start_loop())
         else:
             bt.logging.warning(
                 "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_disabled'"
             )
-
-        if self._organic_scoring is not None:
-            self.loop.create_task(self._organic_scoring.start_loop())
 
         self.load_and_merge_configs()
 
