@@ -122,17 +122,19 @@ class BaseNeuron(ABC):
             raise e
 
         bt.logging.success(f"Running OpenMM version: {self.openmm_version}")
-        
+
     def setup_wandb_logging(self):
         if os.path.isfile(f"{self.config.neuron.full_path}/wandb_ids.pkl"):
-            self.wandb_ids = load_pkl(f"{self.config.neuron.full_path}/wandb_ids.pkl", "rb")
+            self.wandb_ids = load_pkl(
+                f"{self.config.neuron.full_path}/wandb_ids.pkl", "rb"
+            )
         else:
             self.wandb_ids = {}
-            
+
     def add_wandb_id(self, pdb_id: str, wandb_id: str):
         self.wandb_ids[pdb_id] = wandb_id
         write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")
-        
+
     def remove_wandb_id(self, pdb_id: str):
         self.wandb_ids.pop(pdb_id)
         write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")

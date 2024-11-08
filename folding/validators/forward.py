@@ -20,6 +20,7 @@ from folding.utils.ops import (
     get_response_info,
     TimeoutException,
     OpenMMException,
+    RsyncException,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -155,6 +156,9 @@ async def create_new_challenge(self, exclude: List) -> Dict:
     """
     while True:
         forward_start_time = time.time()
+        if self.RSYNC_EXCEPTION_COUNT > 10:
+            self.config.protein.pdb_id = None
+            self.config.protein.input_source = "rcsb"
 
         if self.config.protein.pdb_id is not None:
             pdb_id = self.config.protein.pdb_id
@@ -269,9 +273,13 @@ async def try_prepare_challenge(config, pdb_id: str) -> Dict:
             bt.logging.info(e)
             event["validator_search_status"] = False
             tries = 10
-            
+
         except OpenMMException as e:
             bt.logging.info(f"OpenMMException occurred: init_energy is NaN {e}")
+            event["validator_search_status"] = False
+
+        except RsyncException as e:
+            self.RSYNC_EXCEPTION_COUNT += 1
             event["validator_search_status"] = False
 
         except Exception as e:

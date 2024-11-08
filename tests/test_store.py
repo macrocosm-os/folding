@@ -9,10 +9,11 @@ from folding.store import SQLiteJobStore, MockJob, Job
 
 ROOT_PATH = Path(__file__).parent
 DB_PATH = os.path.join(ROOT_PATH, "mock_data")
-PDB = 'ab12'
-FF = 'charmm27'
-BOX = 'cubic'
-WATER = 'tip3p'
+PDB = "ab12"
+FF = "charmm27"
+BOX = "cubic"
+WATER = "tip3p"
+
 
 @pytest.fixture(autouse=True)
 def cleanup():
@@ -40,8 +41,12 @@ def test_update_job(loss, commit_hash, gro_hash):
 
     job.update(loss=loss, hotkey=hotkey)
 
-    assert job.updated_count == 1, f"updated count should be 1, currently is {job.updated_count}"
-    assert job.updated_at > job.created_at, f"updated at should not be the same as created at"
+    assert (
+        job.updated_count == 1
+    ), f"updated count should be 1, currently is {job.updated_count}"
+    assert (
+        job.updated_at > job.created_at
+    ), f"updated at should not be the same as created at"
 
     if loss >= prev_loss:
         return
@@ -150,8 +155,8 @@ def test_save_then_load_store(n):
     pd.testing.assert_frame_equal(df1, df2)
     assert len(df1) == n, f"store should have {n} jobs, has {len(df1)}"
 
-@pytest.mark.parametrize('ready', [True, False])
-@pytest.mark.parametrize('update_seconds', [0, 10])
+@pytest.mark.parametrize("ready", [True, False])
+@pytest.mark.parametrize("update_seconds", [0, 10])
 def test_queue_contains_jobs(ready, update_seconds):
     store = SQLiteJobStore(db_path=DB_PATH)
 
