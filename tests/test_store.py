@@ -4,8 +4,10 @@ import shutil
 import pytest
 import sqlite3
 import pandas as pd
+import asyncio
 from pathlib import Path
 from folding.store import SQLiteJobStore, MockJob, Job
+
 
 ROOT_PATH = Path(__file__).parent
 DB_PATH = os.path.join(ROOT_PATH, "mock_data")
@@ -34,12 +36,13 @@ def test_create_job(mock):
     (-0.3, '1234', '5678'),
     (-0.4, '1234', '5678'),
 ])
-def test_update_job(loss, commit_hash, gro_hash):
+@pytest.mark.asyncio()
+async def test_update_job(loss, commit_hash, gro_hash):
     job = MockJob()
     prev_loss = job.best_loss
     hotkey = job.hotkeys[0]
 
-    job.update(loss=loss, hotkey=hotkey)
+    await job.update(loss=loss, hotkey=hotkey)
 
     assert (
         job.updated_count == 1
@@ -205,8 +208,8 @@ def test_queue_is_empty_when_all_jobs_are_complete():
     assert (
         store.get_queue(ready=False).qsize() == 0
     ), f"queue should be empty, currently has {store.get_queue(ready=False).qsize()}"
-
-def test_job_update_in_store():
+@pytest.mark.asyncio()
+async def test_job_update_in_store():
     store = SQLiteJobStore(db_path=DB_PATH)
     job = MockJob()
     
@@ -224,7 +227,7 @@ def test_job_update_in_store():
     
     # Update job
     new_loss = -0.1
-    job.update(loss=new_loss, hotkey=job.hotkeys[0])
+    await job.update(loss=new_loss, hotkey=job.hotkeys[0])
     store.update(job)
     
     # Retrieve and check updated job
@@ -284,3 +287,32 @@ def test_get_all_pdbs():
     # Check results
     assert len(pdbs) == 5, f"Expected 5 PDBs, got {len(pdbs)}"
     assert set(pdbs) == set(expected_pdbs), "Retrieved PDBs don't match expected ones"
+@pytest.mark.asyncio()
+async def insert_jobs(store, jobs):
+    for job in jobs:
+        store.insert(pdb=job.pdb,
+                    ff=job.ff,
+                    water=job.water,
+                    box=job.box,
+                    hotkeys=job.hotkeys,
+                    epsilon=job.epsilon,
+                    system_kwargs=job.system_kwargs,
+                    event=job.event,
+                )
+    
+@pytest.mark.asyncio()
+async def test_simul_write():
+    store = SQLiteJobStore(db_path=DB_PATH)
+    jobs = [MockJob() for _ in range(100)]
+    jobs2 = [MockJob() for _ in range(100)]
+
+    task1 = asyncio.create_task(insert_jobs(store, jobs))
+    task2 = asyncio.create_task(insert_jobs(store, jobs2))
+    await asyncio.gather(task1, task2)
+    
+    assert (
+        store.get_queue(ready=False).qsize() == 200
+    ), f"queue should have 200 jobs, currently has {store.get_queue(ready=False).qsize()}"
+    for job, job2 in zip(jobs, jobs2):
+        assert job.pdb in store.get_all_pdbs(), f"job {job.pdb} not found in store"
+        assert job2.pdb in store.get_all_pdbs(), f"job {job2.pdb} not found in store"
