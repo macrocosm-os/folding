@@ -35,6 +35,8 @@ class OrganicValidator(OrganicScoringBase):
         self._validator: BaseValidatorNeuron = validator
 
     async def _on_organic_entry(self, synapse: OrganicSynapse) -> None:
+        # TODO: Add the whitelist here.
+
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
 
@@ -51,8 +53,7 @@ class OrganicValidator(OrganicScoringBase):
             # Choose if organic queue is empty, choose random sample from provided datasets.
             sample = random.choice(self._synth_dataset).sample()
         else:
-            # Return empty dictionary if no samples are available.
-            sample = {}
+            sample = None
 
         return sample
 
@@ -63,7 +64,7 @@ class OrganicValidator(OrganicScoringBase):
         init_time = time.perf_counter()
         sample: dict[str, Any] = await self.sample()
 
-        if not sample:
+        if sample is None:
             return {
                 "sample": False,
                 "total_elapsed_time": time.perf_counter() - init_time,
