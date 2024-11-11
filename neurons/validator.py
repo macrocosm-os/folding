@@ -362,7 +362,7 @@ class Validator(BaseValidatorNeuron):
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
 
-    async def create_jobs(self):
+    async def create_synthetic_jobs(self):
         """
         Creates jobs and adds them to the queue.
         """
@@ -384,7 +384,9 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.debug(f"✅ Creating jobs! ✅")
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
-                    await self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
+                    await self.add_k_synthetic_jobs(
+                        k=self.config.neuron.queue_size - queue.qsize()
+                    )
                 bt.logging.info(
                     f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop."
                 )
@@ -430,7 +432,7 @@ class Validator(BaseValidatorNeuron):
 
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
-        self.loop.create_task(self.create_jobs())
+        self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
         self.is_running = True
         bt.logging.debug("Starting validator in background thread.")
