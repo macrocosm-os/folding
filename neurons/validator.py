@@ -49,7 +49,6 @@ class Validator(BaseValidatorNeuron):
 
         self.load_state()
 
-        # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = SQLiteJobStore()
         self.mdrun_args = self.parse_mdrun_args()
 
