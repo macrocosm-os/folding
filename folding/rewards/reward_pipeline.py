@@ -4,7 +4,7 @@ from folding.store import Job
 from folding.rewards.linear_reward import divide_decreasing
 
 
-def reward_pipeline(
+async def reward_pipeline(
     energies: torch.Tensor, rewards: torch.Tensor, top_reward: float, job: Job
 ):
     """A reward pipeline that determines how to place rewards onto the miners sampled within the batch.

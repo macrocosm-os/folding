@@ -5,6 +5,7 @@ from loguru import logger
 from dataclasses import asdict, dataclass
 import datetime as dt
 import os
+import asyncio
 
 import folding
 import bittensor as bt
@@ -35,7 +36,7 @@ def should_reinit_wandb(self):
     )
 
 
-def init_wandb(self, pdb_id: str, reinit=True, failed=False):
+async def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     """Starts a new wandb run."""
 
     tags = [
@@ -52,7 +53,7 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
         tags.append("mock")
     if self.config.neuron.disable_set_weights:
         tags.append("disable_set_weights")
-
+    tags.append("async")
     wandb_config = {
         key: copy.deepcopy(self.config.get(key, None))
         for key in ("neuron", "reward", "netuid", "wandb")
@@ -61,7 +62,8 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
 
     id = None if pdb_id not in self.wandb_ids.keys() else self.wandb_ids[pdb_id]
 
-    run = wandb.init(
+    run = await asyncio.to_thread(
+        wandb.init,
         anonymous="allow",
         name=pdb_id,
         reinit=reinit,
@@ -92,27 +94,29 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     return run
 
 
-def log_protein(run, pdb_id_path: str):
+async def log_protein(run, pdb_id_path: str):
     """Logs the protein visualization to wandb.
     pdb_id_path: str: path to the pdb file on disk.
     """
     try:
-        run.log({"protein_vis": wandb.Molecule(pdb_id_path)})
+        await asyncio.to_thread(run.log, {"protein_vis": wandb.Molecule(pdb_id_path)})
     except:
         bt.logging.warning("Failed to log protein visualization")
 
 
-def log_folded_protein(run, pdb_id_path: str):
+async def log_folded_protein(run, pdb_id_path: str):
     """Logs the folded protein visualization to wandb.
     pdb_id_path: str: path to the pdb file on disk.
     """
     try:
-        run.log({"folded_protein_vis": wandb.Molecule(pdb_id_path)})
+        await asyncio.to_thread(
+            run.log, {"folded_protein_vis": wandb.Molecule(pdb_id_path)}
+        )
     except:
         bt.logging.warning("Failed to log folded protein visualization")
 
 
-def log_event(
+async def log_event(
     self,
     event,
     failed=False,
@@ -126,16 +130,16 @@ def log_event(
         return
     pdb_id = event["pdb_id"]
 
-    run = init_wandb(self, pdb_id=pdb_id, failed=failed)
+    run = await init_wandb(self, pdb_id=pdb_id, failed=failed)
 
     # Log the event to wandb.
     run.log(event)
     wandb.save(os.path.join(self.config.neuron.full_path, f"events.log"))
 
     if pdb_location is not None:
-        log_protein(run, pdb_id_path=pdb_location)
+        await log_protein(run, pdb_id_path=pdb_location)
     if folded_protein_location is not None:
-        log_folded_protein(run, pdb_id_path=folded_protein_location)
+        await log_folded_protein(run, pdb_id_path=folded_protein_location)
         wandb.save(folded_protein_location)
 
     run.finish()

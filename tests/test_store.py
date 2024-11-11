@@ -2,11 +2,12 @@ import os
 import time
 import shutil
 import pytest
+import sqlite3
 import pandas as pd
+import asyncio
 from pathlib import Path
-from folding.store import PandasJobStore, MockJob, Job
+from folding.store import SQLiteJobStore, MockJob, Job
 
-# TODO: cleanup files after tests
 
 ROOT_PATH = Path(__file__).parent
 DB_PATH = os.path.join(ROOT_PATH, "mock_data")
@@ -16,7 +17,6 @@ BOX = "cubic"
 WATER = "tip3p"
 
 
-# get pytest to run this function to cleanup at the end of EVERY test
 @pytest.fixture(autouse=True)
 def cleanup():
     yield
@@ -29,25 +29,33 @@ def test_create_job(mock):
     if mock:
         MockJob()
     else:
-        Job(pdb=PDB, ff=FF, box=BOX, water=WATER, hotkeys=["a", "b", "c", "d"])
+        Job(
+            pdb=PDB,
+            ff=FF,
+            box=BOX,
+            water=WATER,
+            hotkeys=["a", "b", "c", "d"],
+            created_at=time.time(),
+            updated_at=time.time(),
+        )
 
 
 @pytest.mark.parametrize(
     "loss, commit_hash, gro_hash",
     [
-        (0.1, "1234", "5678"),
-        (0.2, "1234", "5678"),
-        (0.3, "1234", "5678"),
-        (0.4, "1234", "5678"),
+        (-0.1, "1234", "5678"),
+        (-0.2, "1234", "5678"),
+        (-0.3, "1234", "5678"),
+        (-0.4, "1234", "5678"),
     ],
 )
-def test_update_job(loss, commit_hash, gro_hash):
+@pytest.mark.asyncio()
+async def test_update_job(loss, commit_hash, gro_hash):
     job = MockJob()
     prev_loss = job.best_loss
-
     hotkey = job.hotkeys[0]
 
-    job.update(loss=loss, hotkey=hotkey, commit_hash=commit_hash, gro_hash=gro_hash)
+    await job.update(loss=loss, hotkey=hotkey)
 
     assert (
         job.updated_count == 1
@@ -58,7 +66,7 @@ def test_update_job(loss, commit_hash, gro_hash):
 
     if loss >= prev_loss:
         return
-
+    print(job)
     assert job.active == True, f"job should be active, currently is {job.active}"
     assert (
         job.best_loss == loss
@@ -66,24 +74,23 @@ def test_update_job(loss, commit_hash, gro_hash):
     assert (
         job.best_hotkey == hotkey
     ), f"best hotkey should be {hotkey}, currently is {job.best_hotkey}"
-    assert (
-        job.commit_hash == commit_hash
-    ), f"commit hash should be {commit_hash}, currently is {job.commit_hash}"
-    assert (
-        job.gro_hash == gro_hash
-    ), f"gro hash should be {gro_hash}, currently is {job.gro_hash}"
 
 
 def test_init_store():
-    store = PandasJobStore(db_path=DB_PATH, force_create=True)
+    store = SQLiteJobStore(db_path=DB_PATH)
 
-    assert store._db.empty == True, "store should be empty on initialization"
+    # Check if database is empty
+    with sqlite3.connect(store.db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) FROM {store.table_name}")
+        count = cursor.fetchone()[0]
+
+    assert count == 0, "store should be empty on initialization"
 
 
 @pytest.mark.parametrize("mock", [True, False])
-@pytest.mark.parametrize("to_dict", [True, False])
-def test_insert_single_job_into_store(mock, to_dict):
-    store = PandasJobStore(db_path=DB_PATH, force_create=True)
+def test_insert_single_job_into_store(mock):
+    store = SQLiteJobStore(db_path=DB_PATH)
 
     info = {
         "pdb": PDB,
@@ -91,68 +98,122 @@ def test_insert_single_job_into_store(mock, to_dict):
         "box": BOX,
         "water": WATER,
         "hotkeys": ["a", "b", "c", "d"],
+        "created_at": time.time(),
+        "updated_at": time.time(),
     }
     if mock:
         job = MockJob()
     else:
         job = Job(**info)
 
-    if to_dict:
-        store.insert(**job.to_dict())
-    else:
-        store.insert(
-            pdb=job.pdb, ff=job.ff, box=job.box, water=job.water, hotkeys=job.hotkeys
-        )
+    store.insert(
+        pdb=job.pdb,
+        ff=job.ff,
+        water=job.water,
+        box=job.box,
+        hotkeys=job.hotkeys,
+        epsilon=job.epsilon,
+        system_kwargs=job.system_kwargs,
+        event=job.event,
+    )
+    # Check database is not empty
+    with sqlite3.connect(store.db_file) as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) FROM {store.table_name}")
+        count = cursor.fetchone()[0]
 
-    assert store._db.empty == False, "store should not be empty after inserting a job"
+    assert count > 0, "store should not be empty after inserting a job"
     assert (
         store.get_queue(ready=False).qsize() == 1
     ), f"queue should have one job, currently has {store.get_queue(ready=False).qsize()}"
 
 
 def test_repeat_insert_same_pdb_fails():
-    store = PandasJobStore(db_path=DB_PATH, force_create=True)
-
+    store = SQLiteJobStore(db_path=DB_PATH)
     job = MockJob()
 
-    store.insert(**job.to_dict())
+    store.insert(
+        pdb=job.pdb,
+        ff=job.ff,
+        water=job.water,
+        box=job.box,
+        hotkeys=job.hotkeys,
+        epsilon=job.epsilon,
+        system_kwargs=job.system_kwargs,
+        event=job.event,
+    )
 
-    # This fails because the pdb is already in the store
+    # This should fail because the pdb is already in the store
     with pytest.raises(ValueError):
-        store.insert(**job.to_dict())
+        store.insert(
+            pdb=job.pdb,
+            ff=job.ff,
+            water=job.water,
+            box=job.box,
+            hotkeys=job.hotkeys,
+            epsilon=job.epsilon,
+            system_kwargs=job.system_kwargs,
+            event=job.event,
+        )
 
 
 @pytest.mark.parametrize("n", [0, 1, 10, 100])
 def test_save_then_load_store(n):
-    store = PandasJobStore(db_path=DB_PATH, force_create=True)
+    # Create first store and insert jobs
+    store1 = SQLiteJobStore(db_path=DB_PATH)
 
+    jobs = []
     for i in range(n):
         job = MockJob()
-        store.insert(**job.to_dict())
+        store1.insert(
+            pdb=job.pdb,
+            ff=job.ff,
+            water=job.water,
+            box=job.box,
+            hotkeys=job.hotkeys,
+            epsilon=job.epsilon,
+            system_kwargs=job.system_kwargs,
+            event=job.event,
+        )
+        jobs.append(job)
 
-    frame_before = store._db.copy()
-    store = PandasJobStore(db_path=DB_PATH, force_create=False)
+    # Create second store pointing to same database
+    store2 = SQLiteJobStore(db_path=DB_PATH)
 
-    frame_after = store._db.copy()
-    pd.testing.assert_frame_equal(frame_before, frame_after)
+    # Compare contents
+    with sqlite3.connect(store1.db_file) as conn:
+        df1 = pd.read_sql_query(f"SELECT * FROM {store1.table_name}", conn)
+
+    with sqlite3.connect(store2.db_file) as conn:
+        df2 = pd.read_sql_query(f"SELECT * FROM {store2.table_name}", conn)
+
+    pd.testing.assert_frame_equal(df1, df2)
+    assert len(df1) == n, f"store should have {n} jobs, has {len(df1)}"
 
 
 @pytest.mark.parametrize("ready", [True, False])
 @pytest.mark.parametrize("update_seconds", [0, 10])
 def test_queue_contains_jobs(ready, update_seconds):
-    # Check that queue contains active jobs when ready is False and contains ready jobs when ready is True
-
-    store = PandasJobStore(db_path=DB_PATH, force_create=True)
+    store = SQLiteJobStore(db_path=DB_PATH)
 
     t0 = time.time()
 
     for i in range(10):
         job = MockJob(update_seconds=update_seconds)
-        store.insert(**job.to_dict())
+        store.insert(
+            pdb=job.pdb,
+            ff=job.ff,
+            water=job.water,
+            box=job.box,
+            hotkeys=job.hotkeys,
+            epsilon=job.epsilon,
+            system_kwargs=job.system_kwargs,
+            event=job.event,
+        )
 
     elapsed = time.time() - t0
     queue = store.get_queue(ready=ready)
-    print(queue.queue)
+
     if ready and elapsed < update_seconds:
         assert (
             queue.qsize() == 0
@@ -163,13 +224,147 @@ def test_queue_contains_jobs(ready, update_seconds):
 
 
 def test_queue_is_empty_when_all_jobs_are_complete():
-    store = PandasJobStore(db_path=DB_PATH, force_create=True)
+    store = SQLiteJobStore(db_path=DB_PATH)
 
     for i in range(10):
         job = MockJob()
         job.active = False
-        store.insert(**job.to_dict())
+        store.insert(
+            pdb=job.pdb,
+            ff=job.ff,
+            water=job.water,
+            box=job.box,
+            hotkeys=job.hotkeys,
+            epsilon=job.epsilon,
+            system_kwargs=job.system_kwargs,
+            event=job.event,
+            active=job.active,
+        )
 
     assert (
         store.get_queue(ready=False).qsize() == 0
     ), f"queue should be empty, currently has {store.get_queue(ready=False).qsize()}"
+
+
+@pytest.mark.asyncio()
+async def test_job_update_in_store():
+    store = SQLiteJobStore(db_path=DB_PATH)
+    job = MockJob()
+
+    # Insert initial job
+    store.insert(
+        pdb=job.pdb,
+        ff=job.ff,
+        water=job.water,
+        box=job.box,
+        hotkeys=job.hotkeys,
+        epsilon=job.epsilon,
+        system_kwargs=job.system_kwargs,
+        event=job.event,
+    )
+
+    # Update job
+    new_loss = -0.1
+    await job.update(loss=new_loss, hotkey=job.hotkeys[0])
+    store.update(job)
+
+    # Retrieve and check updated job
+    with sqlite3.connect(store.db_file) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT best_loss FROM {store.table_name} WHERE pdb = ?", (job.pdb,)
+        )
+        stored_loss = cursor.fetchone()["best_loss"]
+
+    assert (
+        stored_loss == new_loss
+    ), f"stored loss should be {new_loss}, got {stored_loss}"
+
+
+def test_store_handles_complex_data_types():
+    store = SQLiteJobStore(db_path=DB_PATH)
+
+    # Create job with complex data types
+    job = MockJob()
+    job.event = {"type": "test", "data": [1, 2, 3]}
+    job.system_kwargs = {"param1": "value1", "param2": [4, 5, 6]}
+
+    # Insert and retrieve
+    store.insert(
+        pdb=job.pdb,
+        ff=job.ff,
+        water=job.water,
+        box=job.box,
+        hotkeys=job.hotkeys,
+        epsilon=job.epsilon,
+        system_kwargs=job.system_kwargs,
+        event=job.event,
+    )
+
+    queue = store.get_queue(ready=False)
+    retrieved_job = queue.get()
+
+    assert retrieved_job.event == job.event, "Complex event data not preserved"
+    assert (
+        retrieved_job.system_kwargs == job.system_kwargs
+    ), "Complex system_kwargs not preserved"
+
+
+def test_get_all_pdbs():
+    store = SQLiteJobStore(db_path=DB_PATH)
+
+    # Insert some mock jobs
+    expected_pdbs = []
+    for _ in range(5):
+        job = MockJob()
+        expected_pdbs.append(job.pdb)
+        store.insert(
+            pdb=job.pdb,
+            ff=job.ff,
+            water=job.water,
+            box=job.box,
+            hotkeys=job.hotkeys,
+            epsilon=job.epsilon,
+            system_kwargs=job.system_kwargs,
+            event=job.event,
+        )
+    # Get all PDBs
+    pdbs = store.get_all_pdbs()
+
+    # Check results
+    assert len(pdbs) == 5, f"Expected 5 PDBs, got {len(pdbs)}"
+    assert set(pdbs) == set(expected_pdbs), "Retrieved PDBs don't match expected ones"
+
+
+@pytest.mark.asyncio()
+async def insert_jobs(store, jobs):
+    for job in jobs:
+        store.insert(
+            pdb=job.pdb,
+            ff=job.ff,
+            water=job.water,
+            box=job.box,
+            hotkeys=job.hotkeys,
+            epsilon=job.epsilon,
+            system_kwargs=job.system_kwargs,
+            event=job.event,
+        )
+
+
+@pytest.mark.asyncio()
+async def test_simul_write():
+    store = SQLiteJobStore(db_path=DB_PATH)
+    jobs = [MockJob() for _ in range(100)]
+    jobs2 = [MockJob() for _ in range(100)]
+
+    task1 = asyncio.create_task(insert_jobs(store, jobs))
+    task2 = asyncio.create_task(insert_jobs(store, jobs2))
+    await asyncio.gather(task1, task2)
+
+    assert (
+        store.get_queue(ready=False).qsize() == 200
+    ), f"queue should have 200 jobs, currently has {store.get_queue(ready=False).qsize()}"
+    for job, job2 in zip(jobs, jobs2):
+        assert job.pdb in store.get_all_pdbs(), f"job {job.pdb} not found in store"
+        assert job2.pdb in store.get_all_pdbs(), f"job {job2.pdb} not found in store"
