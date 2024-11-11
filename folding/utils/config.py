@@ -425,6 +425,16 @@ def add_validator_args(cls, parser):
         default="macrocosmos",
     )
 
+    parser.add_argument(
+        "--organic_whitelist",
+        type=str,
+        nargs="+",  # Accepts one or more values as a list
+        help="The validator will only accept organic queries from a list of whitelisted hotkeys.",
+        default=[
+            "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"
+        ],  # Sets default otf key
+    )
+
 
 def config(cls):
     """

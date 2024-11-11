@@ -35,8 +35,6 @@ class OrganicValidator(OrganicScoringBase):
         self._validator: BaseValidatorNeuron = validator
 
     async def _on_organic_entry(self, synapse: OrganicSynapse) -> None:
-        # TODO: Add the whitelist here.
-
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
 
@@ -76,6 +74,6 @@ class OrganicValidator(OrganicScoringBase):
         return {"sample": True, "total_elapsed_time": time.perf_counter() - init_time}
 
     def _blacklist_fn(self, synapse: OrganicSynapse) -> Tuple[bool, str]:
-        if synapse.dendrite.hotkey != self.ORGANIC_WHITELIST_HOTKEY:
+        if synapse.dendrite.hotkey not in self._validator.config.organic_whitelist:
             return True
         return False, ""
