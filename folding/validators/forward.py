@@ -208,7 +208,7 @@ def create_random_modifications_to_system_config(config) -> Dict:
     return system_kwargs
 
 
-async def try_prepare_challenge(config, pdb_id: str) -> Dict:
+async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
