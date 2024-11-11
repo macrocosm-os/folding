@@ -1,4 +1,4 @@
-name: folding  # Replace with your environment name
+name: szymon-folding  # Replace with your environment name
 channels:
   - defaults
   - conda-forge  # Add other channels if needed
@@ -20,3 +20,4 @@ dependencies:
       - parmed==4.2.2
       - plotly==5.22.0
       - kaleido==0.2.1
+      - async-timeout==4.0.3
