@@ -69,7 +69,7 @@ class OrganicValidator(OrganicScoringBase):
             }
 
         # Add jobs to the sqlite database for the vali to process.
-        self._validator.add_job(job_event=sample)
+        await self._validator.add_job(job_event=sample)
 
         return {"sample": True, "total_elapsed_time": time.perf_counter() - init_time}
 
