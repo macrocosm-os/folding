@@ -173,7 +173,7 @@ async def create_new_challenge(self, exclude: List) -> Dict:
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = await try_prepare_challenge(config=self.config, pdb_id=pdb_id)
+        event = await try_prepare_challenge(self, config=self.config, pdb_id=pdb_id)
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
@@ -208,7 +208,7 @@ def create_random_modifications_to_system_config(config) -> Dict:
     return system_kwargs
 
 
-async def try_prepare_challenge(config, pdb_id: str) -> Dict:
+async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
