@@ -1,4 +1,4 @@
-name: folding  # Replace with your environment name
+name: folding-test  # Replace with your environment name
 channels:
   - defaults
   - conda-forge  # Add other channels if needed
@@ -13,6 +13,7 @@ dependencies:
   - gzip==1.13
   - pip:
       - bittensor==6.9.4
+      - git+https://github.com/macrocosm-os/atom.git@main
       - python-dotenv==1.0.1
       - wandb==0.17.2
       - eth-utils==2.1.1

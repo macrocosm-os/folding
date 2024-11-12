@@ -242,7 +242,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            self.add_job(job_event=job_event)
+            await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
     async def update_job(self, job: Job):

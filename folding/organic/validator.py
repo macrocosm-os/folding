@@ -43,6 +43,17 @@ class OrganicValidator(OrganicScoringBase):
         Returns:
             dict[str, Any]: dict that contains all the attributes for creating a simulation object.
         """
+        return {
+            "pdb_id": "1a0a",
+            "ff" : "amber",
+            "water" : "tip3p",
+            "box" : 'cubic', 
+            'epsilon' : 0.1, 
+            "system_kwargs" : {"n_steps" : 1000, "n_steps_per_iteration" : 100, "n_iterations" : 10}, 
+            "active" : True, 
+            "hotkeys" : ['5qq', '2qq', "4sd"],
+        }
+    
         if not self._organic_queue.is_empty():
             # Choose organic sample based on the organic queue logic.
             sample = self._organic_queue.sample()
