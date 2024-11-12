@@ -1,5 +1,6 @@
 import time
 import random
+import asyncio
 import bittensor as bt
 from typing import Any, Literal, Union, Tuple
 
@@ -37,8 +38,36 @@ class OrganicValidator(OrganicScoringBase):
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
 
+        bt.logging.info(f"Number of samples in the queue: {self._organic_queue.size}")
+
         synapse.is_processed = True
         return synapse
+
+    async def start_loop(self):
+        """The main loop for running the organic scoring task, either based on a time interval or steps.
+        Calls the `sample` method to establish the sampling logic for the organic scoring task.
+        """
+        while not self._should_exit:
+            if self._trigger == "steps":
+                while self._step_counter < self._trigger_frequency:
+                    await asyncio.sleep(0.1)
+
+            try:
+                logs = await self.forward()
+
+                total_elapsed_time = logs.get("total_elapsed_time", 0)
+                bt.logging.info(
+                    f"Organic scoring iteration completed in {total_elapsed_time:.2f} seconds."
+                )
+
+                bt.logging.warning(f"Sleeping for {self._validator.config.organic_trigger_frequency} seconds before next organic check.")
+                await asyncio.sleep(self._validator.config.organic_trigger_frequency)
+
+            except Exception as e:
+                bt.logging.error(
+                    f"Error occured during organic scoring iteration:\n{e}"
+                )
+                await asyncio.sleep(1)
 
     async def sample(self) -> dict[str, Any]:
         """Sample data from the organic queue or the synthetic dataset.
