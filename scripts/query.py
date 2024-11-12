@@ -3,11 +3,15 @@ import bittensor as bt
 from folding.protocol import OrganicSynapse
 
 
-async def query(validator_uid: int, params: dict):
-    metagraph = bt.metagraph(netuid=141, network="testnet")
+def query(validator_uid: int, params: dict):
+    metagraph = bt.metagraph(netuid=141, network="test")
     axons = [metagraph.axons[validator_uid]]
 
-    validator_response: OrganicSynapse = await bt.dendrite.forward(
+    wallet = bt.wallet(name="folding-testnet", hotkey="m4")
+    print(wallet.hotkey.ss58_address)
+    dendrite = bt.dendrite(wallet=wallet)
+
+    validator_response: OrganicSynapse = dendrite.query(
         axons=axons,
         synapse=OrganicSynapse(**params),
         timeout=10,
@@ -28,7 +32,8 @@ if __name__ == "__main__":
         "friction": 1.0,
     }
 
-    validator_uid = 101  # Replace with the actual validator UID
+    validator_uid = 81  # Replace with the actual validator UID
 
     # Run the async function using asyncio.run()
-    response = asyncio.run(query(validator_uid, params))
+    # response = asyncio.run(query(validator_uid, params))
+    response = query(validator_uid, params)
