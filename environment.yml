@@ -1,4 +1,4 @@
-name: folding-test  # Replace with your environment name
+name: folding  # Replace with your environment name
 channels:
   - defaults
   - conda-forge  # Add other channels if needed
