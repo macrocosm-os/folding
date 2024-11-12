@@ -208,7 +208,7 @@ def add_args(cls, parser):
         "--protein.input_source",
         type=str,
         help="Specifies the input source for selecting a new protein for simulation.",
-        default=None,
+        default="rcsb",
         choices=["rcsb", "pdbe"],
     )
 
@@ -335,7 +335,7 @@ def add_validator_args(cls, parser):
         "--neuron.update_interval",
         type=float,
         help="The interval in which the validators query the miners for updates. (seconds)",
-        default=300,  # samples every 5-minutes in the simulation.
+        default=30,  # samples every 5-minutes in the simulation.
     )
 
     parser.add_argument(
