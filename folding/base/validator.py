@@ -71,7 +71,9 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
-            self.serve_axon()
+            self.axon = bt.axon(wallet=self.wallet, config=self.config)
+            self._serve_axon()
+
         else:
             bt.logging.warning("axon off, not serving ip to chain.")
 
@@ -103,28 +105,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
         self.load_and_merge_configs()
 
-    def serve_axon(self):
-        """Serve axon to enable external connections."""
-
-        bt.logging.info("serving ip to chain...")
-        try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
-
-            try:
-                self.subtensor.serve_axon(
-                    netuid=self.config.netuid,
-                    axon=self.axon,
-                )
-                bt.logging.info(
-                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
-                )
-            except Exception as e:
-                bt.logging.error(f"Failed to serve Axon with exception: {e}")
-                pass
-
-        except Exception as e:
-            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
-            pass
+    def _serve_axon(self):
+        """Serve axon to enable external connections"""
+        validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+        bt.logging.info(f"Serving validator IP of UID {validator_uid} to chain...")
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor).start()
 
     def set_weights(self):
         """

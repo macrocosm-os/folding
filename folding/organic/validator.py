@@ -33,9 +33,12 @@ class OrganicValidator(OrganicScoringBase):
         # Self reference the validator object to have access to validator methods.
         self._validator: BaseNeuron = validator
 
-    async def _on_organic_entry(self, synapse: OrganicSynapse) -> None:
+    async def _on_organic_entry(self, synapse: OrganicSynapse) -> bt.Synapse:
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
+
+        synapse.is_processed = True
+        return synapse
 
     async def sample(self) -> dict[str, Any]:
         """Sample data from the organic queue or the synthetic dataset.

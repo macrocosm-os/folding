@@ -111,6 +111,8 @@ class OrganicSynapse(bt.Synapse):
     temperature: float
     friction: float
 
+    is_processed:  typing.Optional[bool] = False
+
     def deserialize(self) -> dict:
         return self.dict()
 
