@@ -4,8 +4,7 @@ import bittensor as bt
 from typing import Any, Literal, Union, Tuple
 
 from folding.protocol import OrganicSynapse
-from folding.base.validator import BaseValidatorNeuron
-
+from folding.base.neuron import BaseNeuron
 from atom.organic_scoring import OrganicScoringBase
 
 
@@ -17,7 +16,7 @@ class OrganicValidator(OrganicScoringBase):
         axon: bt.axon,
         trigger_frequency: Union[float, int],
         trigger: Literal["seconds", "steps"],
-        validator: BaseValidatorNeuron,
+        validator: BaseNeuron,
         trigger_frequency_min: Union[float, int] = 5,
         trigger_scaling_factor: Union[float, int] = 5,
         synth_dataset=None,
@@ -32,7 +31,7 @@ class OrganicValidator(OrganicScoringBase):
         )
 
         # Self reference the validator object to have access to validator methods.
-        self._validator: BaseValidatorNeuron = validator
+        self._validator: BaseNeuron = validator
 
     async def _on_organic_entry(self, synapse: OrganicSynapse) -> None:
         config: dict = synapse.get_simulation_params()

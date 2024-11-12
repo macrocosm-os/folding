@@ -28,7 +28,6 @@ import bittensor as bt
 from pathlib import Path
 
 from typing import List, Optional
-from traceback import print_exception
 
 from folding.mock import MockDendrite
 from folding.base.neuron import BaseNeuron
@@ -89,6 +88,7 @@ class BaseValidatorNeuron(BaseNeuron):
         if not self.config.neuron.axon_off and not self.config.neuron.organic_disabled:
             self._organic_scoring = OrganicValidator(
                 axon=self.axon,
+                validator=self,
                 synth_dataset=None,
                 trigger=self.config.neuron.organic_trigger,
                 trigger_frequency=self.config.neuron.organic_trigger_frequency,
