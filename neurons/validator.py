@@ -366,9 +366,12 @@ class Validator(BaseValidatorNeuron):
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
                     await self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
-                bt.logging.info(
-                    f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop."
-                )
+                    bt.logging.info(
+                        f"Sleeping 60 seconds before next job creation loop."
+                    )
+                else:
+                    bt.logging.info("Job queue is full. Sleeping 60 seconds before next job creation loop.")
+                
             except Exception as e:
                 bt.logging.error(f"Error in create_jobs: {e}")
 
