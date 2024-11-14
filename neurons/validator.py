@@ -377,6 +377,9 @@ class Validator(BaseValidatorNeuron):
     async def update_jobs(self):
         while True:
             try:
+                # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.
+                await asyncio.sleep(self.config.neuron.update_interval)
+
                 bt.logging.info("Updating jobs.")
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
@@ -410,7 +413,6 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
-            await asyncio.sleep(self.config.neuron.update_interval)
 
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
