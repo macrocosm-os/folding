@@ -322,7 +322,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
-        await log_event(
+        log_event(
             self,
             event=event,
             pdb_location=pdb_location,
