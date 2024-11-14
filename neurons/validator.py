@@ -372,7 +372,7 @@ class Validator(BaseValidatorNeuron):
             except Exception as e:
                 bt.logging.error(f"Error in create_jobs: {e}")
 
-            await asyncio.sleep(self.config.neuron.update_interval)
+            await asyncio.sleep(60)
 
     async def update_jobs(self):
         while True:
