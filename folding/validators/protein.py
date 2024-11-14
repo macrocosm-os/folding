@@ -8,6 +8,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
+import asyncio
 
 import bittensor as bt
 import numpy as np
@@ -22,6 +23,7 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
+    RsyncException,
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
@@ -105,7 +107,7 @@ class Protein(OpenMMSimulation):
         )
 
     @staticmethod
-    def from_job(job: Job, config: Dict):
+    async def from_job(job: Job, config: Dict):
         # Load_md_inputs is set to True to ensure that miners get files every query.
         protein = Protein(
             pdb_id=job.pdb,
@@ -149,19 +151,21 @@ class Protein(OpenMMSimulation):
         return pdb_complexity
 
     def gather_pdb_id(self):
-        if self.pdb_id is None:
-            self.pdb_id = load_and_sample_random_pdb_ids(
-                root_dir=ROOT_DIR, filename="pdb_ids.pkl"
-            )  # TODO: This should be a class variable via config
-            bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
+        self.pdb_id, self.config.input_source = load_and_sample_random_pdb_ids(
+            root_dir=ROOT_DIR,
+            filename="pdb_ids.pkl",
+            input_source=self.config.input_source,
+            exclude=None,
+        )  # TODO: This should be a class variable via config
+        bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
 
-    def setup_pdb_directory(self):
+    async def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
             os.makedirs(self.pdb_directory)
 
         if not os.path.exists(os.path.join(self.pdb_directory, self.pdb_file)):
-            if not check_and_download_pdbs(
+            if not await check_and_download_pdbs(
                 pdb_directory=self.pdb_directory,
                 pdb_id=self.pdb_file,
                 input_source=self.config.input_source,
@@ -171,7 +175,7 @@ class Protein(OpenMMSimulation):
                 raise Exception(
                     f"Failed to download {self.pdb_file} to {self.pdb_directory}"
                 )
-            self.fix_pdb_file()
+            await self.fix_pdb_file()
         else:
             bt.logging.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
@@ -199,8 +203,7 @@ class Protein(OpenMMSimulation):
                     continue
         return files_to_return
 
-    @timeout(180)
-    def setup_simulation(self):
+    async def setup_simulation(self):
         """forward method defines the following:
         1. gather the pdb_id and setup the namings.
         2. setup the pdb directory and download the pdb file if it doesn't exist.
@@ -208,15 +211,16 @@ class Protein(OpenMMSimulation):
         4. edit the necessary config files and add them to the synapse object self.md_inputs[file] = content
         4. save the files to the validator directory for record keeping.
         """
+
         bt.logging.info(
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
 
         ## Setup the protein directory and sample a random pdb_id if not provided
         self.gather_pdb_id()
-        self.setup_pdb_directory()
+        await self.setup_pdb_directory()
 
-        self.generate_input_files()
+        await self.generate_input_files()
 
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -251,7 +255,7 @@ class Protein(OpenMMSimulation):
         """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
         return app.PDBFile(pdb_file)
 
-    def fix_pdb_file(self):
+    async def fix_pdb_file(self):
         """
         Protein Data Bank (PDB or PDBx/mmCIF) files often have a number of problems
         that must be fixed before they can be used in a molecular dynamics simulation.
@@ -284,7 +288,7 @@ class Protein(OpenMMSimulation):
 
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
-    def generate_input_files(self):
+    async def generate_input_files(self):
         """Generate_input_files method defines the following:
         1. Load the pdb file and create the simulation object.
         2. Minimize the energy of the system.
@@ -299,20 +303,20 @@ class Protein(OpenMMSimulation):
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        self.simulation, self.system_config = self.create_simulation(
-            pdb=self.load_pdb_file(pdb_file=self.pdb_file),
-            system_config=self.system_config.get_config(),
-            state="em",
+        self.simulation, self.system_config = await asyncio.to_thread(self.create_simulation,
+            self.load_pdb_file(pdb_file=self.pdb_file),
+            self.system_config.get_config(),
+            "em",
         )
 
         bt.logging.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
 
         start_time = time.time()
-        self.simulation.minimizeEnergy(
+        await asyncio.to_thread(self.simulation.minimizeEnergy,
             maxIterations=100
         )  # TODO: figure out the right number for this
         bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
-        self.simulation.step(1000)
+        await asyncio.to_thread(self.simulation.step, 1000)
 
         self.simulation.saveCheckpoint("em.cpt")
 

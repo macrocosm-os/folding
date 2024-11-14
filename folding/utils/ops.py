@@ -40,6 +40,11 @@ class ValidationError(Exception):
         super().__init__(self.message)
 
 
+class RsyncException(Exception):
+    def __init__(self, message="Rsync error occurred"):
+        self.message = message
+        super().__init__(self.message)
+        
 def timeout_handler(seconds, func_name):
     raise TimeoutException(f"Function '{func_name}' timed out after {seconds} seconds")
 
@@ -167,14 +172,14 @@ def get_tracebacks():
 
 
 
-def check_and_download_pdbs(
+async def check_and_download_pdbs(
     pdb_directory: str,
     pdb_id: str,
     input_source: str,
     download: bool = True,
     force: bool = False,
 ) -> bool:
-    """Check the status and optionally download a PDB file from the RCSB PDB database.
+    """Check the status and optionally download a PDB file from the specified input source.
 
     Args:
         pdb_directory (str): Directory to save the downloaded PDB file.
@@ -184,8 +189,8 @@ def check_and_download_pdbs(
         bool: True if the PDB file is downloaded successfully and doesn't contain missing values, False otherwise.
 
     Raises:
-        Exception: If download fails.
-
+        Exception: If download fails for rcsb source
+        RsyncException: If download fails for pdbe input source
     """
 
     if input_source not in ["rcsb", "pdbe"]:
@@ -244,9 +249,10 @@ def check_and_download_pdbs(
             )
             return True
         except subprocess.CalledProcessError as e:
-            raise Exception(
+            raise RsyncException(
                 f"Failed to download PDB file with ID {pdb_id} using rsync."
             )
+
     else:
         raise ValueError(f"Unknown input source: {input_source}")
 
