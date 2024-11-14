@@ -371,15 +371,15 @@ class Validator(BaseValidatorNeuron):
                 )
             except Exception as e:
                 bt.logging.error(f"Error in create_jobs: {e}")
+
             await asyncio.sleep(self.config.neuron.update_interval)
 
     async def update_jobs(self):
         while True:
             try:
+                bt.logging.info("Updating jobs.")
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                await asyncio.sleep(self.config.neuron.update_interval)
-                bt.logging.info("Updating jobs.")
                 for job in self.store.get_queue(ready=False).queue:
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
                     if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
@@ -404,10 +404,13 @@ class Validator(BaseValidatorNeuron):
                     await self.update_job(job=job)
             except Exception as e:
                 bt.logging.error(f"Error in update_jobs: {e}")
+
             self.step += 1
+
             bt.logging.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
+            await asyncio.sleep(self.config.neuron.update_interval)
 
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
