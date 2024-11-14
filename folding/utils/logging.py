@@ -51,7 +51,6 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
         tags.append("mock")
     if self.config.neuron.disable_set_weights:
         tags.append("disable_set_weights")
-    tags.append("async")
     wandb_config = {
         key: copy.deepcopy(self.config.get(key, None))
         for key in ("neuron", "reward", "netuid", "wandb")
