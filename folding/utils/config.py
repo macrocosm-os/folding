@@ -82,7 +82,7 @@ def add_args(cls, parser):
         "--neuron.epoch_length",
         type=int,
         help="The default epoch length (how often we set weights, measured in 12 second blocks).",
-        default=250,
+        default=100,
     )
 
     parser.add_argument(
@@ -208,7 +208,7 @@ def add_args(cls, parser):
         "--protein.input_source",
         type=str,
         help="Specifies the input source for selecting a new protein for simulation.",
-        default=None,
+        default="rcsb",
         choices=["rcsb", "pdbe"],
     )
 
@@ -431,8 +431,8 @@ def add_validator_args(cls, parser):
         nargs="+",  # Accepts one or more values as a list
         help="The validator will only accept organic queries from a list of whitelisted hotkeys.",
         default=[
-            "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3", 
-            "5DXRCojWaYH2K5fma95mB4fwDmoGg3BQxmSvyrwKDPEwfSda" #personal key
+            "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3",
+            "5DXRCojWaYH2K5fma95mB4fwDmoGg3BQxmSvyrwKDPEwfSda",  # personal key
         ],  # Sets default otf key
     )
 
