@@ -21,6 +21,7 @@ from abc import ABC, abstractmethod
 import os
 
 import openmm
+from tenacity import RetryError
 
 # Sync calls set weights and also resyncs the metagraph.
 from folding.utils.config import check_config, add_args, config
@@ -154,7 +155,11 @@ class BaseNeuron(ABC):
             self.resync_metagraph()
 
         if self.should_set_weights():
-            self.set_weights()
+            try:
+                self.set_weights()
+            except RetryError as e:
+                bt.logging.error(f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks.")
+                
 
         # Always save state.
         self.save_state()
