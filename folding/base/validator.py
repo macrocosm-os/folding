@@ -19,7 +19,6 @@
 import os
 import json
 import copy
-import time
 import torch
 import asyncio
 import argparse
@@ -27,13 +26,13 @@ import threading
 import bittensor as bt
 
 from typing import List
-from traceback import print_exception
+from pathlib import Path
 
 from folding.base.neuron import BaseNeuron
 from folding.mock import MockDendrite
 from folding.utils.config import add_validator_args
 
-from pathlib import Path
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -110,6 +109,13 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
             pass
 
+    @retry(
+        stop=stop_after_attempt(3),  # Retry up to 3 times
+        wait=wait_fixed(5),  # Wait 5 seconds between retries
+        retry=retry_if_result(
+            lambda result: result is False
+        ),  # Retry if the result is False
+    )
     def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
