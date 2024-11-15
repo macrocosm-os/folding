@@ -50,6 +50,9 @@ class Validator(BaseValidatorNeuron):
 
         self.load_state()
 
+        # Init sync with the network. Updates the metagraph.
+        self.sync()
+
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = SQLiteJobStore()
         self.mdrun_args = self.parse_mdrun_args()
@@ -370,8 +373,10 @@ class Validator(BaseValidatorNeuron):
                         f"Sleeping 60 seconds before next job creation loop."
                     )
                 else:
-                    bt.logging.info("Job queue is full. Sleeping 60 seconds before next job creation loop.")
-                
+                    bt.logging.info(
+                        "Job queue is full. Sleeping 60 seconds before next job creation loop."
+                    )
+
             except Exception as e:
                 bt.logging.error(f"Error in create_jobs: {e}")
 
