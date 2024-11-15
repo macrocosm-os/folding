@@ -31,6 +31,7 @@ from pathlib import Path
 from folding.base.neuron import BaseNeuron
 from folding.mock import MockDendrite
 from folding.utils.config import add_validator_args
+from folding.utils.ops import print_on_retry
 
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
 
@@ -111,10 +112,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
     @retry(
         stop=stop_after_attempt(3),  # Retry up to 3 times
-        wait=wait_fixed(5),  # Wait 5 seconds between retries
+        wait=wait_fixed(1),  # Wait 1 second between retries
         retry=retry_if_result(
             lambda result: result is False
         ),  # Retry if the result is False
+        after=print_on_retry
     )
     def set_weights(self):
         """
@@ -167,10 +169,9 @@ class BaseValidatorNeuron(BaseNeuron):
             wait_for_inclusion=False,
             version_key=self.spec_version,
         )
-        if result is True:
-            bt.logging.info("set_weights on chain successfully!")
-        else:
-            bt.logging.error("set_weights failed")
+
+            
+        return result
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
