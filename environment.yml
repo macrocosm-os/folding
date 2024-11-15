@@ -13,6 +13,7 @@ dependencies:
   - gzip==1.13
   - pip:
       - bittensor==6.9.4
+      - tenacity==9.0.0
       - python-dotenv==1.0.1
       - wandb==0.17.2
       - eth-utils==2.1.1
