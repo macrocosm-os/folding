@@ -50,6 +50,9 @@ class Validator(BaseValidatorNeuron):
 
         self.load_state()
 
+        # Init sync with the network. Updates the metagraph.
+        self.sync()
+
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = SQLiteJobStore()
         self.mdrun_args = self.parse_mdrun_args()
@@ -322,7 +325,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
-        await log_event(
+        log_event(
             self,
             event=event,
             pdb_location=pdb_location,
@@ -366,20 +369,28 @@ class Validator(BaseValidatorNeuron):
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
                     await self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
-                bt.logging.info(
-                    f"Sleeping {self.config.neuron.update_interval} seconds before next job creation loop."
-                )
+                    bt.logging.info(
+                        f"Sleeping 60 seconds before next job creation loop."
+                    )
+                else:
+                    bt.logging.info(
+                        "Job queue is full. Sleeping 60 seconds before next job creation loop."
+                    )
+
             except Exception as e:
                 bt.logging.error(f"Error in create_jobs: {e}")
-            await asyncio.sleep(self.config.neuron.update_interval)
+
+            await asyncio.sleep(60)
 
     async def update_jobs(self):
         while True:
             try:
+                # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.
+                await asyncio.sleep(self.config.neuron.update_interval)
+
+                bt.logging.info("Updating jobs.")
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                await asyncio.sleep(self.config.neuron.update_interval)
-                bt.logging.info("Updating jobs.")
                 for job in self.store.get_queue(ready=False).queue:
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
                     if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
@@ -404,7 +415,9 @@ class Validator(BaseValidatorNeuron):
                     await self.update_job(job=job)
             except Exception as e:
                 bt.logging.error(f"Error in update_jobs: {e}")
+
             self.step += 1
+
             bt.logging.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )

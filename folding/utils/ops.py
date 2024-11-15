@@ -71,6 +71,12 @@ def timeout(seconds):
 
     return decorator
 
+def print_on_retry(retry_state):
+    function_name = retry_state.fn.__name__
+    max_retries = retry_state.retry_object.stop.max_attempt_number
+    bt.logging.warning(f"Retrying {function_name}: retry #{retry_state.attempt_number} out of {max_retries}")
+    
+
 
 def delete_directory(directory: str):
     """We create a lot of files in the process of tracking pdb files.
