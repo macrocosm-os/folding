@@ -60,8 +60,8 @@ class OrganicValidator(OrganicScoringBase):
                     f"Organic scoring iteration completed in {total_elapsed_time:.2f} seconds."
                 )
 
-                bt.logging.warning(f"Sleeping for {self._validator.config.organic_trigger_frequency} seconds before next organic check.")
-                await asyncio.sleep(self._validator.config.organic_trigger_frequency)
+                bt.logging.warning(f"Sleeping for {self._validator.config.neuron.organic_trigger_frequency} seconds before next organic check.")
+                await asyncio.sleep(self._validator.config.neuron.organic_trigger_frequency)
 
             except Exception as e:
                 bt.logging.error(
