@@ -14,6 +14,7 @@ dependencies:
   - pip:
       - bittensor==6.9.4
       - git+https://github.com/macrocosm-os/atom.git@main
+      - tenacity==9.0.0
       - python-dotenv==1.0.1
       - wandb==0.17.2
       - eth-utils==2.1.1

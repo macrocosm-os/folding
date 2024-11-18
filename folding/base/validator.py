@@ -19,7 +19,6 @@
 import os
 import json
 import copy
-import time
 import torch
 import asyncio
 import argparse
@@ -33,6 +32,9 @@ from folding.mock import MockDendrite
 from folding.base.neuron import BaseNeuron
 from folding.utils.config import add_validator_args
 from folding.organic.validator import OrganicValidator
+from folding.utils.ops import print_on_retry
+
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -65,9 +67,6 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = torch.zeros(
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
-
-        # Init sync with the network. Updates the metagraph.
-        self.sync()
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
@@ -111,6 +110,14 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info(f"Serving validator IP of UID {validator_uid} to chain...")
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor).start()
 
+    @retry(
+        stop=stop_after_attempt(3),  # Retry up to 3 times
+        wait=wait_fixed(1),  # Wait 1 second between retries
+        retry=retry_if_result(
+            lambda result: result is False
+        ),  # Retry if the result is False
+        after=print_on_retry
+    )
     def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
@@ -162,10 +169,9 @@ class BaseValidatorNeuron(BaseNeuron):
             wait_for_inclusion=False,
             version_key=self.spec_version,
         )
-        if result is True:
-            bt.logging.info("set_weights on chain successfully!")
-        else:
-            bt.logging.error("set_weights failed")
+
+            
+        return result
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
