@@ -106,5 +106,5 @@ class OrganicValidator(OrganicScoringBase):
 
     def _blacklist_fn(self, synapse: OrganicSynapse) -> Tuple[bool, str]:
         if synapse.dendrite.hotkey not in self._validator.config.organic_whitelist:
-            return True
+            return True, ""
         return False, ""
