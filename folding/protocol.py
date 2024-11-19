@@ -107,7 +107,6 @@ class OrganicSynapse(bt.Synapse):
     ff: str
     water: str
     box: str
-    seed: int
     temperature: float
     friction: float
     epsilon:float
@@ -123,7 +122,6 @@ class OrganicSynapse(bt.Synapse):
             "ff": self.ff,
             "water": self.water,
             "box": self.box,
-            "seed": self.seed,
             "temperature": self.temperature,
             "friction": self.friction,
             "epsilon": self.epsilon

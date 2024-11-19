@@ -111,10 +111,10 @@ class OrganicValidator(OrganicScoringBase):
                 "total_elapsed_time": time.perf_counter() - init_time,
             }
         
-        job_event = {"system_config" : {}, "is_organic": True}
+        job_event = {"system_kwargs" : {}, "is_organic": True}
         for arg in self.simulation_args:
             if arg in sample:
-                job_event["system_config"][arg] = sample.pop(arg)
+                job_event["system_kwargs"][arg] = sample.pop(arg)
         
         #merge the keys from the sample to the job_event
         job_event.update(sample) 

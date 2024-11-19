@@ -213,6 +213,9 @@ class Validator(BaseValidatorNeuron):
         selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
         if len(valid_uids) >= self.config.neuron.sample_size:
+            if job_event.get("is_organic"):
+                bt.logging.info(f"Inserting organic job: {job_event['pdb_id']}")
+
             self.store.insert(
                 pdb=job_event["pdb_id"],
                 ff=job_event["ff"],
