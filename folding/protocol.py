@@ -110,6 +110,7 @@ class OrganicSynapse(bt.Synapse):
     seed: int
     temperature: float
     friction: float
+    epsilon:float
 
     is_processed:  typing.Optional[bool] = False
 
@@ -125,4 +126,5 @@ class OrganicSynapse(bt.Synapse):
             "seed": self.seed,
             "temperature": self.temperature,
             "friction": self.friction,
+            "epsilon": self.epsilon
         }
