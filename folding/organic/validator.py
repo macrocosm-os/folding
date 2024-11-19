@@ -36,7 +36,10 @@ class OrganicValidator(OrganicScoringBase):
 
         # Self reference the validator object to have access to validator methods.
         self._validator: BaseNeuron = validator
-        self.simulation_args = list(SimulationConfig(ff = "organic", water = "organic", box = 'cube').to_dict().keys())
+
+        protected_args = ["ff", "water", "box"]
+        simulation_args = list(SimulationConfig(ff = "organic", water = "organic", box = 'cube').to_dict().keys())
+        self.simulation_args = [arg for arg in simulation_args if arg not in protected_args]
 
     async def _on_organic_entry(self, synapse: OrganicSynapse) -> bt.Synapse:
         """
@@ -44,10 +47,10 @@ class OrganicValidator(OrganicScoringBase):
         It receives a synapse object from the axon and processes.
         """
 
-        bt.logging.success(f"Query received: organic queue size = {self._organic_queue.size}")
-
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
+        bt.logging.success(f"Query received: organic queue size = {self._organic_queue.size}")
+
         synapse.is_processed = True
         return synapse
 
@@ -108,12 +111,13 @@ class OrganicValidator(OrganicScoringBase):
                 "total_elapsed_time": time.perf_counter() - init_time,
             }
         
-        job_event = {"system_config" : {}}
+        job_event = {"system_config" : {}, "is_organic": True}
         for arg in self.simulation_args:
             if arg in sample:
-                job_event["system_config"][arg] = sample[arg]
-            else:
-                job_event[arg] = sample[arg]
+                job_event["system_config"][arg] = sample.pop(arg)
+        
+        #merge the keys from the sample to the job_event
+        job_event.update(sample) 
 
         # Add jobs to the sqlite database for the vali to process.
         await self._validator.add_job(job_event=job_event)
