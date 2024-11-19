@@ -1,5 +1,5 @@
 import time
-import traceback
+import numpy as np
 from tqdm import tqdm
 import bittensor as bt
 from pathlib import Path
@@ -7,7 +7,6 @@ from typing import List, Dict
 from collections import defaultdict
 from async_timeout import timeout
 
-import numpy as np
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
