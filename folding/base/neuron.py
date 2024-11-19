@@ -59,6 +59,12 @@ class BaseNeuron(ABC):
     def block(self):
         return ttl_get_block(self)
 
+    @classmethod
+    def create_config(cls, config=None):
+        base_config = copy.deepcopy(config or cls.config())
+        cls.check_config(base_config)
+        return base_config
+
     def __init__(self, config=None):
         base_config = copy.deepcopy(config or BaseNeuron.config())
         self.config = self.config()
