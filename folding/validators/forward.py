@@ -5,6 +5,7 @@ import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
+
 from async_timeout import timeout
 
 from folding.validators.protein import Protein

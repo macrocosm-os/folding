@@ -50,6 +50,7 @@ class Protein(OpenMMSimulation):
         system_kwargs: Dict,
         load_md_inputs: bool = False,
         epsilon: float = 1, #percentage
+        **kwargs,
     ) -> None:
         """The Protein class is responsible for handling the protein simulation.
         It attempts to setup the simulation environment to ensure that it can be run

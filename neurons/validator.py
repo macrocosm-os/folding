@@ -27,6 +27,7 @@ import pandas as pd
 import bittensor as bt
 import asyncio
 
+from async_timeout import timeout
 
 from folding.utils.uids import get_random_uids
 from folding.rewards.reward_pipeline import reward_pipeline
@@ -61,6 +62,8 @@ class Validator(BaseValidatorNeuron):
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
+
+        self.all_miner_uids.remove(81)
 
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
@@ -213,9 +216,24 @@ class Validator(BaseValidatorNeuron):
         selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
         if len(valid_uids) >= self.config.neuron.sample_size:
-            if job_event.get("is_organic"):
-                bt.logging.info(f"Inserting organic job: {job_event['pdb_id']}")
 
+            # If the job is organic, we still need to run the setup simulation to create the files needed for the job.
+            if job_event.get("is_organic"):
+                protein = Protein(**job_event)
+
+                try:
+                    async with timeout(180):
+                        await protein.setup_simulation()
+
+                    if protein.init_energy > 0:
+                        raise ValueError(
+                            f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                        )
+                
+                except Exception as e:
+                    bt.logging.error(f"Error in setting up organic query: {e}")
+
+            bt.logging.info(f"Inserting organic job: {job_event['pdb_id']}")
             self.store.insert(
                 pdb=job_event["pdb_id"],
                 ff=job_event["ff"],
