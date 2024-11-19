@@ -2,10 +2,13 @@ import time
 import random
 import asyncio
 import bittensor as bt
+
 from typing import Any, Literal, Union, Tuple
 
 from folding.protocol import OrganicSynapse
 from folding.base.neuron import BaseNeuron
+from folding.utils.opemm_simulation_config import SimulationConfig
+
 from atom.organic_scoring import OrganicScoringBase
 
 
@@ -33,18 +36,24 @@ class OrganicValidator(OrganicScoringBase):
 
         # Self reference the validator object to have access to validator methods.
         self._validator: BaseNeuron = validator
+        self.simulation_args = list(SimulationConfig(ff = "organic", water = "organic").to_dict().keys())
 
     async def _on_organic_entry(self, synapse: OrganicSynapse) -> bt.Synapse:
+        """
+        This is the entry point for the organic scoring task. 
+        It receives a synapse object from the axon and processes.
+        """
+
+        bt.logging.info(f"Query received: organic queue size = {self._organic_queue.size}")
+
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
-
-        bt.logging.info(f"Number of samples in the queue: {self._organic_queue.size}")
-
         synapse.is_processed = True
         return synapse
 
     async def start_loop(self):
-        """The main loop for running the organic scoring task, either based on a time interval or steps.
+        """
+        The main loop for running the organic scoring task, either based on a time interval or steps.
         Calls the `sample` method to establish the sampling logic for the organic scoring task.
         """
         while not self._should_exit:
@@ -98,9 +107,16 @@ class OrganicValidator(OrganicScoringBase):
                 "sample": False,
                 "total_elapsed_time": time.perf_counter() - init_time,
             }
+        
+        job_event = {"system_config" : {}}
+        for arg in self.simulation_args:
+            if arg in sample:
+                job_event["system_config"][arg] = sample[arg]
+            else:
+                job_event[arg] = sample[arg]
 
         # Add jobs to the sqlite database for the vali to process.
-        await self._validator.add_job(job_event=sample)
+        await self._validator.add_job(job_event=job_event)
 
         return {"sample": True, "total_elapsed_time": time.perf_counter() - init_time}
 
