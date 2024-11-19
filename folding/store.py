@@ -239,7 +239,7 @@ class Job:
     updated_count: int = 0
     min_updates: int = 5
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=25)
-    epsilon: float = 0.05  # percentage.
+    epsilon: float = 5  # percentage.
     event: dict = None
     system_kwargs: dict = None
 
@@ -256,7 +256,7 @@ class Job:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
         percent_improvement = (
-            (loss - self.best_loss) / self.best_loss
+            100 * (loss - self.best_loss) / self.best_loss
             if not np.isinf(self.best_loss) and not self.best_loss == 0
             else np.nan
         )

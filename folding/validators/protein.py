@@ -13,7 +13,6 @@ import asyncio
 import bittensor as bt
 import numpy as np
 import pandas as pd
-import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
@@ -23,13 +22,11 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
-    RsyncException,
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
-    timeout,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -52,8 +49,23 @@ class Protein(OpenMMSimulation):
         config: Dict,
         system_kwargs: Dict,
         load_md_inputs: bool = False,
-        epsilon: float = 0.01,
+        epsilon: float = 1, #percentage
     ) -> None:
+        """The Protein class is responsible for handling the protein simulation.
+        It attempts to setup the simulation environment to ensure that it can be run
+        on the miner side. It also contains methods to validate the simulation outputs.
+
+        Args:
+            pdb_id (str): pdb_id of the protein, typically a 4 letter string.
+            ff (str): the forcefield that will be used for simulation.
+            water (str): water model that will be used for simulation.
+            box (Literal): the shape of the box that will be used for simulation.
+            config (Dict): bittensor config object.
+            system_kwargs (Dict): system kwargs for the SimualtionConfig object.
+            load_md_inputs (bool, optional): If we should load pre-comuted files for the protein. Defaults to False.
+            epsilon (float, optional): The percentage improvement that must be achieved for this protein to be considered "better". Defaults to 1.
+        """
+
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
         self.pdb_id: str = pdb_id.lower()
