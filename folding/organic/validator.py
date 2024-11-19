@@ -36,7 +36,7 @@ class OrganicValidator(OrganicScoringBase):
 
         # Self reference the validator object to have access to validator methods.
         self._validator: BaseNeuron = validator
-        self.simulation_args = list(SimulationConfig(ff = "organic", water = "organic").to_dict().keys())
+        self.simulation_args = list(SimulationConfig(ff = "organic", water = "organic", box = 'cube').to_dict().keys())
 
     async def _on_organic_entry(self, synapse: OrganicSynapse) -> bt.Synapse:
         """
@@ -44,7 +44,7 @@ class OrganicValidator(OrganicScoringBase):
         It receives a synapse object from the axon and processes.
         """
 
-        bt.logging.info(f"Query received: organic queue size = {self._organic_queue.size}")
+        bt.logging.success(f"Query received: organic queue size = {self._organic_queue.size}")
 
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
