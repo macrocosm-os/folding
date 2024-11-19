@@ -384,6 +384,13 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--neuron.synthetic_job_interval",
+        type=float,
+        help="The amount of time that the synthetic job creation loop should wait before checking the queue size again.",
+        default=60,
+    )
+
+    parser.add_argument(
         "--neuron.organic_disabled",
         action="store_true",
         help="Set this flag to disable organic scoring.",
@@ -432,7 +439,7 @@ def add_validator_args(cls, parser):
         help="The validator will only accept organic queries from a list of whitelisted hotkeys.",
         default=[
             "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3",
-            "5DXRCojWaYH2K5fma95mB4fwDmoGg3BQxmSvyrwKDPEwfSda",  # personal key
+            "5CQ9KNHy9qvRGhLWeV37agEpmLckSgMXzbZWEEXwbupSCTQy",  # personal key
         ],  # Sets default otf key
     )
 

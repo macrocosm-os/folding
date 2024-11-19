@@ -393,17 +393,17 @@ class Validator(BaseValidatorNeuron):
                     )
 
                     bt.logging.info(
-                        f"Sleeping 60 seconds before next job creation loop."
+                        f"Sleeping {self.config.neuron.synthetic_job_interval} seconds before next job creation loop."
                     )
                 else:
                     bt.logging.info(
-                        "Job queue is full. Sleeping 60 seconds before next job creation loop."
+                        f"Job queue is full. Sleeping {self.config.neuron.synthetic_job_interval} seconds before next job creation loop."
                     )
 
             except Exception as e:
                 bt.logging.error(f"Error in create_jobs: {e}")
 
-            await asyncio.sleep(60)
+            await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
         while True:
