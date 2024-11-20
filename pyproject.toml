@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "folding"
+version = "1.1.1"
+description = "Folding test environment"
+authors = ["Brian McCrindle <brian@macrocosmos.ai>", "Sergio Champoux <sergio@macrocosmos.ai>", "Szymon Fonau <szymon.fonau@macrocosmos.ai>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+torch = "2.3.0"
+loguru = "0.7.0"
+pandas = "*"
+bittensor = "8.3.1"
+tenacity = "9.0.0"
+python-dotenv = "1.0.1"
+wandb = "0.17.2"
+eth-utils = "2.1.1"
+parmed = "4.2.2"
+plotly = "5.22.0"
+kaleido = "0.2.1"
+async-timeout = "4.0.3"
+openmm = {version = "8.2.0", extras = ["cuda12"]}
+pdbfixer = { git = "https://github.com/openmm/pdbfixer.git", branch = "master" }
+ipykernel = "^6.29.5"
+tqdm = "^4.67.0"
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
