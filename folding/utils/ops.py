@@ -216,7 +216,7 @@ async def check_and_download_pdbs(
                         file.write(r.text)
 
                 message = " but contains missing values." if not is_complete else ""
-                bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+                bt.logging.success(f"PDB file {pdb_id} downloaded from rcsb" + message)
 
                 return True
             else:
