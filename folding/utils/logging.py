@@ -7,6 +7,7 @@ import os
 
 import folding
 import bittensor as bt
+from loguru import logger
 
 
 @dataclass
@@ -77,13 +78,11 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     self.add_wandb_id(pdb_id, run.id)
 
     if id is None:
-        bt.logging.success(
-            prefix="Started a new wandb run",
+        logger.success("Started a new wandb run",
             sufix=f"<blue> {pdb_id} </blue>",
         )
     else:
-        bt.logging.success(
-            prefix="updated a wandb run",
+        logger.success("updated a wandb run",
             sufix=f"<blue> {pdb_id} </blue>",
         )
 
@@ -97,7 +96,7 @@ def log_protein(run, pdb_id_path: str):
     try:
         run.log({"protein_vis": wandb.Molecule(pdb_id_path)})
     except:
-        bt.logging.warning("Failed to log protein visualization")
+        logger.warning("Failed to log protein visualization")
 
 
 def log_folded_protein(run, pdb_id_path: str):
@@ -107,7 +106,7 @@ def log_folded_protein(run, pdb_id_path: str):
     try:
         run.log({"folded_protein_vis": wandb.Molecule(pdb_id_path)})
     except:
-        bt.logging.warning("Failed to log folded protein visualization")
+        logger.warning("Failed to log folded protein visualization")
 
 
 def log_event(
