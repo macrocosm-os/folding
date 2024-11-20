@@ -163,15 +163,6 @@ class Protein(OpenMMSimulation):
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self):
-        self.pdb_id, self.config.input_source = load_and_sample_random_pdb_ids(
-            root_dir=ROOT_DIR,
-            filename="pdb_ids.pkl",
-            input_source=self.config.input_source,
-            exclude=None,
-        )  # TODO: This should be a class variable via config
-        bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
-
     async def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
@@ -228,11 +219,8 @@ class Protein(OpenMMSimulation):
         bt.logging.info(
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
-
-        ## Setup the protein directory and sample a random pdb_id if not provided
-        self.gather_pdb_id()
+        
         await self.setup_pdb_directory()
-
         await self.generate_input_files()
 
         # Create a validator directory to store the files
