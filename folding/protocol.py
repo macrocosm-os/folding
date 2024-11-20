@@ -104,12 +104,13 @@ class OrganicSynapse(bt.Synapse):
     """A synapse for organic scoring."""
 
     pdb_id: str
+    source: str
     ff: str
     water: str
     box: str
     temperature: float
     friction: float
-    epsilon:float
+    epsilon: float
 
     is_processed:  typing.Optional[bool] = False
 
@@ -119,6 +120,7 @@ class OrganicSynapse(bt.Synapse):
     def get_simulation_params(self):
         return {
             "pdb_id": self.pdb_id,
+            "source":self.source,
             "ff": self.ff,
             "water": self.water,
             "box": self.box,
@@ -126,3 +128,4 @@ class OrganicSynapse(bt.Synapse):
             "friction": self.friction,
             "epsilon": self.epsilon
         }
+
