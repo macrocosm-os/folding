@@ -28,6 +28,8 @@ if [ "$GCC_MAJOR_VERSION" -ne $REQUIRED_MAJOR_GCC_VERSION ]; then
     echo "❌ Warning: Your GCC version is $GCC_VERSION. The script expects GCC version $REQUIRED_MAJOR_GCC_VERSION. Not installing folding."
     exit 1
 fi
+# ensure pip is installed
+python3.11 -m ensurepip
 
 # Install poetry
 python3.11 -m pip install poetry
