@@ -51,6 +51,7 @@ class OrganicValidator(OrganicScoringBase):
         self._organic_queue.add(config)
         bt.logging.success(f"Query received: organic queue size = {self._organic_queue.size}")
 
+        # TODO: This is still False on the API side.... Why!???!
         synapse.is_processed = True
         return synapse
 
