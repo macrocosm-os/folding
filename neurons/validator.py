@@ -219,7 +219,8 @@ class Validator(BaseValidatorNeuron):
 
             # If the job is organic, we still need to run the setup simulation to create the files needed for the job.
             if job_event.get("is_organic"):
-                protein = Protein(**job_event)
+                self.config.protein.input_source = job_event["source"]
+                protein = Protein(**job_event, config = self.config.protein)
 
                 try:
                     async with timeout(180):
