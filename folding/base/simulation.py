@@ -50,21 +50,19 @@ class OpenMMSimulation(GenericSimulation):
         """
         start_time = time.time()
         forcefield = app.ForceField(system_config["ff"], system_config["water"])
-        bt.logging.warning(f"Creating ff took {time.time() - start_time:.4f} seconds")
+        bt.logging.debug(f"Creating ff took {time.time() - start_time:.4f} seconds")
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
         start_time = time.time()
         modeller.deleteWater()
-        bt.logging.warning(
-            f"Deleting water took {time.time() - start_time:.4f} seconds"
-        )
+        bt.logging.debug(f"Deleting water took {time.time() - start_time:.4f} seconds")
 
         # modeller.addExtraParticles(forcefield)
 
         start_time = time.time()
         modeller.addHydrogens(forcefield)
-        bt.logging.warning(
+        bt.logging.debug(
             f"Adding hydrogens took {time.time() - start_time:.4f} seconds"
         )
 
@@ -74,9 +72,7 @@ class OpenMMSimulation(GenericSimulation):
         #     padding=system_config.box_padding * unit.nanometer,
         #     boxShape=system_config.box,
         # )
-        bt.logging.warning(
-            f"Adding solvent took {time.time() - start_time:.4f} seconds"
-        )
+        bt.logging.debug(f"Adding solvent took {time.time() - start_time:.4f} seconds")
 
         # Create the system
         start_time = time.time()
@@ -100,8 +96,8 @@ class OpenMMSimulation(GenericSimulation):
             nonbondedCutoff=nonbondedCutoff,
             constraints=system_config["constraints"],
         )
-        bt.logging.warning(
-            f"Creating system took {time.time() - start_time:.4f} seconds"
+        bt.logging.debug(
+            f"Creating system for {pdb} took {time.time() - start_time:.4f} seconds"
         )
 
         # Integrator settings
@@ -138,14 +134,14 @@ class OpenMMSimulation(GenericSimulation):
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
-        bt.logging.warning(
-            f"Creating simulation took {time.time() - start_time:.4f} seconds"
+        bt.logging.debug(
+            f"Creating simulation for {pdb} took {time.time() - start_time:.4f} seconds"
         )
         # Set initial positions
 
         start_time = time.time()
         simulation.context.setPositions(modeller.positions)
-        bt.logging.warning(
+        bt.logging.debug(
             f"Setting positions took {time.time() - start_time:.4f} seconds"
         )
 

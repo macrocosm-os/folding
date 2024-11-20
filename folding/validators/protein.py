@@ -49,7 +49,7 @@ class Protein(OpenMMSimulation):
         config: Dict,
         system_kwargs: Dict,
         load_md_inputs: bool = False,
-        epsilon: float = 1, #percentage
+        epsilon: float = 1,  # percentage
         **kwargs,
     ) -> None:
         """The Protein class is responsible for handling the protein simulation.
@@ -219,7 +219,7 @@ class Protein(OpenMMSimulation):
         bt.logging.info(
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
-        
+
         await self.setup_pdb_directory()
         await self.generate_input_files()
 
@@ -317,7 +317,9 @@ class Protein(OpenMMSimulation):
         await asyncio.to_thread(
             self.simulation.minimizeEnergy, maxIterations=100
         )  # TODO: figure out the right number for this
-        bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
+        bt.logging.warning(
+            f"Minimization for {self.pdb_id} took {time.time() - start_time:.4f} seconds"
+        )
         await asyncio.to_thread(self.simulation.step, 1000)
 
         self.simulation.saveCheckpoint("em.cpt")

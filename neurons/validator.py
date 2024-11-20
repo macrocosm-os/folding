@@ -216,21 +216,26 @@ class Validator(BaseValidatorNeuron):
         selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
         if len(valid_uids) >= self.config.neuron.sample_size:
-
             # If the job is organic, we still need to run the setup simulation to create the files needed for the job.
             if job_event.get("is_organic"):
                 self.config.protein.input_source = job_event["source"]
-                protein = Protein(**job_event, config = self.config.protein)
+                protein = Protein(**job_event, config=self.config.protein)
 
                 try:
                     async with timeout(180):
+                        bt.logging.info(
+                            f"setup_simulation for organic query: {job_event['pdb_id']}"
+                        )
                         await protein.setup_simulation()
+                        bt.logging.success(
+                            f"✅✅ {job_event['pdb_id']} simulation ran successfully! ✅✅"
+                        )
 
                     if protein.init_energy > 0:
                         raise ValueError(
                             f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                         )
-                
+
                 except Exception as e:
                     bt.logging.error(f"Error in setting up organic query: {e}")
 
@@ -245,12 +250,15 @@ class Validator(BaseValidatorNeuron):
                 system_kwargs=job_event["system_kwargs"],
                 event=job_event,
             )
+
+            await asyncio.sleep(0.01)
+            return True
         else:
             bt.logging.warning(
                 f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
             )
-
-        await asyncio.sleep(0.01)
+            await asyncio.sleep(0.01)
+            return False
 
     async def add_k_synthetic_jobs(self, k: int):
         """Creates new synthetic jobs and assigns them to available workers. Updates DB with new records.
