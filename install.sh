@@ -1,10 +1,5 @@
 #!/bin/bash
 
-# Check if Conda is installed
-if ! command -v conda &> /dev/null; then
-    echo "❌ Conda could not be found. Please install Conda first. Not installing folding."
-    exit 1
-fi
 
 # Check for CUDA availability
 if command -v nvidia-smi &> /dev/null; then
@@ -34,13 +29,17 @@ if [ "$GCC_MAJOR_VERSION" -ne $REQUIRED_MAJOR_GCC_VERSION ]; then
     exit 1
 fi
 
-# Create a venv
-conda env create -f environment.yml
+# Install poetry
+python3.11 -m pip install poetry
 
+# Set the destination of the virtual environment to the project directory
+python3.11 -m poetry config virtualenvs.in-project true
+
+# Install the project dependencies
+python3.11 -m poetry install
+
+python3.11 -m poetry shell
 # Install auxiliary packages
 sudo apt-get update
 sudo apt-get install build-essential cmake libfftw3-dev vim npm -y
 sudo npm install -g pm2 -y
-
-# Install folding
-pip install -e .

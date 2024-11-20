@@ -9,4 +9,4 @@ __spec_version__ = (
     + (1 * int(version_split[2]))
 )
 
-__OPENMM_VERSION_TAG__ = "8.2.0"
+__OPENMM_VERSION_TAG__ = "8.2"
