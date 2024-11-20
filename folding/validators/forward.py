@@ -297,7 +297,7 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
             event["system_kwargs"] = system_kwargs
 
             if "validator_search_status" not in event:
-                bt.logging.success("✅✅ Simulation ran successfully! ✅✅")
+                bt.logging.success(f"✅✅ {pdb_id} simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break
