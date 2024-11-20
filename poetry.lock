@@ -2140,6 +2140,18 @@ files = [
 ]
 
 [[package]]
+name = "nvidia-cuda-nvcc-cu12"
+version = "12.6.77"
+description = "CUDA nvcc"
+optional = false
+python-versions = ">=3"
+files = [
+    {file = "nvidia_cuda_nvcc_cu12-12.6.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:9a2aad43b8f4e4be9c237ece04f64450df77871eeebffad5a5a872714a97ca77"},
+    {file = "nvidia_cuda_nvcc_cu12-12.6.77-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b66bb5dd6b8ae62262586691977d3b4a425e91db61b4b9bc2f6b42bcd4154b96"},
+    {file = "nvidia_cuda_nvcc_cu12-12.6.77-py3-none-win_amd64.whl", hash = "sha256:26e118b4dae4ebd316ab6f5ee3f3c4cb929f8265f717a8e016ba57e254c0b4f1"},
+]
+
+[[package]]
 name = "nvidia-cuda-nvrtc-cu12"
 version = "12.1.105"
 description = "NVRTC native runtime libraries"
@@ -2287,6 +2299,24 @@ files = [
 
 [package.dependencies]
 numpy = "*"
+
+[[package]]
+name = "openmm-cuda-12"
+version = "8.2.0"
+description = "CUDA platform for OpenMM"
+optional = false
+python-versions = "*"
+files = [
+    {file = "OpenMM_CUDA_12-8.2.0-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c7d8baf6349e49bf7de0c2cbddb61bd54fdbbd6f753bb03741d706616e8a3063"},
+    {file = "OpenMM_CUDA_12-8.2.0-py3-none-win_amd64.whl", hash = "sha256:0bd1e0e63ed83a62099df361b6de0d6920799e9984dcda4e605d9083d6ec172c"},
+]
+
+[package.dependencies]
+nvidia-cuda-cupti-cu12 = "*"
+nvidia-cuda-nvcc-cu12 = "*"
+nvidia-cuda-nvrtc-cu12 = "*"
+nvidia-cuda-runtime-cu12 = "*"
+nvidia-cufft-cu12 = "*"
 
 [[package]]
 name = "packaging"
@@ -4645,4 +4675,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "fe6c3eec0c0fea4f880388df8bfd90effe239beeeb00960fadc4e2e21bc58e90"
+content-hash = "20f2ba6f4e3c87c5d9e2069eab6184a9d3357e8477fe808f8b2b2501725454e5"
