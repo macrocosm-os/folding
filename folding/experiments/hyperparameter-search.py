@@ -237,11 +237,31 @@ def try_prepare_challenge(config, pdb_id: str) -> Dict:
     return event
 
 
+output_file_path = (
+    "/home/paperspace/sergio/folding/folding/experiments/output_large.pkl"
+)
+
+
+def check_pkl(file_path):
+    try:
+        with open(file_path, "rb") as file:
+            data = pkl.load(file)
+    except:
+        data = {}
+    return data
+
+
 if __name__ == "__main__":
     print("Hyperparameter search script started.")
     pdbs_list = select_pdb_list_from_csv(input_path=INPUT_PDBS_PATH)
     # pdbs_list = ['3vvt']
+    output_pkl = check_pkl(file_path=output_file_path)
+
     for pdb in pdbs_list:
+        if pdb in output_pkl:
+            bt.logging.info(f"Skipping pdb {pdb} as it is already in the pkl file.")
+            continue
+
         bt.logging.info(f"Search starting for pdb {pdb}")
         config = BaseNeuron.create_config()
 
