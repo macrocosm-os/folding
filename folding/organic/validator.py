@@ -134,7 +134,7 @@ class OrganicValidator(OrganicScoringBase):
         job_event.update(sample)
 
         # Add jobs to the sqlite database for the vali to process.
-        job_added = await self._validator.add_job(job_event=job_event)
+        job_added: bool = await self._validator.add_job(job_event=job_event)
 
         # If the job was unable to be added to the queue for any reason, add it back to the organic queue.
         if not job_added:
