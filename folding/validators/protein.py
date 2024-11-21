@@ -181,6 +181,8 @@ class Protein(OpenMMSimulation):
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
+        self.fix_pdb_file()
+
     def read_and_return_files(self, filenames: List) -> Dict:
         """Read the files and return them as a dictionary."""
         files_to_return = {}
@@ -217,7 +219,7 @@ class Protein(OpenMMSimulation):
         )
 
         ## Setup the protein directory and sample a random pdb_id if not provided
-        self.gather_pdb_id()
+        # self.gather_pdb_id()
         self.setup_pdb_directory()
 
         self.generate_input_files()
@@ -313,10 +315,10 @@ class Protein(OpenMMSimulation):
 
         start_time = time.time()
         self.simulation.minimizeEnergy(
-            maxIterations=100
+            maxIterations=5
         )  # TODO: figure out the right number for this
         bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
-        self.simulation.step(1000)
+        self.simulation.step(100)
 
         self.simulation.saveCheckpoint("em.cpt")
 
