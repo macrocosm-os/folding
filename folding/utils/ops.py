@@ -221,7 +221,7 @@ def check_and_download_pdbs(
         id = pdb_id[0:4]
         substring = pdb_id[1:3]
 
-        unzip_command = ["gunzip", f"{pdb_directory}/{id}.cif.gz"]
+        unzip_command = ["gunzip", "-f", f"{pdb_directory}/{id}.cif.gz"]
 
         rsync_command = [
             "rsync",
