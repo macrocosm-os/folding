@@ -251,13 +251,15 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        logger.info("Loading validator state.")
+        try:
+            state = torch.load(self.config.neuron.full_path + "/state.pt")
+            self.step = state["step"]
+            self.scores = state["scores"]
+            self.hotkeys = state["hotkeys"]
+            logger.info("Loaded previously saved validator state information.")
+        except:
+            logger.info("Previous validator state not found... Starting from scratch")
 
-        # Load the state of the validator from file.
-        state = torch.load(self.config.neuron.full_path + "/state.pt")
-        self.step = state["step"]
-        self.scores = state["scores"]
-        self.hotkeys = state["hotkeys"]
 
     def load_config_json(self):
         config_json_path = os.path.join(
