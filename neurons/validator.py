@@ -197,7 +197,7 @@ class Validator(BaseValidatorNeuron):
 
         return valid_uids
 
-    async def add_job(self, job_event: dict[str, Any], uids: List[int] = None):
+    async def add_job(self, job_event: dict[str, Any], uids: List[int] = None) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
         If uids are not provided, then the function will sample random uids from the network.
 
@@ -251,13 +251,11 @@ class Validator(BaseValidatorNeuron):
                 event=job_event,
             )
 
-            await asyncio.sleep(0.01)
             return True
         else:
             bt.logging.warning(
                 f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
             )
-            await asyncio.sleep(0.01)
             return False
 
     async def add_k_synthetic_jobs(self, k: int):
