@@ -126,6 +126,7 @@ class Validator(BaseValidatorNeuron):
             uids=uids,
             timeout=self.config.neuron.timeout,
             mdrun_args=self.mdrun_args,
+            best_submitted_energy=job.best_loss,
         )
 
     async def ping_all_miners(
