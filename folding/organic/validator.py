@@ -6,8 +6,9 @@ import bittensor as bt
 
 from typing import Any, Literal, Union, Tuple
 
-from folding.protocol import OrganicSynapse
 from folding.base.neuron import BaseNeuron
+from folding.protocol import OrganicSynapse
+from folding.utils.ops import create_simulation_hash
 from folding.utils.opemm_simulation_config import SimulationConfig
 
 from atom.organic_scoring import OrganicScoringBase
@@ -52,15 +53,26 @@ class OrganicValidator(OrganicScoringBase):
         It receives a synapse object from the axon and processes.
         """
 
-        config: dict = synapse.get_simulation_params()
-        self._organic_queue.add(config)
-        bt.logging.success(
-            f"Query received: organic queue size = {self._organic_queue.size}"
-        )
+        if synapse.api_method == "GET":
+            # do something here to lookup the data and return
+            return synapse
 
-        # TODO: This is still False on the API side.... Why!???!
-        synapse.is_processed = True
-        return synapse
+        elif synapse.api_method == "POST":
+            config: dict = synapse.get_simulation_params()
+            self._organic_queue.add(config)
+            bt.logging.success(
+                f"Query received: organic queue size = {self._organic_queue.size}"
+            )
+            synapse.receipt = create_simulation_hash(
+                pdb_id=synapse.pdb_id, source=config
+            )
+
+            return synapse
+
+        else:
+            raise ValueError(
+                f"Invalid API method: {synapse.api_method}, must be 'GET' or 'POST'."
+            )
 
     async def start_loop(self):
         """
