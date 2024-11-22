@@ -38,6 +38,7 @@ from folding.validators.protein import Protein
 from folding.store import Job, SQLiteJobStore
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
+from loguru import logger
 
 
 class Validator(BaseValidatorNeuron):
@@ -58,7 +59,7 @@ class Validator(BaseValidatorNeuron):
         self.mdrun_args = self.parse_mdrun_args()
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
-        bt.logging.info("Determining all miner uids...⏳")
+        logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
@@ -120,7 +121,7 @@ class Validator(BaseValidatorNeuron):
 
         uids = self.get_uids(hotkeys=job.hotkeys)
 
-        bt.logging.info("Running run_step...⏳")
+        logger.info("Running run_step...⏳")
         return await run_step(
             self,
             protein=protein,
@@ -268,7 +269,7 @@ class Validator(BaseValidatorNeuron):
 
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
-            bt.logging.info(f"Adding job: {ii+1}/{k}")
+            logger.info(f"Adding job: {ii+1}/{k}")
 
             # This will change on each loop since we are submitting a new pdb to the batch of miners
             exclude_pdbs = self.store.get_all_pdbs()
@@ -310,12 +311,12 @@ class Validator(BaseValidatorNeuron):
             # All miners not responding but there is at least ONE miner that did in the past. Give them rewards.
             if job.best_loss < 0:
                 apply_pipeline = True
-                bt.logging.warning(
+                logger.warning(
                     f"Received all zero energies for {job.pdb} but stored best_loss < 0... Applying reward pipeline."
                 )
         else:
             apply_pipeline = True
-            bt.logging.success("Non-zero energies received. Applying reward pipeline.")
+            logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
             rewards: torch.Tensor = await reward_pipeline(
@@ -331,7 +332,7 @@ class Validator(BaseValidatorNeuron):
                 uids=uids,  # pretty confident these are in the correct order.
             )
         else:
-            bt.logging.warning(
+            logger.warning(
                 f"All energies zero for job {job.pdb} and job has never been updated... Skipping"
             )
 
@@ -369,7 +370,7 @@ class Validator(BaseValidatorNeuron):
                     protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb"
                 )
         else:
-            bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
+            logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
         log_event(
@@ -381,13 +382,13 @@ class Validator(BaseValidatorNeuron):
 
         merged_events.pop("checked_energy")
         merged_events.pop("miner_energy")
-        bt.logging.success(f"Event information: {merged_events}")
+        logger.success(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
 
     async def sync_loop(self):
-        bt.logging.info("Starting sync loop.")
+        logger.info("Starting sync loop.")
         while True:
             self.sync()
             seconds_per_block = 12
@@ -400,7 +401,7 @@ class Validator(BaseValidatorNeuron):
 
         while True:
             try:
-                bt.logging.info("Starting job creation loop.")
+                logger.info("Starting job creation loop.")
                 queue = self.store.get_queue(ready=False)
                 if queue.qsize() < self.config.neuron.queue_size:
                     # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
@@ -412,7 +413,7 @@ class Validator(BaseValidatorNeuron):
                             f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
                         )
 
-                    bt.logging.debug(f"✅ Creating jobs! ✅")
+                    logger.debug(f"✅ Creating jobs! ✅")
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
 
@@ -420,16 +421,16 @@ class Validator(BaseValidatorNeuron):
                         k=self.config.neuron.queue_size - queue.qsize()
                     )
 
-                    bt.logging.info(
+                    logger.info(
                         f"Sleeping {self.config.neuron.synthetic_job_interval} seconds before next job creation loop."
                     )
                 else:
-                    bt.logging.info(
-                        f"Job queue is full. Sleeping {self.config.neuron.synthetic_job_interval} seconds before next job creation loop."
+                    logger.info(
+                        "Job queue is full. Sleeping 60 seconds before next job creation loop."
                     )
 
             except Exception as e:
-                bt.logging.error(f"Error in create_jobs: {e}")
+                logger.error(f"Error in create_jobs: {e}")
 
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
@@ -439,8 +440,8 @@ class Validator(BaseValidatorNeuron):
                 # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.
                 await asyncio.sleep(self.config.neuron.update_interval)
 
-                bt.logging.info("Updating jobs.")
-                bt.logging.info(f"step({self.step}) block({self.block})")
+                logger.info("Updating jobs.")
+                logger.info(f"step({self.step}) block({self.block})")
 
                 for job in self.store.get_queue(ready=False).queue:
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
@@ -465,11 +466,11 @@ class Validator(BaseValidatorNeuron):
                     # Update the DB with the current status
                     await self.update_job(job=job)
             except Exception as e:
-                bt.logging.error(f"Error in update_jobs: {e}")
+                logger.error(f"Error in update_jobs: {e}")
 
             self.step += 1
 
-            bt.logging.info(
+            logger.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
 
@@ -478,7 +479,7 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
         self.is_running = True
-        bt.logging.debug("Starting validator in background thread.")
+        logger.debug("Starting validator in background thread.")
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -495,10 +496,10 @@ class Validator(BaseValidatorNeuron):
                        None if the context was exited without an exception.
         """
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            logger.debug("Stopping validator in background thread.")
             self.should_exit = True
             self.is_running = False
-            bt.logging.debug("Stopped")
+            logger.debug("Stopped")
 
 
 async def main():

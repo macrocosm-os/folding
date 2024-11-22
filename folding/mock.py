@@ -5,6 +5,7 @@ import random
 import bittensor as bt
 
 from typing import List
+from loguru import logger
 
 
 class MockSubtensor(bt.MockSubtensor):
@@ -47,8 +48,8 @@ class MockMetagraph(bt.metagraph):
             axon.ip = "127.0.0.0"
             axon.port = 8091
 
-        bt.logging.info(f"Metagraph: {self}")
-        bt.logging.info(f"Axons: {self.axons}")
+        logger.info(f"Metagraph: {self}")
+        logger.info(f"Axons: {self.axons}")
 
 
 class MockDendrite(bt.dendrite):

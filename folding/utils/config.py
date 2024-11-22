@@ -17,19 +17,24 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
+import sys
 import torch
 import argparse
 import bittensor as bt
 from loguru import logger
 
+logger.remove()
+
+# Custom format for different log levels
+FORMAT = """<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>"""
 
 def check_config(cls, config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
+    # logger.check_config(config)
 
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
-            config.logging.logging_dir,  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
+            "~/.bittensor/miners",  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
             config.wallet.name,
             config.wallet.hotkey,
             config.netuid,
@@ -53,8 +58,17 @@ def check_config(cls, config: "bt.Config"):
                 backtrace=True,
                 diagnose=False,
                 level="TRACE",
-                format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
+                format=FORMAT,
             )
+
+            # Add custom colored handler to stdout
+            logger.add(
+                sys.stdout,
+                format=FORMAT,
+                level="TRACE",
+                enqueue=True,
+                colorize=True,
+                )
 
 
 def add_args(cls, parser):
@@ -451,7 +465,7 @@ def config(cls):
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
+    # logger.add_args(parser)
     bt.axon.add_args(parser)
     cls.add_args(parser)
     return bt.config(parser)

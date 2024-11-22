@@ -6,6 +6,7 @@ import numpy as np
 
 from folding.protocol import JobSubmissionSynapse
 from folding.validators.protein import Protein
+from loguru import logger
 
 
 def get_energies(
@@ -49,7 +50,7 @@ def get_energies(
                 continue
 
             if resp.dendrite.status_code != 200:
-                bt.logging.info(
+                logger.info(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
@@ -75,7 +76,7 @@ def get_energies(
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
-            bt.logging.error(
+            logger.error(
                 f"Failed to parse miner data for uid {uid} with error: {E}"
             )
             continue

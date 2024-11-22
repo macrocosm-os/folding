@@ -8,6 +8,7 @@ from openmm import unit
 
 import bittensor as bt
 from folding.utils.opemm_simulation_config import SimulationConfig
+from loguru import logger
 
 
 class GenericSimulation(ABC):
@@ -25,7 +26,7 @@ class GenericSimulation(ABC):
             start_time = time.time()
             result = method(*args, **kwargs)
             end_time = time.time()
-            print(f"Method {method.__name__} took {end_time - start_time:.4f} seconds")
+            logger.info(f"Method {method.__name__} took {end_time - start_time:.4f} seconds")
             return result
 
         return timed
@@ -50,19 +51,21 @@ class OpenMMSimulation(GenericSimulation):
         """
         start_time = time.time()
         forcefield = app.ForceField(system_config["ff"], system_config["water"])
-        bt.logging.debug(f"Creating ff took {time.time() - start_time:.4f} seconds")
+        logger.warning(f"Creating ff took {time.time() - start_time:.4f} seconds")
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
         start_time = time.time()
         modeller.deleteWater()
-        bt.logging.debug(f"Deleting water took {time.time() - start_time:.4f} seconds")
+        logger.warning(
+            f"Deleting water took {time.time() - start_time:.4f} seconds"
+        )
 
         # modeller.addExtraParticles(forcefield)
 
         start_time = time.time()
         modeller.addHydrogens(forcefield)
-        bt.logging.debug(
+        logger.warning(
             f"Adding hydrogens took {time.time() - start_time:.4f} seconds"
         )
 
@@ -72,7 +75,9 @@ class OpenMMSimulation(GenericSimulation):
         #     padding=system_config.box_padding * unit.nanometer,
         #     boxShape=system_config.box,
         # )
-        bt.logging.debug(f"Adding solvent took {time.time() - start_time:.4f} seconds")
+        logger.warning(
+            f"Adding solvent took {time.time() - start_time:.4f} seconds"
+        )
 
         # Create the system
         start_time = time.time()
@@ -84,7 +89,7 @@ class OpenMMSimulation(GenericSimulation):
             nonbondedCutoff = threshold * mm.unit.nanometers
             # set the attribute in the config for the pipeline.
             system_config["cutoff"] = threshold
-            bt.logging.warning(
+            logger.warning(
                 f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm"
             )
         else:
@@ -96,8 +101,8 @@ class OpenMMSimulation(GenericSimulation):
             nonbondedCutoff=nonbondedCutoff,
             constraints=system_config["constraints"],
         )
-        bt.logging.debug(
-            f"Creating system for {pdb} took {time.time() - start_time:.4f} seconds"
+        logger.warning(
+            f"Creating system took {time.time() - start_time:.4f} seconds"
         )
 
         # Integrator settings
@@ -134,14 +139,14 @@ class OpenMMSimulation(GenericSimulation):
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
-        bt.logging.debug(
-            f"Creating simulation for {pdb} took {time.time() - start_time:.4f} seconds"
+        logger.warning(
+            f"Creating simulation took {time.time() - start_time:.4f} seconds"
         )
         # Set initial positions
 
         start_time = time.time()
         simulation.context.setPositions(modeller.positions)
-        bt.logging.debug(
+        logger.warning(
             f"Setting positions took {time.time() - start_time:.4f} seconds"
         )
 

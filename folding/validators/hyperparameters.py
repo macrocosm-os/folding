@@ -6,6 +6,7 @@ import numpy as np
 import bittensor as bt
 
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
+from loguru import logger
 
 
 class HyperParameters:
@@ -91,7 +92,7 @@ class HyperParameters:
             try:
                 parameter_set.pop(param)
             except KeyError:
-                bt.logging.error(
+                logger.error(
                     f"Parameter {param} not found in parameter set. Only FF, BOX_TYPE, and/or WATER are allowed."
                 )
 

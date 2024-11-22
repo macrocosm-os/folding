@@ -19,6 +19,7 @@
 import typing
 import base64
 import bittensor as bt
+from loguru import logger
 
 from folding.utils.opemm_simulation_config import SimulationConfig
 
@@ -68,7 +69,7 @@ class JobSubmissionSynapse(bt.Synapse):
         Returns:
         - dict: The serialized response, which in this case is the value of md_output.
         """
-        bt.logging.info(
+        logger.info(
             f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the response has expected hash
@@ -80,7 +81,7 @@ class JobSubmissionSynapse(bt.Synapse):
                 try:
                     md_output[k] = base64.b64decode(v)
                 except Exception as e:
-                    bt.logging.error(f"Error decoding {k} from md_output: {e}")
+                    logger.error(f"Error decoding {k} from md_output: {e}")
                     md_output[k] = None
 
             self.md_output = md_output
@@ -93,7 +94,7 @@ class JobSubmissionSynapse(bt.Synapse):
                 try:
                     md_inputs[k] = base64.b64decode(v)
                 except Exception as e:
-                    bt.logging.error(f"Error decoding {k} from md_inputs: {e}")
+                    logger.error(f"Error decoding {k} from md_inputs: {e}")
                     md_inputs[k] = None
 
             self.md_inputs = md_inputs

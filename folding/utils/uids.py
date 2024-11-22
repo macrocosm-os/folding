@@ -2,6 +2,7 @@ import torch
 import random
 import bittensor as bt
 from typing import List
+from loguru import logger
 
 
 def check_uid_availability(
@@ -53,7 +54,7 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
     # Check if candidate_uids contain enough for querying, if not grab all avaliable uids
     available_uids = candidate_uids
     if len(available_uids) < k:
-        bt.logging.warning(
+        logger.warning(
             f"Requested {k} uids but only {len(available_uids)} were returned. To disable this, consider reducing neuron.sample_size"
         )
         k = len(available_uids)
