@@ -1,16 +1,16 @@
-import re
 import os
 import sys
-import tqdm
 import signal
 import random
 import shutil
+import hashlib
 import requests
 import functools
 import traceback
 import subprocess
 import pickle as pkl
 from typing import Dict, List
+
 import numpy as np
 import pandas as pd
 import parmed as pmd
@@ -357,3 +357,17 @@ def plot_miner_validator_curves(
         width=1400,
     )
     fig.write_image(os.path.join(miner_data_directory, filename + "_percent_diff.png"))
+
+
+def create_simulation_hash(pdb_id: str, system_config: Dict) -> str:
+    """Creates a simulation hash based on the pdb_id and the system_config given.
+
+    Returns:
+        str: first 6 characters of a sha256 hash
+    """
+    system_hash = pdb_id
+    for key, value in system_config.items():
+        system_hash += str(key) + str(value)
+
+    hash_object = hashlib.sha256(system_hash.encode("utf-8"))
+    return hash_object.hexdigest()[:6]

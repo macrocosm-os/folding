@@ -113,7 +113,8 @@ class OrganicSynapse(bt.Synapse):
     friction: float
     epsilon: float
 
-    is_processed: typing.Optional[bool] = False
+    api_method: typing.optional[str] = None
+    receipt: typing.Optional[str] = ""  # Hash that identifies the submission
 
     def deserialize(self) -> dict:
         return self.dict()
