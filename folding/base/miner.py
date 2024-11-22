@@ -26,6 +26,7 @@ import bittensor as bt
 from folding.base.neuron import BaseNeuron
 from folding.protocol import PingSynapse
 from folding.utils.config import add_miner_args
+from loguru import logger
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -43,11 +44,11 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Warn if allowing incoming requests from anyone.
         if not self.config.blacklist.force_validator_permit:
-            bt.logging.warning(
+            logger.warning(
                 "You are allowing non-validators to send requests to your miner. This is a security risk."
             )
         if self.config.blacklist.allow_non_registered:
-            bt.logging.warning(
+            logger.warning(
                 "You are allowing non-registered entities to send requests to your miner. This is a security risk."
             )
 
@@ -55,7 +56,7 @@ class BaseMinerNeuron(BaseNeuron):
         self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
         # Attach determiners which functions are called when servicing a request.
-        bt.logging.info(f"Attaching forward function to miner axon.")
+        logger.info(f"Attaching forward function to miner axon.")
         self.axon.attach(
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
@@ -63,7 +64,7 @@ class BaseMinerNeuron(BaseNeuron):
         ).attach(
             forward_fn=self.ping_forward,  # not sure if we need blacklist on this.
         )
-        bt.logging.info(f"Axon created: {self.axon}")
+        logger.info(f"Axon created: {self.axon}")
 
         # Instantiate runners
         self.should_exit: bool = False
@@ -78,14 +79,14 @@ class BaseMinerNeuron(BaseNeuron):
             self (PingSynapse): must attach "can_serve" and "available_compute"
         """
 
-        bt.logging.info(f"Received ping request from {synapse.dendrite.hotkey[:8]}")
+        logger.info(f"Received ping request from {synapse.dendrite.hotkey[:8]}")
 
         synapse.available_compute = self.max_workers - len(self.simulations)
 
         # TODO: add more conditions.
         if synapse.available_compute > 0:
             synapse.can_serve = True
-            bt.logging.success("Telling validator you can serve ✅")
+            logger.success("Telling validator you can serve ✅")
         return synapse
 
     def run(self):
@@ -116,7 +117,7 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        bt.logging.info(
+        logger.info(
             f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
@@ -124,7 +125,7 @@ class BaseMinerNeuron(BaseNeuron):
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
 
-        bt.logging.info(f"Miner starting at block: {self.block}")
+        logger.info(f"Miner starting at block: {self.block}")
 
         # This loop maintains the miner's operations until intentionally stopped.
         try:
@@ -135,12 +136,12 @@ class BaseMinerNeuron(BaseNeuron):
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
-            bt.logging.success("Miner killed by keyboard interrupt.")
+            logger.success("Miner killed by keyboard interrupt.")
             exit()
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
         except Exception as e:
-            bt.logging.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
 
     def run_in_background_thread(self):
         """
@@ -148,23 +149,23 @@ class BaseMinerNeuron(BaseNeuron):
         This is useful for non-blocking operations.
         """
         if not self.is_running:
-            bt.logging.debug("Starting miner in background thread.")
+            logger.debug("Starting miner in background thread.")
             self.should_exit = False
             self.thread = threading.Thread(target=self.run, daemon=True)
             self.thread.start()
             self.is_running = True
-            bt.logging.debug("Started")
+            logger.debug("Started")
 
     def stop_run_thread(self):
         """
         Stops the miner's operations that are running in the background thread.
         """
         if self.is_running:
-            bt.logging.debug("Stopping miner in background thread.")
+            logger.debug("Stopping miner in background thread.")
             self.should_exit = True
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            logger.debug("Stopped")
 
     def __enter__(self):
         """
@@ -191,7 +192,7 @@ class BaseMinerNeuron(BaseNeuron):
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("resync_metagraph()")
+        logger.info("resync_metagraph()")
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)

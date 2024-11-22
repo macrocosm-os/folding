@@ -12,12 +12,13 @@ import pandas as pd
 from typing import List
 from bs4 import BeautifulSoup
 from collections import defaultdict
+from loguru import logger
 
 
 def save_data_to_pkl(data, folder_location, filename):
     with open(os.path.join(folder_location, filename), "wb") as f:
         pickle.dump(data, f)
-        bt.logging.info(f"Saved data to {folder_location}/{filename}")
+        logger.info(f"Saved data to {folder_location}/{filename}")
 
 
 def save_data_as_df(data: defaultdict[List]):

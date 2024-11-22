@@ -18,12 +18,13 @@
 import time
 import bittensor as bt
 from folding.miners.folding_miner import FoldingMiner
+from loguru import logger
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     with FoldingMiner() as m:
         while True:
-            bt.logging.warning(
+            logger.warning(
                 f"Miner running:: network: {m.subtensor.network} | step: {m.step} | uid: {m.uid} | trust: {m.metagraph.trust[m.uid]:.3f} | emission {m.metagraph.emission[m.uid]:.3f}"
             )
             time.sleep(30)
