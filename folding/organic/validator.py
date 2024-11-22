@@ -59,6 +59,11 @@ class OrganicValidator(OrganicScoringBase):
 
         elif synapse.api_method == "POST":
             config: dict = synapse.get_simulation_params()
+            receipt = create_simulation_hash(pdb_id=synapse.pdb_id, source=config)
+
+            # Add the hash to the config to be used as a lookup.
+            config["receipt"] = receipt
+
             self._organic_queue.add(config)
             bt.logging.success(
                 f"Query received: organic queue size = {self._organic_queue.size}"
