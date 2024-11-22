@@ -353,13 +353,6 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.num_concurrent_forwards",
-        type=int,
-        help="The number of concurrent forwards running at any time.",
-        default=1,
-    )
-
-    parser.add_argument(
         "--neuron.queue_size",
         type=int,
         help="The number of jobs to keep in the queue.",
@@ -405,6 +398,41 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--neuron.synthetic_job_interval",
+        type=float,
+        help="The amount of time that the synthetic job creation loop should wait before checking the queue size again.",
+        default=60,
+    )
+
+    parser.add_argument(
+        "--neuron.organic_disabled",
+        action="store_true",
+        help="Set this flag to disable organic scoring.",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--neuron.organic_trigger",
+        type=str,
+        help="Organic query validation trigger mode (seconds or steps).",
+        default="seconds",
+    )
+
+    parser.add_argument(
+        "--neuron.organic_trigger_frequency",
+        type=float,
+        help="Organic query sampling frequency (seconds or steps value).",
+        default=120.0,
+    )
+
+    parser.add_argument(
+        "--neuron.organic_trigger_frequency_min",
+        type=float,
+        help="Minimum organic query sampling frequency (seconds or steps value).",
+        default=5.0,
+    )
+
+    parser.add_argument(
         "--wandb.project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
@@ -416,6 +444,17 @@ def add_validator_args(cls, parser):
         type=str,
         help="The name of the project where you are sending the new run.",
         default="macrocosmos",
+    )
+
+    parser.add_argument(
+        "--organic_whitelist",
+        type=str,
+        nargs="+",  # Accepts one or more values as a list
+        help="The validator will only accept organic queries from a list of whitelisted hotkeys.",
+        default=[
+            "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3",
+            "5CQ9KNHy9qvRGhLWeV37agEpmLckSgMXzbZWEEXwbupSCTQy",  # personal key
+        ],  # Sets default otf key
     )
 
 

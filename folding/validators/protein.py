@@ -13,7 +13,6 @@ import asyncio
 import bittensor as bt
 import numpy as np
 import pandas as pd
-import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
@@ -23,13 +22,11 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
-    RsyncException,
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
-    timeout,
 )
 from loguru import logger
 
@@ -53,8 +50,24 @@ class Protein(OpenMMSimulation):
         config: Dict,
         system_kwargs: Dict,
         load_md_inputs: bool = False,
-        epsilon: float = 0.01,
+        epsilon: float = 1,  # percentage
+        **kwargs,
     ) -> None:
+        """The Protein class is responsible for handling the protein simulation.
+        It attempts to setup the simulation environment to ensure that it can be run
+        on the miner side. It also contains methods to validate the simulation outputs.
+
+        Args:
+            pdb_id (str): pdb_id of the protein, typically a 4 letter string.
+            ff (str): the forcefield that will be used for simulation.
+            water (str): water model that will be used for simulation.
+            box (Literal): the shape of the box that will be used for simulation.
+            config (Dict): bittensor config object.
+            system_kwargs (Dict): system kwargs for the SimualtionConfig object.
+            load_md_inputs (bool, optional): If we should load pre-comuted files for the protein. Defaults to False.
+            epsilon (float, optional): The percentage improvement that must be achieved for this protein to be considered "better". Defaults to 1.
+        """
+
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
         self.pdb_id: str = pdb_id.lower()
@@ -151,15 +164,6 @@ class Protein(OpenMMSimulation):
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self):
-        self.pdb_id, self.config.input_source = load_and_sample_random_pdb_ids(
-            root_dir=ROOT_DIR,
-            filename="pdb_ids.pkl",
-            input_source=self.config.input_source,
-            exclude=None,
-        )  # TODO: This should be a class variable via config
-        logger.debug(f"Selected random pdb id: {self.pdb_id!r}")
-
     async def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
@@ -217,10 +221,7 @@ class Protein(OpenMMSimulation):
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
 
-        ## Setup the protein directory and sample a random pdb_id if not provided
-        self.gather_pdb_id()
         await self.setup_pdb_directory()
-
         await self.generate_input_files()
 
         # Create a validator directory to store the files
@@ -304,7 +305,8 @@ class Protein(OpenMMSimulation):
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        self.simulation, self.system_config = await asyncio.to_thread(self.create_simulation,
+        self.simulation, self.system_config = await asyncio.to_thread(
+            self.create_simulation,
             self.load_pdb_file(pdb_file=self.pdb_file),
             self.system_config.get_config(),
             "em",
@@ -313,8 +315,8 @@ class Protein(OpenMMSimulation):
         logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
 
         start_time = time.time()
-        await asyncio.to_thread(self.simulation.minimizeEnergy,
-            maxIterations=100
+        await asyncio.to_thread(
+            self.simulation.minimizeEnergy, maxIterations=100
         )  # TODO: figure out the right number for this
         logger.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
         await asyncio.to_thread(self.simulation.step, 1000)

@@ -21,6 +21,8 @@ import base64
 import bittensor as bt
 from loguru import logger
 
+from folding.utils.opemm_simulation_config import SimulationConfig
+
 
 class PingSynapse(bt.Synapse):
     """Responsible for determining if a miner can accept a request"""
@@ -97,3 +99,34 @@ class JobSubmissionSynapse(bt.Synapse):
 
             self.md_inputs = md_inputs
         return self
+
+
+class OrganicSynapse(bt.Synapse):
+    """A synapse for organic scoring."""
+
+    pdb_id: str
+    source: str
+    ff: str
+    water: str
+    box: str
+    temperature: float
+    friction: float
+    epsilon: float
+
+    is_processed:  typing.Optional[bool] = False
+
+    def deserialize(self) -> dict:
+        return self.dict()
+
+    def get_simulation_params(self):
+        return {
+            "pdb_id": self.pdb_id,
+            "source":self.source,
+            "ff": self.ff,
+            "water": self.water,
+            "box": self.box,
+            "temperature": self.temperature,
+            "friction": self.friction,
+            "epsilon": self.epsilon
+        }
+

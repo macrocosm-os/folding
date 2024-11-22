@@ -24,13 +24,14 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
-
-from typing import List
 from pathlib import Path
 
-from folding.base.neuron import BaseNeuron
+from typing import List, Optional
+
 from folding.mock import MockDendrite
+from folding.base.neuron import BaseNeuron
 from folding.utils.config import add_validator_args
+from folding.organic.validator import OrganicValidator
 from folding.utils.ops import print_on_retry
 
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
@@ -70,7 +71,9 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
-            self.serve_axon()
+            self.axon = bt.axon(wallet=self.wallet, config=self.config)
+            self._serve_axon()
+
         else:
             logger.warning("axon off, not serving ip to chain.")
 
@@ -83,30 +86,30 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
+        self._organic_scoring: Optional[OrganicValidator] = None
+        if not self.config.neuron.axon_off and not self.config.neuron.organic_disabled:
+            self._organic_scoring = OrganicValidator(
+                axon=self.axon,
+                validator=self,
+                synth_dataset=None,
+                trigger=self.config.neuron.organic_trigger,
+                trigger_frequency=self.config.neuron.organic_trigger_frequency,
+                trigger_frequency_min=self.config.neuron.organic_trigger_frequency_min,
+            )
+
+            self.loop.create_task(self._organic_scoring.start_loop())
+        else:
+            bt.logging.warning(
+                "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_disabled'"
+            )
+
         self.load_and_merge_configs()
 
-    def serve_axon(self):
-        """Serve axon to enable external connections."""
-
-        logger.info("serving ip to chain...")
-        try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
-
-            try:
-                self.subtensor.serve_axon(
-                    netuid=self.config.netuid,
-                    axon=self.axon,
-                )
-                logger.info(
-                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to serve Axon with exception: {e}")
-                pass
-
-        except Exception as e:
-            logger.error(f"Failed to create Axon initialize with exception: {e}")
-            pass
+    def _serve_axon(self):
+        """Serve axon to enable external connections"""
+        validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+        bt.logging.info(f"Serving validator IP of UID {validator_uid} to chain...")
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor).start()
 
     @retry(
         stop=stop_after_attempt(3),  # Retry up to 3 times

@@ -45,7 +45,8 @@ class RsyncException(Exception):
     def __init__(self, message="Rsync error occurred"):
         self.message = message
         super().__init__(self.message)
-        
+
+
 def timeout_handler(seconds, func_name):
     raise TimeoutException(f"Function '{func_name}' timed out after {seconds} seconds")
 
@@ -176,7 +177,6 @@ def get_tracebacks():
     logger.error(" ---------------- Traceback details ---------------- ")
     logger.warning("".join(formatted_traceback))
     logger.warning(" ---------------- End of Traceback ----------------\n")
-
 
 
 async def check_and_download_pdbs(
