@@ -64,8 +64,6 @@ class Validator(BaseValidatorNeuron):
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
 
-        self.all_miner_uids.remove(81)
-
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
