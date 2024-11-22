@@ -78,11 +78,13 @@ def init_wandb(self, pdb_id: str, reinit=True, failed=False):
     self.add_wandb_id(pdb_id, run.id)
 
     if id is None:
-        logger.success("Started a new wandb run",
+        logger.success(
+            "Started a new wandb run",
             sufix=f"<blue> {pdb_id} </blue>",
         )
     else:
-        logger.success("updated a wandb run",
+        logger.success(
+            "updated a wandb run",
             sufix=f"<blue> {pdb_id} </blue>",
         )
 

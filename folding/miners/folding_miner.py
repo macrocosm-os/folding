@@ -94,9 +94,7 @@ def attach_files_to_synapse(
         synapse.miner_state = state
 
     except Exception as e:
-        logger.error(
-            f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}"
-        )
+        logger.error(f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}")
         get_tracebacks()
         synapse.md_output = {}
 
@@ -434,9 +432,7 @@ class FoldingMiner(BaseMinerNeuron):
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
             # Ignore requests from un-registered entities.
-            logger.trace(
-                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
-            )
+            logger.trace(f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}")
             return True, "Unrecognized hotkey"
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if self.config.blacklist.force_validator_permit:
@@ -451,9 +447,7 @@ class FoldingMiner(BaseMinerNeuron):
                 )
                 return True, "Non-validator hotkey"
 
-        logger.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
-        )
+        logger.trace(f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}")
         return False, "Hotkey recognized!"
 
     async def priority(self, synapse: JobSubmissionSynapse) -> float:
@@ -463,9 +457,7 @@ class FoldingMiner(BaseMinerNeuron):
         priority = float(
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
-        logger.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority
-        )
+        logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)
         return priority
 
 

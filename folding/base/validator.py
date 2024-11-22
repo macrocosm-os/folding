@@ -117,7 +117,7 @@ class BaseValidatorNeuron(BaseNeuron):
         retry=retry_if_result(
             lambda result: result is False
         ),  # Retry if the result is False
-        after=print_on_retry
+        after=print_on_retry,
     )
     def set_weights(self):
         """
@@ -171,7 +171,6 @@ class BaseValidatorNeuron(BaseNeuron):
             version_key=self.spec_version,
         )
 
-            
         return result
 
     def resync_metagraph(self):
@@ -262,7 +261,6 @@ class BaseValidatorNeuron(BaseNeuron):
             logger.info("Loaded previously saved validator state information.")
         except:
             logger.info("Previous validator state not found... Starting from scratch")
-
 
     def load_config_json(self):
         config_json_path = os.path.join(

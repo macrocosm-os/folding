@@ -141,9 +141,7 @@ class Protein(OpenMMSimulation):
             protein.pdb_contents = protein.load_pdb_as_string(protein.pdb_location)
 
         except Exception as E:
-            logger.error(
-                f"from_job failed for {protein.pdb_id} with Exception {E}."
-            )
+            logger.error(f"from_job failed for {protein.pdb_id} with Exception {E}.")
             return None
         return protein
 

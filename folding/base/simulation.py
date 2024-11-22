@@ -26,7 +26,9 @@ class GenericSimulation(ABC):
             start_time = time.time()
             result = method(*args, **kwargs)
             end_time = time.time()
-            logger.info(f"Method {method.__name__} took {end_time - start_time:.4f} seconds")
+            logger.info(
+                f"Method {method.__name__} took {end_time - start_time:.4f} seconds"
+            )
             return result
 
         return timed
@@ -57,17 +59,13 @@ class OpenMMSimulation(GenericSimulation):
 
         start_time = time.time()
         modeller.deleteWater()
-        logger.warning(
-            f"Deleting water took {time.time() - start_time:.4f} seconds"
-        )
+        logger.warning(f"Deleting water took {time.time() - start_time:.4f} seconds")
 
         # modeller.addExtraParticles(forcefield)
 
         start_time = time.time()
         modeller.addHydrogens(forcefield)
-        logger.warning(
-            f"Adding hydrogens took {time.time() - start_time:.4f} seconds"
-        )
+        logger.warning(f"Adding hydrogens took {time.time() - start_time:.4f} seconds")
 
         start_time = time.time()
         # modeller.addSolvent(
@@ -75,9 +73,7 @@ class OpenMMSimulation(GenericSimulation):
         #     padding=system_config.box_padding * unit.nanometer,
         #     boxShape=system_config.box,
         # )
-        logger.warning(
-            f"Adding solvent took {time.time() - start_time:.4f} seconds"
-        )
+        logger.warning(f"Adding solvent took {time.time() - start_time:.4f} seconds")
 
         # Create the system
         start_time = time.time()
@@ -101,9 +97,7 @@ class OpenMMSimulation(GenericSimulation):
             nonbondedCutoff=nonbondedCutoff,
             constraints=system_config["constraints"],
         )
-        logger.warning(
-            f"Creating system took {time.time() - start_time:.4f} seconds"
-        )
+        logger.warning(f"Creating system took {time.time() - start_time:.4f} seconds")
 
         # Integrator settings
         integrator = mm.LangevinIntegrator(
@@ -146,9 +140,7 @@ class OpenMMSimulation(GenericSimulation):
 
         start_time = time.time()
         simulation.context.setPositions(modeller.positions)
-        logger.warning(
-            f"Setting positions took {time.time() - start_time:.4f} seconds"
-        )
+        logger.warning(f"Setting positions took {time.time() - start_time:.4f} seconds")
 
         # Converting the system config into a Dict[str,str] and ensure all values in system_config are of the correct type
         for k, v in system_config.items():
