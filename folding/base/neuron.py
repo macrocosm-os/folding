@@ -67,8 +67,6 @@ class BaseNeuron(ABC):
         self.config.merge(base_config)
         self.check_config(self.config)
 
-
-
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 
@@ -158,8 +156,9 @@ class BaseNeuron(ABC):
             try:
                 self.set_weights()
             except RetryError as e:
-                logger.error(f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks.")
-                
+                logger.error(
+                    f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
+                )
 
         # Always save state.
         self.save_state()

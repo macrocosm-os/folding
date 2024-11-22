@@ -76,9 +76,7 @@ def get_energies(
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
-            logger.error(
-                f"Failed to parse miner data for uid {uid} with error: {E}"
-            )
+            logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
             continue
 
     return energies, event

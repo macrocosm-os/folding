@@ -113,7 +113,7 @@ class OrganicSynapse(bt.Synapse):
     friction: float
     epsilon: float
 
-    is_processed:  typing.Optional[bool] = False
+    is_processed: typing.Optional[bool] = False
 
     def deserialize(self) -> dict:
         return self.dict()
@@ -121,12 +121,11 @@ class OrganicSynapse(bt.Synapse):
     def get_simulation_params(self):
         return {
             "pdb_id": self.pdb_id,
-            "source":self.source,
+            "source": self.source,
             "ff": self.ff,
             "water": self.water,
             "box": self.box,
             "temperature": self.temperature,
             "friction": self.friction,
-            "epsilon": self.epsilon
+            "epsilon": self.epsilon,
         }
-
