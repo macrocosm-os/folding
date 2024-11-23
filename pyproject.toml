@@ -6,8 +6,8 @@ authors = ["Brian McCrindle <brian@macrocosmos.ai>", "Sergio Champoux <sergio@ma
 
 [tool.poetry.dependencies]
 python = "^3.11"
-torch = "2.3.0"
-loguru = "0.7.0"
+torch = "^2.3.0"
+loguru = "0.7.2"
 pandas = "*"
 bittensor = "8.3.1"
 tenacity = "9.0.0"
@@ -23,7 +23,7 @@ ipykernel = "^6.29.5"
 tqdm = "^4.67.0"
 openmm = {extras = ["cuda12"], version = "^8.2.0"}
 openmm-cuda-12 = "^8.2.0"
-atom = { git = "https://github.com/macrocosm-os/atom.git", branch = "master" }
+atom = { git = "https://github.com/macrocosm-os/atom.git", branch = "main" }
 
 
 [build-system]
