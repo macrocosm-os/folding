@@ -30,7 +30,6 @@ class BatchRewardOutput(BaseModel):
 class BatchRewardInput(BaseModel):
     energies: torch.Tensor
     top_reward: float
-    job: Job
 
     class Config:
         arbitrary_types_allowed = True
@@ -51,6 +50,10 @@ class BaseReward(ABC):
     ) -> BatchRewardOutput:
         pass
 
+    @abstractmethod
+    async def calculate_final_reward(self, rewards: torch.Tensor) -> torch.Tensor:
+        pass
+
     async def setup_rewards(self, energies: torch.Tensor) -> torch.Tensor:
         """Setup rewards for the given energies"""
         return torch.zeros(len(energies))
@@ -62,7 +65,7 @@ class BaseReward(ABC):
             data=data, rewards=self.rewards
         )
         batch_rewards_output.rewards = await self.calculate_final_reward(
-            rewards=batch_rewards_output.rewards, job=data.job
+            rewards=batch_rewards_output.rewards
         )
         batch_rewards_time: float = time.time() - t0
 
@@ -72,18 +75,6 @@ class BaseReward(ABC):
             batch_time=batch_rewards_time,
             extra_info=batch_rewards_output.extra_info,
         )
-
-    async def calculate_final_reward(
-        self, rewards: torch.Tensor, job: Job
-    ) -> torch.Tensor:
-        # priority_multiplier = 1 + (job.priority - 1) * 0.1 TODO: Implement priority
-        priority_multiplier = 1.0
-        organic_multiplier = 1.0
-        if "is_organic" in job.event.keys():
-            if job.event["is_organic"]:
-                organic_multiplier = 10.0
-
-        return rewards * priority_multiplier * organic_multiplier
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name})"

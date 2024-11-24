@@ -30,7 +30,7 @@ import asyncio
 from async_timeout import timeout
 
 from folding.utils.uids import get_random_uids
-from folding.rewards.folding_reward import FoldingReward
+from folding.rewards.folding_reward import SyntheticFoldingReward, OrganicFoldingReward
 from folding.validators.forward import create_new_challenge, run_step, run_ping_step
 from folding.validators.protein import Protein
 
@@ -215,9 +215,12 @@ class Validator(BaseValidatorNeuron):
         job_event["uid_search_time"] = time.time() - start_time
         selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
+        reward_model = SyntheticFoldingReward.__qualname__
+
         if len(valid_uids) >= self.config.neuron.sample_size:
             # If the job is organic, we still need to run the setup simulation to create the files needed for the job.
             if job_event.get("is_organic"):
+                reward_model = OrganicFoldingReward.__qualname__
                 self.config.protein.input_source = job_event["source"]
                 protein = Protein(**job_event, config=self.config.protein)
 
@@ -248,6 +251,7 @@ class Validator(BaseValidatorNeuron):
                 hotkeys=selected_hotkeys,
                 epsilon=job_event["epsilon"],
                 system_kwargs=job_event["system_kwargs"],
+                reward_model=reward_model,
                 event=job_event,
             )
 
@@ -318,7 +322,7 @@ class Validator(BaseValidatorNeuron):
             logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            folding_reward = FoldingReward()
+            folding_reward = globals()[job.reward_model]()
             reward_event: RewardEvent = await folding_reward.apply(
                 data=BatchRewardInput(energies=energies, top_reward=top_reward, job=job)
             )

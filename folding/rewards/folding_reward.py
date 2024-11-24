@@ -11,9 +11,6 @@ class FoldingReward(BaseReward):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def name(self) -> str:
-        return "folding_reward"
-
     async def get_rewards(
         self, data: BatchRewardInput, rewards: torch.Tensor
     ) -> BatchRewardOutput:
@@ -91,3 +88,57 @@ class FoldingReward(BaseReward):
                 rewards[index] = 1 - top_reward
 
         return BatchRewardOutput(rewards=rewards, extra_info=info)
+
+
+class SyntheticFoldingReward(FoldingReward):
+    """Synthetic Folding reward class"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def name(self) -> str:
+        return "synthetic_folding_reward"
+
+    async def calculate_final_reward(self, rewards: torch.Tensor) -> torch.Tensor:
+        """
+        Calculate the final reward for the job.
+
+        Args:
+            rewards (torch.Tensor): tensor of rewards, floats.
+            job (Job)
+
+        Returns:
+            torch.Tensor: tensor of rewards, floats.
+        """
+        # priority_multiplier = 1 + (job.priority - 1) * 0.1 TODO: Implement priority
+        priority_multiplier = 1.0
+        organic_multiplier = 1.0
+
+        return rewards * priority_multiplier * organic_multiplier
+
+
+class OrganicFoldingReward(FoldingReward):
+    """Organic Folding reward class"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def name(self) -> str:
+        return "organic_folding_reward"
+
+    async def calculate_final_reward(self, rewards: torch.Tensor) -> torch.Tensor:
+        """
+        Calculate the final reward for the job.
+
+        Args:
+            rewards (torch.Tensor): tensor of rewards, floats.
+            job (Job)
+
+        Returns:
+            torch.Tensor: tensor of rewards, floats.
+        """
+        # priority_multiplier = 1 + (job.priority - 1) * 0.1 TODO: Implement priority
+        priority_multiplier = 1.0
+        organic_multiplier = 10.0
+
+        return rewards * priority_multiplier * organic_multiplier
