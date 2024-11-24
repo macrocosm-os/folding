@@ -4,17 +4,19 @@ from loguru import logger
 from folding.store import Job
 from folding.rewards.linear_reward import divide_decreasing
 
+
 class FoldingReward(BaseReward):
     """Folding reward class"""
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
+
     def name(self) -> str:
-        return 'folding_reward'
-        
-    
-    async def get_rewards(self, data: BatchRewardInput, rewards: torch.Tensor) -> BatchRewardOutput:
+        return "folding_reward"
+
+    async def get_rewards(
+        self, data: BatchRewardInput, rewards: torch.Tensor
+    ) -> BatchRewardOutput:
         """
         A reward pipeline that determines how to place rewards onto the miners sampled within the batch.
         Currently applies a linearly decreasing reward on all miners that are not the current best / previously
@@ -29,12 +31,12 @@ class FoldingReward(BaseReward):
         energies: torch.Tensor = data.energies
         top_reward: float = data.top_reward
         job: Job = data.job
-        
+
         nonzero_energies: torch.Tensor = torch.nonzero(energies)
-        
+
         info = {
-            'name': self.name(),
-            'top_reward': top_reward,
+            "name": self.name(),
+            "top_reward": top_reward,
         }
 
         # If the best hotkey is not in the set of hotkeys in the job, this means that the top miner has stopped replying.
@@ -42,7 +44,9 @@ class FoldingReward(BaseReward):
             logger.warning(
                 f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}. Assigning no reward."
             )
-            return BatchRewardOutput(rewards=rewards, extra_info=info) # rewards of all 0s.
+            return BatchRewardOutput(
+                rewards=rewards, extra_info=info
+            )  # rewards of all 0s.
 
         best_index: int = job.hotkeys.index(job.best_hotkey)
 
@@ -87,4 +91,3 @@ class FoldingReward(BaseReward):
                 rewards[index] = 1 - top_reward
 
         return BatchRewardOutput(rewards=rewards, extra_info=info)
-    

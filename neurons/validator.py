@@ -319,7 +319,9 @@ class Validator(BaseValidatorNeuron):
 
         if apply_pipeline:
             folding_reward = FoldingReward()
-            reward_event: RewardEvent = await folding_reward.apply(data=BatchRewardInput(energies=energies, top_reward=top_reward, job=job))
+            reward_event: RewardEvent = await folding_reward.apply(
+                data=BatchRewardInput(energies=energies, top_reward=top_reward, job=job)
+            )
             rewards: torch.Tensor = reward_event.rewards
 
             uids = self.get_uids(hotkeys=job.hotkeys)
