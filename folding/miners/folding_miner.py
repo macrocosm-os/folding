@@ -3,14 +3,12 @@ import time
 import glob
 import base64
 import random
-import hashlib
 import concurrent.futures
 from collections import defaultdict
 from typing import Dict, List, Tuple
 import copy
 import traceback
 
-import bittensor as bt
 import openmm as mm
 import openmm.app as app
 
@@ -21,6 +19,7 @@ from folding.protocol import JobSubmissionSynapse
 from folding.utils.logging import log_event
 from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
+    create_simulation_hash,
     check_if_directory_exists,
     get_tracebacks,
     write_pkl,
@@ -198,19 +197,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         return event
 
-    def get_simulation_hash(self, pdb_id: str, system_config: Dict) -> str:
-        """Creates a simulation hash based on the pdb_id and the system_config given.
-
-        Returns:
-            str: first 6 characters of a sha256 hash
-        """
-        system_hash = pdb_id
-        for key, value in system_config.items():
-            system_hash += str(key) + str(value)
-
-        hash_object = hashlib.sha256(system_hash.encode("utf-8"))
-        return hash_object.hexdigest()[:6]
-
     def is_unique_job(self, system_config_filepath: str) -> bool:
         """Check to see if a submitted job is unique by checking to see if the folder exists.
 
@@ -251,7 +237,7 @@ class FoldingMiner(BaseMinerNeuron):
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
 
-        pdb_hash = self.get_simulation_hash(
+        pdb_hash = create_simulation_hash(
             pdb_id=pdb_id, system_config=synapse.system_config
         )
         output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
