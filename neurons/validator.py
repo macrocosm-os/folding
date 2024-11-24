@@ -30,13 +30,14 @@ import asyncio
 from async_timeout import timeout
 
 from folding.utils.uids import get_random_uids
-from folding.rewards.reward_pipeline import reward_pipeline
+from folding.rewards.folding_reward import FoldingReward
 from folding.validators.forward import create_new_challenge, run_step, run_ping_step
 from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job, SQLiteJobStore
 from folding.base.validator import BaseValidatorNeuron
+from folding.base.reward import BatchRewardInput, RewardEvent
 from folding.utils.logging import log_event
 from loguru import logger
 
@@ -317,12 +318,9 @@ class Validator(BaseValidatorNeuron):
             logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            rewards: torch.Tensor = await reward_pipeline(
-                energies=energies,
-                rewards=rewards,
-                top_reward=top_reward,
-                job=job,
-            )
+            folding_reward = FoldingReward()
+            reward_event: RewardEvent = await folding_reward.apply(data=BatchRewardInput(energies=energies, top_reward=top_reward, job=job))
+            rewards: torch.Tensor = reward_event.rewards
 
             uids = self.get_uids(hotkeys=job.hotkeys)
             await self.update_scores(
