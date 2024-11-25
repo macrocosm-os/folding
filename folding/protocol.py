@@ -55,7 +55,7 @@ class JobSubmissionSynapse(bt.Synapse):
     # Miner can decide if they are serving the request or not.
     miner_serving: bool = True
 
-    best_submitted_energy: typing.Optional[dict] = None
+    best_submitted_energy: typing.Optional[float] = None
 
     # Optional request output, filled by receiving axon.
     md_output: typing.Optional[dict] = None

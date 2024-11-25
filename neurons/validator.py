@@ -227,7 +227,7 @@ class Validator(BaseValidatorNeuron):
                         )
                         await protein.setup_simulation()
                         logger.success(
-                            f"✅✅ {job_event['pdb_id']} simulation ran successfully! ✅✅"
+                            f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
                         )
 
                     if protein.init_energy > 0:
@@ -238,7 +238,7 @@ class Validator(BaseValidatorNeuron):
                 except Exception as e:
                     logger.error(f"Error in setting up organic query: {e}")
 
-            logger.info(f"Inserting organic job: {job_event['pdb_id']}")
+            logger.info(f"Inserting job: {job_event['pdb_id']}")
             self.store.insert(
                 pdb=job_event["pdb_id"],
                 ff=job_event["ff"],
