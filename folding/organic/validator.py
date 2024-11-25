@@ -3,6 +3,7 @@ import copy
 import random
 import asyncio
 import bittensor as bt
+from loguru import logger
 
 from typing import Any, Literal, Union, Tuple
 
@@ -54,7 +55,7 @@ class OrganicValidator(OrganicScoringBase):
 
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
-        bt.logging.success(
+        logger.success(
             f"Query received: organic queue size = {self._organic_queue.size}"
         )
 
@@ -76,11 +77,11 @@ class OrganicValidator(OrganicScoringBase):
                 logs = await self.forward()
 
                 total_elapsed_time = logs.get("total_elapsed_time", 0)
-                bt.logging.info(
+                logger.info(
                     f"Organic scoring iteration completed in {total_elapsed_time:.2f} seconds."
                 )
 
-                bt.logging.warning(
+                logger.warning(
                     f"Sleeping for {self._validator.config.neuron.organic_trigger_frequency} seconds before next organic check."
                 )
                 await asyncio.sleep(
@@ -88,7 +89,7 @@ class OrganicValidator(OrganicScoringBase):
                 )
 
             except Exception as e:
-                bt.logging.error(
+                logger.error(
                     f"Error occured during organic scoring iteration:\n{e}"
                 )
                 await asyncio.sleep(1)
@@ -138,7 +139,7 @@ class OrganicValidator(OrganicScoringBase):
 
         # If the job was unable to be added to the queue for any reason, add it back to the organic queue.
         if not job_added:
-            bt.logging.warning("adding previously sampled job back to organic queue.")
+            logger.warning("adding previously sampled job back to organic queue.")
             self._organic_queue.add(sample_copy)
             return {
                 "total_elapsed_time": time.perf_counter() - init_time,
