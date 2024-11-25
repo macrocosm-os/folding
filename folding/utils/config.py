@@ -18,7 +18,6 @@
 
 import os
 import sys
-import torch
 import argparse
 import bittensor as bt
 from loguru import logger
@@ -453,9 +452,8 @@ def add_validator_args(cls, parser):
         nargs="+",  # Accepts one or more values as a list
         help="The validator will only accept organic queries from a list of whitelisted hotkeys.",
         default=[
-            "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3",
-            "5CQ9KNHy9qvRGhLWeV37agEpmLckSgMXzbZWEEXwbupSCTQy",  # personal key
-        ],  # Sets default otf key
+            "5CQ9KNHy9qvRGhLWeV37agEpmLckSgMXzbZWEEXwbupSCTQy",
+        ],
     )
 
 

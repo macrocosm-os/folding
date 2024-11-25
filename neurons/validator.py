@@ -19,12 +19,12 @@ import re
 import time
 import random
 import numpy as np
+from loguru import logger
 from itertools import chain
 from typing import Any, Dict, List, Tuple
 
 import torch
 import pandas as pd
-import bittensor as bt
 import asyncio
 
 from async_timeout import timeout
@@ -38,7 +38,6 @@ from folding.validators.protein import Protein
 from folding.store import Job, SQLiteJobStore
 from folding.base.validator import BaseValidatorNeuron
 from folding.utils.logging import log_event
-from loguru import logger
 
 
 class Validator(BaseValidatorNeuron):
@@ -126,6 +125,7 @@ class Validator(BaseValidatorNeuron):
             uids=uids,
             timeout=self.config.neuron.timeout,
             mdrun_args=self.mdrun_args,
+            best_submitted_energy=job.best_loss,
         )
 
     async def ping_all_miners(
@@ -222,12 +222,12 @@ class Validator(BaseValidatorNeuron):
 
                 try:
                     async with timeout(180):
-                        bt.logging.info(
+                        logger.info(
                             f"setup_simulation for organic query: {job_event['pdb_id']}"
                         )
                         await protein.setup_simulation()
-                        bt.logging.success(
-                            f"✅✅ {job_event['pdb_id']} simulation ran successfully! ✅✅"
+                        logger.success(
+                            f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
                         )
 
                     if protein.init_energy > 0:
@@ -236,9 +236,9 @@ class Validator(BaseValidatorNeuron):
                         )
 
                 except Exception as e:
-                    bt.logging.error(f"Error in setting up organic query: {e}")
+                    logger.error(f"Error in setting up organic query: {e}")
 
-            bt.logging.info(f"Inserting organic job: {job_event['pdb_id']}")
+            logger.info(f"Inserting job: {job_event['pdb_id']}")
             self.store.insert(
                 pdb=job_event["pdb_id"],
                 ff=job_event["ff"],
@@ -252,7 +252,7 @@ class Validator(BaseValidatorNeuron):
 
             return True
         else:
-            bt.logging.warning(
+            logger.warning(
                 f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
             )
             return False

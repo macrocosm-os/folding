@@ -55,6 +55,7 @@ async def run_step(
     uids: List[int],
     timeout: float,
     mdrun_args="",  # TODO: Remove this
+    best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()
 
@@ -78,6 +79,7 @@ async def run_step(
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
         system_config=system_config,
+        best_submitted_energy=best_submitted_energy,
     )
 
     # Make calls to the network with the prompt - this is synchronous.

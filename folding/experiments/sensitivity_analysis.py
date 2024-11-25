@@ -4,10 +4,10 @@
 import os
 import time
 import wandb
-from typing import Dict, List
 from tqdm import tqdm
+from loguru import logger
 from pathlib import Path
-import bittensor as bt
+from typing import Dict, List
 
 import pandas as pd
 from box import Box  # install using pip install box
@@ -37,7 +37,7 @@ SIMULATION_STEPS = {"nvt": 50000, "npt": 75000, "md_0_1": 100000}
 
 def log_event(event: Dict):
     """Log the event to the console and to the wandb logger."""
-    # bt.logging.info(f"Event: {event}")
+    # logger.info(f"Event: {event}")
     wandb.log(event)
 
 
@@ -98,15 +98,15 @@ def create_new_challenge(pdb_id: str) -> Dict:
     forward_start_time = time.time()
 
     # Perform a hyperparameter search until we find a valid configuration for the pdb
-    # bt.logging.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
+    # logger.warning(f"Attempting to prepare challenge for pdb {pdb_id}")
     protein, event = try_prepare_challenge(pdb_id=pdb_id)
 
     if event.get("validator_search_status"):
-        bt.logging.success(f"✅✅ Successfully created challenge for pdb_id {pdb_id} ✅✅")
+        logger.success(f"✅✅ Successfully created challenge for pdb_id {pdb_id} ✅✅")
     else:
         # forward time if validator step fails
         event["hp_search_time"] = time.time() - forward_start_time
-        bt.logging.error(
+        logger.error(
             f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
         )
 
@@ -121,7 +121,7 @@ def try_prepare_challenge(pdb_id: str) -> Dict:
     # exclude_in_hp_search = parse_config(config)
     hp_sampler = HyperParameters()
 
-    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    logger.info(f"Searching parameter space for pdb {pdb_id}")
 
     for tries in tqdm(
         range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
@@ -144,7 +144,7 @@ def try_prepare_challenge(pdb_id: str) -> Dict:
             protein.setup_simulation()
 
         except Exception as e:
-            bt.logging.error(f"Error occurred for pdb_id {pdb_id}: {e}")
+            logger.error(f"Error occurred for pdb_id {pdb_id}: {e}")
             event["validator_search_status"] = False
 
         finally:
@@ -156,12 +156,12 @@ def try_prepare_challenge(pdb_id: str) -> Dict:
             # event["epsilon"] = protein.epsilon
 
             if "validator_search_status" not in event:
-                bt.logging.warning("✅✅ Simulation ran successfully! ✅✅")
+                logger.warning("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break
             if tries == 3:
-                bt.logging.error(f"Max tries reached for pdb_id {pdb_id} :x::x:")
+                logger.error(f"Max tries reached for pdb_id {pdb_id} :x::x:")
                 break
 
     return protein, event
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         try:
             protein, event = create_new_challenge(pdb_id=pdb_id)
         except Exception as e:
-            bt.logging.error(f"Error occurred for pdb_id {pdb_id}: {e}")
+            logger.error(f"Error occurred for pdb_id {pdb_id}: {e}")
             pdbs_to_exclude.append(pdb_id)
             continue
 
@@ -228,7 +228,7 @@ if __name__ == "__main__":
                     output_dir=protein.validator_directory,
                 )
 
-                bt.logging.info(
+                logger.info(
                     f"Running {state} for {steps_to_run} steps for pdb {pdb_id}"
                 )
 

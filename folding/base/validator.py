@@ -25,6 +25,7 @@ import argparse
 import threading
 import bittensor as bt
 from pathlib import Path
+from loguru import logger
 
 from typing import List, Optional
 
@@ -35,7 +36,6 @@ from folding.organic.validator import OrganicValidator
 from folding.utils.ops import print_on_retry
 
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
-from loguru import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -99,7 +99,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
             self.loop.create_task(self._organic_scoring.start_loop())
         else:
-            bt.logging.warning(
+            logger.warning(
                 "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_disabled'"
             )
 
@@ -108,7 +108,7 @@ class BaseValidatorNeuron(BaseNeuron):
     def _serve_axon(self):
         """Serve axon to enable external connections"""
         validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-        bt.logging.info(f"Serving validator IP of UID {validator_uid} to chain...")
+        logger.info(f"Serving validator IP of UID {validator_uid} to chain...")
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor).start()
 
     @retry(
