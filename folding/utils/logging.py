@@ -1,13 +1,13 @@
 import copy
 import wandb
 from typing import List
-from loguru import logger
+from folding.utils.config import logger
 from dataclasses import asdict, dataclass
 import os
 
 import folding
 import bittensor as bt
-from loguru import logger
+from folding.utils.config import logger
 
 
 @dataclass

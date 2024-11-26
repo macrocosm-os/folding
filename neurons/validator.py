@@ -19,7 +19,7 @@ import re
 import time
 import random
 import numpy as np
-from loguru import logger
+from folding.utils.config import logger
 from itertools import chain
 from typing import Any, Dict, List, Tuple
 

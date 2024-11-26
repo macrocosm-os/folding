@@ -6,7 +6,7 @@ import numpy as np
 
 from folding.protocol import JobSubmissionSynapse
 from folding.validators.protein import Protein
-from loguru import logger
+from folding.utils.config import logger
 
 
 def get_energies(

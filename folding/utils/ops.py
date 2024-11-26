@@ -18,7 +18,7 @@ import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
-from loguru import logger
+from folding.utils.config import logger
 
 
 class TimeoutException(Exception):

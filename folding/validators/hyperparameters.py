@@ -6,7 +6,7 @@ import numpy as np
 import bittensor as bt
 
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
-from loguru import logger
+from folding.utils.config import logger
 
 
 class HyperParameters:

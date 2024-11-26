@@ -3,7 +3,7 @@ import copy
 import random
 import asyncio
 import bittensor as bt
-from loguru import logger
+from folding.utils.config import logger
 
 from typing import Any, Literal, Union, Tuple
 

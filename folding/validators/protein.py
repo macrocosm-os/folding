@@ -28,7 +28,7 @@ from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
 )
-from loguru import logger
+from folding.utils.config import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 

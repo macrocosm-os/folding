@@ -3,7 +3,7 @@ import pytest
 import os
 import random
 import string
-from loguru import logger
+from folding.utils.config import logger
 
 from pathlib import Path
 import concurrent.futures

@@ -26,7 +26,7 @@ from folding.utils.ops import (
     write_pkl,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
-from loguru import logger
+from folding.utils.config import logger
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

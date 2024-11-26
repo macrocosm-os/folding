@@ -2,7 +2,7 @@ import torch
 import bittensor as bt
 from folding.store import Job
 from folding.rewards.linear_reward import divide_decreasing
-from loguru import logger
+from folding.utils.config import logger
 
 
 async def reward_pipeline(

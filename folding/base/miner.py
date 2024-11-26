@@ -26,7 +26,7 @@ import bittensor as bt
 from folding.base.neuron import BaseNeuron
 from folding.protocol import PingSynapse
 from folding.utils.config import add_miner_args
-from loguru import logger
+from folding.utils.config import logger
 
 
 class BaseMinerNeuron(BaseNeuron):

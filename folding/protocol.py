@@ -19,7 +19,7 @@
 import typing
 import base64
 import bittensor as bt
-from loguru import logger
+from folding.utils.config import logger
 
 from folding.utils.opemm_simulation_config import SimulationConfig
 
