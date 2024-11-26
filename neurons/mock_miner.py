@@ -18,12 +18,13 @@
 import time
 import bittensor as bt
 from folding.miners.mock_miner import MockFoldingMiner
+from loguru import logger
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     with MockFoldingMiner() as m:
         while True:
-            bt.logging.info(
+            logger.info(
                 f"Miner running:: network: {m.subtensor.network} | step: {m.step} | uid: {m.uid}"
             )
             time.sleep(15)

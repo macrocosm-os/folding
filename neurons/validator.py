@@ -14,20 +14,20 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
-
+import os
 import re
 import time
 import random
 import numpy as np
-from typing import Dict, List, Tuple
+from loguru import logger
 from itertools import chain
-import os
+from typing import Any, Dict, List, Tuple
 
 import torch
 import pandas as pd
-import bittensor as bt
 import asyncio
 
+from async_timeout import timeout
 
 from folding.utils.uids import get_random_uids
 from folding.rewards.reward_pipeline import reward_pipeline
@@ -58,7 +58,7 @@ class Validator(BaseValidatorNeuron):
         self.mdrun_args = self.parse_mdrun_args()
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
-        bt.logging.info("Determining all miner uids...⏳")
+        logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
@@ -118,13 +118,14 @@ class Validator(BaseValidatorNeuron):
 
         uids = self.get_uids(hotkeys=job.hotkeys)
 
-        bt.logging.info("Running run_step...⏳")
+        logger.info("Running run_step...⏳")
         return await run_step(
             self,
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
             mdrun_args=self.mdrun_args,
+            best_submitted_energy=job.best_loss,
         )
 
     async def ping_all_miners(
@@ -177,8 +178,87 @@ class Validator(BaseValidatorNeuron):
         elif len(active_uids) <= num_uids_to_sample:
             return active_uids
 
-    async def add_jobs(self, k: int):
-        """Creates new jobs and assigns them to available workers. Updates DB with new records.
+    async def get_valid_uids(self) -> List[int]:
+        """get valid uids to work on a job by sampling random uids and excluding active jobs.
+
+        Returns:
+            valid_uids: List of uids
+        """
+        active_jobs = self.store.get_queue(ready=False).queue
+        active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
+        active_hotkeys = list(chain.from_iterable(active_hotkeys))
+        exclude_uids = self.get_uids(hotkeys=active_hotkeys)
+
+        valid_uids = await self.sample_random_uids(
+            num_uids_to_sample=self.config.neuron.sample_size,
+            exclude_uids=exclude_uids,
+        )
+
+        return valid_uids
+
+    async def add_job(self, job_event: dict[str, Any], uids: List[int] = None) -> bool:
+        """Add a job to the job store while also checking to see what uids can be assigned to the job.
+        If uids are not provided, then the function will sample random uids from the network.
+
+        Args:
+            job_event (dict[str, Any]): parameters that are needed to make the job.
+            uids (List[int], optional): List of uids that can be assigned to the job. Defaults to None.
+        """
+        start_time = time.time()
+
+        if uids is not None:
+            valid_uids = uids
+        else:
+            valid_uids = await self.get_valid_uids()
+
+        job_event["uid_search_time"] = time.time() - start_time
+        selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
+
+        if len(valid_uids) >= self.config.neuron.sample_size:
+            # If the job is organic, we still need to run the setup simulation to create the files needed for the job.
+            if job_event.get("is_organic"):
+                self.config.protein.input_source = job_event["source"]
+                protein = Protein(**job_event, config=self.config.protein)
+
+                try:
+                    async with timeout(180):
+                        logger.info(
+                            f"setup_simulation for organic query: {job_event['pdb_id']}"
+                        )
+                        await protein.setup_simulation()
+                        logger.success(
+                            f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
+                        )
+
+                    if protein.init_energy > 0:
+                        raise ValueError(
+                            f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                        )
+
+                except Exception as e:
+                    logger.error(f"Error in setting up organic query: {e}")
+
+            logger.info(f"Inserting job: {job_event['pdb_id']}")
+            self.store.insert(
+                pdb=job_event["pdb_id"],
+                ff=job_event["ff"],
+                water=job_event["water"],
+                box=job_event["box"],
+                hotkeys=selected_hotkeys,
+                epsilon=job_event["epsilon"],
+                system_kwargs=job_event["system_kwargs"],
+                event=job_event,
+            )
+
+            return True
+        else:
+            logger.warning(
+                f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
+            )
+            return False
+
+    async def add_k_synthetic_jobs(self, k: int):
+        """Creates new synthetic jobs and assigns them to available workers. Updates DB with new records.
         Each "job" is an individual protein folding challenge that is distributed to the miners.
 
         Args:
@@ -187,47 +267,13 @@ class Validator(BaseValidatorNeuron):
 
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
         for ii in range(k):
-            bt.logging.info(f"Adding job: {ii+1}/{k}")
+            logger.info(f"Adding job: {ii+1}/{k}")
 
             # This will change on each loop since we are submitting a new pdb to the batch of miners
             exclude_pdbs = self.store.get_all_pdbs()
+            job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            # assign workers to the job (hotkeys)
-            active_jobs = self.store.get_queue(ready=False).queue
-            active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
-            active_hotkeys = list(chain.from_iterable(active_hotkeys))
-            exclude_uids = self.get_uids(hotkeys=active_hotkeys)
-
-            start_time = time.time()
-            valid_uids = await self.sample_random_uids(
-                num_uids_to_sample=self.config.neuron.sample_size,
-                exclude_uids=exclude_uids,
-            )
-
-            uid_search_time = time.time() - start_time
-
-            if len(valid_uids) >= self.config.neuron.sample_size:
-                # With the above logic, we know we have a valid set of uids.
-                # selects a new pdb, downloads data, preprocesses and gets hyperparams.
-                job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
-                job_event["uid_search_time"] = uid_search_time
-
-                selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
-
-                self.store.insert(
-                    pdb=job_event["pdb_id"],
-                    ff=job_event["ff"],
-                    water=job_event["water"],
-                    box=job_event["box"],
-                    hotkeys=selected_hotkeys,
-                    epsilon=job_event["epsilon"],
-                    system_kwargs=job_event["system_kwargs"],
-                    event=job_event,
-                )
-            else:
-                bt.logging.warning(
-                    f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
-                )
+            await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
     async def update_job(self, job: Job):
@@ -263,12 +309,12 @@ class Validator(BaseValidatorNeuron):
             # All miners not responding but there is at least ONE miner that did in the past. Give them rewards.
             if job.best_loss < 0:
                 apply_pipeline = True
-                bt.logging.warning(
+                logger.warning(
                     f"Received all zero energies for {job.pdb} but stored best_loss < 0... Applying reward pipeline."
                 )
         else:
             apply_pipeline = True
-            bt.logging.success("Non-zero energies received. Applying reward pipeline.")
+            logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
             rewards: torch.Tensor = await reward_pipeline(
@@ -284,7 +330,7 @@ class Validator(BaseValidatorNeuron):
                 uids=uids,  # pretty confident these are in the correct order.
             )
         else:
-            bt.logging.warning(
+            logger.warning(
                 f"All energies zero for job {job.pdb} and job has never been updated... Skipping"
             )
 
@@ -322,7 +368,7 @@ class Validator(BaseValidatorNeuron):
                     protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb"
                 )
         else:
-            bt.logging.error(f"Protein.from_job returns NONE for protein {job.pdb}")
+            logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
         # Remove these keys from the log because they polute the terminal.
         log_event(
@@ -334,26 +380,26 @@ class Validator(BaseValidatorNeuron):
 
         merged_events.pop("checked_energy")
         merged_events.pop("miner_energy")
-        bt.logging.success(f"Event information: {merged_events}")
+        logger.success(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
 
     async def sync_loop(self):
-        bt.logging.info("Starting sync loop.")
+        logger.info("Starting sync loop.")
         while True:
             self.sync()
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
 
-    async def create_jobs(self):
+    async def create_synthetic_jobs(self):
         """
         Creates jobs and adds them to the queue.
         """
 
         while True:
             try:
-                bt.logging.info("Starting job creation loop.")
+                logger.info("Starting job creation loop.")
                 queue = self.store.get_queue(ready=False)
                 if queue.qsize() < self.config.neuron.queue_size:
                     # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
@@ -365,22 +411,26 @@ class Validator(BaseValidatorNeuron):
                             f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
                         )
 
-                    bt.logging.debug(f"✅ Creating jobs! ✅")
+                    logger.debug(f"✅ Creating jobs! ✅")
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
-                    await self.add_jobs(k=self.config.neuron.queue_size - queue.qsize())
-                    bt.logging.info(
-                        f"Sleeping 60 seconds before next job creation loop."
+
+                    await self.add_k_synthetic_jobs(
+                        k=self.config.neuron.queue_size - queue.qsize()
+                    )
+
+                    logger.info(
+                        f"Sleeping {self.config.neuron.synthetic_job_interval} seconds before next job creation loop."
                     )
                 else:
-                    bt.logging.info(
+                    logger.info(
                         "Job queue is full. Sleeping 60 seconds before next job creation loop."
                     )
 
             except Exception as e:
-                bt.logging.error(f"Error in create_jobs: {e}")
+                logger.error(f"Error in create_jobs: {e}")
 
-            await asyncio.sleep(60)
+            await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
         while True:
@@ -388,8 +438,8 @@ class Validator(BaseValidatorNeuron):
                 # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.
                 await asyncio.sleep(self.config.neuron.update_interval)
 
-                bt.logging.info("Updating jobs.")
-                bt.logging.info(f"step({self.step}) block({self.block})")
+                logger.info("Updating jobs.")
+                logger.info(f"step({self.step}) block({self.block})")
 
                 for job in self.store.get_queue(ready=False).queue:
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
@@ -414,20 +464,20 @@ class Validator(BaseValidatorNeuron):
                     # Update the DB with the current status
                     await self.update_job(job=job)
             except Exception as e:
-                bt.logging.error(f"Error in update_jobs: {e}")
+                logger.error(f"Error in update_jobs: {e}")
 
             self.step += 1
 
-            bt.logging.info(
+            logger.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
 
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
-        self.loop.create_task(self.create_jobs())
+        self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
         self.is_running = True
-        bt.logging.debug("Starting validator in background thread.")
+        logger.debug("Starting validator in background thread.")
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -444,10 +494,10 @@ class Validator(BaseValidatorNeuron):
                        None if the context was exited without an exception.
         """
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            logger.debug("Stopping validator in background thread.")
             self.should_exit = True
             self.is_running = False
-            bt.logging.debug("Stopped")
+            logger.debug("Stopped")
 
 
 async def main():

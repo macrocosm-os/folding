@@ -93,7 +93,7 @@ class TemplateValidatorNeuronTestCase(unittest.TestCase):
 
     def test_reward_with_nan(self):
         # TODO: Test that NaN rewards are correctly sanitized
-        # TODO: Test that a bt.logging.warning is thrown when a NaN reward is sanitized
+        # TODO: Test that a logger.warning is thrown when a NaN reward is sanitized
         responses = self.dendrite.query(
             # Send the query to miners in the network.
             axons=[self.metagraph.axons[uid] for uid in self.miner_uids],
@@ -108,5 +108,5 @@ class TemplateValidatorNeuronTestCase(unittest.TestCase):
         # Add NaN values to rewards
         rewards[0] = float("nan")
 
-        with self.assertLogs(bt.logging, level="WARNING") as cm:
+        with self.assertLogs(logger, level="WARNING") as cm:
             self.neuron.update_scores(rewards, self.miner_uids)

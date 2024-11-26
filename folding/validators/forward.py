@@ -1,13 +1,13 @@
 import time
-import traceback
+import numpy as np
 from tqdm import tqdm
 import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
+
 from async_timeout import timeout
 
-import numpy as np
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
@@ -22,6 +22,7 @@ from folding.utils.ops import (
     OpenMMException,
     RsyncException,
 )
+from loguru import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -33,7 +34,7 @@ async def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
     axons = [self.metagraph.axons[uid] for uid in uids]
     synapse = PingSynapse()
 
-    bt.logging.info(f"Pinging {len(axons)} uids")
+    logger.info(f"Pinging {len(axons)} uids")
     responses: List[PingSynapse] = await self.dendrite.forward(
         axons=axons,
         synapse=synapse,
@@ -54,6 +55,7 @@ async def run_step(
     uids: List[int],
     timeout: float,
     mdrun_args="",  # TODO: Remove this
+    best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()
 
@@ -77,10 +79,11 @@ async def run_step(
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
         system_config=system_config,
+        best_submitted_energy=best_submitted_energy,
     )
 
     # Make calls to the network with the prompt - this is synchronous.
-    bt.logging.info("⏰ Waiting for miner responses ⏰")
+    logger.info("⏰ Waiting for miner responses ⏰")
     responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
         axons=axons,
         synapse=synapse,
@@ -107,7 +110,7 @@ async def run_step(
     }
 
     if len(responses_serving) == 0:
-        bt.logging.warning(
+        logger.warning(
             f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗"
         )
         return event
@@ -172,7 +175,7 @@ async def create_new_challenge(self, exclude: List) -> Dict:
             self.config.protein.input_source = input_source
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
-        bt.logging.info(f"Attempting to prepare challenge for pdb {pdb_id}")
+        logger.info(f"Attempting to prepare challenge for pdb {pdb_id}")
         event = await try_prepare_challenge(self, config=self.config, pdb_id=pdb_id)
         event["input_source"] = self.config.protein.input_source
 
@@ -184,7 +187,7 @@ async def create_new_challenge(self, exclude: List) -> Dict:
 
             # only log the event if the simulation was not successful
             log_event(self, event, failed=True)
-            bt.logging.debug(
+            logger.debug(
                 f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
             )
             exclude.append(pdb_id)
@@ -212,7 +215,7 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
-    bt.logging.info(f"Searching parameter space for pdb {pdb_id}")
+    logger.info(f"Searching parameter space for pdb {pdb_id}")
 
     exclude_in_hp_search = parse_config(config)
     hp_sampler = HyperParameters(exclude=exclude_in_hp_search)
@@ -270,12 +273,12 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
                 )
 
         except TimeoutException as e:
-            bt.logging.info(e)
+            logger.info(e)
             event["validator_search_status"] = False
             tries = 10
 
         except OpenMMException as e:
-            bt.logging.info(f"OpenMMException occurred: init_energy is NaN {e}")
+            logger.info(f"OpenMMException occurred: init_energy is NaN {e}")
             event["validator_search_status"] = False
 
         except RsyncException as e:
@@ -284,7 +287,7 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
 
         except Exception as e:
             # full traceback
-            bt.logging.info(e)
+            logger.info(e)
             event["validator_search_status"] = False
 
         finally:
@@ -297,13 +300,13 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
             event["system_kwargs"] = system_kwargs
 
             if "validator_search_status" not in event:
-                bt.logging.success("✅✅ Simulation ran successfully! ✅✅")
+                logger.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
                 # break out of the loop if the simulation was successful
                 break
 
             if tries == 10:
-                bt.logging.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")
+                logger.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")
                 return event
 
     return event

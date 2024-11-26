@@ -30,6 +30,7 @@ from folding import __spec_version__ as spec_version
 from folding import __OPENMM_VERSION_TAG__
 from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
+from loguru import logger
 
 
 class BaseNeuron(ABC):
@@ -66,18 +67,15 @@ class BaseNeuron(ABC):
         self.config.merge(base_config)
         self.check_config(self.config)
 
-        # Set up logging with the provided configuration and directory.
-        bt.logging(config=self.config, logging_dir=self.config.full_path)
-
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 
         # Log the configuration for reference.
-        bt.logging.info(self.config)
+        logger.info(self.config)
 
         # Build Bittensor objects
         # These are core Bittensor classes to interact with the network.
-        bt.logging.info("Setting up bittensor objects.")
+        logger.info("Setting up bittensor objects.")
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
@@ -93,16 +91,16 @@ class BaseNeuron(ABC):
             self.check_openmm_version()
             self.setup_wandb_logging()
 
-        bt.logging.info(f"Wallet: {self.wallet}")
-        bt.logging.info(f"Subtensor: {self.subtensor}")
-        bt.logging.info(f"Metagraph: {self.metagraph}")
+        logger.info(f"Wallet: {self.wallet}")
+        logger.info(f"Subtensor: {self.subtensor}")
+        logger.info(f"Metagraph: {self.metagraph}")
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
         self.check_registered()
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-        bt.logging.info(
+        logger.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
@@ -122,7 +120,7 @@ class BaseNeuron(ABC):
         except Exception as e:
             raise e
 
-        bt.logging.success(f"Running OpenMM version: {self.openmm_version}")
+        logger.success(f"Running OpenMM version: {self.openmm_version}")
 
     def setup_wandb_logging(self):
         if os.path.isfile(f"{self.config.neuron.full_path}/wandb_ids.pkl"):
@@ -158,8 +156,9 @@ class BaseNeuron(ABC):
             try:
                 self.set_weights()
             except RetryError as e:
-                bt.logging.error(f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks.")
-                
+                logger.error(
+                    f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
+                )
 
         # Always save state.
         self.save_state()
@@ -170,7 +169,7 @@ class BaseNeuron(ABC):
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
         ):
-            bt.logging.error(
+            logger.error(
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli subnets register` before trying again"
             )
@@ -206,6 +205,6 @@ class BaseNeuron(ABC):
         pass
 
     def load_state(self):
-        bt.logging.warning(
+        logger.warning(
             "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
         )

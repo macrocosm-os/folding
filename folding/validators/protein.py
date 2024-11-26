@@ -13,7 +13,6 @@ import asyncio
 import bittensor as bt
 import numpy as np
 import pandas as pd
-import plotly.express as px
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
@@ -23,14 +22,13 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
-    RsyncException,
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
     load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
-    timeout,
 )
+from loguru import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -52,8 +50,24 @@ class Protein(OpenMMSimulation):
         config: Dict,
         system_kwargs: Dict,
         load_md_inputs: bool = False,
-        epsilon: float = 0.01,
+        epsilon: float = 1,  # percentage
+        **kwargs,
     ) -> None:
+        """The Protein class is responsible for handling the protein simulation.
+        It attempts to setup the simulation environment to ensure that it can be run
+        on the miner side. It also contains methods to validate the simulation outputs.
+
+        Args:
+            pdb_id (str): pdb_id of the protein, typically a 4 letter string.
+            ff (str): the forcefield that will be used for simulation.
+            water (str): water model that will be used for simulation.
+            box (Literal): the shape of the box that will be used for simulation.
+            config (Dict): bittensor config object.
+            system_kwargs (Dict): system kwargs for the SimualtionConfig object.
+            load_md_inputs (bool, optional): If we should load pre-comuted files for the protein. Defaults to False.
+            epsilon (float, optional): The percentage improvement that must be achieved for this protein to be considered "better". Defaults to 1.
+        """
+
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
 
         self.pdb_id: str = pdb_id.lower()
@@ -127,9 +141,7 @@ class Protein(OpenMMSimulation):
             protein.pdb_contents = protein.load_pdb_as_string(protein.pdb_location)
 
         except Exception as E:
-            bt.logging.error(
-                f"from_job failed for {protein.pdb_id} with Exception {E}."
-            )
+            logger.error(f"from_job failed for {protein.pdb_id} with Exception {E}.")
             return None
         return protein
 
@@ -150,15 +162,6 @@ class Protein(OpenMMSimulation):
                         pdb_complexity[key] += 1
         return pdb_complexity
 
-    def gather_pdb_id(self):
-        self.pdb_id, self.config.input_source = load_and_sample_random_pdb_ids(
-            root_dir=ROOT_DIR,
-            filename="pdb_ids.pkl",
-            input_source=self.config.input_source,
-            exclude=None,
-        )  # TODO: This should be a class variable via config
-        bt.logging.debug(f"Selected random pdb id: {self.pdb_id!r}")
-
     async def setup_pdb_directory(self):
         # if directory doesn't exist, download the pdb file and save it to the directory
         if not os.path.exists(self.pdb_directory):
@@ -177,7 +180,7 @@ class Protein(OpenMMSimulation):
                 )
             await self.fix_pdb_file()
         else:
-            bt.logging.info(
+            logger.info(
                 f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
             )
 
@@ -212,14 +215,11 @@ class Protein(OpenMMSimulation):
         4. save the files to the validator directory for record keeping.
         """
 
-        bt.logging.info(
+        logger.info(
             f"Launching {self.pdb_id} Protein Job with the following configuration\nff : {self.ff}\nbox : {self.box}\nwater : {self.water}"
         )
 
-        ## Setup the protein directory and sample a random pdb_id if not provided
-        self.gather_pdb_id()
         await self.setup_pdb_directory()
-
         await self.generate_input_files()
 
         # Create a validator directory to store the files
@@ -296,26 +296,27 @@ class Protein(OpenMMSimulation):
         4. Save the system config to the validator directory.
         5. Move all files except the pdb file to the validator directory.
         """
-        bt.logging.info(f"Changing path to {self.pdb_directory}")
+        logger.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
-        bt.logging.info(
+        logger.info(
             f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
         )
 
-        self.simulation, self.system_config = await asyncio.to_thread(self.create_simulation,
+        self.simulation, self.system_config = await asyncio.to_thread(
+            self.create_simulation,
             self.load_pdb_file(pdb_file=self.pdb_file),
             self.system_config.get_config(),
             "em",
         )
 
-        bt.logging.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
+        logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
 
         start_time = time.time()
-        await asyncio.to_thread(self.simulation.minimizeEnergy,
-            maxIterations=100
+        await asyncio.to_thread(
+            self.simulation.minimizeEnergy, maxIterations=100
         )  # TODO: figure out the right number for this
-        bt.logging.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
+        logger.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
         await asyncio.to_thread(self.simulation.step, 1000)
 
         self.simulation.saveCheckpoint("em.cpt")
@@ -328,7 +329,7 @@ class Protein(OpenMMSimulation):
         check_if_directory_exists(output_directory=self.validator_directory)
         # Move all files
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
-        bt.logging.debug(f"Moving all files except pdb to {self.validator_directory}")
+        logger.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
 
     def gen_seed(self):
@@ -348,14 +349,14 @@ class Protein(OpenMMSimulation):
         Returns:
             _type_: _description_
         """
-        bt.logging.info(f"⏰ Saving files to {output_directory}...")
+        logger.info(f"⏰ Saving files to {output_directory}...")
         check_if_directory_exists(output_directory=output_directory)
 
         filetypes = {}
         for filename, content in files.items():
             filetypes[filename.split(".")[-1]] = filename
 
-            bt.logging.info(f"Saving file {filename} to {output_directory}")
+            logger.info(f"Saving file {filename} to {output_directory}")
             if "em.cpt" in filename:
                 filename = "em_binary.cpt"
 
@@ -366,7 +367,7 @@ class Protein(OpenMMSimulation):
         return filetypes
 
     def delete_files(self, directory: str):
-        bt.logging.info(f"Deleting files in {directory}")
+        logger.info(f"Deleting files in {directory}")
         for file in os.listdir(directory):
             os.remove(os.path.join(directory, file))
         # os.rmdir(output_directory)
@@ -390,14 +391,14 @@ class Protein(OpenMMSimulation):
         }
 
         if len(md_output.keys()) == 0:
-            bt.logging.warning(
+            logger.warning(
                 f"Miner {self.hotkey_alias} returned empty md_output... Skipping!"
             )
             return False
 
         for ext in required_files_extensions:
             if ext not in self.md_outputs_exts:
-                bt.logging.error(f"Missing file with extension {ext} in md_output")
+                logger.error(f"Missing file with extension {ext} in md_output")
                 return False
 
         self.get_miner_data_directory(hotkey=hotkey)
@@ -412,7 +413,7 @@ class Protein(OpenMMSimulation):
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
 
-            bt.logging.info(
+            logger.info(
                 f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}"
             )
             self.simulation, self.system_config = self.create_simulation(
@@ -448,7 +449,7 @@ class Protein(OpenMMSimulation):
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
                 )
                 if os.path.exists(checkpoint_path):
-                    bt.logging.warning(
+                    logger.warning(
                         f"Miner {self.hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
@@ -479,11 +480,11 @@ class Protein(OpenMMSimulation):
                 )
 
         except ValidationError as E:
-            bt.logging.warning(f"{E}")
+            logger.warning(f"{E}")
             return False
 
         except Exception as e:
-            bt.logging.error(f"Failed to recreate simulation: {e}")
+            logger.error(f"Failed to recreate simulation: {e}")
             return False
 
         return True
@@ -532,7 +533,7 @@ class Protein(OpenMMSimulation):
             )
         )
 
-        bt.logging.info(
+        logger.info(
             f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
         )
 
@@ -552,7 +553,7 @@ class Protein(OpenMMSimulation):
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
 
         if not self.check_gradient(check_energies=check_energies):
-            bt.logging.warning(
+            logger.warning(
                 f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!"
             )
             return False, [], []

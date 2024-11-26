@@ -17,19 +17,24 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
-import torch
+import sys
 import argparse
 import bittensor as bt
 from loguru import logger
 
+logger.remove()
+
+# Custom format for different log levels
+FORMAT = """<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>"""
+
 
 def check_config(cls, config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
+    # logger.check_config(config)
 
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
-            config.logging.logging_dir,  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
+            "~/.bittensor/miners",  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
             config.wallet.name,
             config.wallet.hotkey,
             config.netuid,
@@ -53,7 +58,16 @@ def check_config(cls, config: "bt.Config"):
                 backtrace=True,
                 diagnose=False,
                 level="TRACE",
-                format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
+                format=FORMAT,
+            )
+
+            # Add custom colored handler to stdout
+            logger.add(
+                sys.stdout,
+                format=FORMAT,
+                level="TRACE",
+                enqueue=True,
+                colorize=True,
             )
 
 
@@ -339,13 +353,6 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.num_concurrent_forwards",
-        type=int,
-        help="The number of concurrent forwards running at any time.",
-        default=1,
-    )
-
-    parser.add_argument(
         "--neuron.queue_size",
         type=int,
         help="The number of jobs to keep in the queue.",
@@ -391,6 +398,41 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--neuron.synthetic_job_interval",
+        type=float,
+        help="The amount of time that the synthetic job creation loop should wait before checking the queue size again.",
+        default=60,
+    )
+
+    parser.add_argument(
+        "--neuron.organic_disabled",
+        action="store_true",
+        help="Set this flag to disable organic scoring.",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--neuron.organic_trigger",
+        type=str,
+        help="Organic query validation trigger mode (seconds or steps).",
+        default="seconds",
+    )
+
+    parser.add_argument(
+        "--neuron.organic_trigger_frequency",
+        type=float,
+        help="Organic query sampling frequency (seconds or steps value).",
+        default=120.0,
+    )
+
+    parser.add_argument(
+        "--neuron.organic_trigger_frequency_min",
+        type=float,
+        help="Minimum organic query sampling frequency (seconds or steps value).",
+        default=5.0,
+    )
+
+    parser.add_argument(
         "--wandb.project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
@@ -404,6 +446,16 @@ def add_validator_args(cls, parser):
         default="macrocosmos",
     )
 
+    parser.add_argument(
+        "--organic_whitelist",
+        type=str,
+        nargs="+",  # Accepts one or more values as a list
+        help="The validator will only accept organic queries from a list of whitelisted hotkeys.",
+        default=[
+            "5CQ9KNHy9qvRGhLWeV37agEpmLckSgMXzbZWEEXwbupSCTQy",
+        ],
+    )
+
 
 def config(cls):
     """
@@ -412,7 +464,7 @@ def config(cls):
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
+    # logger.add_args(parser)
     bt.axon.add_args(parser)
     cls.add_args(parser)
     return bt.config(parser)

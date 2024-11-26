@@ -19,6 +19,9 @@
 import typing
 import base64
 import bittensor as bt
+from loguru import logger
+
+from folding.utils.opemm_simulation_config import SimulationConfig
 
 
 class PingSynapse(bt.Synapse):
@@ -52,6 +55,8 @@ class JobSubmissionSynapse(bt.Synapse):
     # Miner can decide if they are serving the request or not.
     miner_serving: bool = True
 
+    best_submitted_energy: typing.Optional[float] = None
+
     # Optional request output, filled by receiving axon.
     md_output: typing.Optional[dict] = None
     miner_seed: typing.Optional[int] = None
@@ -66,7 +71,7 @@ class JobSubmissionSynapse(bt.Synapse):
         Returns:
         - dict: The serialized response, which in this case is the value of md_output.
         """
-        bt.logging.info(
+        logger.info(
             f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the response has expected hash
@@ -78,7 +83,7 @@ class JobSubmissionSynapse(bt.Synapse):
                 try:
                     md_output[k] = base64.b64decode(v)
                 except Exception as e:
-                    bt.logging.error(f"Error decoding {k} from md_output: {e}")
+                    logger.error(f"Error decoding {k} from md_output: {e}")
                     md_output[k] = None
 
             self.md_output = md_output
@@ -91,8 +96,38 @@ class JobSubmissionSynapse(bt.Synapse):
                 try:
                     md_inputs[k] = base64.b64decode(v)
                 except Exception as e:
-                    bt.logging.error(f"Error decoding {k} from md_inputs: {e}")
+                    logger.error(f"Error decoding {k} from md_inputs: {e}")
                     md_inputs[k] = None
 
             self.md_inputs = md_inputs
         return self
+
+
+class OrganicSynapse(bt.Synapse):
+    """A synapse for organic scoring."""
+
+    pdb_id: str
+    source: str
+    ff: str
+    water: str
+    box: str
+    temperature: float
+    friction: float
+    epsilon: float
+
+    is_processed: typing.Optional[bool] = False
+
+    def deserialize(self) -> dict:
+        return self.dict()
+
+    def get_simulation_params(self):
+        return {
+            "pdb_id": self.pdb_id,
+            "source": self.source,
+            "ff": self.ff,
+            "water": self.water,
+            "box": self.box,
+            "temperature": self.temperature,
+            "friction": self.friction,
+            "epsilon": self.epsilon,
+        }

@@ -26,6 +26,7 @@ from folding.utils.ops import (
     write_pkl,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
+from loguru import logger
 
 # root level directory for the project (I HATE THIS)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,7 +37,7 @@ def attach_files(
     files_to_attach: List, synapse: JobSubmissionSynapse
 ) -> JobSubmissionSynapse:
     """function that parses a list of files and attaches them to the synapse object"""
-    bt.logging.info(f"Sending files to validator: {files_to_attach}")
+    logger.info(f"Sending files to validator: {files_to_attach}")
     for filename in files_to_attach:
         try:
             with open(filename, "rb") as f:
@@ -45,7 +46,7 @@ def attach_files(
                 ]  # remove the directory from the filename
                 synapse.md_output[filename] = base64.b64encode(f.read())
         except Exception as e:
-            bt.logging.error(f"Failed to read file {filename!r} with error: {e}")
+            logger.error(f"Failed to read file {filename!r} with error: {e}")
             get_tracebacks()
 
     return synapse
@@ -93,9 +94,7 @@ def attach_files_to_synapse(
         synapse.miner_state = state
 
     except Exception as e:
-        bt.logging.error(
-            f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}"
-        )
+        logger.error(f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}")
         get_tracebacks()
         synapse.md_output = {}
 
@@ -137,7 +136,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations = self.create_default_dict()
 
         self.max_workers = self.config.neuron.max_workers
-        bt.logging.info(
+        logger.info(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
 
@@ -178,15 +177,15 @@ class FoldingMiner(BaseMinerNeuron):
                     state, error_info = future.result()
                     # If the simulation is done, we can remove it from the simulation store
                     if state == "finished":
-                        bt.logging.warning(
+                        logger.warning(
                             f"✅ {pdb_id} finished simulation... Removing from execution stack ✅"
                         )
                     else:
                         # If the simulation failed, we should log the error and remove it from the simulation store
-                        bt.logging.error(
+                        logger.error(
                             f"❗ {pdb_id} failed simulation... Removing from execution stack ❗"
                         )
-                        bt.logging.error(f"Error info: {error_info}")
+                        logger.error(f"Error info: {error_info}")
                     sims_to_delete.append(pdb_hash)
 
             for pdb_hash in sims_to_delete:
@@ -195,7 +194,7 @@ class FoldingMiner(BaseMinerNeuron):
             running_simulations = [sim["pdb_id"] for sim in self.simulations.values()]
 
             event["running_simulations"] = running_simulations
-            bt.logging.warning(f"Simulations Running: {running_simulations}")
+            logger.warning(f"Simulations Running: {running_simulations}")
 
         return event
 
@@ -243,7 +242,7 @@ class FoldingMiner(BaseMinerNeuron):
         pdb_id = synapse.pdb_id
 
         # If we are already running a process with the same identifier, return intermediate information
-        bt.logging.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
+        logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
 
         # increment step counter everytime miner receives a query.
         self.step += 1
@@ -276,11 +275,11 @@ class FoldingMiner(BaseMinerNeuron):
                 )
 
             elif len(self.simulations) == self.max_workers:
-                bt.logging.warning(
+                logger.warning(
                     f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
                 )
 
-                bt.logging.warning(f"❗ Removing miner from job pool ❗")
+                logger.warning(f"❗ Removing miner from job pool ❗")
 
                 event["condition"] = "cpu_limit_reached"
                 synapse.miner_serving = False
@@ -331,7 +330,7 @@ class FoldingMiner(BaseMinerNeuron):
                         synapse.miner_serving = False
                         event["condition"] = "failed_simulation"
                         event["state"] = state
-                        bt.logging.warning(
+                        logger.warning(
                             f"❗Returning previous simulation data for failed simulation: {pdb_id}❗"
                         )
                         return check_synapse(self=self, synapse=synapse, event=event)
@@ -339,7 +338,7 @@ class FoldingMiner(BaseMinerNeuron):
                     with open(seed_file, "r") as f:
                         seed = f.readlines()[-1].strip()
 
-                    bt.logging.warning(
+                    logger.warning(
                         f"❗ Found existing data for protein: {pdb_id}... Sending previously computed, most advanced simulation state ❗"
                     )
                     synapse = attach_files_to_synapse(
@@ -349,7 +348,7 @@ class FoldingMiner(BaseMinerNeuron):
                         seed=seed,
                     )
                 except Exception as e:
-                    bt.logging.error(
+                    logger.error(
                         f"Failed to read state file for protein {pdb_id} with error: {e}"
                     )
                     state = None
@@ -389,7 +388,7 @@ class FoldingMiner(BaseMinerNeuron):
                     f.write(content)
 
             except Exception as e:
-                bt.logging.error(f"Failed to write file {filename!r} with error: {e}")
+                logger.error(f"Failed to write file {filename!r} with error: {e}")
 
         # Write the contents of the pdb file to the output directory
         with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
@@ -421,7 +420,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.simulations[pdb_hash]["output_dir"] = simulation_manager.output_dir
         self.simulations[pdb_hash]["queried_at"] = time.time()
 
-        bt.logging.success(f"✅ New pdb_id {pdb_id} submitted to job executor ✅ ")
+        logger.success(f"✅ New pdb_id {pdb_id} submitted to job executor ✅ ")
 
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
@@ -433,9 +432,7 @@ class FoldingMiner(BaseMinerNeuron):
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
             # Ignore requests from un-registered entities.
-            bt.logging.trace(
-                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
-            )
+            logger.trace(f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}")
             return True, "Unrecognized hotkey"
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if self.config.blacklist.force_validator_permit:
@@ -445,14 +442,12 @@ class FoldingMiner(BaseMinerNeuron):
                 not self.metagraph.validator_permit[uid]
                 or self.metagraph.stake[uid] < 10_000
             ):
-                bt.logging.warning(
+                logger.warning(
                     f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
                 return True, "Non-validator hotkey"
 
-        bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
-        )
+        logger.trace(f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}")
         return False, "Hotkey recognized!"
 
     async def priority(self, synapse: JobSubmissionSynapse) -> float:
@@ -462,9 +457,7 @@ class FoldingMiner(BaseMinerNeuron):
         priority = float(
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority
-        )
+        logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)
         return priority
 
 
@@ -516,11 +509,11 @@ class SimulationManager:
             suppress_cmd_output (bool, optional): Defaults to True.
             mock (bool, optional): mock for debugging. Defaults to False.
         """
-        bt.logging.info(f"Running simulation for protein: {self.pdb_id}")
+        logger.info(f"Running simulation for protein: {self.pdb_id}")
         simulations = self.configure_commands(
             seed=self.seed, system_config=copy.deepcopy(self.system_config)
         )
-        bt.logging.info(f"Simulations: {simulations}")
+        logger.info(f"Simulations: {simulations}")
 
         # Make sure the output directory exists and if not, create it
         check_if_directory_exists(output_directory=self.output_dir)
@@ -532,7 +525,7 @@ class SimulationManager:
 
         try:
             for state, simulation in simulations.items():
-                bt.logging.info(f"Running {state} commands")
+                logger.info(f"Running {state} commands")
 
                 self.write_state(
                     state=state,
@@ -545,7 +538,7 @@ class SimulationManager:
 
                 # TODO: Add a Mock pipeline for the new OpenMM simulation here.
 
-            bt.logging.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
+            logger.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
 
             state = "finished"
             self.write_state(
@@ -653,7 +646,7 @@ class MockSimulationManager(SimulationManager):
     def run(self, total_wait_time: int = 1):
         start_time = time.time()
 
-        bt.logging.debug(f"✅ MockSimulationManager.run is running ✅")
+        logger.debug(f"✅ MockSimulationManager.run is running ✅")
         check_if_directory_exists(output_directory=self.output_dir)
 
         store = os.path.join(self.output_dir, self.state_file_name)
@@ -662,12 +655,12 @@ class MockSimulationManager(SimulationManager):
         intermediate_interval = total_wait_time / len(states)
 
         for state in states:
-            bt.logging.info(f"Running state: {state}")
+            logger.info(f"Running state: {state}")
             state_time = time.time()
             with open(store, "w") as f:
                 f.write(f"{state}\n")
 
             time.sleep(intermediate_interval)
-            bt.logging.info(f"Total state_time: {time.time() - state_time}")
+            logger.info(f"Total state_time: {time.time() - state_time}")
 
-        bt.logging.warning(f"Total run method time: {time.time() - start_time}")
+        logger.warning(f"Total run method time: {time.time() - start_time}")

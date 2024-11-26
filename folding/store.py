@@ -13,6 +13,7 @@ import pandas as pd
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "db")
 
+
 class SQLiteJobStore:
     """SQLite-based job store replacing the CSV-based implementation."""
 
@@ -21,13 +22,14 @@ class SQLiteJobStore:
         self.table_name = table_name
         os.makedirs(self.db_path, exist_ok=True)
         self.db_file = os.path.join(self.db_path, "jobs.db")
-        
+
         self.init_db()
 
     def init_db(self):
         """Initialize the SQLite database with the required schema."""
         with sqlite3.connect(self.db_file) as conn:
-            conn.execute(f"""
+            conn.execute(
+                f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
                     pdb TEXT PRIMARY KEY,
                     active INTEGER,
@@ -50,58 +52,67 @@ class SQLiteJobStore:
                     system_kwargs TEXT,
                     min_updates INTEGER
                 )
-            """)
+            """
+            )
 
-    def _row_to_job(self, row) -> 'Job':
+    def _row_to_job(self, row) -> "Job":
         """Convert a database row to a Job object."""
         if not row:
             return None
-            
+
         data = dict(row)
         # Convert stored JSON strings back to Python objects
-        data['hotkeys'] = json.loads(data['hotkeys'])
-        data['event'] = json.loads(data['event']) if data['event'] else None
-        data['system_kwargs'] = json.loads(data['system_kwargs']) if data['system_kwargs'] else None
-        
+        data["hotkeys"] = json.loads(data["hotkeys"])
+        data["event"] = json.loads(data["event"]) if data["event"] else None
+        data["system_kwargs"] = (
+            json.loads(data["system_kwargs"]) if data["system_kwargs"] else None
+        )
+
         # Convert timestamps
-        for field in ['created_at', 'updated_at', 'best_loss_at']:
+        for field in ["created_at", "updated_at", "best_loss_at"]:
             if data[field]:
                 data[field] = pd.Timestamp(data[field])
             else:
                 data[field] = pd.NaT
 
         # Convert intervals
-        data['update_interval'] = pd.Timedelta(seconds=data['update_interval'])
-        data['max_time_no_improvement'] = pd.Timedelta(seconds=data['max_time_no_improvement'])
-        
+        data["update_interval"] = pd.Timedelta(seconds=data["update_interval"])
+        data["max_time_no_improvement"] = pd.Timedelta(
+            seconds=data["max_time_no_improvement"]
+        )
+
         # Convert boolean
-        data['active'] = bool(data['active'])
-        
+        data["active"] = bool(data["active"])
+
         return Job(**data)
 
-    def _job_to_dict(self, job: 'Job') -> dict:
+    def _job_to_dict(self, job: "Job") -> dict:
         """Convert a Job object to a dictionary for database storage."""
         data = job.to_dict()
-        
+
         # Convert Python objects to JSON strings
-        data['hotkeys'] = json.dumps(data['hotkeys'])
-        data['event'] = json.dumps(data['event']) if data['event'] else None
-        data['system_kwargs'] = json.dumps(data['system_kwargs']) if data['system_kwargs'] else None
-        
+        data["hotkeys"] = json.dumps(data["hotkeys"])
+        data["event"] = json.dumps(data["event"]) if data["event"] else None
+        data["system_kwargs"] = (
+            json.dumps(data["system_kwargs"]) if data["system_kwargs"] else None
+        )
+
         # Convert timestamps to strings
-        for field in ['created_at', 'updated_at', 'best_loss_at']:
+        for field in ["created_at", "updated_at", "best_loss_at"]:
             if isinstance(data[field], pd.Timestamp):
                 data[field] = data[field].isoformat()
             elif pd.isna(data[field]):
                 data[field] = None
 
         # Convert intervals to seconds
-        data['update_interval'] = int(data['update_interval'].total_seconds())
-        data['max_time_no_improvement'] = int(data['max_time_no_improvement'].total_seconds())
-        
+        data["update_interval"] = int(data["update_interval"].total_seconds())
+        data["max_time_no_improvement"] = int(
+            data["max_time_no_improvement"].total_seconds()
+        )
+
         # Convert boolean to integer
-        data['active'] = int(data['active'])
-        
+        data["active"] = int(data["active"])
+
         return data
 
     def get_queue(self, ready=True) -> Queue:
@@ -109,7 +120,7 @@ class SQLiteJobStore:
         with sqlite3.connect(self.db_file) as conn:
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
-            
+
             if ready:
                 # Calculate the threshold time for ready jobs
                 now = datetime.utcnow().isoformat()
@@ -121,22 +132,31 @@ class SQLiteJobStore:
                 cur.execute(query, (now,))
             else:
                 cur.execute(f"SELECT * FROM {self.table_name} WHERE active = 1")
-            
+
             rows = cur.fetchall()
 
         queue = Queue()
         for row in rows:
             job = self._row_to_job(row)
             queue.put(job)
-        
+
         return queue
 
-    def insert(self, pdb: str, ff: str, box: str, water: str, hotkeys: List[str],
-               epsilon: float, system_kwargs: dict, **kwargs):
+    def insert(
+        self,
+        pdb: str,
+        ff: str,
+        box: str,
+        water: str,
+        hotkeys: List[str],
+        epsilon: float,
+        system_kwargs: dict,
+        **kwargs,
+    ):
         """Insert a new job into the database."""
         with sqlite3.connect(self.db_file) as conn:
             cur = conn.cursor()
-            
+
             # Check if job already exists
             cur.execute(f"SELECT 1 FROM {self.table_name} WHERE pdb = ?", (pdb,))
             if cur.fetchone():
@@ -153,32 +173,32 @@ class SQLiteJobStore:
                 updated_at=pd.Timestamp.now().floor("s"),
                 epsilon=epsilon,
                 system_kwargs=system_kwargs,
-                **kwargs
+                **kwargs,
             )
-            
+
             data = self._job_to_dict(job)
-            
+
             # Build the insert query
-            columns = ', '.join(data.keys())
-            placeholders = ', '.join(['?' for _ in data])
+            columns = ", ".join(data.keys())
+            placeholders = ", ".join(["?" for _ in data])
             query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
-            
+
             cur.execute(query, list(data.values()))
 
-    def update(self, job: 'Job'):
+    def update(self, job: "Job"):
         """Update an existing job in the database."""
         with sqlite3.connect(self.db_file) as conn:
             cur = conn.cursor()
-            
+
             data = self._job_to_dict(job)
-            pdb = data.pop('pdb')  # Remove pdb from update data as it's the primary key
-            
+            pdb = data.pop("pdb")  # Remove pdb from update data as it's the primary key
+
             # Build the update query
-            set_clause = ', '.join([f"{k} = ?" for k in data.keys()])
+            set_clause = ", ".join([f"{k} = ?" for k in data.keys()])
             query = f"UPDATE {self.table_name} SET {set_clause} WHERE pdb = ?"
-            
+
             cur.execute(query, list(data.values()) + [pdb])
-            
+
     def get_all_pdbs(self) -> list:
         """
         Retrieve all PDB IDs from the job store.
@@ -197,6 +217,7 @@ class SQLiteJobStore:
         with sqlite3.connect(self.db_file) as conn:
             df = pd.read_sql_query(f"SELECT * FROM {self.table_name}", conn)
         return f"{self.__class__.__name__}\n{df.__repr__()}"
+
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
 @dataclass
@@ -218,7 +239,7 @@ class Job:
     updated_count: int = 0
     min_updates: int = 5
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=25)
-    epsilon: float = 0.05  # percentage.
+    epsilon: float = 5  # percentage.
     event: dict = None
     system_kwargs: dict = None
 
@@ -235,14 +256,16 @@ class Job:
             raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
 
         percent_improvement = (
-            (loss - self.best_loss) / self.best_loss
+            100 * (loss - self.best_loss) / self.best_loss
             if not np.isinf(self.best_loss) and not self.best_loss == 0
             else np.nan
         )
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        never_updated_better_loss = np.isnan(percent_improvement) and loss < self.best_loss
+        never_updated_better_loss = (
+            np.isnan(percent_improvement) and loss < self.best_loss
+        )
         better_loss = percent_improvement >= self.epsilon
 
         if never_updated_better_loss or better_loss:
@@ -250,13 +273,15 @@ class Job:
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
         elif (
-            pd.Timestamp.now().floor("s") - self.best_loss_at > self.max_time_no_improvement
+            pd.Timestamp.now().floor("s") - self.best_loss_at
+            > self.max_time_no_improvement
             and self.updated_count >= self.min_updates
         ):
             self.active = False
         elif (
             isinstance(self.best_loss_at, pd._libs.tslibs.nattype.NaTType)
-            and pd.Timestamp.now().floor("s") - self.created_at > self.max_time_no_improvement
+            and pd.Timestamp.now().floor("s") - self.created_at
+            > self.max_time_no_improvement
         ):
             self.active = False
 
@@ -268,8 +293,9 @@ class Job:
             return False
         return True
 
+
 class MockJob(Job):
-    def __init__(self, n_hotkeys=5, update_seconds=5, stop_after_seconds=3600*24):
+    def __init__(self, n_hotkeys=5, update_seconds=5, stop_after_seconds=3600 * 24):
         self.pdb = self._make_pdb()
         self.ff = "charmm27"
         self.box = "cube"

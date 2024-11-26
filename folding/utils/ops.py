@@ -18,6 +18,7 @@ import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
+from loguru import logger
 
 
 class TimeoutException(Exception):
@@ -44,7 +45,8 @@ class RsyncException(Exception):
     def __init__(self, message="Rsync error occurred"):
         self.message = message
         super().__init__(self.message)
-        
+
+
 def timeout_handler(seconds, func_name):
     raise TimeoutException(f"Function '{func_name}' timed out after {seconds} seconds")
 
@@ -71,11 +73,13 @@ def timeout(seconds):
 
     return decorator
 
+
 def print_on_retry(retry_state):
     function_name = retry_state.fn.__name__
     max_retries = retry_state.retry_object.stop.max_attempt_number
-    bt.logging.warning(f"Retrying {function_name}: retry #{retry_state.attempt_number} out of {max_retries}")
-    
+    logger.warning(
+        f"Retrying {function_name}: retry #{retry_state.attempt_number} out of {max_retries}"
+    )
 
 
 def delete_directory(directory: str):
@@ -164,7 +168,7 @@ def select_random_pdb_id(PDB_IDS: List[str], exclude: List[str] = None) -> str:
 def check_if_directory_exists(output_directory):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
-        bt.logging.debug(f"Created directory {output_directory!r}")
+        logger.debug(f"Created directory {output_directory!r}")
 
 
 def get_tracebacks():
@@ -172,10 +176,9 @@ def get_tracebacks():
     exc_type, exc_value, exc_traceback = sys.exc_info()
     formatted_traceback = traceback.format_exception(exc_type, exc_value, exc_traceback)
 
-    bt.logging.error(" ---------------- Traceback details ---------------- ")
-    bt.logging.warning("".join(formatted_traceback))
-    bt.logging.warning(" ---------------- End of Traceback ----------------\n")
-
+    logger.error(" ---------------- Traceback details ---------------- ")
+    logger.warning("".join(formatted_traceback))
+    logger.warning(" ---------------- End of Traceback ----------------\n")
 
 
 async def check_and_download_pdbs(
@@ -216,16 +219,16 @@ async def check_and_download_pdbs(
                         file.write(r.text)
 
                 message = " but contains missing values." if not is_complete else ""
-                bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+                logger.success(f"PDB file {pdb_id} downloaded" + message)
 
                 return True
             else:
-                bt.logging.warning(
+                logger.warning(
                     f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
                 )
                 return False
         else:
-            bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+            logger.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
             raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
 
     elif input_source == "pdbe":
@@ -247,7 +250,7 @@ async def check_and_download_pdbs(
         try:
             subprocess.run(rsync_command, check=True)
             subprocess.run(unzip_command, check=True)
-            bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
+            logger.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
 
             convert_cif_to_pdb(
                 cif_file=f"{pdb_directory}/{id}.cif",
@@ -315,10 +318,10 @@ def convert_cif_to_pdb(cif_file: str, pdb_file: str):
     try:
         structure = pmd.load_file(cif_file)
         structure.write_pdb(pdb_file)  # Write the structure to a PDB file
-        bt.logging.debug(f"Successfully converted {cif_file} to {pdb_file}")
+        logger.debug(f"Successfully converted {cif_file} to {pdb_file}")
 
     except Exception as e:
-        bt.logging.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")
+        logger.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")
 
 
 def plot_miner_validator_curves(

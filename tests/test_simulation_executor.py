@@ -1,15 +1,14 @@
 import pytest
 
 import os
-import time
 import random
 import string
+from loguru import logger
+
 from pathlib import Path
 import concurrent.futures
 from collections import defaultdict
 from folding.miners.folding_miner import MockSimulationManager
-
-import bittensor as bt
 
 ROOT_PATH = Path(__file__).parent
 OUTPUT_PATH = os.path.join(ROOT_PATH, "mock_data", "test_miner")
@@ -83,10 +82,10 @@ def test_simulation_manager(max_workers: int):
                 # This seems to happen because of some IO delay..
                 if os.path.exists(OUTPUT_PATH):
                     if len(os.listdir(OUTPUT_PATH)) == 0:
-                        bt.logging.warning(f"OUTPUT_PATH IS EMPTY... continue")
+                        logger.warning(f"OUTPUT_PATH IS EMPTY... continue")
                         continue
                 else:
-                    bt.logging.warning(f"OUTPUT_PATH DOES NOT EXIST... continue")
+                    logger.warning(f"OUTPUT_PATH DOES NOT EXIST... continue")
                     continue
 
                 current_state = sim["executor"].get_state()
