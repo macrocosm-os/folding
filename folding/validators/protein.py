@@ -1,3 +1,9 @@
+"""
+This module implements the Protein class for handling protein simulations in the folding system.
+It provides functionality for setting up, running, and validating molecular dynamics simulations
+of proteins using OpenMM.
+"""
+
 import os
 import time
 import glob
@@ -10,7 +16,8 @@ from pathlib import Path
 from typing import Dict, List, Literal
 import asyncio
 
-import bittensor as bt
+from loguru import logger
+
 import numpy as np
 import pandas as pd
 from openmm import app, unit
@@ -25,10 +32,9 @@ from folding.utils.ops import (
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
-    load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
 )
-from loguru import logger
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -39,7 +45,7 @@ class Protein(OpenMMSimulation):
 
     @property
     def name(self):
-        return self.protein_pdb.split(".")[0]
+        return self.pdb_id
 
     def __init__(
         self,
@@ -147,14 +153,14 @@ class Protein(OpenMMSimulation):
 
     @staticmethod
     def load_pdb_as_string(pdb_path: str) -> str:
-        with open(pdb_path, "r") as f:
+        with open(pdb_path, "r", encoding="utf-8") as f:
             return f.read()
 
     @staticmethod
     def _get_pdb_complexity(pdb_path):
         """Get the complexity of the pdb file by counting the number of atoms, residues, etc."""
         pdb_complexity = defaultdict(int)
-        with open(pdb_path, "r") as f:
+        with open(pdb_path, "r", encoding="utf-8") as f:
             for line in f.readlines():
                 # Check if the line starts with any of the PDB_RECORDS
                 for key in Protein.PDB_RECORDS:
@@ -163,7 +169,11 @@ class Protein(OpenMMSimulation):
         return pdb_complexity
 
     async def setup_pdb_directory(self):
-        # if directory doesn't exist, download the pdb file and save it to the directory
+        """setup the pdb directory for this protein configuration.
+
+        Raises:
+            Exception: Raises an exception if it failed to download.
+        """
         if not os.path.exists(self.pdb_directory):
             os.makedirs(self.pdb_directory)
 
@@ -204,6 +214,7 @@ class Protein(OpenMMSimulation):
 
                 except Exception:
                     continue
+
         return files_to_return
 
     async def setup_simulation(self):
@@ -283,7 +294,7 @@ class Protein(OpenMMSimulation):
         app.PDBFile.writeFile(
             topology=fixer.topology,
             positions=fixer.positions,
-            file=open(self.pdb_location, "w"),
+            file=open(self.pdb_location, "w", encoding="utf-8"),
         )
 
     # Function to generate the OpenMM simulation state.
@@ -479,8 +490,8 @@ class Protein(OpenMMSimulation):
                     write_mode="wb",
                 )
 
-        except ValidationError as E:
-            logger.warning(f"{E}")
+        except ValidationError as e:
+            logger.warning(f"{e}")
             return False
 
         except Exception as e:
@@ -594,12 +605,13 @@ class Protein(OpenMMSimulation):
         """Save the pdb file to the output path."""
         positions = self.simulation.context.getState(getPositions=True).getPositions()
         topology = self.simulation.topology
-        with open(output_path, "w") as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             app.PDBFile.writeFile(topology, positions, f)
 
     def get_energy(self):
+        """Get the energy of the simulation"""
         state = self.simulation.context.getState(getEnergy=True)
-
         return state.getPotentialEnergy() / unit.kilojoules_per_mole
 
     def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
@@ -609,9 +621,6 @@ class Protein(OpenMMSimulation):
     def _calculate_epsilon(self):
         # TODO: Make this a better relationship?
         return self.epsilon
-
-    def extract(self, filepath: str, names=["step", "default-name"]):
-        return pd.read_csv(filepath, sep="\s+", header=None, names=names)
 
     def remove_pdb_directory(self):
         """Method to remove the pdb directory after the simulation is complete.
