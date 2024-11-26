@@ -6,6 +6,7 @@ import numpy as np
 
 from folding.protocol import JobSubmissionSynapse
 from folding.validators.protein import Protein
+from loguru import logger
 
 
 def get_energies(
@@ -28,7 +29,7 @@ def get_energies(
     event["miner_energy"] = [0] * len(uids)
     event["rmsds"] = [0] * len(uids)
     event["process_md_output_time"] = [0] * len(uids)
-    event["is_run_valid"] = [0] * len(uids)
+    event["is_run_valid_time"] = [0] * len(uids)
     event["ns_computed"] = [0] * len(uids)
 
     energies = np.zeros(len(uids))
@@ -49,7 +50,7 @@ def get_energies(
                 continue
 
             if resp.dendrite.status_code != 200:
-                bt.logging.info(
+                logger.info(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
                 )
                 continue
@@ -62,7 +63,7 @@ def get_energies(
 
             start_time = time.time()
             is_valid, checked_energy, miner_energy = protein.is_run_valid()
-            event["is_run_valid"][i] = time.time() - start_time
+            event["is_run_valid_time"][i] = time.time() - start_time
 
             energies[i] = np.median(checked_energy[-10:]) if is_valid else 0
 
@@ -75,9 +76,7 @@ def get_energies(
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
-            bt.logging.error(
-                f"Failed to parse miner data for uid {uid} with error: {E}"
-            )
+            logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
             continue
 
     return energies, event

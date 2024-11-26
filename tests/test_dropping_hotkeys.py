@@ -7,7 +7,7 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
-from folding.store import PandasJobStore, Job
+from folding.store import SQLiteJobStore, Job
 from folding.rewards.reward_pipeline import reward_pipeline as pipeline
 
 ROOT_PATH = Path(__file__).parent
@@ -26,7 +26,7 @@ def delete_db_path():
 def insert_single_job_in_store():
     epsilon = 1e-5
 
-    store = PandasJobStore(db_path=DB_PATH, force_create=True)
+    store = SQLiteJobStore(db_path=DB_PATH, force_create=True)
     info = {
         "pdb": PDB,
         "ff": FF,

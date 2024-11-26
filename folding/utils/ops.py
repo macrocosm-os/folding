@@ -2,14 +2,15 @@ import re
 import os
 import sys
 import tqdm
+import signal
 import random
 import shutil
 import requests
+import functools
 import traceback
 import subprocess
 import pickle as pkl
 from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 import parmed as pmd
@@ -17,6 +18,11 @@ import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
+from loguru import logger
+
+
+class TimeoutException(Exception):
+    pass
 
 
 class OpenMMException(Exception):
@@ -39,6 +45,41 @@ class RsyncException(Exception):
     def __init__(self, message="Rsync error occurred"):
         self.message = message
         super().__init__(self.message)
+
+
+def timeout_handler(seconds, func_name):
+    raise TimeoutException(f"Function '{func_name}' timed out after {seconds} seconds")
+
+
+# Decorator to apply the timeout
+def timeout(seconds):
+    def decorator(func):
+        @functools.wraps(func)  # Retain original function metadata
+        def wrapper(*args, **kwargs):
+            # Set the signal alarm with the function name
+            signal.signal(
+                signal.SIGALRM,
+                lambda signum, frame: timeout_handler(seconds, func.__name__),
+            )
+            signal.alarm(seconds)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                # Disable the alarm
+                signal.alarm(0)
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def print_on_retry(retry_state):
+    function_name = retry_state.fn.__name__
+    max_retries = retry_state.retry_object.stop.max_attempt_number
+    logger.warning(
+        f"Retrying {function_name}: retry #{retry_state.attempt_number} out of {max_retries}"
+    )
 
 
 def delete_directory(directory: str):
@@ -127,7 +168,7 @@ def select_random_pdb_id(PDB_IDS: List[str], exclude: List[str] = None) -> str:
 def check_if_directory_exists(output_directory):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
-        bt.logging.debug(f"Created directory {output_directory!r}")
+        logger.debug(f"Created directory {output_directory!r}")
 
 
 def get_tracebacks():
@@ -135,38 +176,12 @@ def get_tracebacks():
     exc_type, exc_value, exc_traceback = sys.exc_info()
     formatted_traceback = traceback.format_exception(exc_type, exc_value, exc_traceback)
 
-    bt.logging.error(" ---------------- Traceback details ---------------- ")
-    bt.logging.warning("".join(formatted_traceback))
-    bt.logging.warning(" ---------------- End of Traceback ----------------\n")
+    logger.error(" ---------------- Traceback details ---------------- ")
+    logger.warning("".join(formatted_traceback))
+    logger.warning(" ---------------- End of Traceback ----------------\n")
 
 
-def run_cmd_commands(
-    commands: List[str], suppress_cmd_output: bool = True, verbose: bool = False
-):
-    for cmd in tqdm.tqdm(commands):
-        bt.logging.debug(f"Running command: {cmd}")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                check=True,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            if not suppress_cmd_output:
-                bt.logging.info(result.stdout.decode())
-
-        except subprocess.CalledProcessError as e:
-            bt.logging.error(f"❌ Failed to run command ❌: {cmd}")
-            if verbose:
-                bt.logging.error(f"Output: {e.stdout.decode()}")
-                bt.logging.error(f"Error: {e.stderr.decode()}")
-                get_tracebacks()
-            raise
-
-
-def check_and_download_pdbs(
+async def check_and_download_pdbs(
     pdb_directory: str,
     pdb_id: str,
     input_source: str,
@@ -204,16 +219,16 @@ def check_and_download_pdbs(
                         file.write(r.text)
 
                 message = " but contains missing values." if not is_complete else ""
-                bt.logging.success(f"PDB file {pdb_id} downloaded" + message)
+                logger.success(f"PDB file {pdb_id} downloaded" + message)
 
                 return True
             else:
-                bt.logging.warning(
+                logger.warning(
                     f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
                 )
                 return False
         else:
-            bt.logging.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
+            logger.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
             raise Exception(f"Failed to download PDB file with ID {pdb_id}.")
 
     elif input_source == "pdbe":
@@ -235,7 +250,7 @@ def check_and_download_pdbs(
         try:
             subprocess.run(rsync_command, check=True)
             subprocess.run(unzip_command, check=True)
-            bt.logging.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
+            logger.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
 
             convert_cif_to_pdb(
                 cif_file=f"{pdb_directory}/{id}.cif",
@@ -303,10 +318,10 @@ def convert_cif_to_pdb(cif_file: str, pdb_file: str):
     try:
         structure = pmd.load_file(cif_file)
         structure.write_pdb(pdb_file)  # Write the structure to a PDB file
-        bt.logging.debug(f"Successfully converted {cif_file} to {pdb_file}")
+        logger.debug(f"Successfully converted {cif_file} to {pdb_file}")
 
     except Exception as e:
-        bt.logging.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")
+        logger.error(f"Failed to convert {cif_file} to PDB format. Error: {e}")
 
 
 def plot_miner_validator_curves(
