@@ -32,15 +32,11 @@ fi
 python3.11 -m ensurepip
 
 # Install poetry
-python3.11 -m pip install poetry
-
-# Set the destination of the virtual environment to the project directory
-python3.11 -m poetry config virtualenvs.in-project true
+pip install poetry
 
 # Install the project dependencies
-python3.11 -m poetry install
+poetry install
 
-python3.11 -m poetry shell
 # Install auxiliary packages
 sudo apt-get update
 sudo apt-get install build-essential cmake libfftw3-dev vim npm -y

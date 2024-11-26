@@ -40,12 +40,47 @@ The protein folding subnet is Bittensors’ first venture into academic use case
 
 This subnet is designed to produce valuable academic research in Bittensor. Researchers and universities can use this subnet to simulate almost any protein, on demand, for free. It is our hope that this subnet will empower researchers to conduct world-class research and publish in top journals while demonstrating that decentralized systems are an economic and efficient alternative to traditional approaches.
 
+# Installation
+As a validator, you are **required** to have Weights and Biases (Wandb) active on your machine. We open-source our logging to the community, so this is a necessary component. The repo will not work without Wandb. 
+
+As a miner, this is an optional include. As such, we do not have logic for logging natively in the base miner, but can be easily added. 
+
+This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script. Below are all the steps needed to ensure that your machine is running properly:
+
+Firstly, you must install conda: 
+```bash 
+mkdir -p ~/miniconda3
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm ~/miniconda3/miniconda.sh
+
+source ~/miniconda3/bin/activate
+conda init --all
+```
+
+Install wandb: 
+```bash
+pip install wandb 
+wandb login
+```
+
+We use a combination of `conda` and `poetry` to manage our environments. It is very important to create the environment with python 3.11 as this is necesssary for `bittensor` and `openmm`
+```bash 
+git clone https://github.com/macrocosm-os/folding.git
+cd folding
+
+conda create --name folding python3.11
+bash install.sh
+```
+
+Bash install will use poetry to build the environment correctly. 
+
   
 # What is Protein Folding?  
-  
-  Proteins are the biological molecules that "do" things, they are the molecular machines of biochemistry. Enzymes that break down food, hemoglobin that carries oxygen in blood, and actin filaments that make muscles contract are all proteins. They are made from long chains of amino acids, and the sequence of these chains is the information that is stored in DNA. However, its a large step to go from a 2D chain of amino acids to a 3D structure capable of working. 
 
-  The process of this 2D structure folding on itself into a stable, 3D shape is called **protein folding**. For the most part, this process happens naturally and the end structure is in a much lower free energy state than the string. Like a bag of legos though, it is not enough to just know the building blocks being used, its the way they're supposed to be put together that matters. *"Form defines function"* is a common phrase in biochemsitry, and it is the quest to determine form, and thus function of proteins, that makes this process so important to understand and simulate. 
+Proteins are the biological molecules that "do" things, they are the molecular machines of biochemistry. Enzymes that break down food, hemoglobin that carries oxygen in blood, and actin filaments that make muscles contract are all proteins. They are made from long chains of amino acids, and the sequence of these chains is the information that is stored in DNA. However, its a large step to go from a 2D chain of amino acids to a 3D structure capable of working. 
+
+The process of this 2D structure folding on itself into a stable, 3D shape is called **protein folding**. For the most part, this process happens naturally and the end structure is in a much lower free energy state than the string. Like a bag of legos though, it is not enough to just know the building blocks being used, its the way they're supposed to be put together that matters. *"Form defines function"* is a common phrase in biochemsitry, and it is the quest to determine form, and thus function of proteins, that makes this process so important to understand and simulate. 
 
 # Why is Folding a Good Subnet Idea? 
 An ideal incentive mechanism defines an asymmetric workload between the validators and miners. The necessary proof of work (PoW) for the miners must require substantial effort and should be impossible to circumvent. On the other hand, the validation and rewarding process should benefit from some kind of privileged position or vantage point so that an objective score can be assigned without excess work. Put simply, **rewarding should be objective and adversarially robust**.
@@ -80,36 +115,6 @@ Protein folding utilizes an open-source package called [OpenMM](https://openmm.o
 3. Conda Distribution (we recommend [Miniconda](https://docs.anaconda.com/miniconda/)). Using conda is an [OpenMM requirement](http://docs.openmm.org/latest/userguide/application/01_getting_started.html#installing-openmm). 
 
 For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
-
-## Installation 
-As a validator, you are **required** to have Weights and Biases (Wandb) active on your machine. We open-source our logging to the community, so this is a necessary component. The repo will not work without Wandb. 
-
-As a miner, this is an optional include. As such, we do not have logic for logging natively in the base miner, but can be easily added. 
-
-This repository requires python3.8 or higher. To install it, simply clone this repository and run the [install.sh](./install.sh) script. Below are all the steps needed to ensure that your machine is running properly:
-
-Firstly, you must install conda: 
-```bash 
-mkdir -p ~/miniconda3
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
-bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
-rm ~/miniconda3/miniconda.sh
-```
-
-```bash
-pip install wandb 
-wandb login
-
-git clone https://github.com/macrocosm-os/folding.git
-cd folding
-bash install.sh
-
-conda activate folding
-pip install -e .
-```
-
-This will also create a virtual environment in which the repo can be run inside of.
-
 
 ## Registering on Mainnet
 ```
@@ -203,6 +208,7 @@ This repository is licensed under the MIT License.
 ```text
 # The MIT License (MIT)
 # Copyright © 2024 Yuma Rao
+# Copyright © 2024 Macrocosmos AI
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
