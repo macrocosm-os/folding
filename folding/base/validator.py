@@ -25,7 +25,7 @@ import argparse
 import threading
 import bittensor as bt
 from pathlib import Path
-from loguru import logger
+from folding.utils.logger import logger
 
 from typing import List, Optional
 
