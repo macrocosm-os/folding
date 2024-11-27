@@ -1,7 +1,6 @@
 import copy
 import wandb
 from typing import List
-from folding.utils.logger import logger
 from dataclasses import asdict, dataclass
 import os
 
