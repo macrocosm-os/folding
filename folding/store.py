@@ -151,6 +151,7 @@ class SQLiteJobStore:
         hotkeys: List[str],
         epsilon: float,
         system_kwargs: dict,
+        reward_model: str,
         **kwargs,
     ):
         """Insert a new job into the database."""
@@ -173,6 +174,7 @@ class SQLiteJobStore:
                 updated_at=pd.Timestamp.now().floor("s"),
                 epsilon=epsilon,
                 system_kwargs=system_kwargs,
+                reward_model=reward_model,
                 **kwargs,
             )
 
@@ -229,6 +231,7 @@ class Job:
     hotkeys: list
     created_at: pd.Timestamp
     updated_at: pd.Timestamp
+    reward_model: str
     active: bool = True
     best_loss: float = np.inf
     best_loss_at: pd.Timestamp = pd.NaT
