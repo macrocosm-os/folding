@@ -148,56 +148,6 @@ files = [
 ]
 
 [[package]]
-name = "ansible"
-version = "6.7.0"
-description = "Radically simple IT automation"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "ansible-6.7.0-py3-none-any.whl", hash = "sha256:3cda6e67b1d42516f64ce376bb94c5186ff33d215d155432be5b3c2ec60bf112"},
-    {file = "ansible-6.7.0.tar.gz", hash = "sha256:c188f3ac8a8583794aadcff0bea87895ead58c19d6f244cd0c342562706e176c"},
-]
-
-[package.dependencies]
-ansible-core = ">=2.13.7,<2.14.0"
-
-[[package]]
-name = "ansible-core"
-version = "2.13.13"
-description = "Radically simple IT automation"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "ansible-core-2.13.13.tar.gz", hash = "sha256:7ad2d8c0a5fa4a59de1809a5f96d2dbf511189c834116f5c72aec9730b51074b"},
-    {file = "ansible_core-2.13.13-py3-none-any.whl", hash = "sha256:f50220254b8e13a79b68e68e759f5bf89f3f3584c907737985a017c699b1c3b6"},
-]
-
-[package.dependencies]
-cryptography = "*"
-jinja2 = ">=3.0.0"
-packaging = "*"
-PyYAML = ">=5.1"
-resolvelib = ">=0.5.3,<0.9.0"
-
-[[package]]
-name = "ansible-vault"
-version = "2.1.0"
-description = "R/W an ansible-vault yaml file"
-optional = false
-python-versions = "*"
-files = [
-    {file = "ansible-vault-2.1.0.tar.gz", hash = "sha256:5ce8fdb5470f1449b76bf07ae2abc56480dad48356ae405c85b686efb64dbd5e"},
-]
-
-[package.dependencies]
-ansible = "*"
-setuptools = "*"
-
-[package.extras]
-dev = ["black", "flake8", "isort[pyproject]", "pytest"]
-release = ["twine"]
-
-[[package]]
 name = "anyio"
 version = "4.6.2.post1"
 description = "High level compatibility layer for multiple asynchronous event loop implementations"
@@ -337,21 +287,20 @@ tests = ["PyHamcrest (>=2.0.2)", "mypy", "pytest (>=4.6)", "pytest-benchmark", "
 
 [[package]]
 name = "bittensor"
-version = "8.3.1"
+version = "8.4.1"
 description = "bittensor"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "bittensor-8.3.1-py3-none-any.whl", hash = "sha256:7dd16344532346a61e64aaa25e3dcbd2983a6ad93046f9df6136df01ad9a8344"},
-    {file = "bittensor-8.3.1.tar.gz", hash = "sha256:7085baef06e098149006cbfea90960ca92acfdc9cf0307afb9fc716fe8abbee9"},
+    {file = "bittensor-8.4.1-py3-none-any.whl", hash = "sha256:1de988733d87f11204c65716b679aa5de13e7ab8c231b031d22e74c22c88c1ed"},
+    {file = "bittensor-8.4.1.tar.gz", hash = "sha256:cc9b791a0914a70f4021c625fd50e89abee2b2316f8d710e8f3b77f67cc068a0"},
 ]
 
 [package.dependencies]
 aiohttp = ">=3.9,<4.0"
 async-property = "0.2.2"
-backoff = "*"
 bittensor-cli = "*"
-bittensor-wallet = ">=2.1.0"
+bittensor-wallet = ">=2.1.3"
 bt-decode = "0.2.0a0"
 colorama = ">=0.4.6,<0.5.0"
 fastapi = ">=0.110.1,<0.111.0"
@@ -373,7 +322,7 @@ scalecodec = "1.2.11"
 setuptools = ">=70.0.0,<70.1.0"
 substrate-interface = ">=1.7.9,<1.8.0"
 uvicorn = "*"
-websockets = ">12.0"
+websockets = ">=14.1"
 wheel = "*"
 
 [package.extras]
@@ -419,33 +368,33 @@ cuda = ["cubit (>=1.1.0)", "torch"]
 
 [[package]]
 name = "bittensor-wallet"
-version = "2.1.1"
+version = "2.1.3"
 description = ""
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "bittensor_wallet-2.1.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:accfd722b2160023b63cbe8a838b13200dbfacfef4fb6eb52836af1e41c2de90"},
-    {file = "bittensor_wallet-2.1.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0ae74f7cbfc7ac9f78c3222e418e65320339f4d5ffd9ac866e3dd388e16ab5ad"},
-    {file = "bittensor_wallet-2.1.1-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:219b05d692b41c5123e5772ea9bdfb38d94d58919fb0013748adeb47ef24b2be"},
-    {file = "bittensor_wallet-2.1.1-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:797f7ce5fda6fa1e86b3e9b7feeb969e21bc17071c293898d1e1eacce2a8bfc8"},
-    {file = "bittensor_wallet-2.1.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:8d1e336b3d4a2e8eabe6a9963ddd7dd3c4e0fc530a7d7be0611617500625d2a0"},
-    {file = "bittensor_wallet-2.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5e44335b1a8e106aaf9950ce2b353982fad009188e4cc6cac0e8a104b90c68ff"},
-    {file = "bittensor_wallet-2.1.1-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:7e52b0184aa389399193c0fec0bedc6a4bd5e59f9141b0e68efffe0300b4ac97"},
-    {file = "bittensor_wallet-2.1.1-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:087727dc7cbe677141e049226849e2aea9717f05fb1d55af9b9679aff4fc0cd2"},
-    {file = "bittensor_wallet-2.1.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ef05cbf77d11c37291b427d15dc1dc197564493fe6c4f73d87f6f16667a76026"},
-    {file = "bittensor_wallet-2.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:405f1c72d15405adc44859066c1a3c3220a6d19430ef582f3aeeaa7ebf87f565"},
-    {file = "bittensor_wallet-2.1.1-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:b461daa2de078bc43bdf85848c96b19d15a21233cc6c8820c565d558d4f35320"},
-    {file = "bittensor_wallet-2.1.1-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:559ad67dfd2c6330564c01d18f38c263d7bbf49d0645489f16e8d358f5e2dbe4"},
-    {file = "bittensor_wallet-2.1.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4e05b39047170767770a7918bdc9bf11fd86b23d0c3b850a18af41314878f23a"},
-    {file = "bittensor_wallet-2.1.1-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:58df0024d1ab2d7c9de6e4ed597c32b30b68258a23230fcc76afe75c18fa5eb9"},
-    {file = "bittensor_wallet-2.1.1-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e5eb3a698d351b7a1311bd95df669dbf8e6d3138a7ce7e2fed07739146e09fc9"},
-    {file = "bittensor_wallet-2.1.1-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:9339aeb690095d18c615f616140a25f7163717aedf75502a7b5dffbc60ea9c4c"},
-    {file = "bittensor_wallet-2.1.1.tar.gz", hash = "sha256:06588cd15b5d2173548bbe6d5e30ea08c4e7c4a1f5eda76fc48a83a426499bf6"},
+    {file = "bittensor_wallet-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:07462933ace69992079013ff7497c5f67e94b5d1adbada4ff08c5b18ebc18afe"},
+    {file = "bittensor_wallet-2.1.3-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:23110aca2d8f3e58c0b7c7bb58a74a66227aea85b30e4fa3eb616f5a13a0f659"},
+    {file = "bittensor_wallet-2.1.3-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:a5199c84e9d33ccec451294f89d9354b61568a0b623ceee995f588ccdc14ea5c"},
+    {file = "bittensor_wallet-2.1.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:a34e524f21e8c7bd8edfd54db530480b81f48d2334a0a11b86ea22d9e349137c"},
+    {file = "bittensor_wallet-2.1.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:45a1556e02304e1e8e91059cc11bb8346fa2334ac039f79bb1e6f630fa26657f"},
+    {file = "bittensor_wallet-2.1.3-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:9399c753c37dbe63430c5aff4fba0a038e0349dde0061d623506a24e3b4d2cec"},
+    {file = "bittensor_wallet-2.1.3-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:1e2f0d03a21a0c54b1f8cd59f34941d7a60df490e9aab7d7776b03f290de6074"},
+    {file = "bittensor_wallet-2.1.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:24c446b0af4c9ffc3ac122f97a1de25b283c877aa49892748ad06a8a61a74e13"},
+    {file = "bittensor_wallet-2.1.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9eafd9c82720644b3eeac2f68deaa9cec4cf175836b16c89206d98ce22590e8e"},
+    {file = "bittensor_wallet-2.1.3-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:f5122b05d8eede2bfc2eb242214b75ecab08f0da5d4f7547ed01ad253349e019"},
+    {file = "bittensor_wallet-2.1.3-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:88020b18aa2f91b336a6f04354b7acb124701f9678d74e41f5ffb64a7e1e5731"},
+    {file = "bittensor_wallet-2.1.3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:eb7dd2ed4c12e617574b7302a6c20fb8e915477ce2942627f624293b5de9a003"},
+    {file = "bittensor_wallet-2.1.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:de47dea7d283e83449465f9780d4dde608fe09da45d6ef8c795806e49ccf4fd2"},
+    {file = "bittensor_wallet-2.1.3-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:e35adc5303b2186df889e07c79bf0bc074df382df49e6c216a8feb27f00453a4"},
+    {file = "bittensor_wallet-2.1.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2ffd5bd02ca772151aca8d1883d3536718d170e9fd095593d6e7860b6bd4ac5b"},
+    {file = "bittensor_wallet-2.1.3-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:75ec884ee9ea4117cae3d18f90044b76daa47463294b94f56260c700ee95e7e5"},
+    {file = "bittensor_wallet-2.1.3-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1e1ee5be2b8b4c8fa36bc1750da723152dd7c96c4e606121146913adf83cf667"},
+    {file = "bittensor_wallet-2.1.3-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:0b879438249fc70dc2f7b8b579566c526dde68c2baa31d12ee3c4fcd4087f7b9"},
+    {file = "bittensor_wallet-2.1.3.tar.gz", hash = "sha256:41927d7e5d68fff1494cef5abd861ede0afc684dff366824b0806cfa3ce13af0"},
 ]
 
 [package.dependencies]
-ansible = ">=6.7,<7.0"
-ansible-vault = ">=2.1,<3.0"
 cryptography = ">=43.0.1,<43.1.0"
 eth-utils = "<2.3.0"
 munch = ">=2.5.0,<2.6.0"
@@ -456,7 +405,7 @@ substrate-interface = ">=1.7.9,<1.8.0"
 termcolor = "*"
 
 [package.extras]
-dev = ["aioresponses (==0.7.6)", "coveralls (==3.3.1)", "ddt (==1.6.0)", "factory-boy (==3.3.0)", "flake8 (==7.0.0)", "freezegun (==1.5.0)", "httpx (==0.27.0)", "hypothesis (==6.81.1)", "maturin (==1.7.0)", "mypy (==1.8.0)", "py-bip39-bindings (==0.1.11)", "pytest (==7.2.0)", "pytest-asyncio (==0.23.7)", "pytest-cov (==4.0.0)", "pytest-mock (==3.12.0)", "pytest-rerunfailures (==10.2)", "pytest-split (==0.8.0)", "pytest-xdist (==3.0.2)", "ruff (==0.4.7)", "types-retry (==0.9.9.4)"]
+dev = ["aioresponses (==0.7.6)", "ansible-vault (>=2.1,<3.0)", "coveralls (==3.3.1)", "ddt (==1.6.0)", "factory-boy (==3.3.0)", "flake8 (==7.0.0)", "freezegun (==1.5.0)", "httpx (==0.27.0)", "hypothesis (==6.81.1)", "maturin (==1.7.0)", "mypy (==1.8.0)", "py-bip39-bindings (==0.1.11)", "pytest (==7.2.0)", "pytest-asyncio (==0.23.7)", "pytest-cov (==4.0.0)", "pytest-mock (==3.12.0)", "pytest-rerunfailures (==10.2)", "pytest-split (==0.8.0)", "pytest-xdist (==3.0.2)", "ruff (==0.4.7)", "types-retry (==0.9.9.4)"]
 
 [[package]]
 name = "bt-decode"
@@ -3978,23 +3927,6 @@ socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
-name = "resolvelib"
-version = "0.8.1"
-description = "Resolve abstract dependencies into concrete ones"
-optional = false
-python-versions = "*"
-files = [
-    {file = "resolvelib-0.8.1-py2.py3-none-any.whl", hash = "sha256:d9b7907f055c3b3a2cfc56c914ffd940122915826ff5fb5b1de0c99778f4de98"},
-    {file = "resolvelib-0.8.1.tar.gz", hash = "sha256:c6ea56732e9fb6fca1b2acc2ccc68a0b6b8c566d8f3e78e0443310ede61dbd37"},
-]
-
-[package.extras]
-examples = ["html5lib", "packaging", "pygraphviz", "requests"]
-lint = ["black", "flake8", "isort", "mypy", "types-requests"]
-release = ["build", "towncrier", "twine"]
-test = ["commentjson", "packaging", "pytest"]
-
-[[package]]
 name = "retry"
 version = "0.9.2"
 description = "Easy to use retry decorator."
@@ -5017,4 +4949,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.13"
-content-hash = "5dd5b398b56230926b176e6b2c3be636ae2315eaa1bf5f3b5a55646a592eb5ae"
+content-hash = "0fd4827c423e425d22006cce64a671c77f2bcb69b13624e8c99feafca4757d73"

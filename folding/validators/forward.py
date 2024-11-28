@@ -22,7 +22,7 @@ from folding.utils.ops import (
     OpenMMException,
     RsyncException,
 )
-from loguru import logger
+from folding.utils.logger import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 

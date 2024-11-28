@@ -8,7 +8,7 @@ from openmm import unit
 
 import bittensor as bt
 from folding.utils.opemm_simulation_config import SimulationConfig
-from loguru import logger
+from folding.utils.logger import logger
 
 
 class GenericSimulation(ABC):

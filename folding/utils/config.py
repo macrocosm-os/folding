@@ -20,55 +20,31 @@ import os
 import sys
 import argparse
 import bittensor as bt
-from loguru import logger
-
-logger.remove()
-
-# Custom format for different log levels
-FORMAT = """<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>"""
-
+from folding.utils.logger import logger
+from folding.utils.logger import setup_file_logging, add_events_level
 
 def check_config(cls, config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
-    # logger.check_config(config)
-
+    
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
-            "~/.bittensor/miners",  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
+            "~/.bittensor/miners",
             config.wallet.name,
             config.wallet.hotkey,
             config.netuid,
             config.neuron.name,
         )
     )
-    print("full path:", full_path)
     config.neuron.full_path = os.path.expanduser(full_path)
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
 
     if not config.neuron.dont_save_events:
-        # Add custom event logger for the events.
-        if "EVENTS" not in logger._core.levels:
-            logger.level("EVENTS", no=38, icon="📝")
-            logger.add(
-                os.path.join(config.neuron.full_path, "events.log"),
-                rotation=config.neuron.events_retention_size,
-                serialize=False,
-                enqueue=True,
-                backtrace=True,
-                diagnose=False,
-                level="TRACE",
-                format=FORMAT,
-            )
-
-            # Add custom colored handler to stdout
-            logger.add(
-                sys.stdout,
-                format=FORMAT,
-                level="TRACE",
-                enqueue=True,
-                colorize=True,
-            )
+        add_events_level()
+        setup_file_logging(
+            os.path.join(config.neuron.full_path, "events.log"),
+            config.neuron.events_retention_size
+        )
 
 
 def add_args(cls, parser):

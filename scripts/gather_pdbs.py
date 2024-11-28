@@ -12,7 +12,7 @@ import pandas as pd
 from typing import List
 from bs4 import BeautifulSoup
 from collections import defaultdict
-from loguru import logger
+from folding.utils.logger import logger
 
 
 def save_data_to_pkl(data, folder_location, filename):

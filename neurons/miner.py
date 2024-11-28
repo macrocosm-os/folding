@@ -18,7 +18,7 @@
 import time
 import bittensor as bt
 from folding.miners.folding_miner import FoldingMiner
-from loguru import logger
+from folding.utils.logger import logger
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
