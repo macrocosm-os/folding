@@ -30,7 +30,7 @@ from folding import __spec_version__ as spec_version
 from folding import __OPENMM_VERSION_TAG__
 from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
-from loguru import logger
+from folding.utils.logger import logger
 
 
 class BaseNeuron(ABC):
