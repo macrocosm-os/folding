@@ -15,9 +15,15 @@ from folding.utils.config import log_filter
         '',
         1
     ),
+    (
+        [{'message': 'btcli w regen_coldkey 5GRDsru2BDD8UBasfKDsHBKmHLxaPcbuwcug3f7AaByLXizn'}],
+        '\b[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{32,64}\b', 
+        0
+    )
 ])
 def test_log_filter(records, log_exclude_pattern, expected_len):
     with patch('builtins.open', mock_open(read_data=log_exclude_pattern)):
         filtered_records = [record for record in records if log_filter(record, log_exclude_pattern)]
 
+    print(filtered_records)
     assert len(filtered_records) == expected_len
