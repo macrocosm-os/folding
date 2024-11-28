@@ -56,9 +56,6 @@ class BaseMinerNeuron(BaseNeuron):
         self.axon = bt.axon(
             wallet=self.wallet,
             config=self.config,
-            port=self.config.axon.port,
-            external_port=self.config.axon.external_port,
-            ip=self.config.axon.ip,
         )
 
         # Attach determiners which functions are called when servicing a request.
