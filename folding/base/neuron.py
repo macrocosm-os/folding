@@ -154,7 +154,9 @@ class BaseNeuron(ABC):
 
         if self.should_set_weights():
             try:
+                logger.info("Attempting to set weights...")
                 self.set_weights()
+                logger.success("Weight setting successful!")
             except RetryError as e:
                 logger.error(
                     f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
