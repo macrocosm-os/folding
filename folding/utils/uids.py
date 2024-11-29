@@ -2,7 +2,7 @@ import torch
 import random
 import bittensor as bt
 from typing import List
-from loguru import logger
+from folding.utils.logger import logger
 
 
 def check_uid_availability(

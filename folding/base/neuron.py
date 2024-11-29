@@ -30,7 +30,7 @@ from folding import __spec_version__ as spec_version
 from folding import __OPENMM_VERSION_TAG__
 from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
-from loguru import logger
+from folding.utils.logger import logger
 
 
 class BaseNeuron(ABC):
@@ -160,7 +160,9 @@ class BaseNeuron(ABC):
 
         if self.should_set_weights():
             try:
+                logger.info("Attempting to set weights...")
                 self.set_weights()
+                logger.success("Weight setting successful!")
             except RetryError as e:
                 logger.error(
                     f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
