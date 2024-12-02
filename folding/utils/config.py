@@ -23,9 +23,10 @@ import bittensor as bt
 from folding.utils.logger import logger
 from folding.utils.logger import setup_file_logging, add_events_level
 
+
 def check_config(cls, config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
-    
+
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
             "~/.bittensor/miners",
@@ -43,7 +44,7 @@ def check_config(cls, config: "bt.Config"):
         add_events_level()
         setup_file_logging(
             os.path.join(config.neuron.full_path, "events.log"),
-            config.neuron.events_retention_size
+            config.neuron.events_retention_size,
         )
 
 
@@ -318,7 +319,7 @@ def add_validator_args(cls, parser):
         "--neuron.ping_timeout",
         type=float,
         help="Controls the timeout for the PingSynapse call",
-        default=3,
+        default=45,
     )
 
     parser.add_argument(
