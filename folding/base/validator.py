@@ -73,7 +73,10 @@ class BaseValidatorNeuron(BaseNeuron):
         if not self.config.neuron.axon_off:
             self.axon = bt.axon(
                 wallet=self.wallet,
-                config=self.config
+                config=self.config,
+                port=self.config.axon.port,
+                external_port=self.config.axon.external_port,
+                ip=self.config.axon.ip,
             )
             self._serve_axon()
 
