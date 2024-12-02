@@ -78,7 +78,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 external_port=self.config.axon.external_port,
                 ip=self.config.axon.ip,
             )
-            self._serve_axon()
+            self.serve_axon()
 
         else:
             logger.warning("axon off, not serving ip to chain.")
@@ -116,6 +116,29 @@ class BaseValidatorNeuron(BaseNeuron):
         validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         logger.info(f"Serving validator IP of UID {validator_uid} to chain...")
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor).start()
+
+    def serve_axon(self):
+        """Serve axon to enable external connections."""
+
+        bt.logging.info("serving ip to chain...")
+        try:
+            self.axon = bt.axon(wallet=self.wallet, config=self.config)
+
+            try:
+                self.subtensor.serve_axon(
+                    netuid=self.config.netuid,
+                    axon=self.axon,
+                )
+                bt.logging.info(
+                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+                )
+            except Exception as e:
+                bt.logging.error(f"Failed to serve Axon with exception: {e}")
+                pass
+
+        except Exception as e:
+            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
+            pass
 
     @retry(
         stop=stop_after_attempt(3),  # Retry up to 3 times
