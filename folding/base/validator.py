@@ -29,8 +29,10 @@ from folding.utils.logger import logger
 
 from typing import List, Optional
 
+from atom.base.neuron import BaseNeuron as AtomBaseNeuron
+
+from folding.base import BaseFolding
 from folding.mock import MockDendrite
-from folding.base.neuron import BaseNeuron
 from folding.utils.config import add_validator_args
 from folding.organic.validator import OrganicValidator
 from folding.utils.ops import print_on_retry
@@ -40,7 +42,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
-class BaseValidatorNeuron(BaseNeuron):
+class BaseValidatorNeuron(AtomBaseNeuron, BaseFolding):
     """
     Base class for Bittensor validators. Your validator should inherit from this class.
     """
@@ -71,10 +73,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
-            self.axon = bt.axon(
-                wallet=self.wallet,
-                config=self.config
-            )
+            self.axon = bt.axon(wallet=self.wallet, config=self.config)
             self._serve_axon()
 
         else:
