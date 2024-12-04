@@ -5,7 +5,7 @@ import os
 import time
 import wandb
 from tqdm import tqdm
-from loguru import logger
+from folding.utils.logger import logger
 from pathlib import Path
 from typing import Dict, List
 

@@ -22,7 +22,7 @@ from folding.utils.ops import (
     OpenMMException,
     RsyncException,
 )
-from loguru import logger
+from folding.utils.logger import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -78,7 +78,7 @@ async def run_step(
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
         system_config=system_config,
-        best_submitted_energy=best_submitted_energy,
+        best_submitted_energy= 0 if np.isinf(best_submitted_energy) else best_submitted_energy,
     )
 
     # Make calls to the network with the prompt - this is synchronous.

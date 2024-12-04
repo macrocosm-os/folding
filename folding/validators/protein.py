@@ -35,6 +35,7 @@ from folding.utils.ops import (
     plot_miner_validator_curves,
 )
 
+from folding.utils.logger import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 

@@ -26,7 +26,7 @@ import bittensor as bt
 from folding.base.neuron import BaseNeuron
 from folding.protocol import PingSynapse
 from folding.utils.config import add_miner_args
-from loguru import logger
+from folding.utils.logger import logger
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -53,7 +53,10 @@ class BaseMinerNeuron(BaseNeuron):
             )
 
         # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(wallet=self.wallet, config=self.config)
+        self.axon = bt.axon(
+            wallet=self.wallet,
+            config=self.config,
+        )
 
         # Attach determiners which functions are called when servicing a request.
         logger.info(f"Attaching forward function to miner axon.")
