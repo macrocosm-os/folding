@@ -12,9 +12,8 @@ import bittensor as bt
 from pathlib import Path
 from typing import List, Optional
 
-from atom.base.neuron import BaseNeuron as AtomBaseNeuron
+from atom.base.validator import BaseValidatorNeuron as AtomBaseValidatorNeuron
 
-from folding.mock import MockDendrite
 from folding.utils.logger import logger
 from folding.base.neuron import BaseFolding
 from folding.utils.ops import print_on_retry
@@ -26,7 +25,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
-class BaseValidatorNeuron(AtomBaseNeuron, BaseFolding):
+class BaseValidatorNeuron(AtomBaseValidatorNeuron, BaseFolding):
     """
     Base class for Bittensor validators. Your validator should inherit from this class.
     """
@@ -38,39 +37,6 @@ class BaseValidatorNeuron(AtomBaseNeuron, BaseFolding):
 
     def __init__(self, config=None):
         super().__init__(config=config)
-
-        # Save a copy of the hotkeys to local memory.
-        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
-
-        # Dendrite lets us send messages to other nodes (axons) in the network.
-        if self.config.mock:
-            self.dendrite = MockDendrite(wallet=self.wallet)
-        else:
-            self.dendrite = bt.dendrite(wallet=self.wallet)
-        logger.info(f"Dendrite: {self.dendrite}")
-
-        # Set up initial scoring weights for validation
-        logger.info("Building validation weights.")
-        self.scores = torch.zeros(
-            self.metagraph.n, dtype=torch.float32, device=self.device
-        )
-
-        # Serve axon to enable external connections.
-        if not self.config.neuron.axon_off:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
-            self._serve_axon()
-
-        else:
-            logger.warning("axon off, not serving ip to chain.")
-
-        # Create asyncio event loop to manage async tasks.
-        self.loop = asyncio.get_event_loop()
-
-        # Instantiate runners
-        self.should_exit: bool = False
-        self.is_running: bool = False
-        self.thread: threading.Thread = None
-        self.lock = asyncio.Lock()
 
         self._organic_scoring: Optional[OrganicValidator] = None
         if not self.config.neuron.axon_off and not self.config.neuron.organic_disabled:
@@ -90,12 +56,6 @@ class BaseValidatorNeuron(AtomBaseNeuron, BaseFolding):
             )
 
         self.load_and_merge_configs()
-
-    def _serve_axon(self):
-        """Serve axon to enable external connections"""
-        validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-        logger.info(f"Serving validator IP of UID {validator_uid} to chain...")
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor).start()
 
     @retry(
         stop=stop_after_attempt(3),  # Retry up to 3 times
@@ -161,40 +121,6 @@ class BaseValidatorNeuron(AtomBaseNeuron, BaseFolding):
 
         return result
 
-    def resync_metagraph(self):
-        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        logger.info("resync_metagraph()")
-
-        # Copies state of metagraph before syncing.
-        previous_metagraph = copy.deepcopy(self.metagraph)
-
-        # Sync the metagraph.
-        self.metagraph.sync(subtensor=self.subtensor)
-
-        # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.metagraph.axons:
-            return
-
-        logger.info(
-            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
-        )
-        # Zero out all hotkeys that have been replaced.
-        for uid, hotkey in enumerate(self.hotkeys):
-            if hotkey != self.metagraph.hotkeys[uid]:
-                self.scores[uid] = 0  # hotkey has been replaced
-
-        # Check to see if the metagraph has changed size.
-        # If so, we need to add new hotkeys and moving averages.
-        if len(self.hotkeys) < len(self.metagraph.hotkeys):
-            # Update the size of the moving average scores.
-            new_moving_average = torch.zeros((self.metagraph.n)).to(self.device)
-            min_len = min(len(self.hotkeys), len(self.scores))
-            new_moving_average[:min_len] = self.scores[:min_len]
-            self.scores = new_moving_average
-
-        # Update the hotkeys.
-        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
-
     async def update_scores(self, rewards: torch.FloatTensor, uids: List[int]):
         """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
@@ -224,31 +150,6 @@ class BaseValidatorNeuron(AtomBaseNeuron, BaseFolding):
             1 - alpha
         ) * self.scores.to(self.device)
         logger.debug(f"Updated moving avg scores: {self.scores}")
-
-    def save_state(self):
-        """Saves the state of the validator to a file."""
-        logger.info("Saving validator state.")
-
-        # Save the state of the validator to file.
-        torch.save(
-            {
-                "step": self.step,
-                "scores": self.scores,
-                "hotkeys": self.hotkeys,
-            },
-            self.config.neuron.full_path + "/state.pt",
-        )
-
-    def load_state(self):
-        """Loads the state of the validator from a file."""
-        try:
-            state = torch.load(self.config.neuron.full_path + "/state.pt")
-            self.step = state["step"]
-            self.scores = state["scores"]
-            self.hotkeys = state["hotkeys"]
-            logger.info("Loaded previously saved validator state information.")
-        except:
-            logger.info("Previous validator state not found... Starting from scratch")
 
     def load_config_json(self):
         config_json_path = os.path.join(
