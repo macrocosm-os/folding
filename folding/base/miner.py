@@ -23,13 +23,14 @@ import traceback
 
 import bittensor as bt
 
-from folding.base.neuron import BaseNeuron
+from atom.base.neuron import BaseNeuron as AtomBaseNeuron
+
 from folding.protocol import PingSynapse
 from folding.utils.config import add_miner_args
 from folding.utils.logger import logger
 
 
-class BaseMinerNeuron(BaseNeuron):
+class BaseMinerNeuron(AtomBaseNeuron):
     """
     Base class for Bittensor miners.
     """

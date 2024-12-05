@@ -1,7 +1,14 @@
+import os
 import openmm
+
+from folding.utils.logger import logger
+from folding.__init__ import __OPENMM_VERSION_TAG__
+from folding.utils.ops import load_pkl, write_pkl, OpenMMException
 
 
 class BaseFolding:
+    """This is the BaseFolding class that is inherited by all validator/miner classes in the folding module."""
+
     def check_openmm_version(self):
         """
         A method that enforces that the OpenMM version that is running the version specified in the __OPENMM_VERSION_TAG__.
