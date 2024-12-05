@@ -3,11 +3,8 @@
 
 import os
 import json
-import copy
 import torch
-import asyncio
 import argparse
-import threading
 import bittensor as bt
 from pathlib import Path
 from typing import List, Optional
