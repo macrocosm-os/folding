@@ -1,23 +1,16 @@
 # The MIT License (MIT)
 # Copyright © 2024 Macrocosmos AI.
 
-import time
-import asyncio
-import threading
 import argparse
-import traceback
-
-import bittensor as bt
-
 from folding.utils.logger import logger
 from folding.protocol import PingSynapse
 from folding.base.neuron import BaseFolding
 from folding.utils.config import add_miner_args
 
-from atom.base.miner import BaseMinerNeuron
+from atom.base.miner import BaseMinerNeuron as AtomBaseMinerNeuron
 
 
-class BaseMinerNeuron(BaseMinerNeuron, BaseFolding):
+class BaseMinerNeuron(AtomBaseMinerNeuron, BaseFolding):
     """
     Base class for Bittensor miners.
     """
