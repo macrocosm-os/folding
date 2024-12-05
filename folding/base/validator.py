@@ -4,17 +4,16 @@
 import os
 import json
 import torch
-import argparse
 import bittensor as bt
 from pathlib import Path
 from typing import List, Optional
+from folding.__init__ import __spec_version__
 
 from atom.base.validator import BaseValidatorNeuron as AtomBaseValidatorNeuron
 
 from folding.utils.logger import logger
 from folding.base.neuron import BaseFolding
 from folding.utils.ops import print_on_retry
-from folding.utils.config import add_validator_args
 from folding.organic.validator import OrganicValidator
 
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
@@ -26,11 +25,6 @@ class BaseValidatorNeuron(AtomBaseValidatorNeuron, BaseFolding):
     """
     Base class for Bittensor validators. Your validator should inherit from this class.
     """
-
-    @classmethod
-    def add_args(cls, parser: argparse.ArgumentParser):
-        super().add_args(parser)
-        add_validator_args(cls, parser)
 
     def __init__(self, config=None):
         super().__init__(config=config)
@@ -53,6 +47,9 @@ class BaseValidatorNeuron(AtomBaseValidatorNeuron, BaseFolding):
             )
 
         self.load_and_merge_configs()
+
+    def spec_version(self):
+        return __spec_version__
 
     @retry(
         stop=stop_after_attempt(3),  # Retry up to 3 times

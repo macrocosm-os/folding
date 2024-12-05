@@ -5,7 +5,7 @@ import argparse
 from folding.utils.logger import logger
 from folding.protocol import PingSynapse
 from folding.base.neuron import BaseFolding
-from folding.utils.config import add_miner_args
+from folding.__init__ import __spec_version__
 
 from atom.base.miner import BaseMinerNeuron as AtomBaseMinerNeuron
 
@@ -15,10 +15,8 @@ class BaseMinerNeuron(AtomBaseMinerNeuron, BaseFolding):
     Base class for Bittensor miners.
     """
 
-    @classmethod
-    def add_args(cls, parser: argparse.ArgumentParser):
-        super().add_args(parser)
-        add_miner_args(cls, parser)
+    def spec_version(self):
+        return __spec_version__
 
     def ping_forward(self, synapse: PingSynapse):
         """Respond to the validator with the necessary information about serving
