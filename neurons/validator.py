@@ -249,6 +249,16 @@ class Validator(BaseValidatorNeuron):
                 system_kwargs=job_event["system_kwargs"],
                 event=job_event,
             )
+            try:
+                self.store.upload_job( 
+                    pdb=job_event["pdb_id"],
+                    ff=job_event["ff"],
+                    water=job_event["water"],
+                    box=job_event["box"],
+                    hotkey=self.wallet.hotkey,
+                    gjp_address=self.config.neuron.gjp_address,)
+            except Exception as e:
+                logger.warning(f"Error uploading job: {e}")
 
             return True
         else:
