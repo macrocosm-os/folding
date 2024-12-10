@@ -69,7 +69,7 @@ We use a combination of `conda` and `poetry` to manage our environments. It is v
 git clone https://github.com/macrocosm-os/folding.git
 cd folding
 
-conda create --name folding python3.11
+conda create --name folding python=3.11
 bash install.sh
 ```
 
