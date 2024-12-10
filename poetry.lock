@@ -149,22 +149,23 @@ files = [
 
 [[package]]
 name = "anyio"
-version = "4.6.2.post1"
+version = "4.7.0"
 description = "High level compatibility layer for multiple asynchronous event loop implementations"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "anyio-4.6.2.post1-py3-none-any.whl", hash = "sha256:6d170c36fba3bdd840c73d3868c1e777e33676a69c3a72cf0a0d5d6d8009b61d"},
-    {file = "anyio-4.6.2.post1.tar.gz", hash = "sha256:4c8bc31ccdb51c7f7bd251f51c609e038d63e34219b44aa86e47576389880b4c"},
+    {file = "anyio-4.7.0-py3-none-any.whl", hash = "sha256:ea60c3723ab42ba6fff7e8ccb0488c898ec538ff4df1f1d5e642c3601d07e352"},
+    {file = "anyio-4.7.0.tar.gz", hash = "sha256:2f834749c602966b7d456a7567cafcb309f96482b5081d14ac93ccd457f9dd48"},
 ]
 
 [package.dependencies]
 idna = ">=2.8"
 sniffio = ">=1.1"
+typing_extensions = {version = ">=4.5", markers = "python_version < \"3.13\""}
 
 [package.extras]
-doc = ["Sphinx (>=7.4,<8.0)", "packaging", "sphinx-autodoc-typehints (>=1.2.0)", "sphinx-rtd-theme"]
-test = ["anyio[trio]", "coverage[toml] (>=7)", "exceptiongroup (>=1.2.0)", "hypothesis (>=4.0)", "psutil (>=5.9)", "pytest (>=7.0)", "pytest-mock (>=3.6.1)", "trustme", "truststore (>=0.9.1)", "uvloop (>=0.21.0b1)"]
+doc = ["Sphinx (>=7.4,<8.0)", "packaging", "sphinx-autodoc-typehints (>=1.2.0)", "sphinx_rtd_theme"]
+test = ["anyio[trio]", "coverage[toml] (>=7)", "exceptiongroup (>=1.2.0)", "hypothesis (>=4.0)", "psutil (>=5.9)", "pytest (>=7.0)", "pytest-mock (>=3.6.1)", "trustme", "truststore (>=0.9.1)", "uvloop (>=0.21)"]
 trio = ["trio (>=0.26.1)"]
 
 [[package]]
@@ -236,8 +237,8 @@ torch = "2.3.0"
 [package.source]
 type = "git"
 url = "https://github.com/macrocosm-os/atom.git"
-reference = "features/epistula"
-resolved_reference = "63b1f5795b68f5d037391781242ed7b1e6dd2036"
+reference = "main"
+resolved_reference = "5176a79e6b15c62e961cb4e1b6e1ec13b48c2432"
 
 [[package]]
 name = "attrs"
@@ -1358,13 +1359,13 @@ files = [
 
 [[package]]
 name = "huggingface-hub"
-version = "0.26.3"
+version = "0.26.5"
 description = "Client library to download and publish models, datasets and other repos on the huggingface.co hub"
 optional = false
 python-versions = ">=3.8.0"
 files = [
-    {file = "huggingface_hub-0.26.3-py3-none-any.whl", hash = "sha256:e66aa99e569c2d5419240a9e553ad07245a5b1300350bfbc5a4945cf7432991b"},
-    {file = "huggingface_hub-0.26.3.tar.gz", hash = "sha256:90e1fe62ffc26757a073aaad618422b899ccf9447c2bba8c902a90bef5b42e1d"},
+    {file = "huggingface_hub-0.26.5-py3-none-any.whl", hash = "sha256:fb7386090bbe892072e64b85f7c4479fd2d65eea5f2543327c970d5169e83924"},
+    {file = "huggingface_hub-0.26.5.tar.gz", hash = "sha256:1008bd18f60bfb65e8dbc0a97249beeeaa8c99d3c2fa649354df9fa5a13ed83b"},
 ]
 
 [package.dependencies]
@@ -2916,82 +2917,94 @@ files = [
 
 [[package]]
 name = "py-ed25519-zebra-bindings"
-version = "1.1.0"
+version = "1.2.0"
 description = "Python bindings for the ed25519-zebra RUST crate"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:f0634c6b56cd81ce8bc10c322c14a7cd2a72f3742572c0dec332979df36e7cf5"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:cc91befe939088aedd176e46f1316b46b4c5dd8f44a14d309e49a634fd65dbe7"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:70cc6b1d460608b23e7a0f91ecb0cd4d8ed54762fc9035cc7d5d6a22358d5679"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:045396583efc93f16ee80df7739040a66cc7f8e048e9aec60d19e4cd2afaafb8"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:838ea2bb3f27907ec7a07aff6b267646b7c0c010f506673cbbc0d911e57cdfb8"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:716f090ab1564c9bf13e790b6f8bdea5ae40b68082def48f91023a8e12e38cf1"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:2ebf8935bf1a856d9283916cfa62083b5cdfb24f7b772f42276fbf5b5af0f1f6"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:7a9e5652d3bc2e4e5ef7c12ba6767800b49f9504207e4210ac4bac9c2e31efa9"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:b846ffdfd035206e16e76026bc1f4cb45964068a929b76b2ec3289fef3ee420b"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:c97c0d04be12b299581daba0296bd522460a0f7001b9340d1551c0e2daea18a4"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:b1d8f8b04c2b3372ef33554d62fec44db28517dea1986944fc65ce3b35341800"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-none-win32.whl", hash = "sha256:3243cdaad41406c21e3840630ca46a997f30644a7b3c4aa7fe54c930d0ad66af"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp310-none-win_amd64.whl", hash = "sha256:278481a18225dc74e4292980c1859b1774b9e86da2d9a4cd63988717d24d421c"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:048e84121007b6ced32b70086e9bd710a825920f0715d73be4760c45f61847be"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:8200479a222da9bab0abbe35d9a60e4f658a4039054c3b9f2e58a102a393a658"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8ef039b7a7e4f1653e7f0c467d136a7e135061e53fdc74934d36489a8859f9e4"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:d6d035b7bd3dd998ef6030666e69cde95c34225187f53ebb9c2fa7298a65ffde"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:8f4a7bb72294f7f1f560a464832c0fc32bc0a20cf4d3b638f2428bf3dde6ebda"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:89735c2623bcf02177004eaa895250a3115214cd51df2ab561863f565aa06b1b"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:4a7cccd8ab3156d1f397c6476583e78427e93cd01fa82173df78b96e15eb9f4d"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:27483aa9262d0952e886d01ec174056503238064ce1f08a3fb17752db18071dd"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:b461baeb4adb5c5d916f8cf31651142744f29b90f010a71bb22beafe0d803f40"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:1b79af368be80b5cd32b2a678c775f113c1d76c6f0e1ea5e66586c81c9e0ab5b"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:9555ccf645374e5282103416fe5cba60937d7bf12af676980bd4e18cfa2fab48"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-none-win32.whl", hash = "sha256:1c55a32c2070aa68e0ed5a2930ba547fbf47617fd279462171d5c0f87b00df6d"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp311-none-win_amd64.whl", hash = "sha256:c4a4dedb1b8edf7f68dd8015f9d8a20f2f0ecca90fac4432e5cbabfcc16ab13d"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:3ee9a0b7eb896547e539a27c4286461d58c6a99952ea27fa1b5f5e39e63019dc"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:93e2a12d0bbf58f4d1e5ae2a1c352e43302cadd747a1a5e88fea03ce7a78a562"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a33673e6047eba0a0a28e818fa0b36b703986347fc98e6f0f96e36af68756787"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:14399e6e8c5b9c193256a1b9aec16b9de719691de84ab23a690056cfe011d13b"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:85ea7a5632a1bf6713518bb56d4c8abe5128aee173a3c498b3a564cfb346ca72"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2a01f58a1c980df68c8efd43892562b3224507bab83d880910fbb4a3c84fc965"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:655360cd74718d4efb8fbaf7afb2e4ce459af5f1d399479f577a63bd9177aa3b"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:650081644c6613fdf658456ed4b2a6580ec1b54084f318a31a924ce5cf536bb9"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:5d56b81186fc75cbcf80d0549f83e98c62c4359460e512f9fb8d6c7be2a158dd"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:072bf62421ad890c1849aaa19c7b6e6a890d337f0622e9bd09161b180a10496c"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:e09830c3672699f5f1f164fe92b102254ef68300ceaddc847d9a35bf4a2ec270"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-none-win32.whl", hash = "sha256:33ca2a7ad10846c281a73450316b390c7343e62e40516389fc1b580241f3907f"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp312-none-win_amd64.whl", hash = "sha256:4ba042528ddb81f8f025b1987bf8f19547f188efb7aa4c95d1a4e3e7f968e991"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-macosx_10_12_x86_64.whl", hash = "sha256:d75a61407651174841051d59ebcee5716207371999bef78055193e96b6dec546"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:b5afba0bd4ae86f06b278698d24acebe2d4b912e0490c94ee550a859377e5c05"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d977fb8d7f5594278ea3eb8283dac811cc35c925176454ccbb3ddf0110e194fa"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:83aa29a0d0df233591da3118142c818adc3f697143d655378ee076e6f091be7e"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:01f2952e5c7082dc9266d668528b27711874d0f5d2aa2e85994a46643b12686e"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f0db1e886f65a439fe9641196e05229715701df572a92b41428ad097d4889c5b"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:dada974b078204d1591851d0e5958824569900be3ea53676b84165ba16283641"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:c0f7aa0056c7af9df6c580880948cce42f779951e3e551573acf9b30462d9ca9"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-musllinux_1_2_armv7l.whl", hash = "sha256:2176111de560441caaf72f09da77a1d4f8eacbb34245e2531c7243ee4070829f"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:6f8686f160c4e7e928c79ad33919817b9eb608e5808154311a933078bad243b4"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:09b089af355cb0815cca4796407f89aaf08aceb5d39c5b7de087533319e3673e"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-none-win32.whl", hash = "sha256:12e5f602897c1c95217e406d80f2e7901c90b9345011c147c36989bfb7c3bb49"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-cp39-none-win_amd64.whl", hash = "sha256:119c3ca0c23570ead0a3ea9e8b7fb9716bf3675229562a7dadd815009cecf3eb"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ded8debbcffc756214cd55ebefff44fb23640c9f54edf34c0e43b371e2d2b42d"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:db18ef79ea6dc0bc42e28cd46eb442d8e84c0c9c8b2809babd63608efe015ec9"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:875bba860c5ce874e33e6d04c4804c8e4149754720bf47bd66c068a61c2ed3cc"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:de987c5c8b3a69504f82adc4d3b70aa322315550f945684111d8bfe40288517b"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:9721c029279a6e074d4a69a8ca2ee5da6264efda052fe07afcae6ca04e340805"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:b8843fe090b793449fc8b581ff5d55c03ae9bb18ecd4943ef27c51751df9e5e8"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-musllinux_1_2_armv7l.whl", hash = "sha256:b8da29729eb83c1aeeb80f0a60ceb30f6c00ba9c2c208548f6628b8f4764eccd"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-musllinux_1_2_i686.whl", hash = "sha256:a99ab59da361a9834c0019954e72a7687fa19a3380c5acc3274452c26af3b791"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp310-pypy310_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:4b40b19b0259412171a36f51778bc9d8e92f21baea469549a03ff99318bc640e"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0b7c389eee3f99c1ad3b3fa32fc53914dda22876f8e2918b5b564b98f029dd92"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:f13dffb7875eea6b2bd8f9b1165e29d9cd3df2c919c2f2db0f164926c99393e8"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:a55f043d87e00e7d68fed03d02ac0725acd2dff9a03e61388285d6d920f6850f"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e48f09c403c58245cc6712ce34ba3cab91705c901a6c4bb1e865847f46b26ec9"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:17694b0afce037860043cf8237a990e8df9c307b4decb73028d794ae56733875"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:c80f339abfc522248c749323b2cd6d555c3095128b01d845eb48a746318553da"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-musllinux_1_2_armv7l.whl", hash = "sha256:89222bb4e16d1e222a95c622630f3380fe1896ab7d0cd145da39f3aa8888ed64"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-musllinux_1_2_i686.whl", hash = "sha256:85904f3b4e11d2fc7358686e15c1e0e3707b4e1846e82d49d764c9c44881f2a3"},
-    {file = "py_ed25519_zebra_bindings-1.1.0-pp39-pypy39_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:b4452e9ed752db2c1ed2b7c74e1d589dfa68101b04c3304ba87a3cb843d34306"},
-    {file = "py_ed25519_zebra_bindings-1.1.0.tar.gz", hash = "sha256:2977603b59cfc593fb01284465fe41062d6929b0d09edf0e1ade40709977014f"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d488bf0ac70424514fddb3cf9cca6166ad149b7655970719e9bbef398054e6ad"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:7c3f97af9b0db7fe2bba1b1ac8d684711fc33e6383c067e1a1fc642e1595282a"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:9798a82efe73cfff02eb4c09576af0dc0ca3b41cc3e17cf469179add708c8b40"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0837d10e19e72bb4665c584c89f207bad8b3d29cf2410c0f9ea310c6698f4b26"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:8bb278da1728db5259d5c29dcc95717336a69fc6e6159cb7400ac262ee8a96ca"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:5a739e82c82a1f62de54cc0482e9d007b961c84220849ffd86924e34f8db5c9e"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:d311a44ae162da4b391eb4d47675709b5044b925bef20e4e2209cdfa28ccc1ee"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:c4a30a6a22f28173de66634294824455ae683163be32565f36fbfa27b8a76495"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:325eb5d0c7a406fd6abbd5b2daeb6d16e4c161a86909bf11a34a3a2c351e7fa0"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-win32.whl", hash = "sha256:dcd8f8ecbc3593c54fb3fcc1d0d847d2fdf86c8d2e6840d319d152f4efdef498"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp310-cp310-win_amd64.whl", hash = "sha256:b762e13f1e2cedfac4be954a70a75330a5368e2c0ecd64db7ce1e2e9672ed4da"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:dbfe655442b73d49c1ac740f87a480cfee4c013fcb0ba2b639290b20f8dc9bb5"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:b03308c3eb2311b5d308c3df22dbf244073e4c014cda5da2609a562adb4121fc"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1828031f38f246d35c7c7b427c17a3525fc311c0402d3b32572510977b9d0f67"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:f88238cf167ba5681e74a556b1e6ce825cb157825ce40c7f757b7d02a7c47dfb"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:2b25ca1596ae3be7e6ce6e78252ce7efa570000f9ba5b39cfe8dd10e79f73d50"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:68a33b1d8af961d28831caf2d481879bb1592f700da79aa5613d845ae6b8153a"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:41ee171c18852f6db4a86e68c4fbd622f5415f15c0ab9b40ac1fe66a8ddc3844"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:58623ff56bf1da2581a7d52507d9757ec3b03d49879fc8611646faf666bd0120"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:3fdd9cc305dd88562b9fe4d27762070bfdaa1e88647a1509a22fe252e17148d7"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:911f068d15159798309dc1895ce156b1bca2f91e34446be3ac5f54f2d3418979"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:9d0fc9c1afbf4b5ff0bc03accf5f07bf53971839eb373d1139eb3bb5a02b3bd0"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-win32.whl", hash = "sha256:256b96fdf0e264a348bf4176c0fb180a0efc6627ac312cb5e71ec95b347d1ff5"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp311-cp311-win_amd64.whl", hash = "sha256:efa06b8a0e11c62c10fdf576679ab3039aa6a7254e6cfa4d2d230941799fef5b"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:8d63a447d3adac9b431fecd886cf711a6d44200d8b2497598a8ab44ac897f1fb"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:a5b1c32414a6da709e84d0614e1ed153a5e1dbcbf6d4d17baa31c493fdbd4da4"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:780073555571390c4b355b5646c0b59c2a90d3393e354d58c4ad904121a2aee2"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:677ade8ab3348604a9e4176b068ff19707cf205fd8ee4f1781614b085628fa45"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:c19c0cc491bc4999245f9d2e904f611354f442710b6dae6d1d6ebc81666124cc"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1317a8af53c658f1e89b346d361edaf10eccd428c937a17d0684b2192fa77c40"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:cdc05ade2608707f6c54701e7425d9c00751ccffa57533a48f68f61b0aada9f1"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:ec1965ed54fd162da564cc33676377888bd1ad14c15680465463d06e14aac74d"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:7386e7cec522ac50e7d81cfc8488e463fe93902d6ba0f7c79d6f6db0fcf71111"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:b06102b2be52da075f29f0db907bb5a03af942e2f6fb558065ea5717aa567d32"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:4237cf821f74126077220d5826448c0b68c8807f40db961b1335bb6a66a83af8"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-win32.whl", hash = "sha256:fe11223695c94040f31b48a2128f1642a1b689aaaa91b5f8ae018d53b1497409"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:87654379855152770974c045099e488b577d86429af609524903b8029b276417"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:2e10a578c1297a9b12a818c5b874d9830afba1592e8cb9df3a44b2afbc241cf0"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:7f0edbed9d94f5295c4f360baa38e124626296e36f315d6a19bc91f7d8a61627"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fe2d0db5c2d4c0575b91373eb0c33b1d222fbb38664e17d807c8845eab268c16"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:4b371742adbd9be4a5a813e5d920a1a057fe9013620681651a3e7c84fd1f8d8b"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:f82a6ae05ac4feb16d077ce1b4a48396c9685bc2b37d3a1ffbcd16023a4f3b8a"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:446f26b62311db93205507fedb3fa07dae786ae75822182d44dadd28984d7768"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:f76ccb64577bbdfdacc543298355747dca9684e74262f844c3d892bd583e023b"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:c5c95587f93f9cbf73e3609e8befe2b36c488bcf96ccc1c8c63b257212e1b9df"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:3f157f87844d5e395380eaf03d9baa2108126ad276088c7edb55869683cc2cfc"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:022499a21096d03d90654af2203a5475f6c3c5572245b7bc6a1bbeeb4e42c319"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:7b466ec2de929e38e6f441156a3e108a3c090dbc6b624864f6c1b300cc329f8d"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:998b5d9c4db1053156a55e8edf06a5dce68ddaa3e928e2861f8ba9a5fe5b6119"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313t-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:3a0fe34c20032f406a78c865c308b49fe3c79c9e1642f6471228cfbc6c513348"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313t-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:f7e3273d73148d983a5e7f9ed3e8b53824dcb7833393aa09dd969dd3e7a1f3c1"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:cb5858f54ebd7d37c9d21c6dd80367d0031dbda7bd91b333018c0f243e1284f5"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313t-musllinux_1_2_armv7l.whl", hash = "sha256:4fd00c8686b17e31ec29d8e4e7ce97f465fe26227f12c9e111e012b9d0dff4b9"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313t-musllinux_1_2_i686.whl", hash = "sha256:e4e55fc5be4ba0c723d424cefdbb8d863e74d2ff25fbeadca9539ca60d78cc0f"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:91816ed4cef90d4d08fa9f55fa0c5687c5eba601dc1a44f211adcf1c20d96cc3"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:da78de274a8276ba8127cd1a0c8dc7889162703d0f21b8ca136587a40ab911fb"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:acc66206412d2abbfb088bd4027c7e21949975cc66f5ccd6249b8937a3cf315d"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:71f36c2465d808149604e536e50e3d6038c5bc83165df3b71a78345a66437819"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7c8ff027c9363f9c52ee36967b74e948f583e90a5bcbc24b31831a5ce9a25173"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:161f5996ac22ba224e3c1026fef7992a7f2be71685f7dc3208b2f94039a680cc"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:eeec2b39546ebea93f96cfd8c7984e1d5489c4767f053225b1b71da1aba60273"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-musllinux_1_2_armv7l.whl", hash = "sha256:4524e3a900d6f11daa12185ee0d96c11f215ddf714b697599d8f0ec99d03275a"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:0614733ed55ad8bd80a4a3a8abf21d26e39678c6fe31ee164388c7dc543e070d"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:aa9a2a610ffe5b576513ff4d6bd77b79e1c818c1a11df51522e7a82c9c299059"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-win32.whl", hash = "sha256:81b2dac4669d2935edf5953eb53c2507023774d2fa6e3a51743e8e3757f28e1a"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-cp39-cp39-win_amd64.whl", hash = "sha256:3503a179561ada2ac456351e211a28b433083d5fa48ff605e9670ae51797ea12"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:3f76228db22d018a66e858b27d4c074a0111438919a45276ac1a00d397d6daca"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:4f7c0875eda221bfdc1029207d7807c2ae5446bf4aaf5d34def94b8fa2abeace"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:0c713b7dba676380e2a1c3208667a71bf4bcc02a67b487894cda35c6103079e9"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1fe2882a1377199cdb656e42adf5e97869d1b04af1f66a7300179f95692603c2"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:c6afd09a1b831444a5107ca8e48f14db837a2351cac25e70e71f80f976c76ca2"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:91c0627efe7048ce552be5db08c11a99d532b2e115316daed3b53e52ba9f383b"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-musllinux_1_2_armv7l.whl", hash = "sha256:d6efc48c7c26838044c7f58ba2e7944776ef6eaef21c962a528ddffd3943e1b4"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-musllinux_1_2_i686.whl", hash = "sha256:7cb8befc4c52c681c4e2f5994adeff28f529f767c979921faaa1fbb84a52afae"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp310-pypy310_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:3b976f2c6053011c08dcde2f5805e285a8ff53eec5a42be0cc24ce93bc5729ac"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp39-pypy39_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5f7ac9e2f0856b2ce3db7bfb6bb1b750e2533846b8aaf6106d5edc4fca33d4e2"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp39-pypy39_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:e97df330d22c671e4e494b4e4f85ab06a4b067f38201430d8d08e687c6c1ef25"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp39-pypy39_pp73-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:ac83999ed7ef81a64830495ad356e587ff89bdc20c79ad81d2baf8e38c707d76"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp39-pypy39_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:78c23fe0e20159268ee343110a9afe58813691c9fe94bfb3525efcd23af97b81"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp39-pypy39_pp73-musllinux_1_2_armv7l.whl", hash = "sha256:900e1fd3d1474b02342d5e388fe874b2b71d1c87e4e652ed5b7773ca25c34754"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp39-pypy39_pp73-musllinux_1_2_i686.whl", hash = "sha256:c11f644619ca166fb62b6ec4586d53fc74e1bc3a5345e9b84af6baca7b5ca6b1"},
+    {file = "py_ed25519_zebra_bindings-1.2.0-pp39-pypy39_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:f03a9514c7e763367128a7e6be529fe8417775f72d5d717c0c3004047f188596"},
+    {file = "py_ed25519_zebra_bindings-1.2.0.tar.gz", hash = "sha256:d9ec63d54b1801d5b5bdef0b3096ed94e2e1a7c870c937682afc7b8b25ffc2fc"},
 ]
 
 [[package]]
@@ -3961,13 +3974,13 @@ test = ["coverage", "pytest"]
 
 [[package]]
 name = "sentry-sdk"
-version = "2.19.0"
+version = "2.19.2"
 description = "Python client for Sentry (https://sentry.io)"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "sentry_sdk-2.19.0-py2.py3-none-any.whl", hash = "sha256:7b0b3b709dee051337244a09a30dbf6e95afe0d34a1f8b430d45e0982a7c125b"},
-    {file = "sentry_sdk-2.19.0.tar.gz", hash = "sha256:ee4a4d2ae8bfe3cac012dcf3e4607975904c137e1738116549fc3dbbb6ff0e36"},
+    {file = "sentry_sdk-2.19.2-py2.py3-none-any.whl", hash = "sha256:ebdc08228b4d131128e568d696c210d846e5b9d70aa0327dec6b1272d9d40b84"},
+    {file = "sentry_sdk-2.19.2.tar.gz", hash = "sha256:467df6e126ba242d39952375dd816fbee0f217d119bf454a8ce74cf1e7909e8d"},
 ]
 
 [package.dependencies]
@@ -4687,13 +4700,13 @@ test = ["pytest (>=6.0.0)", "setuptools (>=65)"]
 
 [[package]]
 name = "win32-setctime"
-version = "1.1.0"
+version = "1.2.0"
 description = "A small Python utility to set file creation time on Windows"
 optional = false
 python-versions = ">=3.5"
 files = [
-    {file = "win32_setctime-1.1.0-py3-none-any.whl", hash = "sha256:231db239e959c2fe7eb1d7dc129f11172354f98361c4fa2d6d2d7e278baa8aad"},
-    {file = "win32_setctime-1.1.0.tar.gz", hash = "sha256:15cf5750465118d6929ae4de4eb46e8edae9a5634350c01ba582df868e932cb2"},
+    {file = "win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390"},
+    {file = "win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0"},
 ]
 
 [package.extras]
@@ -4930,4 +4943,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.13"
-content-hash = "c5d2d4eaa11a5d3a41a512ee54b5fa6e282e51712e2be2fe194c0dd8d11de9e8"
+content-hash = "c130221616c11ff2b558e24a18517d82986a38dc29be545e5c97e7124911583b"
