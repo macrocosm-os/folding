@@ -245,9 +245,7 @@ class SQLiteJobStore:
             },
             "em_s3_link": "s3://path/to/em",
             "priority": 1,
-            "organic": False,
-            "created_at": pd.Timestamp.now().floor("s"),
-            "updated_at": pd.Timestamp.now().floor("s"),
+            "organic": False
         }
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
