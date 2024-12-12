@@ -1,15 +1,17 @@
+import json
 import os
 import random
-import string
-import json
 import sqlite3
-from typing import List
+import string
+from dataclasses import asdict, dataclass
+from datetime import datetime
 from queue import Queue
-from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict
+from typing import List
 
 import numpy as np
 import pandas as pd
+import requests
+from atom.epistula.epistula import Epistula
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "db")
 
@@ -22,6 +24,7 @@ class SQLiteJobStore:
         self.table_name = table_name
         os.makedirs(self.db_path, exist_ok=True)
         self.db_file = os.path.join(self.db_path, "jobs.db")
+        self.epistula = Epistula()
 
         self.init_db()
 
@@ -217,6 +220,41 @@ class SQLiteJobStore:
         with sqlite3.connect(self.db_file) as conn:
             df = pd.read_sql_query(f"SELECT * FROM {self.table_name}", conn)
         return f"{self.__class__.__name__}\n{df.__repr__()}"
+
+    def upload_job(
+        self,
+        pdb: str,
+        ff: str,
+        box: str,
+        water: str,
+        hotkeys: list,
+        system_kwargs: dict,
+        hotkey,
+        gjp_address: str,
+    ):
+        """Upload a job to the database."""
+
+        body = {
+            "pdb_id": pdb,
+            "hotkeys": hotkeys,
+            "system_config": {
+                "ff": ff,
+                "box": box,
+                "water": water,
+                "system_kwargs": system_kwargs,
+            },
+            "em_s3_link": "s3://path/to/em",
+            "priority": 1,
+            "organic": False
+        }
+        body_bytes = self.epistula.create_message_body(body)
+        headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
+
+        response = requests.post(
+            f"http://{gjp_address}/jobs", headers=headers, data=body_bytes
+        )
+        if response.status_code != 200:
+            raise ValueError(f"Failed to upload job: {response.text}")
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
