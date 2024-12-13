@@ -551,6 +551,10 @@ class Protein(OpenMMSimulation):
         )
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
+        
+        if len(np.unique(check_energies)) == 1:
+            logger.warning("All energy values in reproduced simulation are the same. Skipping!")
+            return False, [], []
 
         if not self.check_gradient(check_energies=check_energies):
             logger.warning(
