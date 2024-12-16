@@ -169,11 +169,12 @@ class BaseValidatorNeuron(BaseNeuron):
             netuid=self.config.netuid,
             uids=uint_uids,
             weights=uint_weights,
-            wait_for_finalization=False,
-            wait_for_inclusion=False,
+            wait_for_finalization=True,
+            wait_for_inclusion=True,
             version_key=self.spec_version,
         )
 
+        logger.debug(result)
         return result[0]
 
     def resync_metagraph(self):
@@ -272,6 +273,7 @@ class BaseValidatorNeuron(BaseNeuron):
             valid_stakes = self.metagraph.S[valid_indices]
             normalized_stakes = valid_stakes / np.sum(valid_stakes)
 
+            self.step = 1
             self.scores = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(
                 self.device
             )

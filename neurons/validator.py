@@ -53,9 +53,6 @@ class Validator(BaseValidatorNeuron):
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
-        # Set the weights for the first time.
-        self.weight_setter()
-
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = SQLiteJobStore()
         self.mdrun_args = self.parse_mdrun_args()
@@ -390,10 +387,10 @@ class Validator(BaseValidatorNeuron):
 
     async def sync_loop(self):
         logger.info("Starting sync loop.")
-        while True:
-            self.sync()
+        while True:            
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+            self.sync()
 
     async def create_synthetic_jobs(self):
         """
