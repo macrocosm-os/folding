@@ -85,7 +85,7 @@ class BaseNeuron(ABC):
         else:
             self.wallet = bt.wallet(config=self.config)
             self.subtensor = bt.subtensor(config=self.config)
-            self.metagraph = self.subtensor.metagraph(self.config.netuid)
+            self.metagraph = self.subtensor.metagraph(self.config.netuid, lite=False)
 
             # Check OpenMM version if we are not in mock mode.
             self.check_openmm_version()

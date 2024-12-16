@@ -272,7 +272,9 @@ class BaseValidatorNeuron(BaseNeuron):
             valid_stakes = self.metagraph.S[valid_indices]
             normalized_stakes = valid_stakes / np.sum(valid_stakes)
 
-            self.scores = np.dot(normalized_stakes, valid_weights)
+            self.scores = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(
+                self.device
+            )
 
     def load_config_json(self):
         config_json_path = os.path.join(
