@@ -174,7 +174,7 @@ class BaseValidatorNeuron(BaseNeuron):
             version_key=self.spec_version,
         )
 
-        return result
+        return result[0]
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""

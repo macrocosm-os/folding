@@ -53,6 +53,9 @@ class Validator(BaseValidatorNeuron):
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
+        # Set the weights for the first time.
+        self.weight_setter()
+
         # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = SQLiteJobStore()
         self.mdrun_args = self.parse_mdrun_args()
@@ -382,8 +385,8 @@ class Validator(BaseValidatorNeuron):
         merged_events.pop("miner_energy")
         logger.success(f"Event information: {merged_events}")
 
-        if protein is not None and job.active is False:
-            protein.remove_pdb_directory()
+        # if protein is not None and job.active is False:
+        #     protein.remove_pdb_directory()
 
     async def sync_loop(self):
         logger.info("Starting sync loop.")
