@@ -54,7 +54,6 @@ async def run_step(
     protein: Protein,
     uids: List[int],
     timeout: float,
-    mdrun_args="",  # TODO: Remove this
     best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()

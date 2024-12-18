@@ -31,6 +31,7 @@ def get_energies(
     event["process_md_output_time"] = [0] * len(uids)
     event["is_run_valid_time"] = [0] * len(uids)
     event["ns_computed"] = [0] * len(uids)
+    event["miner_seed"] = [0] * len(uids)
 
     energies = np.zeros(len(uids))
 
@@ -73,6 +74,7 @@ def get_energies(
             event["reported_energy"][i] = float(energy)
             event["rmsds"][i] = float(rmsd)
             event["ns_computed"][i] = float(ns_computed)
+            event["miner_seed"][i] = resp.miner_seed
 
         except Exception as E:
             # If any of the above methods have an error, we will catch here.
