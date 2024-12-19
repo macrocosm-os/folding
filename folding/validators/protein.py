@@ -21,12 +21,14 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
+    write_pkl,
+    load_pkl,
     check_and_download_pdbs,
     check_if_directory_exists,
-    write_pkl,
     plot_miner_validator_curves,
     hex_dump_to_file,
     compare_files_same_length,
+    extract_content_from_txt,
 )
 
 from folding.utils.logger import logger
@@ -119,6 +121,10 @@ class Protein(OpenMMSimulation):
         )
         self.simulation_pkl_location = os.path.join(
             self.validator_directory, self.simulation_pkl
+        )
+
+        self.velm_array_pkl = os.path.join(
+            self.pdb_directory, "velm_array_indicies.pkl"
         )
 
     @staticmethod
@@ -287,8 +293,7 @@ class Protein(OpenMMSimulation):
             file=open(self.pdb_location, "w"),
         )
 
-    @staticmethod
-    def create_initial_state_files(pdb_id: str, simulation: app.Simulation):
+    def create_initial_state_files(self, pdb_id: str, simulation: app.Simulation):
         """Alters the initial state of the simulation using initial velocities
         at the beginning and the end of the protein chain to use as a lookup in memory.
 
@@ -341,10 +346,26 @@ class Protein(OpenMMSimulation):
         # This is where in the file we should be looking to segment the velocity array.
         start_index, end_index = differences[0][0], differences[-1][0]
 
+        # we extract the masses right from the decoded checkpoint file.
+        velm_content = extract_content_from_txt(
+            file=f"{base_name}.txt",
+            start_index=start_index,
+            end_index=end_index,
+        )
+
+        # Remove the 00 information from the array.
+        base_mask = velm_content != "00"
+        pdb_masses = velm_content[base_mask]
+
         # Save the indicies to a pkl file to be read later.
         write_pkl(
-            data={"start_index": start_index, "end_index": end_index},
-            path=f"velm_array_indicies.pkl",
+            data={
+                "pdb_masses": pdb_masses,
+                "base_mask": base_mask,
+                "start_index": start_index,
+                "end_index": end_index,
+            },
+            path=self.velm_array_pkl,
             write_mode="wb",
         )
 
@@ -538,6 +559,30 @@ class Protein(OpenMMSimulation):
 
             self.cpt_step = self.simulation.currentStep
             self.checkpoint_path = checkpoint_path
+
+            # Here is where we are going to check if the miner is running a real protein.
+            hex_dump_to_file(
+                checkpoint_file=checkpoint_path,
+                output_path=os.path.join(
+                    self.miner_data_directory, "miner_checkpoint.txt"
+                ),
+            )
+
+            velm_data = load_pkl(self.velm_array_pkl, "rb")
+            miner_velm: np.ndarray = extract_content_from_txt(
+                file=os.path.join(self.miner_data_directory, "miner_checkpoint.txt"),
+                start_index=velm_data["start_index"],
+                end_index=velm_data["end_index"],
+            )
+
+            # Remove non-interesting elements from the array
+            miner_masses = miner_velm[velm_data["base_mask"]]
+
+            if not np.array_equal(miner_masses, velm_data["pdb_masses"]):
+                logger.error(
+                    f"The masses returned by miner {hotkey} for pdb {self.pdb_id} do not identically equal initial protein masses."
+                )
+                return False
 
             # Save the system config to the miner data directory
             system_config_path = os.path.join(

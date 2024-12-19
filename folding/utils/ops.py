@@ -10,11 +10,12 @@ import functools
 import traceback
 import subprocess
 import pickle as pkl
+from itertools import chain
 from typing import Dict, List
+
 import numpy as np
 import pandas as pd
 import parmed as pmd
-import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
@@ -412,3 +413,21 @@ def compare_files_same_length(
                 return differences
 
     return differences
+
+
+def extract_content_from_txt(path: str, start_index: int, end_index: int) -> np.ndarray:
+    """Extract content from the text file between the start and end index.
+
+    Args:
+        path (str): location of the text file
+        start_index (int): Start row index
+        end_index (int): End row index.
+    """
+    with open(path, "r") as file:
+        content = file.readlines()
+
+    content = content[start_index : end_index + 1]
+    content = [line.split() for line in content]
+    flattened = np.array(list(chain.from_iterable(content)))
+
+    return flattened
