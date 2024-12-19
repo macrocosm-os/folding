@@ -105,6 +105,8 @@ class BaseNeuron(ABC):
         )
         self.step = 0
 
+        logger.info(f"Running spec version: {spec_version}")
+
     def check_openmm_version(self):
         """
         A method that enforces that the OpenMM version that is running the version specified in the __OPENMM_VERSION_TAG__.
