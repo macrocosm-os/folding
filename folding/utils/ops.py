@@ -357,3 +357,58 @@ def plot_miner_validator_curves(
         width=1400,
     )
     fig.write_image(os.path.join(miner_data_directory, filename + "_percent_diff.png"))
+
+
+def hex_dump_to_file(checkpoint_file: str, output_path: str, bytes_per_line=16):
+    """Converts a binary checkpoint file to a hex dump and writes it to a file
+    to be used for checkpoint comparisons.
+
+    Args:
+        checkpoint_file (str): location of the checkpoint file
+        output_path (str): location to write the hex dump
+        bytes_per_line (int, optional):  Defaults to 16.
+    """
+    with open(checkpoint_file, "rb") as f, open(output_path, "w") as out_file:
+        offset = 0
+        while True:
+            chunk = f.read(bytes_per_line)
+            if not chunk:
+                break
+            # Format the offset, hex values, and ASCII representation
+            hex_values = " ".join(f"{byte:02x}" for byte in chunk)
+            line = f"{hex_values:<{bytes_per_line*3}}\n"
+            out_file.write(line)
+            offset += bytes_per_line
+
+
+def compare_files_same_length(
+    file1_path,
+    file2_path,
+    line_start=1,
+    line_end=None,
+    number_of_expected_line_differences: int = 2,
+):
+    """
+    Compare two text files line by line and identify lines with differences.
+
+    Args:
+        file1_path (str): Path to the first text file.
+        file2_path (str): Path to the second text file.
+
+    Returns:
+        list of tuples: A list of tuples containing (line_number, file1_line, file2_line) for each differing line.
+    """
+    differences = []
+    with open(file1_path, "r") as file1, open(file2_path, "r") as file2:
+        for line_number, (line1, line2) in enumerate(
+            zip(file1, file2), start=line_start
+        ):
+            if line_end is not None and line_number > line_end:
+                break
+            if line1.strip() != line2.strip():  # Compare stripped lines
+                differences.append((line_number, line1.strip(), line2.strip()))
+
+            if len(differences) == number_of_expected_line_differences:
+                return differences
+
+    return differences

@@ -4,13 +4,12 @@ import glob
 import base64
 import random
 import shutil
-from collections import defaultdict
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Literal
 import asyncio
+from pathlib import Path
+from dataclasses import dataclass
+from collections import defaultdict
+from typing import Dict, List, Literal
 
-import bittensor as bt
 import numpy as np
 import pandas as pd
 from openmm import app, unit
@@ -25,9 +24,11 @@ from folding.utils.ops import (
     check_and_download_pdbs,
     check_if_directory_exists,
     write_pkl,
-    load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
+    hex_dump_to_file,
+    compare_files_same_length,
 )
+
 from folding.utils.logger import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -286,6 +287,71 @@ class Protein(OpenMMSimulation):
             file=open(self.pdb_location, "w"),
         )
 
+    @staticmethod
+    def create_initial_state_files(pdb_id: str, simulation: app.Simulation):
+        """Alters the initial state of the simulation using initial velocities
+        at the beginning and the end of the protein chain to use as a lookup in memory.
+
+        Args:
+            pdb_id (str): The pdb_id of the protein.
+            simulation (app.Simulation): The simulation object.
+
+        Returns:
+            simulation: original simulation object.
+        """
+
+        base_name = f"base_{pdb_id}"
+        bookmark_name = f"base_{pdb_id}_bookmark"
+
+        # We want to save the original state (zero velocities) of the simulation to be used for anomaly detection.
+        simulation.saveCheckpoint(f"{base_name}.cpt")
+        hex_dump_to_file(
+            checkpoint_file=f"{base_name}.cpt",
+            output_file=f"{base_name}.txt",
+        )
+
+        vel = simulation.context.getState(getVelocities=True).getVelocities(
+            asNumpy=True
+        )
+
+        # Modify the velocity of the first and last atoms to get a bookmark.
+        vel[0] = [1.0, 0.0, 0.0] * unit.nanometers / unit.picoseconds
+        vel[-1] = [0.0, 0.0, -1.0] * unit.nanometers / unit.picoseconds
+
+        # Set the updated velocities back to the context
+        simulation.context.setVelocities(vel)
+
+        simulation.saveCheckpoint(f"{bookmark_name}.cpt")
+        hex_dump_to_file(
+            checkpoint_file=f"{bookmark_name}.cpt",
+            output_file=f"{bookmark_name}.txt",
+        )
+
+        differences = compare_files_same_length(
+            file1=f"{base_name}.txt",
+            file2=f"{bookmark_name}.txt",
+            number_of_expected_line_differences=2,  # two velocities are changed
+        )
+
+        if len(differences) != 2:
+            raise OpenMMException(
+                f"Failed to create bookmark for {pdb_id}. Differences: {differences}"
+            )
+
+        # This is where in the file we should be looking to segment the velocity array.
+        start_index, end_index = differences[0][0], differences[-1][0]
+
+        # Save the indicies to a pkl file to be read later.
+        write_pkl(
+            data={"start_index": start_index, "end_index": end_index},
+            path=f"velm_array_indicies.pkl",
+            write_mode="wb",
+        )
+
+        # Reset the state.
+        simulation.loadCheckpoint(f"{base_name}.cpt")
+        return simulation
+
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
     async def generate_input_files(self):
@@ -296,6 +362,7 @@ class Protein(OpenMMSimulation):
         4. Save the system config to the validator directory.
         5. Move all files except the pdb file to the validator directory.
         """
+
         logger.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
@@ -310,8 +377,12 @@ class Protein(OpenMMSimulation):
             "em",
         )
 
-        logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
+        # Create the initial state files for the simulation
+        self.simulation = Protein.create_initial_state_files(
+            self.pdb_id, self.simulation
+        )
 
+        logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
         start_time = time.time()
         await asyncio.to_thread(
             self.simulation.minimizeEnergy, maxIterations=100
@@ -551,9 +622,11 @@ class Protein(OpenMMSimulation):
         )
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
-        
+
         if len(np.unique(check_energies)) == 1:
-            logger.warning("All energy values in reproduced simulation are the same. Skipping!")
+            logger.warning(
+                "All energy values in reproduced simulation are the same. Skipping!"
+            )
             return False, [], []
 
         if not self.check_gradient(check_energies=check_energies):
