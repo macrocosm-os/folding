@@ -560,30 +560,6 @@ class Protein(OpenMMSimulation):
             self.cpt_step = self.simulation.currentStep
             self.checkpoint_path = checkpoint_path
 
-            # Here is where we are going to check if the miner is running a real protein.
-            hex_dump_to_file(
-                checkpoint_file=checkpoint_path,
-                output_path=os.path.join(
-                    self.miner_data_directory, "miner_checkpoint.txt"
-                ),
-            )
-
-            velm_data = load_pkl(self.velm_array_pkl, "rb")
-            miner_velm: np.ndarray = extract_content_from_txt(
-                file=os.path.join(self.miner_data_directory, "miner_checkpoint.txt"),
-                start_index=velm_data["start_index"],
-                end_index=velm_data["end_index"],
-            )
-
-            # Remove non-interesting elements from the array
-            miner_masses = miner_velm[velm_data["base_mask"]]
-
-            if not np.array_equal(miner_masses, velm_data["pdb_masses"]):
-                logger.error(
-                    f"The masses returned by miner {hotkey} for pdb {self.pdb_id} do not identically equal initial protein masses."
-                )
-                return False
-
             # Save the system config to the miner data directory
             system_config_path = os.path.join(
                 self.miner_data_directory, f"miner_system_config_{seed}.pkl"
@@ -618,10 +594,47 @@ class Protein(OpenMMSimulation):
             mean_gradient <= GRADIENT_THRESHOLD
         )  # includes large negative gradients is passible
 
+    def check_masses(self) -> bool:
+        """
+        Check if the masses reported in the miner file are identical to the masses given
+        in the initial pdb file. If not, they have modified the system in unintended ways.
+
+        Reference:
+        https://github.com/openmm/openmm/blob/53770948682c40bd460b39830d4e0f0fd3a4b868/platforms/common/src/kernels/langevinMiddle.cc#L11
+        """
+        miner_hex_path = os.path.join(
+            self.miner_data_directory, f"{self.current_state}_miner_hex.txt"
+        )
+
+        hex_dump_to_file(
+            checkpoint_file=self.checkpoint_path, output_path=miner_hex_path
+        )
+
+        velm_data = load_pkl(self.velm_array_pkl, "rb")
+        miner_velm: np.ndarray = extract_content_from_txt(
+            file=miner_hex_path,
+            start_index=velm_data["start_index"],
+            end_index=velm_data["end_index"],
+        )
+
+        # Apply the mask to the array to get the masses identified from the original checkpoint file.
+        miner_masses = miner_velm[velm_data["base_mask"]]
+
+        if not np.array_equal(miner_masses, velm_data["pdb_masses"]):
+            logger.error(
+                f"The masses returned by miner {self.hotkey_alias} for pdb {self.pdb_id} do not identically equal initial protein masses."
+            )
+            return False
+        return True
+
     def is_run_valid(self):
         """
-        Checks if the run is valid by comparing the potential energy values
-        between the current simulation and a reference log file.
+        Checks if the run is valid by evaluating a set of logical conditions:
+
+        1. comparing the potential energy values between the current simulation and a reference log file.
+        2. ensuring that the gradient of the minimization is within a certain threshold to prevent exploits.
+        3. ensuring that the masses of the atoms in the simulation are the same as the masses in the original pdb file.
+
 
         Returns:
             Tuple[bool, list, list]: True if the run is valid, False otherwise.
@@ -630,6 +643,9 @@ class Protein(OpenMMSimulation):
 
         # The percentage that we allow the energy to differ from the miner to the validator.
         ANOMALY_THRESHOLD = 0.5
+
+        if not self.check_masses():
+            return False, [], []
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
