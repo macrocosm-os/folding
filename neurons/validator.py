@@ -395,15 +395,15 @@ class Validator(BaseValidatorNeuron):
         merged_events.pop("miner_energy")
         logger.success(f"Event information: {merged_events}")
 
-        if protein is not None and job.active is False:
-            protein.remove_pdb_directory()
+        # if protein is not None and job.active is False:
+        #     protein.remove_pdb_directory()
 
     async def sync_loop(self):
         logger.info("Starting sync loop.")
-        while True:
-            self.sync()
+        while True:            
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+            self.sync()
 
     async def create_synthetic_jobs(self):
         """
