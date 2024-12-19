@@ -27,6 +27,7 @@ from tenacity import RetryError
 from folding.utils.config import check_config, add_args, config
 from folding.utils.misc import ttl_get_block
 from folding import __spec_version__ as spec_version
+from folding import __version__ as version
 from folding import __OPENMM_VERSION_TAG__
 from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
@@ -105,7 +106,7 @@ class BaseNeuron(ABC):
         )
         self.step = 0
 
-        logger.info(f"Running spec version: {spec_version}")
+        logger.info(f"Running spec version: {spec_version} --> Version: {version}")
 
     def check_openmm_version(self):
         """
