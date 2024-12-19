@@ -106,7 +106,7 @@ class OpenMMSimulation(GenericSimulation):
             system_config["time_step_size"] * unit.picoseconds,
         )
 
-        seed = seed if system_config["seed"] is None else system_config["seed"]
+        seed = seed if seed is not None else system_config["seed"]
         integrator.setRandomNumberSeed(seed)
 
         # Periodic boundary conditions
