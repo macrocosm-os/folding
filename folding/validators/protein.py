@@ -348,11 +348,7 @@ class Protein(OpenMMSimulation):
 
         # load in information from the velm memory
         velm = self.create_velm(simulation=self.simulation)
-        write_pkl(
-            data=velm,
-            path=self.velm_array_pkl,
-            write_mode="wb",
-        )
+        
 
         logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
         start_time = time.time()
@@ -374,6 +370,12 @@ class Protein(OpenMMSimulation):
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
         logger.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
+        
+        write_pkl(
+            data=velm,
+            path=self.velm_array_pkl,
+            write_mode="wb",
+        )
 
     def gen_seed(self):
         """Generate a random seed"""
