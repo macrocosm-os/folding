@@ -23,6 +23,7 @@ import torch
 import asyncio
 import argparse
 import threading
+import numpy as np
 import bittensor as bt
 from pathlib import Path
 from folding.utils.logger import logger
@@ -71,10 +72,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
-            self.axon = bt.axon(
-                wallet=self.wallet,
-                config=self.config
-            )
+            self.axon = bt.axon(wallet=self.wallet, config=self.config)
             self._serve_axon()
 
         else:
@@ -176,7 +174,8 @@ class BaseValidatorNeuron(BaseNeuron):
             version_key=self.spec_version,
         )
 
-        return result
+        logger.debug(result)
+        return result[0]
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
@@ -265,7 +264,19 @@ class BaseValidatorNeuron(BaseNeuron):
             self.hotkeys = state["hotkeys"]
             logger.info("Loaded previously saved validator state information.")
         except:
-            logger.info("Previous validator state not found... Starting from scratch")
+            logger.info(
+                "Previous validator state not found... Weight copying the average of the network."
+            )
+
+            valid_indices = np.where(self.metagraph.validator_permit)[0]
+            valid_weights = self.metagraph.weights[valid_indices]
+            valid_stakes = self.metagraph.S[valid_indices]
+            normalized_stakes = valid_stakes / np.sum(valid_stakes)
+
+            self.step = 1
+            self.scores = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(
+                self.device
+            )
 
     def load_config_json(self):
         config_json_path = os.path.join(

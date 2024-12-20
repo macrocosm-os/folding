@@ -402,9 +402,9 @@ class Validator(BaseValidatorNeuron):
     async def sync_loop(self):
         logger.info("Starting sync loop.")
         while True:
-            self.sync()
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+            self.sync()
 
     async def create_synthetic_jobs(self):
         """

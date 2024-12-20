@@ -27,6 +27,7 @@ from tenacity import RetryError
 from folding.utils.config import check_config, add_args, config
 from folding.utils.misc import ttl_get_block
 from folding import __spec_version__ as spec_version
+from folding import __version__ as version
 from folding import __OPENMM_VERSION_TAG__
 from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
@@ -85,7 +86,7 @@ class BaseNeuron(ABC):
         else:
             self.wallet = bt.wallet(config=self.config)
             self.subtensor = bt.subtensor(config=self.config)
-            self.metagraph = self.subtensor.metagraph(self.config.netuid)
+            self.metagraph = self.subtensor.metagraph(self.config.netuid, lite = False)
 
             # Check OpenMM version if we are not in mock mode.
             self.check_openmm_version()
@@ -104,6 +105,8 @@ class BaseNeuron(ABC):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
+
+        logger.info(f"Running spec version: {spec_version} --> Version: {version}")
 
     def check_openmm_version(self):
         """
@@ -153,17 +156,22 @@ class BaseNeuron(ABC):
             self.resync_metagraph()
 
         if self.should_set_weights():
-            try:
-                logger.info("Attempting to set weights...")
-                self.set_weights()
-                logger.success("Weight setting successful!")
-            except RetryError as e:
-                logger.error(
-                    f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
-                )
+            self.weight_setter()
 
         # Always save state.
         self.save_state()
+
+    def weight_setter(self):
+        """ method to set weights for the validator. """
+        try:
+            logger.info("Attempting to set weights...")
+            weights_are_set = self.set_weights()
+            if weights_are_set:
+                logger.success("Weight setting successful!")
+        except RetryError as e:
+            logger.error(
+                f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
+            )
 
     def check_registered(self):
         # --- Check for registration.

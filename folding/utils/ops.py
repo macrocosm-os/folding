@@ -11,10 +11,10 @@ import traceback
 import subprocess
 import pickle as pkl
 from typing import Dict, List
+
 import numpy as np
 import pandas as pd
 import parmed as pmd
-import bittensor as bt
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
