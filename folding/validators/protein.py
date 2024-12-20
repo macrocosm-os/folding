@@ -347,7 +347,7 @@ class Protein(OpenMMSimulation):
         # Upload files to S3
         try:
             # upload pdb file to s3
-            self.handler.put(
+            self.s3_pdb_link = self.handler.put(
                 file_path=self.pdb_location,
                 location=f"inputs/{self.pdb_id}/{self.VALIDATOR_ID}/{self.input_time}",
                 content_type=None,
@@ -355,7 +355,7 @@ class Protein(OpenMMSimulation):
             )
             logger.info(f"Uploaded pdb file to s3")
             # upload checkpoint file to s3
-            self.handler.put(
+            self.s3_cpt_link = self.handler.put(
                 file_path=os.path.join(self.validator_directory.rsplit('/', 1)[0], self.simulation_cpt),
                 location=f"inputs/{self.pdb_id}/{self.VALIDATOR_ID}/{self.input_time}",
                 content_type=None,
