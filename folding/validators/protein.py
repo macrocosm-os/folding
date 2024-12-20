@@ -4,13 +4,12 @@ import glob
 import base64
 import random
 import shutil
-from collections import defaultdict
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Literal
 import asyncio
+from pathlib import Path
+from dataclasses import dataclass
+from collections import defaultdict
+from typing import Dict, List, Literal, Any
 
-import bittensor as bt
 import numpy as np
 import pandas as pd
 from openmm import app, unit
@@ -22,12 +21,13 @@ from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
+    write_pkl,
+    load_pkl,
     check_and_download_pdbs,
     check_if_directory_exists,
-    write_pkl,
-    load_and_sample_random_pdb_ids,
     plot_miner_validator_curves,
 )
+
 from folding.utils.logger import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -118,6 +118,10 @@ class Protein(OpenMMSimulation):
         )
         self.simulation_pkl_location = os.path.join(
             self.validator_directory, self.simulation_pkl
+        )
+
+        self.velm_array_pkl = os.path.join(
+            self.pdb_directory, "velm_array_indicies.pkl"
         )
 
     @staticmethod
@@ -286,6 +290,37 @@ class Protein(OpenMMSimulation):
             file=open(self.pdb_location, "w"),
         )
 
+    def create_velm(self, simulation: app.Simulation) -> Dict[str, Any]:
+        """Alters the initial state of the simulation using initial velocities
+        at the beginning and the end of the protein chain to use as a lookup in memory.
+
+        Args:
+            simulation (app.Simulation): The simulation object.
+
+        Returns:
+            simulation: original simulation object.
+        """
+
+        mass_index = 0
+        mass_indicies = []
+        atom_masses: List[unit.quantity.Quantity] = []
+
+        while True:
+            try:
+                atom_masses.append(simulation.system.getParticleMass(mass_index))
+                mass_indicies.append(mass_index)
+                mass_index += 1
+            except:
+                # When there are no more atoms.
+                break
+
+        velm = {
+            "mass_indicies": mass_indicies,
+            "pdb_masses": atom_masses,
+        }
+
+        return velm
+
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
     async def generate_input_files(self):
@@ -296,6 +331,7 @@ class Protein(OpenMMSimulation):
         4. Save the system config to the validator directory.
         5. Move all files except the pdb file to the validator directory.
         """
+
         logger.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
@@ -310,8 +346,10 @@ class Protein(OpenMMSimulation):
             "em",
         )
 
-        logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
+        # load in information from the velm memory
+        velm = self.create_velm(simulation=self.simulation)
 
+        logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
         start_time = time.time()
         await asyncio.to_thread(
             self.simulation.minimizeEnergy, maxIterations=100
@@ -331,6 +369,13 @@ class Protein(OpenMMSimulation):
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
         logger.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
+
+        # We are writing the velm array to the pdb directory after we moved all the other files for simplicity.
+        write_pkl(
+            data=velm,
+            path=self.velm_array_pkl,
+            write_mode="wb",
+        )
 
     def gen_seed(self):
         """Generate a random seed"""
@@ -502,10 +547,37 @@ class Protein(OpenMMSimulation):
             mean_gradient <= GRADIENT_THRESHOLD
         )  # includes large negative gradients is passible
 
+    def check_masses(self) -> bool:
+        """
+        Check if the masses reported in the miner file are identical to the masses given
+        in the initial pdb file. If not, they have modified the system in unintended ways.
+
+        Reference:
+        https://github.com/openmm/openmm/blob/53770948682c40bd460b39830d4e0f0fd3a4b868/platforms/common/src/kernels/langevinMiddle.cc#L11
+        """
+
+        validator_velm_data = load_pkl(self.velm_array_pkl, "rb")
+        miner_velm_data = self.create_velm(simulation=self.simulation)
+
+        validator_masses = validator_velm_data["pdb_masses"]
+        miner_masses = miner_velm_data["pdb_masses"]
+
+        for i, (v_mass, m_mass) in enumerate(zip(validator_masses, miner_masses)):
+            if v_mass != m_mass:
+                logger.error(
+                    f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}"
+                )
+                return False
+        return True
+
     def is_run_valid(self):
         """
-        Checks if the run is valid by comparing the potential energy values
-        between the current simulation and a reference log file.
+        Checks if the run is valid by evaluating a set of logical conditions:
+
+        1. comparing the potential energy values between the current simulation and a reference log file.
+        2. ensuring that the gradient of the minimization is within a certain threshold to prevent exploits.
+        3. ensuring that the masses of the atoms in the simulation are the same as the masses in the original pdb file.
+
 
         Returns:
             Tuple[bool, list, list]: True if the run is valid, False otherwise.
@@ -515,9 +587,12 @@ class Protein(OpenMMSimulation):
         # The percentage that we allow the energy to differ from the miner to the validator.
         ANOMALY_THRESHOLD = 0.5
 
+        if not self.check_masses():
+            return False, [], [], "masses"
+
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
-            return False, [], []
+            return False, [], [], "logging_resolution"
 
         # Run the simulation at most 3000 steps
         steps_to_run = min(3000, self.log_step - self.cpt_step)
@@ -551,16 +626,18 @@ class Protein(OpenMMSimulation):
         )
 
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
-        
+
         if len(np.unique(check_energies)) == 1:
-            logger.warning("All energy values in reproduced simulation are the same. Skipping!")
-            return False, [], []
+            logger.warning(
+                "All energy values in reproduced simulation are the same. Skipping!"
+            )
+            return False, [], [], "energies_non_unique"
 
         if not self.check_gradient(check_energies=check_energies):
             logger.warning(
                 f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!"
             )
-            return False, [], []
+            return False, [], [], "gradient"
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
@@ -578,7 +655,7 @@ class Protein(OpenMMSimulation):
         )
 
         if median_percent_diff > ANOMALY_THRESHOLD:
-            return False, check_energies.tolist(), miner_energies.tolist()
+            return False, check_energies.tolist(), miner_energies.tolist(), "anomaly"
 
         # Save the folded pdb file if the run is valid
         self.save_pdb(
@@ -587,7 +664,7 @@ class Protein(OpenMMSimulation):
             )
         )
 
-        return True, check_energies.tolist(), miner_energies.tolist()
+        return True, check_energies.tolist(), miner_energies.tolist(), ""
 
     def get_ns_computed(self):
         """Calculate the number of nanoseconds computed by the miner."""
