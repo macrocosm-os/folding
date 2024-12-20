@@ -231,6 +231,7 @@ class SQLiteJobStore:
         system_kwargs: dict,
         hotkey,
         gjp_address: str,
+        s3_links: list,
     ):
         """Upload a job to the database."""
 
@@ -243,7 +244,7 @@ class SQLiteJobStore:
                 "water": water,
                 "system_kwargs": system_kwargs,
             },
-            "em_s3_link": "s3://path/to/em",
+            "s3_link": s3_links,
             "priority": 1,
             "organic": False
         }

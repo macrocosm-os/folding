@@ -180,6 +180,8 @@ async def create_new_challenge(self, exclude: List) -> Dict:
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
+            event["s3_pdb_link"] = self.s3_pdb_link
+            event["s3_cpt_link"] = self.s3_cpt_link
             return event
         else:
             # forward time if validator step fails
