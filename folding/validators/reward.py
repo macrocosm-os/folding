@@ -31,7 +31,7 @@ def get_energies(
     event["process_md_output_time"] = [0] * len(uids)
     event["is_run_valid_time"] = [0] * len(uids)
     event["ns_computed"] = [0] * len(uids)
-    event["reason"] = [0] * len(uids)
+    event["reason"] = [""] * len(uids)
 
     energies = np.zeros(len(uids))
 
