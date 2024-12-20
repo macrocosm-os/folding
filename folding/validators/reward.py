@@ -31,6 +31,7 @@ def get_energies(
     event["process_md_output_time"] = [0] * len(uids)
     event["is_run_valid_time"] = [0] * len(uids)
     event["ns_computed"] = [0] * len(uids)
+    event["reason"] = [0] * len(uids)
 
     energies = np.zeros(len(uids))
 
@@ -62,8 +63,9 @@ def get_energies(
                 continue
 
             start_time = time.time()
-            is_valid, checked_energy, miner_energy = protein.is_run_valid()
+            is_valid, checked_energy, miner_energy, reason = protein.is_run_valid()
             event["is_run_valid_time"][i] = time.time() - start_time
+            event["reason"][i] = reason
 
             energies[i] = np.median(checked_energy[-10:]) if is_valid else 0
 

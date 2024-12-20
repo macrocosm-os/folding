@@ -586,11 +586,11 @@ class Protein(OpenMMSimulation):
         ANOMALY_THRESHOLD = 0.5
 
         if not self.check_masses():
-            return False, [], []
+            return False, [], [], "masses"
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
-            return False, [], []
+            return False, [], [], "logging_resolution"
 
         # Run the simulation at most 3000 steps
         steps_to_run = min(3000, self.log_step - self.cpt_step)
@@ -629,13 +629,13 @@ class Protein(OpenMMSimulation):
             logger.warning(
                 "All energy values in reproduced simulation are the same. Skipping!"
             )
-            return False, [], []
+            return False, [], [], "energies_non_unique"
 
         if not self.check_gradient(check_energies=check_energies):
             logger.warning(
                 f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!"
             )
-            return False, [], []
+            return False, [], [], "gradient"
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
@@ -653,7 +653,7 @@ class Protein(OpenMMSimulation):
         )
 
         if median_percent_diff > ANOMALY_THRESHOLD:
-            return False, check_energies.tolist(), miner_energies.tolist()
+            return False, check_energies.tolist(), miner_energies.tolist(), "anomaly"
 
         # Save the folded pdb file if the run is valid
         self.save_pdb(
@@ -662,7 +662,7 @@ class Protein(OpenMMSimulation):
             )
         )
 
-        return True, check_energies.tolist(), miner_energies.tolist()
+        return True, check_energies.tolist(), miner_energies.tolist(), ""
 
     def get_ns_computed(self):
         """Calculate the number of nanoseconds computed by the miner."""
