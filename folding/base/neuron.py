@@ -86,7 +86,7 @@ class BaseNeuron(ABC):
         else:
             self.wallet = bt.wallet(config=self.config)
             self.subtensor = bt.subtensor(config=self.config)
-            self.metagraph = self.subtensor.metagraph(self.config.netuid)
+            self.metagraph = self.subtensor.metagraph(self.config.netuid, lite = False)
 
             # Check OpenMM version if we are not in mock mode.
             self.check_openmm_version()
@@ -156,17 +156,22 @@ class BaseNeuron(ABC):
             self.resync_metagraph()
 
         if self.should_set_weights():
-            try:
-                logger.info("Attempting to set weights...")
-                self.set_weights()
-                logger.success("Weight setting successful!")
-            except RetryError as e:
-                logger.error(
-                    f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
-                )
+            self.weight_setter()
 
         # Always save state.
         self.save_state()
+
+    def weight_setter(self):
+        """ method to set weights for the validator. """
+        try:
+            logger.info("Attempting to set weights...")
+            weights_are_set = self.set_weights()
+            if weights_are_set:
+                logger.success("Weight setting successful!")
+        except RetryError as e:
+            logger.error(
+                f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
+            )
 
     def check_registered(self):
         # --- Check for registration.
