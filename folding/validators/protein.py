@@ -8,7 +8,7 @@ import asyncio
 from pathlib import Path
 from dataclasses import dataclass
 from collections import defaultdict
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Any
 
 import numpy as np
 import pandas as pd
@@ -26,9 +26,6 @@ from folding.utils.ops import (
     check_and_download_pdbs,
     check_if_directory_exists,
     plot_miner_validator_curves,
-    hex_dump_to_file,
-    compare_files_same_length,
-    extract_content_from_txt,
 )
 
 from folding.utils.logger import logger
@@ -293,85 +290,36 @@ class Protein(OpenMMSimulation):
             file=open(self.pdb_location, "w"),
         )
 
-    def create_initial_state_files(self, pdb_id: str, simulation: app.Simulation):
+    def create_velm(self, simulation: app.Simulation) -> Dict[str, Any]:
         """Alters the initial state of the simulation using initial velocities
         at the beginning and the end of the protein chain to use as a lookup in memory.
 
         Args:
-            pdb_id (str): The pdb_id of the protein.
             simulation (app.Simulation): The simulation object.
 
         Returns:
             simulation: original simulation object.
         """
 
-        base_name = f"base_{pdb_id}"
-        bookmark_name = f"base_{pdb_id}_bookmark"
+        mass_index = 0
+        mass_indicies = []
+        atom_masses: List[unit.quantity.Quantity] = []
 
-        # We want to save the original state (zero velocities) of the simulation to be used for anomaly detection.
-        simulation.saveCheckpoint(f"{base_name}.cpt")
-        hex_dump_to_file(
-            checkpoint_file=f"{base_name}.cpt",
-            output_file=f"{base_name}.txt",
-        )
+        while True:
+            try:
+                atom_masses.append(simulation.system.getParticleMass(mass_index))
+                mass_indicies.append(mass_index)
+                mass_index += 1
+            except:
+                # When there are no more atoms.
+                break
 
-        vel = simulation.context.getState(getVelocities=True).getVelocities(
-            asNumpy=True
-        )
+        velm = {
+            "mass_indicies": mass_indicies,
+            "pdb_masses": atom_masses,
+        }
 
-        # Modify the velocity of the first and last atoms to get a bookmark.
-        vel[0] = [1.0, 0.0, 0.0] * unit.nanometers / unit.picoseconds
-        vel[-1] = [0.0, 0.0, -1.0] * unit.nanometers / unit.picoseconds
-
-        # Set the updated velocities back to the context
-        simulation.context.setVelocities(vel)
-
-        simulation.saveCheckpoint(f"{bookmark_name}.cpt")
-        hex_dump_to_file(
-            checkpoint_file=f"{bookmark_name}.cpt",
-            output_file=f"{bookmark_name}.txt",
-        )
-
-        differences = compare_files_same_length(
-            file1=f"{base_name}.txt",
-            file2=f"{bookmark_name}.txt",
-            number_of_expected_line_differences=2,  # two velocities are changed
-        )
-
-        if len(differences) != 2:
-            raise OpenMMException(
-                f"Failed to create bookmark for {pdb_id}. Differences: {differences}"
-            )
-
-        # This is where in the file we should be looking to segment the velocity array.
-        start_index, end_index = differences[0][0], differences[-1][0]
-
-        # we extract the masses right from the decoded checkpoint file.
-        velm_content = extract_content_from_txt(
-            file=f"{base_name}.txt",
-            start_index=start_index,
-            end_index=end_index,
-        )
-
-        # Remove the 00 information from the array.
-        base_mask = velm_content != "00"
-        pdb_masses = velm_content[base_mask]
-
-        # Save the indicies to a pkl file to be read later.
-        write_pkl(
-            data={
-                "pdb_masses": pdb_masses,
-                "base_mask": base_mask,
-                "start_index": start_index,
-                "end_index": end_index,
-            },
-            path=self.velm_array_pkl,
-            write_mode="wb",
-        )
-
-        # Reset the state.
-        simulation.loadCheckpoint(f"{base_name}.cpt")
-        return simulation
+        return velm
 
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
@@ -398,9 +346,12 @@ class Protein(OpenMMSimulation):
             "em",
         )
 
-        # Create the initial state files for the simulation
-        self.simulation = Protein.create_initial_state_files(
-            self.pdb_id, self.simulation
+        # load in information from the velm memory
+        velm = self.create_velm(simulation=self.simulation)
+        write_pkl(
+            data=velm,
+            path=self.velm_array_pkl,
+            write_mode="wb",
         )
 
         logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
@@ -602,29 +553,19 @@ class Protein(OpenMMSimulation):
         Reference:
         https://github.com/openmm/openmm/blob/53770948682c40bd460b39830d4e0f0fd3a4b868/platforms/common/src/kernels/langevinMiddle.cc#L11
         """
-        miner_hex_path = os.path.join(
-            self.miner_data_directory, f"{self.current_state}_miner_hex.txt"
-        )
 
-        hex_dump_to_file(
-            checkpoint_file=self.checkpoint_path, output_path=miner_hex_path
-        )
+        validator_velm_data = load_pkl(self.velm_array_pkl, "rb")
+        miner_velm_data = self.create_velm(simulation=self.simulation)
 
-        velm_data = load_pkl(self.velm_array_pkl, "rb")
-        miner_velm: np.ndarray = extract_content_from_txt(
-            file=miner_hex_path,
-            start_index=velm_data["start_index"],
-            end_index=velm_data["end_index"],
-        )
+        validator_masses = validator_velm_data["pdb_masses"]
+        miner_masses = miner_velm_data["pdb_masses"]
 
-        # Apply the mask to the array to get the masses identified from the original checkpoint file.
-        miner_masses = miner_velm[velm_data["base_mask"]]
-
-        if not np.array_equal(miner_masses, velm_data["pdb_masses"]):
-            logger.error(
-                f"The masses returned by miner {self.hotkey_alias} for pdb {self.pdb_id} do not identically equal initial protein masses."
-            )
-            return False
+        for i, (v_mass, m_mass) in enumerate(zip(validator_masses, miner_masses)):
+            if v_mass != m_mass:
+                logger.error(
+                    f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}"
+                )
+                return False
         return True
 
     def is_run_valid(self):
