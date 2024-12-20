@@ -348,7 +348,6 @@ class Protein(OpenMMSimulation):
 
         # load in information from the velm memory
         velm = self.create_velm(simulation=self.simulation)
-        
 
         logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
         start_time = time.time()
@@ -370,7 +369,8 @@ class Protein(OpenMMSimulation):
         cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
         logger.debug(f"Moving all files except pdb to {self.validator_directory}")
         os.system(cmd)
-        
+
+        # We are writing the velm array to the pdb directory after we moved all the other files for simplicity.
         write_pkl(
             data=velm,
             path=self.velm_array_pkl,
