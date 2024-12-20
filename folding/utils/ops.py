@@ -10,7 +10,6 @@ import functools
 import traceback
 import subprocess
 import pickle as pkl
-from itertools import chain
 from typing import Dict, List
 
 import numpy as np
