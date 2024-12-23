@@ -442,7 +442,7 @@ class Validator(BaseValidatorNeuron):
                     )
 
             except Exception as e:
-                logger.error(f"Error in create_jobs: {e}")
+                logger.error(f"Error in create_synthetic_jobs: {e}")
 
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
