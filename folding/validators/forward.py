@@ -93,30 +93,16 @@ async def run_step(
 
     response_info = get_response_info(responses=responses)
 
-    # There are hotkeys that have decided to stop serving. We need to remove them from the store.
-    responses_serving = []
-    active_uids = []
-    for ii, state in enumerate(response_info["response_miners_serving"]):
-        if state:
-            responses_serving.append(responses[ii])
-            active_uids.append(uids[ii])
-
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
-        "uids": active_uids,
+        "uids": uids,
         "energies": [],
         **response_info,
     }
 
-    if len(responses_serving) == 0:
-        logger.warning(
-            f"❗ No miners serving pdb_id {synapse.pdb_id}... Making job inactive. ❗"
-        )
-        return event
-
     energies, energy_event = get_energies(
-        protein=protein, responses=responses_serving, uids=active_uids
+        protein=protein, responses=responses, uids=uids
     )
 
     # Log the step event.
