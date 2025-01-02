@@ -157,26 +157,27 @@ class Validator(BaseValidatorNeuron):
     async def sample_random_uids(
         self,
         num_uids_to_sample: int,
-        exclude_uids: List[int],
+        exclude_uids: List[int] = None,
     ) -> List[int]:
         """Helper function to sample a batch of uids on the network, determine their serving status,
         and sample more until a desired number of uids is found.
 
         Args:
             num_uids_to_sample (int): The number of uids to sample.
-            exclude_uids (List[int]): A list of uids that should be excluded from sampling.
+            exclude_uids (List[int], optional): List of uids to exclude from the sampling. Defaults to None.
 
         Returns:
-            List[int]: A list of responding and free uids.
+            List[int]: A list of random uids.
         """
-        exclude_uids = []
-        active_uids = await self.ping_all_miners(exclude_uids=exclude_uids)
 
-        if len(active_uids) > num_uids_to_sample:
-            return random.sample(active_uids, num_uids_to_sample)
+        if exclude_uids is not None:
+            all_miner_uids = list(
+                set(self.all_miner_uids).difference(set(exclude_uids))
+            )
+        else:
+            all_miner_uids = self.all_miner_uids
 
-        elif len(active_uids) <= num_uids_to_sample:
-            return active_uids
+        return random.sample(all_miner_uids, num_uids_to_sample)
 
     async def get_valid_uids(self) -> List[int]:
         """get valid uids to work on a job by sampling random uids and excluding active jobs.
@@ -191,7 +192,7 @@ class Validator(BaseValidatorNeuron):
 
         valid_uids = await self.sample_random_uids(
             num_uids_to_sample=self.config.neuron.sample_size,
-            exclude_uids=exclude_uids,
+            exclude_uids = exclude_uids
         )
 
         return valid_uids
