@@ -260,6 +260,7 @@ class Validator(BaseValidatorNeuron):
                     system_kwargs=job_event["system_kwargs"],
                     hotkey=self.wallet.hotkey,
                     gjp_address=self.config.neuron.gjp_address,
+                    s3_link=[job_event["s3_pdb_link"], job_event["s3_cpt_link"]]
                 )
             except Exception as e:
                 logger.warning(f"Error uploading job: {e}")
@@ -434,7 +435,7 @@ class Validator(BaseValidatorNeuron):
                     )
 
                     logger.info(
-                        f"Sleeping {self.config.neuron.synthetic_job_interval} seconds before next job creation loop."
+                        f"Sleeping {5} seconds before next job creation loop."
                     )
                 else:
                     logger.info(
@@ -442,7 +443,7 @@ class Validator(BaseValidatorNeuron):
                     )
 
             except Exception as e:
-                logger.error(f"Error in create_jobs: {e}")
+                logger.error(f"Error in create_synthetic_jobs: {e}")
 
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 

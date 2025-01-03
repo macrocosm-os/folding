@@ -173,6 +173,7 @@ async def create_new_challenge(self, exclude: List) -> Dict:
 
         if event.get("validator_search_status"):
             return protein, event
+
         else:
             # forward time if validator step fails
             event["hp_search_time"] = time.time() - forward_start_time
