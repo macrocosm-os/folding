@@ -27,10 +27,10 @@ import torch
 import pandas as pd
 import asyncio
 
-from async_timeout import timeout
-
 from folding.utils.uids import get_random_uids
+from folding.utils.s3_utils import upload_to_s3
 from folding.rewards.reward_pipeline import reward_pipeline
+from folding.utils.ops import setup_and_verify_simulation
 from folding.validators.forward import create_new_challenge, run_step, run_ping_step
 from folding.validators.protein import Protein
 
@@ -191,13 +191,14 @@ class Validator(BaseValidatorNeuron):
         exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
         valid_uids = await self.sample_random_uids(
-            num_uids_to_sample=self.config.neuron.sample_size,
-            exclude_uids = exclude_uids
+            num_uids_to_sample=self.config.neuron.sample_size, exclude_uids=exclude_uids
         )
 
         return valid_uids
 
-    async def add_job(self, job_event: dict[str, Any], uids: List[int] = None) -> bool:
+    async def add_job(
+        self, job_event: dict[str, Any], uids: List[int] = None, protein: Protein = None
+    ) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
         If uids are not provided, then the function will sample random uids from the network.
 
@@ -222,22 +223,21 @@ class Validator(BaseValidatorNeuron):
                 protein = Protein(**job_event, config=self.config.protein)
 
                 try:
-                    async with timeout(180):
-                        logger.info(
-                            f"setup_simulation for organic query: {job_event['pdb_id']}"
-                        )
-                        await protein.setup_simulation()
-                        logger.success(
-                            f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
-                        )
-
-                    if protein.init_energy > 0:
-                        raise ValueError(
-                            f"Initial energy is positive: {protein.init_energy}. Simulation failed."
-                        )
+                    protein = await setup_and_verify_simulation(protein=protein)
 
                 except Exception as e:
                     logger.error(f"Error in setting up organic query: {e}")
+
+            s3_pdb_link, s3_cpt_link = upload_to_s3(
+                job_event["pdb_id"],
+                self.config.protein.input_source,
+                self.config.protein.ff,
+                self.config.protein.water,
+                self.config.protein.box,
+            )
+
+            job_event["s3_pdb_link"] = s3_pdb_link
+            job_event["s3_cpt_link"] = s3_cpt_link
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
             self.store.insert(

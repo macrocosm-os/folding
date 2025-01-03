@@ -16,6 +16,7 @@ from folding.protocol import PingSynapse, JobSubmissionSynapse
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
+    setup_and_verify_simulation,
     load_and_sample_random_pdb_ids,
     get_response_info,
     TimeoutException,
@@ -79,7 +80,9 @@ async def run_step(
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
         system_config=system_config,
-        best_submitted_energy= 0 if np.isinf(best_submitted_energy) else best_submitted_energy,
+        best_submitted_energy=0
+        if np.isinf(best_submitted_energy)
+        else best_submitted_energy,
     )
 
     # Make calls to the network with the prompt - this is synchronous.
@@ -162,11 +165,14 @@ async def create_new_challenge(self, exclude: List) -> Dict:
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         logger.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = await try_prepare_challenge(self, config=self.config, pdb_id=pdb_id)
+        protein, event = await try_prepare_challenge(
+            self, config=self.config, pdb_id=pdb_id
+        )
+
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
-            return event
+            return protein, event
         else:
             # forward time if validator step fails
             event["hp_search_time"] = time.time() - forward_start_time
@@ -250,13 +256,7 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
         )
 
         try:
-            async with timeout(180):
-                await protein.setup_simulation()
-
-            if protein.init_energy > 0:
-                raise ValueError(
-                    f"Initial energy is positive: {protein.init_energy}. Simulation failed."
-                )
+            protein = await setup_and_verify_simulation(protein=protein)
 
         except TimeoutException as e:
             logger.info(e)
@@ -293,6 +293,6 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
 
             if tries == 10:
                 logger.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")
-                return event
+                return protein, event
 
-    return event
+    return protein, event
