@@ -1,16 +1,18 @@
-import json
 import os
+import json
+import string
 import random
 import sqlite3
-import string
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+import requests
 from queue import Queue
 from typing import List
 
+from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+
 import numpy as np
 import pandas as pd
-import requests
+
 from atom.epistula.epistula import Epistula
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "db")
@@ -218,24 +220,30 @@ class SQLiteJobStore:
         Returns:
             str: The ID of the updated job.
         """
-        
+
         body = job.to_dict()
-        body['pdb_id'] = body.pop('pdb')
-        body['system_config'] = {
-            "ff": body.pop('ff'),
-            "box": body.pop('box'),
-            "water": body.pop('water'),
-            "system_kwargs": body.pop('system_kwargs'),
+        body["pdb_id"] = body.pop("pdb")
+        body["system_config"] = {
+            "ff": body.pop("ff"),
+            "box": body.pop("box"),
+            "water": body.pop("water"),
+            "system_kwargs": body.pop("system_kwargs"),
         }
-        body['em_s3_link'] = body.get('em_s3_link', 's3://path/to/em')
-        body['priority'] = body.get('priority', 1)
-        body['is_organic'] = body.get('is_organic', False)
-        body['update_interval'] = body.pop('update_interval').total_seconds()
-        body['max_time_no_improvement'] = body.pop('max_time_no_improvement').total_seconds()
-        body['best_loss_at'] = datetime.now(timezone.utc).isoformat() if body['best_loss_at'] == pd.NaT else body['best_loss_at']
-        body['event'] = str(body.pop('event'))
-        body['best_hotkey'] = '' if body['best_hotkey'] is None else body['best_hotkey']
-        body['best_loss'] = 0 if body['best_loss'] == np.inf else body['best_loss']
+        body["em_s3_link"] = body.get("em_s3_link", "s3://path/to/em")
+        body["priority"] = body.get("priority", 1)
+        body["is_organic"] = body.get("is_organic", False)
+        body["update_interval"] = body.pop("update_interval").total_seconds()
+        body["max_time_no_improvement"] = body.pop(
+            "max_time_no_improvement"
+        ).total_seconds()
+        body["best_loss_at"] = (
+            datetime.now(timezone.utc).isoformat()
+            if body["best_loss_at"] == pd.NaT
+            else body["best_loss_at"]
+        )
+        body["event"] = str(body.pop("event"))
+        body["best_hotkey"] = "" if body["best_hotkey"] is None else body["best_hotkey"]
+        body["best_loss"] = 0 if body["best_loss"] == np.inf else body["best_loss"]
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
@@ -247,7 +255,7 @@ class SQLiteJobStore:
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
-        return response.json()['job_id']
+        return response.json()["job_id"]
 
     def get_all_pdbs(self) -> list:
         """
@@ -279,7 +287,7 @@ class SQLiteJobStore:
         hotkey,
         gjp_address: str,
         epsilon: float,
-        **kwargs
+        **kwargs,
     ):
         """
         Upload a job to the global job pool database.
@@ -302,35 +310,37 @@ class SQLiteJobStore:
             ValueError: If the job upload fails.
         """
         job = Job(
-                pdb=pdb,
-                ff=ff,
-                box=box,
-                water=water,
-                hotkeys=hotkeys,
-                created_at=pd.Timestamp.now().floor("s"),
-                updated_at=pd.Timestamp.now().floor("s"),
-                epsilon=epsilon,
-                system_kwargs=system_kwargs,
-                **kwargs,
-            )
-        
+            pdb=pdb,
+            ff=ff,
+            box=box,
+            water=water,
+            hotkeys=hotkeys,
+            created_at=pd.Timestamp.now().floor("s"),
+            updated_at=pd.Timestamp.now().floor("s"),
+            epsilon=epsilon,
+            system_kwargs=system_kwargs,
+            **kwargs,
+        )
+
         body = job.to_dict()
-        body['pdb_id'] = body.pop('pdb')
-        body['system_config'] = {
-            "ff": body.pop('ff'),
-            "box": body.pop('box'),
-            "water": body.pop('water'),
-            "system_kwargs": body.pop('system_kwargs'),
+        body["pdb_id"] = body.pop("pdb")
+        body["system_config"] = {
+            "ff": body.pop("ff"),
+            "box": body.pop("box"),
+            "water": body.pop("water"),
+            "system_kwargs": body.pop("system_kwargs"),
         }
-        body['em_s3_link'] = body.get('em_s3_link', 's3://path/to/em')
-        body['priority'] = body.get('priority', 1)
-        body['is_organic'] = body.get('is_organic', False)
-        body['update_interval'] = body.pop('update_interval').total_seconds()
-        body['max_time_no_improvement'] = body.pop('max_time_no_improvement').total_seconds()
-        body['best_loss_at'] = datetime.now(timezone.utc).isoformat()
-        body['event'] = str(body.pop('event'))
-        body['best_hotkey'] = ''
-        body['best_loss'] = 0
+        body["em_s3_link"] = body.get("em_s3_link", "s3://path/to/em")
+        body["priority"] = body.get("priority", 1)
+        body["is_organic"] = body.get("is_organic", False)
+        body["update_interval"] = body.pop("update_interval").total_seconds()
+        body["max_time_no_improvement"] = body.pop(
+            "max_time_no_improvement"
+        ).total_seconds()
+        body["best_loss_at"] = datetime.now(timezone.utc).isoformat()
+        body["event"] = str(body.pop("event"))
+        body["best_hotkey"] = ""
+        body["best_loss"] = 0
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
@@ -340,7 +350,7 @@ class SQLiteJobStore:
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
-        return response.json()['job_id']
+        return response.json()["job_id"]
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
