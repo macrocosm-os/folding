@@ -9,35 +9,35 @@
 # The above copyright notice and this permission notice shall be included in all copies or substantial portions of
 # the Software.
 
+import asyncio
+
 # THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
 # THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 import os
+import random
 import re
 import time
-import random
-import numpy as np
-from folding.utils.logger import logger
 from itertools import chain
 from typing import Any, Dict, List, Tuple
 
-import torch
+import numpy as np
 import pandas as pd
-import asyncio
-
+import torch
 from async_timeout import timeout
 
-from folding.utils.uids import get_random_uids
+from folding.base.validator import BaseValidatorNeuron
 from folding.rewards.reward_pipeline import reward_pipeline
-from folding.validators.forward import create_new_challenge, run_step, run_ping_step
-from folding.validators.protein import Protein
 
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job, SQLiteJobStore
-from folding.base.validator import BaseValidatorNeuron
+from folding.utils.logger import logger
 from folding.utils.logging import log_event
+from folding.utils.uids import get_random_uids
+from folding.validators.forward import create_new_challenge, run_ping_step, run_step
+from folding.validators.protein import Protein
 
 
 class Validator(BaseValidatorNeuron):
@@ -191,8 +191,7 @@ class Validator(BaseValidatorNeuron):
         exclude_uids = self.get_uids(hotkeys=active_hotkeys)
 
         valid_uids = await self.sample_random_uids(
-            num_uids_to_sample=self.config.neuron.sample_size,
-            exclude_uids = exclude_uids
+            num_uids_to_sample=self.config.neuron.sample_size, exclude_uids=exclude_uids
         )
 
         return valid_uids
@@ -240,6 +239,21 @@ class Validator(BaseValidatorNeuron):
                     logger.error(f"Error in setting up organic query: {e}")
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
+            try:
+                job_id = self.store.upload_job(
+                    pdb=job_event["pdb_id"],
+                    ff=job_event["ff"],
+                    water=job_event["water"],
+                    box=job_event["box"],
+                    hotkeys=selected_hotkeys,
+                    system_kwargs=job_event["system_kwargs"],
+                    hotkey=self.wallet.hotkey,
+                    event=job_event,
+                    gjp_address=self.config.neuron.gjp_address,
+                )
+            except Exception as e:
+                logger.warning(f"Error uploading job: {e}")
+            job_event["job_id"] = job_id
             self.store.insert(
                 pdb=job_event["pdb_id"],
                 ff=job_event["ff"],
@@ -250,19 +264,6 @@ class Validator(BaseValidatorNeuron):
                 system_kwargs=job_event["system_kwargs"],
                 event=job_event,
             )
-            try:
-                self.store.upload_job(
-                    pdb=job_event["pdb_id"],
-                    ff=job_event["ff"],
-                    water=job_event["water"],
-                    box=job_event["box"],
-                    hotkeys=selected_hotkeys,
-                    system_kwargs=job_event["system_kwargs"],
-                    hotkey=self.wallet.hotkey,
-                    gjp_address=self.config.neuron.gjp_address,
-                )
-            except Exception as e:
-                logger.warning(f"Error uploading job: {e}")
 
             return True
         else:
@@ -350,6 +351,12 @@ class Validator(BaseValidatorNeuron):
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
+        self.store.update_gjp_job(
+            job=job,
+            gjp_address=self.config.neuron.gjp_address,
+            hotkey=self.wallet.hotkey,
+            job_id=job.job_id,
+        )
 
         async def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
@@ -425,7 +432,7 @@ class Validator(BaseValidatorNeuron):
                             f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
                         )
 
-                    logger.debug(f"✅ Creating jobs! ✅")
+                    logger.debug("✅ Creating jobs! ✅")
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
 
@@ -459,6 +466,12 @@ class Validator(BaseValidatorNeuron):
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
                     if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
                         self.store.update(job=job)
+                        self.store.update_gjp_job(
+                            job=job,
+                            gjp_address=self.config.neuron.gjp_address,
+                            hotkey=self.wallet.hotkey,
+                            job_id=job.job_id,
+                        )
                         continue
 
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
@@ -468,6 +481,12 @@ class Validator(BaseValidatorNeuron):
                     if len(job_event["energies"]) == 0:
                         job.active = False
                         self.store.update(job=job)
+                        self.store.update_gjp_job(
+                            job=job,
+                            gjp_address=self.config.neuron.gjp_address,
+                            hotkey=self.wallet.hotkey,
+                            job_id=job.job_id,
+                        )
                         continue
 
                     if isinstance(job.event, str):

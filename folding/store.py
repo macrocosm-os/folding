@@ -53,7 +53,8 @@ class SQLiteJobStore:
                     water TEXT,
                     epsilon REAL,
                     system_kwargs TEXT,
-                    min_updates INTEGER
+                    min_updates INTEGER,
+                    job_id TEXT
                 )
             """
             )
@@ -202,6 +203,33 @@ class SQLiteJobStore:
 
             cur.execute(query, list(data.values()) + [pdb])
 
+    def update_gjp_job(self, job: "Job", gjp_address: str, hotkey: str, job_id: str):
+        body = {
+            "pdb_id": job.pdb,
+            "hotkeys": job.hotkeys,
+            "system_config": {
+                "ff": job.ff,
+                "box": job.box,
+                "water": job.water,
+                "system_kwargs": job.system_kwargs,
+            },
+            "em_s3_link": "s3://path/to/em",
+            "priority": 1,
+            "organic": False,
+            **job.event,
+        }
+        body_bytes = self.epistula.create_message_body(body)
+        headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
+
+        response = requests.post(
+            f"http://{gjp_address}/jobs/update/{job_id}",
+            headers=headers,
+            data=body_bytes,
+        )
+        if response.status_code != 200:
+            raise ValueError(f"Failed to upload job: {response.text}")
+        return response.json().job_id
+
     def get_all_pdbs(self) -> list:
         """
         Retrieve all PDB IDs from the job store.
@@ -231,6 +259,7 @@ class SQLiteJobStore:
         system_kwargs: dict,
         hotkey,
         gjp_address: str,
+        event: dict,
     ):
         """Upload a job to the database."""
 
@@ -245,7 +274,8 @@ class SQLiteJobStore:
             },
             "em_s3_link": "s3://path/to/em",
             "priority": 1,
-            "organic": False
+            "organic": False,
+            **event,
         }
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
@@ -255,6 +285,7 @@ class SQLiteJobStore:
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
+        return response.json().job_id
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
@@ -280,6 +311,7 @@ class Job:
     epsilon: float = 5  # percentage.
     event: dict = None
     system_kwargs: dict = None
+    job_id: str = None
 
     def to_dict(self):
         return asdict(self)
