@@ -204,6 +204,19 @@ class SQLiteJobStore:
             cur.execute(query, list(data.values()) + [pdb])
 
     def update_gjp_job(self, job: "Job", gjp_address: str, hotkey: str, job_id: str):
+        """
+        Updates a GJP job with the given parameters.
+        Args:
+            job (Job): The job object containing job details.
+            gjp_address (str): The address of the GJP server.
+            hotkey (str): The hotkey for authentication.
+            job_id (str): The ID of the job to be updated.
+        Raises:
+            ValueError: If the job update fails (response status code is not 200).
+        Returns:
+            str: The ID of the updated job.
+        """
+
         body = {
             "pdb_id": job.pdb,
             "hotkeys": job.hotkeys,
@@ -261,7 +274,26 @@ class SQLiteJobStore:
         gjp_address: str,
         event: dict,
     ):
-        """Upload a job to the database."""
+        """
+        Upload a job to the global job pool database.
+
+        Args:
+            pdb (str): The PDB ID of the job.
+            ff (str): The force field configuration.
+            box (str): The box configuration.
+            water (str): The water configuration.
+            hotkeys (list): A list of hotkeys.
+            system_kwargs (dict): Additional system configuration arguments.
+            hotkey: The hotkey for generating headers.
+            gjp_address (str): The address of the api server.
+            event (dict): Additional event data.
+
+        Returns:
+            str: The job ID of the uploaded job.
+
+        Raises:
+            ValueError: If the job upload fails.
+        """
 
         body = {
             "pdb_id": pdb,
