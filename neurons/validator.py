@@ -248,12 +248,15 @@ class Validator(BaseValidatorNeuron):
                     hotkeys=selected_hotkeys,
                     system_kwargs=job_event["system_kwargs"],
                     hotkey=self.wallet.hotkey,
-                    event=job_event,
                     gjp_address=self.config.neuron.gjp_address,
+                    epsilon=job_event["epsilon"],
+                    event=job_event,
                 )
+                job_event["job_id"] = job_id
             except Exception as e:
                 logger.warning(f"Error uploading job: {e}")
-            job_event["job_id"] = job_id
+                job_event["job_id"] = None
+                
             self.store.insert(
                 pdb=job_event["pdb_id"],
                 ff=job_event["ff"],
@@ -262,6 +265,7 @@ class Validator(BaseValidatorNeuron):
                 hotkeys=selected_hotkeys,
                 epsilon=job_event["epsilon"],
                 system_kwargs=job_event["system_kwargs"],
+                job_id=job_event["job_id"],
                 event=job_event,
             )
 
