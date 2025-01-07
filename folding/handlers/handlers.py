@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional
-from folding.handlers.s3_client import S3Client
+from folding.handlers.s3_client import create_s3_client
 import mimetypes
 import datetime 
+from folding.utils.logging import logger 
 
 class BaseHandler(ABC):
     """Abstract base class for content handlers.
@@ -21,7 +22,7 @@ class DigitalOceanS3Handler(BaseHandler):
     Manages file content retrieval and storage operations using DigitalOcean Spaces S3.
     """
 
-    def __init__(self, bucket_name: str, s3_client: S3Client):
+    def __init__(self, bucket_name: str):
         """
         Initializes the handler with a bucket name and an s3 client. 
 
@@ -32,7 +33,7 @@ class DigitalOceanS3Handler(BaseHandler):
         """
 
         self.bucket_name = bucket_name
-        self.s3_client = s3_client
+        self.s3_client = create_s3_client()
         self.custom_mime_types = {
                 ".cpt": "application/octet-stream",
                 ".pdb": "chemical/x-pdb",
@@ -46,6 +47,7 @@ class DigitalOceanS3Handler(BaseHandler):
         location: str,
         content_type: Optional[str] = None,
         public: bool = False,
+        file_type:str = None,
     ):
         """
         Upload a file to a specific location in the S3 bucket.
@@ -61,12 +63,11 @@ class DigitalOceanS3Handler(BaseHandler):
             file_name = file_path.split("/")[-1]
             key = f"{location}/{file_name}"
 
-            print(f"Uploading file to S3 with Key: {key}")  # Debugging
 
             with open(file_path, "rb") as file:
                 data = file.read()
 
-            # Infer MIME type from file extension if not provided
+            # Infer MIME type 
             if not content_type:
                 content_type = (
                     self.custom_mime_types.get(file_name[file_name.rfind(".") :])  # Check custom MIME types first
@@ -74,25 +75,17 @@ class DigitalOceanS3Handler(BaseHandler):
                     or "application/octet-stream"  # Default to generic binary if no MIME type is found
                 )
 
-            
-            # upload the file to the bucket. 
-            self.s3_client.s3_client.put_object(
+            # upload file
+            self.s3_client.put_object(
                 Bucket=self.bucket_name, 
                 Key=key, 
                 Body=data,
                 ContentType=content_type,
                 ACL="public-read" if public else "private",
             )
-
-            print(
-                f"File '{file_name}' successfully uploaded to '{key}' in bucket '{self.bucket_name}' with content type '{content_type}'."
-            )
-
-        except FileNotFoundError:
-            print(f"File '{file_path}' not found. Ensure the path is correct.")
-            raise
+            logger.info(f"Uploaded {file_type} to s3")
         except Exception as e:
-            print(f"An error occurred while uploading the file:{e}")
+            logger.error(f"handler.put() error: {e}")
             raise 
 
         
