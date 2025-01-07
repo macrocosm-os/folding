@@ -16,7 +16,6 @@ from folding.protocol import PingSynapse, JobSubmissionSynapse
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
-    setup_and_verify_simulation,
     load_and_sample_random_pdb_ids,
     get_response_info,
     TimeoutException,
@@ -257,12 +256,18 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
         )
 
         try:
-            protein = await setup_and_verify_simulation(protein=protein)
+            async with timeout(180):
+                await protein.setup_simulation()
+
+            if protein.init_energy > 0:
+                raise ValueError(
+                    f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                )           
 
         except TimeoutException as e:
             logger.info(e)
             event["validator_search_status"] = False
-            tries = 10
+            tries = 5
 
         except OpenMMException as e:
             logger.info(f"OpenMMException occurred: init_energy is NaN {e}")
