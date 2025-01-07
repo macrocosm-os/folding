@@ -22,6 +22,7 @@ import numpy as np
 from folding.utils.logger import logger
 from itertools import chain
 from typing import Any, Dict, List, Tuple
+from async_timeout import timeout
 
 import torch
 import pandas as pd
@@ -30,7 +31,7 @@ import asyncio
 from folding.utils.uids import get_random_uids
 from folding.utils.s3_utils import upload_to_s3
 from folding.rewards.reward_pipeline import reward_pipeline
-from folding.utils.ops import setup_and_verify_simulation
+
 from folding.validators.forward import create_new_challenge, run_step, run_ping_step
 from folding.validators.protein import Protein
 
@@ -223,7 +224,13 @@ class Validator(BaseValidatorNeuron):
                 protein = Protein(**job_event, config=self.config.protein)
 
                 try:
-                    protein = await setup_and_verify_simulation(protein=protein)
+                    async with timeout(180):
+                        await protein.setup_simulation()
+
+                    if protein.init_energy > 0:
+                        raise ValueError(
+                            f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                        )
 
                 except Exception as e:
                     logger.error(f"Error in setting up organic query: {e}")
