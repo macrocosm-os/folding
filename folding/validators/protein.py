@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from openmm import app, unit
 from pdbfixer import PDBFixer
-from folding.handlers.s3_client import S3Client 
+
 from folding.handlers.handlers import DigitalOceanS3Handler
 
 from folding.base.simulation import OpenMMSimulation
@@ -113,16 +113,8 @@ class Protein(OpenMMSimulation):
         self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
         self.ACCESS_KEY_ID = os.getenv("ACCESS_KEY_ID")
         self.SECRET_ACCESS_KEY = os.getenv("SECRET_ACCESS_KEY")
-        self.s3_client = S3Client(
-            region_name="nyc3",
-            endpoint_url = "https://nyc3.digitaloceanspaces.com",
-            access_key_id=self.ACCESS_KEY_ID,
-            secret_access_key=self.SECRET_ACCESS_KEY,
-        )
-
         self.handler = DigitalOceanS3Handler(
             bucket_name="vali-s3-demo-do",
-            s3_client=self.s3_client,
         )
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -382,26 +374,27 @@ class Protein(OpenMMSimulation):
 
         self.input_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        # Upload files to S3
         try:
-            # upload pdb file to s3
-            self.s3_pdb_link = self.handler.put(
-                file_path=self.pdb_location,
-                location=f"inputs/{self.pdb_id}/{self.VALIDATOR_ID}/{self.input_time}",
-                content_type=None,
-                public=True
-            )
-            logger.info(f"Uploaded pdb file to s3")
-            # upload checkpoint file to s3
-            self.s3_cpt_link = self.handler.put(
-                file_path=os.path.join(self.validator_directory.rsplit('/', 1)[0], self.simulation_cpt),
-                location=f"inputs/{self.pdb_id}/{self.VALIDATOR_ID}/{self.input_time}",
-                content_type=None,
-                public=True
-            )
-            logger.info(f"Uploaded checkpoint file to s3")
+            
+            for file_type in ["cpt","pdb"]:
+                
+                if file_type == "cpt":
+                    file_path = os.path.join(self.validator_directory.rsplit('/', 1)[0], self.simulation_cpt)
+                else: 
+                    file_path = self.pdb_location 
+
+                location = f"inputs/{self.pdb_id}/{self.VALIDATOR_ID}/{self.input_time}"
+                logger.debug(f"putting file: {file_path} at {location} with type {file_type}")
+                await asyncio.to_thread(self.handler.put(
+                    file_path=file_path,
+                    location=location,
+                    public=True, 
+                    file_type=file_type
+                ))
+                await asyncio.sleep(0.10)
+
         except Exception as e:
-            logger.error(f"Failed to upload files to S3: {e}")
+            logger.error(f"Exception during file upload:  {str(e)}")
             raise 
 
         # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
