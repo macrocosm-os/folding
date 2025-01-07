@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
+from folding.utils.epistula_utils import get_epistula_body
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "db")
 
@@ -213,25 +214,7 @@ class SQLiteJobStore:
             str: The ID of the updated job.
         """
 
-        body = job.to_dict()
-        body["pdb_id"] = body.pop("pdb")
-        body["system_config"] = {
-            "ff": body.pop("ff"),
-            "box": body.pop("box"),
-            "water": body.pop("water"),
-            "system_kwargs": body.pop("system_kwargs"),
-        }
-        body["em_s3_link"] = body.get("em_s3_link", "s3://path/to/em")
-        body["priority"] = body.get("priority", 1)
-        body["is_organic"] = body.get("is_organic", False)
-        body["update_interval"] = body.pop("update_interval").total_seconds()
-        body["max_time_no_improvement"] = body.pop("max_time_no_improvement").total_seconds()
-        body["best_loss_at"] = (
-            datetime.now(timezone.utc).isoformat() if body["best_loss_at"] == pd.NaT else body["best_loss_at"]
-        )
-        body["event"] = str(body.pop("event"))
-        body["best_hotkey"] = "" if body["best_hotkey"] is None else body["best_hotkey"]
-        body["best_loss"] = 0 if body["best_loss"] == np.inf else body["best_loss"]
+        body = get_epistula_body(job=job)
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
@@ -310,23 +293,7 @@ class SQLiteJobStore:
             **kwargs,
         )
 
-        body = job.to_dict()
-        body["pdb_id"] = body.pop("pdb")
-        body["system_config"] = {
-            "ff": body.pop("ff"),
-            "box": body.pop("box"),
-            "water": body.pop("water"),
-            "system_kwargs": body.pop("system_kwargs"),
-        }
-        body["em_s3_link"] = body.get("em_s3_link", "s3://path/to/em")
-        body["priority"] = body.get("priority", 1)
-        body["is_organic"] = body.get("is_organic", False)
-        body["update_interval"] = body.pop("update_interval").total_seconds()
-        body["max_time_no_improvement"] = body.pop("max_time_no_improvement").total_seconds()
-        body["best_loss_at"] = datetime.now(timezone.utc).isoformat()
-        body["event"] = str(body.pop("event"))
-        body["best_hotkey"] = ""
-        body["best_loss"] = 0
+        body = get_epistula_body(job=job)
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
