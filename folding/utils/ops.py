@@ -359,13 +359,13 @@ def plot_miner_validator_curves(
     fig.write_image(os.path.join(miner_data_directory, filename + "_percent_diff.png"))
 
 
-async def setup_and_verify_simulation(protein: "Protein") -> "Protein":
-    async with timeout(180):
-        await protein.setup_simulation()
+# async def setup_and_verify_simulation(protein: "Protein") -> "Protein":
+#     async with timeout(180):
+#         await protein.setup_simulation()
 
-    if protein.init_energy > 0:
-        raise ValueError(
-            f"Initial energy is positive: {protein.init_energy}. Simulation failed."
-        )
+#     if protein.init_energy > 0:
+#         raise ValueError(
+#             f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+#         )
 
-    return protein
+#     return protein
