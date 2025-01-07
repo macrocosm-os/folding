@@ -1,6 +1,7 @@
 import numpy as np
 from datetime import datetime, timezone
 import pandas as pd
+import json
 
 
 def get_epistula_body(job: "Job") -> dict:
@@ -29,7 +30,7 @@ def get_epistula_body(job: "Job") -> dict:
     body["best_loss_at"] = (
         datetime.now(timezone.utc).isoformat() if body["best_loss_at"] == pd.NaT else body["best_loss_at"]
     )
-    body["event"] = str(body.pop("event"))
+    body["event"] = json.dumps(body.pop("event"))
     body["best_hotkey"] = "" if body["best_hotkey"] is None else body["best_hotkey"]
     body["best_loss"] = 0 if body["best_loss"] == np.inf else body["best_loss"]
 
