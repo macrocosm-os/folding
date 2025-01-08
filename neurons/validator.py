@@ -22,6 +22,7 @@ import re
 import time
 from itertools import chain
 from typing import Any, Dict, List, Tuple
+import traceback 
 
 import numpy as np
 import pandas as pd
@@ -196,7 +197,7 @@ class Validator(BaseValidatorNeuron):
 
         return valid_uids
 
-    async def add_job(self, job_event: dict[str, Any], uids: List[int] = None) -> bool:
+    async def add_job(self, job_event: dict[str, Any], uids: List[int] = None, protein: Protein = None) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
         If uids are not provided, then the function will sample random uids from the network.
 
@@ -251,10 +252,11 @@ class Validator(BaseValidatorNeuron):
                     gjp_address=self.config.neuron.gjp_address,
                     epsilon=job_event["epsilon"],
                     event=job_event,
+                    s3_links=job_event["s3_links"],
                 )
                 job_event["job_id"] = job_id
             except Exception as e:
-                logger.warning(f"Error uploading job: {e}")
+                logger.warning(f"Error uploading job: {traceback.format_exc()}")
                 job_event["job_id"] = None
                 
             self.store.insert(
