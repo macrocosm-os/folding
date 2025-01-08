@@ -5,7 +5,7 @@ import random
 import sqlite3
 import requests
 from queue import Queue
-from typing import List
+from typing import Dict, List
 
 from datetime import datetime, timezone
 from dataclasses import asdict, dataclass
@@ -57,7 +57,8 @@ class SQLiteJobStore:
                     epsilon REAL,
                     system_kwargs TEXT,
                     min_updates INTEGER,
-                    job_id TEXT
+                    job_id TEXT,
+                    s3_links TEXT
                 )
             """
             )
@@ -258,7 +259,7 @@ class SQLiteJobStore:
         hotkey,
         gjp_address: str,
         epsilon: float,
-        s3_links: list,
+        s3_links: Dict[str, str],
         **kwargs,
 
     ):
@@ -292,6 +293,7 @@ class SQLiteJobStore:
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
             system_kwargs=system_kwargs,
+            s3_links = s3_links,
             **kwargs,
         )
 
@@ -330,6 +332,7 @@ class Job:
     event: dict = None
     system_kwargs: dict = None
     job_id: str = None
+    s3_links: Dict[str, str] = None
 
     def to_dict(self):
         return asdict(self)
