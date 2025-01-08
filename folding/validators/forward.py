@@ -7,12 +7,12 @@ from typing import List, Dict
 from collections import defaultdict
 
 from async_timeout import timeout
-
+from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse
-
+import asyncio
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
@@ -288,6 +288,15 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
             if "validator_search_status" not in event:
                 logger.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
+                s3_links = await upload_to_s3(
+                    handler = protein.handler, 
+                    pdb_location = protein.pdb_location, 
+                    simulation_cpt = protein.simulation_cpt, 
+                    validator_directory = protein.validator_directory, 
+                    pdb_id = pdb_id, 
+                    VALIDATOR_ID = protein.VALIDATOR_ID
+                )
+                event["s3_links"] = s3_links
                 # break out of the loop if the simulation was successful
                 break
 
