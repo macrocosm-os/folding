@@ -13,7 +13,6 @@ S3_CONFIG = {
     "endpoint_url": os.getenv("S3_ENDPOINT"),
     "access_key_id": os.getenv("S3_KEY"),
     "secret_access_key": os.getenv("S3_SECRET"),
-    # "bucket_name": os.getenv("S3_BUCKET"),
 }
 
 class BaseHandler(ABC):
@@ -53,12 +52,12 @@ def create_s3_client(
     )
 
 async def upload_to_s3(
-    handler,
-    pdb_location,
-    simulation_cpt,
-    validator_directory,
-    pdb_id,
-    VALIDATOR_ID,
+    handler: 'DigitalOceanS3Handler',
+    pdb_location: str,
+    simulation_cpt: str,
+    validator_directory: str,
+    pdb_id: str,
+    VALIDATOR_ID: str,
 ):
     """Asynchronously uploads PDB and CPT files to S3 using the specified handler.
 
@@ -96,7 +95,7 @@ async def upload_to_s3(
                 public=True, 
                 file_type=file_type
             )
-            s3_links[file_type] = "https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/"+ key 
+            s3_links[file_type] = os.path.join("https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key)
             await asyncio.sleep(0.10)
 
         return s3_links
@@ -150,7 +149,7 @@ class DigitalOceanS3Handler(BaseHandler):
 
         try:
             file_name = file_path.split("/")[-1]
-            key = f"{location}/{file_name}"
+            key = os.path.join(location, file_name)
 
 
             with open(file_path, "rb") as file:
