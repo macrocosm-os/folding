@@ -41,3 +41,4 @@ poetry install
 sudo apt-get update
 sudo apt-get install build-essential cmake libfftw3-dev vim npm -y
 sudo npm install -g pm2 -y
+./install_rqlite.sh
