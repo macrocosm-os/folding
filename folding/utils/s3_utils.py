@@ -86,16 +86,15 @@ async def upload_to_s3(
 
 class DigitalOceanS3Handler(BaseHandler):
     """Handles DigitalOcean Spaces S3 operations for content management.
-    
+
     Manages file content storage operations using DigitalOcean Spaces S3.
     """
 
     def __init__(self, bucket_name: str):
         """
-        Initializes the handler with a bucket name and an s3 client. 
+        Initializes the handler with a bucket name. 
         Args:
             bucket_name (str): The name of the s3 bucket to interact with. 
-            s3_client (S3Client): The s3 client to interact with the bucket.
             custom_mime_types (dict[str, str], optional): A dictionary of custom mime types for specific file extensions. Defaults to None.
         """
 
