@@ -161,6 +161,13 @@ Validators are heavily recommended to run the autoprocess script to ensure that 
 bash run_autoprocess.sh
 ```
 
+The following environment variables need to be set in your system or application environment:
+- `S3_REGION = "nyc3"`: The AWS region or S3-compatible region where the bucket is located.
+- `S3_ENDPOINT = "https://nyc3.digitaloceanspaces.com"`: The endpoint URL for your S3-compatible service.
+- `S3_KEY`: Your S3 access key ID.
+- `S3_SECRET`: Your S3 secret access key.
+- `VALIDATOR_ID`: Unique identifier for your validator. 
+
 ### Miner
 There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the miner are below. 
 ```bash
