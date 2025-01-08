@@ -90,12 +90,13 @@ async def upload_to_s3(
             location = f"inputs/{pdb_id}/{VALIDATOR_ID}/{input_time}"
             logger.debug(f"putting file: {file_path} at {location} with type {file_type}")
             
-            s3_links[file_type] = await asyncio.to_thread(handler.put,
+            key = await asyncio.to_thread(handler.put,
                 file_path=file_path,
                 location=location,
                 public=True, 
                 file_type=file_type
             )
+            s3_links[file_type] = "https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/"+ key 
             await asyncio.sleep(0.10)
 
         return s3_links
