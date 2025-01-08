@@ -22,7 +22,7 @@ def get_epistula_body(job: "Job") -> dict:
         "water": body.pop("water"),
         "system_kwargs": body.pop("system_kwargs"),
     }
-    body["em_s3_link"] = body.get("em_s3_link", "s3://path/to/em")
+    body["s3_links"] = json.dumps(body.pop("s3_links"))
     body["priority"] = body.get("priority", 1)
     body["is_organic"] = body.get("is_organic", False)
     body["update_interval"] = body.pop("update_interval").total_seconds()
