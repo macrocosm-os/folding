@@ -5,6 +5,7 @@ import base64
 import random
 import shutil
 import asyncio
+import datetime 
 from pathlib import Path
 from dataclasses import dataclass
 from collections import defaultdict
@@ -15,6 +16,7 @@ import pandas as pd
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
+from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
@@ -106,6 +108,10 @@ class Protein(OpenMMSimulation):
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
+        self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
+        self.handler = DigitalOceanS3Handler(
+            bucket_name="vali-s3-demo-do",
+        )
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
