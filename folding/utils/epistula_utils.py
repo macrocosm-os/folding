@@ -28,7 +28,7 @@ def get_epistula_body(job: "Job") -> dict:
     body["update_interval"] = body.pop("update_interval").total_seconds()
     body["max_time_no_improvement"] = body.pop("max_time_no_improvement").total_seconds()
     body["best_loss_at"] = (
-        datetime.now(timezone.utc).isoformat() if body["best_loss_at"] == pd.NaT else body["best_loss_at"]
+         body["best_loss_at"] if pd.notna(body["best_loss_at"]) else datetime.now(timezone.utc).isoformat()
     )
     body["event"] = json.dumps(body.pop("event"))
     body["best_hotkey"] = "" if body["best_hotkey"] is None else body["best_hotkey"]
