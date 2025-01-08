@@ -1,17 +1,20 @@
-import json
 import os
+import json
+import string
 import random
 import sqlite3
-import string
-from dataclasses import asdict, dataclass
-from datetime import datetime
+import requests
 from queue import Queue
 from typing import List
 
+from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+
 import numpy as np
 import pandas as pd
-import requests
+
 from atom.epistula.epistula import Epistula
+from folding.utils.epistula_utils import get_epistula_body
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "db")
 
@@ -53,7 +56,8 @@ class SQLiteJobStore:
                     water TEXT,
                     epsilon REAL,
                     system_kwargs TEXT,
-                    min_updates INTEGER
+                    min_updates INTEGER,
+                    job_id TEXT
                 )
             """
             )
@@ -67,9 +71,7 @@ class SQLiteJobStore:
         # Convert stored JSON strings back to Python objects
         data["hotkeys"] = json.loads(data["hotkeys"])
         data["event"] = json.loads(data["event"]) if data["event"] else None
-        data["system_kwargs"] = (
-            json.loads(data["system_kwargs"]) if data["system_kwargs"] else None
-        )
+        data["system_kwargs"] = json.loads(data["system_kwargs"]) if data["system_kwargs"] else None
 
         # Convert timestamps
         for field in ["created_at", "updated_at", "best_loss_at"]:
@@ -80,9 +82,7 @@ class SQLiteJobStore:
 
         # Convert intervals
         data["update_interval"] = pd.Timedelta(seconds=data["update_interval"])
-        data["max_time_no_improvement"] = pd.Timedelta(
-            seconds=data["max_time_no_improvement"]
-        )
+        data["max_time_no_improvement"] = pd.Timedelta(seconds=data["max_time_no_improvement"])
 
         # Convert boolean
         data["active"] = bool(data["active"])
@@ -96,9 +96,7 @@ class SQLiteJobStore:
         # Convert Python objects to JSON strings
         data["hotkeys"] = json.dumps(data["hotkeys"])
         data["event"] = json.dumps(data["event"]) if data["event"] else None
-        data["system_kwargs"] = (
-            json.dumps(data["system_kwargs"]) if data["system_kwargs"] else None
-        )
+        data["system_kwargs"] = json.dumps(data["system_kwargs"]) if data["system_kwargs"] else None
 
         # Convert timestamps to strings
         for field in ["created_at", "updated_at", "best_loss_at"]:
@@ -109,9 +107,7 @@ class SQLiteJobStore:
 
         # Convert intervals to seconds
         data["update_interval"] = int(data["update_interval"].total_seconds())
-        data["max_time_no_improvement"] = int(
-            data["max_time_no_improvement"].total_seconds()
-        )
+        data["max_time_no_improvement"] = int(data["max_time_no_improvement"].total_seconds())
 
         # Convert boolean to integer
         data["active"] = int(data["active"])
@@ -154,6 +150,7 @@ class SQLiteJobStore:
         hotkeys: List[str],
         epsilon: float,
         system_kwargs: dict,
+        job_id: str,
         **kwargs,
     ):
         """Insert a new job into the database."""
@@ -176,6 +173,7 @@ class SQLiteJobStore:
                 updated_at=pd.Timestamp.now().floor("s"),
                 epsilon=epsilon,
                 system_kwargs=system_kwargs,
+                job_id=job_id,
                 **kwargs,
             )
 
@@ -201,6 +199,34 @@ class SQLiteJobStore:
             query = f"UPDATE {self.table_name} SET {set_clause} WHERE pdb = ?"
 
             cur.execute(query, list(data.values()) + [pdb])
+
+    def update_gjp_job(self, job: "Job", gjp_address: str, hotkey, job_id: str):
+        """
+        Updates a GJP job with the given parameters.
+        Args:
+            job (Job): The job object containing job details.
+            gjp_address (str): The address of the GJP server.
+            hotkey (str): The hotkey for authentication.
+            job_id (str): The ID of the job to be updated.
+        Raises:
+            ValueError: If the job update fails (response status code is not 200).
+        Returns:
+            str: The ID of the updated job.
+        """
+
+        body = get_epistula_body(job=job)
+
+        body_bytes = self.epistula.create_message_body(body)
+        headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
+
+        response = requests.post(
+            f"http://{gjp_address}/jobs/update/{job_id}",
+            headers=headers,
+            data=body_bytes,
+        )
+        if response.status_code != 200:
+            raise ValueError(f"Failed to upload job: {response.text}")
+        return response.json()["job_id"]
 
     def get_all_pdbs(self) -> list:
         """
@@ -231,30 +257,51 @@ class SQLiteJobStore:
         system_kwargs: dict,
         hotkey,
         gjp_address: str,
+        epsilon: float,
+        **kwargs,
     ):
-        """Upload a job to the database."""
+        """
+        Upload a job to the global job pool database.
 
-        body = {
-            "pdb_id": pdb,
-            "hotkeys": hotkeys,
-            "system_config": {
-                "ff": ff,
-                "box": box,
-                "water": water,
-                "system_kwargs": system_kwargs,
-            },
-            "em_s3_link": "s3://path/to/em",
-            "priority": 1,
-            "organic": False
-        }
+        Args:
+            pdb (str): The PDB ID of the job.
+            ff (str): The force field configuration.
+            box (str): The box configuration.
+            water (str): The water configuration.
+            hotkeys (list): A list of hotkeys.
+            system_kwargs (dict): Additional system configuration arguments.
+            hotkey: The hotkey for generating headers.
+            gjp_address (str): The address of the api server.
+            event (dict): Additional event data.
+
+        Returns:
+            str: The job ID of the uploaded job.
+
+        Raises:
+            ValueError: If the job upload fails.
+        """
+        job = Job(
+            pdb=pdb,
+            ff=ff,
+            box=box,
+            water=water,
+            hotkeys=hotkeys,
+            created_at=pd.Timestamp.now().floor("s"),
+            updated_at=pd.Timestamp.now().floor("s"),
+            epsilon=epsilon,
+            system_kwargs=system_kwargs,
+            **kwargs,
+        )
+
+        body = get_epistula_body(job=job)
+
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
 
-        response = requests.post(
-            f"http://{gjp_address}/jobs", headers=headers, data=body_bytes
-        )
+        response = requests.post(f"http://{gjp_address}/jobs", headers=headers, data=body_bytes)
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
+        return response.json()["job_id"]
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
@@ -280,6 +327,7 @@ class Job:
     epsilon: float = 5  # percentage.
     event: dict = None
     system_kwargs: dict = None
+    job_id: str = None
 
     def to_dict(self):
         return asdict(self)
@@ -301,9 +349,7 @@ class Job:
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        never_updated_better_loss = (
-            np.isnan(percent_improvement) and loss < self.best_loss
-        )
+        never_updated_better_loss = np.isnan(percent_improvement) and loss < self.best_loss
         better_loss = percent_improvement >= self.epsilon
 
         if never_updated_better_loss or better_loss:
@@ -311,15 +357,13 @@ class Job:
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
         elif (
-            pd.Timestamp.now().floor("s") - self.best_loss_at
-            > self.max_time_no_improvement
+            pd.Timestamp.now().floor("s") - self.best_loss_at > self.max_time_no_improvement
             and self.updated_count >= self.min_updates
         ):
             self.active = False
         elif (
             isinstance(self.best_loss_at, pd._libs.tslibs.nattype.NaTType)
-            and pd.Timestamp.now().floor("s") - self.created_at
-            > self.max_time_no_improvement
+            and pd.Timestamp.now().floor("s") - self.created_at > self.max_time_no_improvement
         ):
             self.active = False
 
@@ -339,10 +383,9 @@ class MockJob(Job):
         self.box = "cube"
         self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
-        self.created_at = (
-            pd.Timestamp.now().floor("s")
-            - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
-        ).floor("s")
+        self.created_at = (pd.Timestamp.now().floor("s") - pd.Timedelta(seconds=random.randint(0, 3600 * 24))).floor(
+            "s"
+        )
         self.updated_at = self.created_at
         self.best_loss = 0
         self.best_hotkey = random.choice(self.hotkeys)
