@@ -297,6 +297,7 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
                     VALIDATOR_ID = protein.VALIDATOR_ID
                 )
                 event["s3_links"] = s3_links
+                logger.info("Input files uploaded to s3")
                 # break out of the loop if the simulation was successful
                 break
 
