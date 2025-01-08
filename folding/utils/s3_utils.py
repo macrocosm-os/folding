@@ -17,14 +17,11 @@ S3_CONFIG = {
 }
 
 class BaseHandler(ABC):
-    """Abstract base class for content handlers.
-    
-    Defines the interface for content handling operations with get/put operations.
-    """
+    """Abstract base class for handlers that manage content storage operations."""
 
     @abstractmethod
     def put(self):
-        """Abstract method to store content."""
+        """Stores content in a designated storage system. This method must be implemented by subclasses."""
         pass
 
 def create_s3_client(
@@ -34,7 +31,14 @@ def create_s3_client(
     secret_access_key: str = S3_CONFIG["secret_access_key"],
 ) -> boto3.client:  
 
-    """Creates an S3 client"""
+    """Creates a configured S3 client using the environment variables defined in S3_CONFIG.
+
+    Raises:
+        ValueError: If any required S3 configuration parameters are missing.
+
+    Returns:
+        boto3.S3.Client: A boto3 S3 client configured for use.
+    """
 
     if not all([region_name, endpoint_url, access_key_id, secret_access_key]):
         raise ValueError("Missing required S3 configuration parameters.")
@@ -56,46 +60,58 @@ async def upload_to_s3(
     pdb_id,
     VALIDATOR_ID,
 ):
-        try:
-            s3_links = {}
-            input_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            
-            for file_type in ["pdb", "cpt"]:
-                
-                if file_type == "cpt":
-                    file_path = os.path.join(validator_directory, simulation_cpt)
-                else: 
-                    file_path = pdb_location 
+    """Asynchronously uploads PDB and CPT files to S3 using the specified handler.
 
-                location = f"inputs/{pdb_id}/{VALIDATOR_ID}/{input_time}"
-                logger.debug(f"putting file: {file_path} at {location} with type {file_type}")
-                
-                s3_links[file_type] = await asyncio.to_thread(handler.put,
-                    file_path=file_path,
-                    location=location,
-                    public=True, 
-                    file_type=file_type
-                )
-                await asyncio.sleep(0.10)
+    Args:
+        handler (BaseHandler): The content handler that will execute the upload.
+        pdb_location (str): Path to the PDB file.
+        simulation_cpt (str): Path to the CPT file.
+        validator_directory (str): Directory where validator-specific files are stored.
+        pdb_id (str): Identifier for the PDB entry.
+        VALIDATOR_ID (str): Identifier for the validator.
 
-            return s3_links
+    Returns:
+        Dict[str, str]: A dictionary of file types and their corresponding S3 URLs.
+
+    Raises:
+        Exception: If any error occurs during file upload.
+    """
+    try:
+        s3_links = {}
+        input_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         
-        except Exception as e:
-            logger.error(f"Exception during file upload:  {str(e)}")
-            raise
+        for file_type in ["pdb", "cpt"]:
+            
+            if file_type == "cpt":
+                file_path = os.path.join(validator_directory, simulation_cpt)
+            else: 
+                file_path = pdb_location 
+
+            location = f"inputs/{pdb_id}/{VALIDATOR_ID}/{input_time}"
+            logger.debug(f"putting file: {file_path} at {location} with type {file_type}")
+            
+            s3_links[file_type] = await asyncio.to_thread(handler.put,
+                file_path=file_path,
+                location=location,
+                public=True, 
+                file_type=file_type
+            )
+            await asyncio.sleep(0.10)
+
+        return s3_links
+    
+    except Exception as e:
+        logger.error(f"Exception during file upload:  {str(e)}")
+        raise
 
 class DigitalOceanS3Handler(BaseHandler):
-    """Handles DigitalOcean Spaces S3 operations for content management.
-
-    Manages file content storage operations using DigitalOcean Spaces S3.
-    """
+    """Manages DigitalOcean Spaces S3 operations for file storage."""
 
     def __init__(self, bucket_name: str):
-        """
-        Initializes the handler with a bucket name. 
+        """Initializes a handler for S3 operations with DigitalOcean Spaces.
+
         Args:
-            bucket_name (str): The name of the s3 bucket to interact with. 
-            custom_mime_types (dict[str, str], optional): A dictionary of custom mime types for specific file extensions. Defaults to None.
+            bucket_name (str): The name of the S3 bucket.
         """
 
         self.bucket_name = bucket_name
@@ -115,13 +131,20 @@ class DigitalOceanS3Handler(BaseHandler):
         public: bool = False,
         file_type:str = None,
     ):
-        """
-        Upload a file to a specific location in the S3 bucket.
+        """Uploads a file to a specified location in the S3 bucket, optionally setting its access permissions and MIME type.
+
         Args:
-            file_path (str): The local path to the file to upload.
-            location (str): The destination path within the bucket (e.g., 'inputs/protein/validator').
-            content_type (str, optional): The MIME type of the file. If not provided, inferred from file extension.
-            public (bool): Whether to make the uploaded file publicly accessible. Defaults to False.
+            file_path (str): Local path to the file to upload.
+            location (str): Destination path within the bucket.
+            content_type (str, optional): MIME type of the file. If None, it's inferred.
+            public (bool): Whether to make the file publicly accessible.
+            file_type (str, optional): Type of the file, used to determine custom MIME types.
+
+        Returns:
+            str: The S3 key of the uploaded file.
+
+        Raises:
+            Exception: If the upload fails.
         """
 
         try:
