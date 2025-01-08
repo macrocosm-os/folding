@@ -258,7 +258,9 @@ class SQLiteJobStore:
         hotkey,
         gjp_address: str,
         epsilon: float,
+        s3_links: list,
         **kwargs,
+
     ):
         """
         Upload a job to the global job pool database.
