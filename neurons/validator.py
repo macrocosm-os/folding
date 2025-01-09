@@ -352,16 +352,6 @@ class Validator(BaseValidatorNeuron):
                 protein.get_miner_data_directory(event["best_hotkey"])
                 folded_protein_location = os.path.join(protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb")
 
-                # find the cpt file in the miner data directory
-                # Priority order of the files
-                cpt_files = ["md_0_1.cpt", "nvt.cpt", "npt.cpt"]
-
-                for file_name in cpt_files:
-                    file_path = os.path.join(protein.miner_data_directory, file_name)
-                    if os.path.isfile(file_path):
-                        best_cpt_file = file_path
-                        break
-
         else:
             logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
@@ -373,15 +363,19 @@ class Validator(BaseValidatorNeuron):
             folded_protein_location=folded_protein_location,
         )
 
-        if best_cpt_file is not None:
+        # Upload the best .cpt files to S3
+        output_links = []
+        for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
             output_link = await upload_output_to_s3(
                 handler=protein.handler,
                 output_file=best_cpt_file,
                 pdb_id=job.pdb,
-                miner_hotkey=event["best_hotkey"],
+                miner_hotkey=job.hotkeys[idx],
                 VALIDATOR_ID=self.wallet.hotkey,
             )
-        job.best_cpt_link = output_link
+            output_links.append(output_link)
+
+        job.best_cpt_links = output_links
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)

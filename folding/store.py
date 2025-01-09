@@ -332,7 +332,7 @@ class Job:
     system_kwargs: dict = None
     job_id: str = None
     s3_links: Dict[str, str] = None
-    best_cpt_link: str = None
+    best_cpt_links: list = None
 
     def to_dict(self):
         return asdict(self)
