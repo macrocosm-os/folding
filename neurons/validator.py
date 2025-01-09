@@ -365,8 +365,7 @@ class Validator(BaseValidatorNeuron):
         )
 
         # Only upload the best .cpt files to S3 if the job is inactive
-        if job.active is not False:
-            # Upload the best .cpt files to S3
+        if job.active is False:
             output_links = []
             for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
                 # If the best_cpt_file is empty, we will append an empty string to the output_links list.

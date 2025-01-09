@@ -95,10 +95,13 @@ class SQLiteJobStore:
         """Convert a Job object to a dictionary for database storage."""
         data = job.to_dict()
 
-        # Convert Python objects to JSON strings
-        data["hotkeys"] = json.dumps(data["hotkeys"])
-        data["event"] = json.dumps(data["event"]) if data["event"] else None
-        data["system_kwargs"] = json.dumps(data["system_kwargs"]) if data["system_kwargs"] else None
+        # Convert Python list or dict objects to JSON strings for sqlite 
+        data_to_update = {}
+        for k, v in data.items():
+            if isinstance(v, (list,dict)):
+                data_to_update[k] = json.dumps(v)
+
+        data.update(data_to_update)
 
         # Convert timestamps to strings
         for field in ["created_at", "updated_at", "best_loss_at"]:
