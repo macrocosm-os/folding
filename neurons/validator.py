@@ -8,7 +8,7 @@ import random
 import asyncio
 from itertools import chain
 from typing import Any, Dict, List, Tuple
-import traceback 
+import traceback
 
 import torch
 import numpy as np
@@ -25,6 +25,7 @@ from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
+from folding.utils.s3_utils import upload_output_to_s3
 
 
 class Validator(BaseValidatorNeuron):
@@ -323,15 +324,6 @@ class Validator(BaseValidatorNeuron):
         else:
             logger.warning(f"All energies zero for job {job.pdb} and job has never been updated... Skipping")
 
-        # Finally, we update the job in the store regardless of what happened.
-        self.store.update(job=job)
-        self.store.update_gjp_job(
-            job=job,
-            gjp_address=self.config.neuron.gjp_address,
-            hotkey=self.wallet.hotkey,
-            job_id=job.job_id,
-        )
-
         async def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
                 if isinstance(value, pd.Timedelta):
@@ -358,6 +350,7 @@ class Validator(BaseValidatorNeuron):
 
                 protein.get_miner_data_directory(event["best_hotkey"])
                 folded_protein_location = os.path.join(protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb")
+
         else:
             logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
 
@@ -367,6 +360,31 @@ class Validator(BaseValidatorNeuron):
             event=event,
             pdb_location=pdb_location,
             folded_protein_location=folded_protein_location,
+        )
+
+        # Only upload the best .cpt files to S3 if the job is inactive
+        if job.active is False:
+            # Upload the best .cpt files to S3
+            output_links = []
+            for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
+                output_link = await upload_output_to_s3(
+                    handler=protein.handler,
+                    output_file=best_cpt_file,
+                    pdb_id=job.pdb,
+                    miner_hotkey=job.hotkeys[idx],
+                    VALIDATOR_ID=self.wallet.hotkey,
+                )
+                output_links.append(output_link)
+
+            job.best_cpt_links = output_links
+
+        # Finally, we update the job in the store regardless of what happened.
+        self.store.update(job=job)
+        self.store.update_gjp_job(
+            job=job,
+            gjp_address=self.config.neuron.gjp_address,
+            hotkey=self.wallet.hotkey,
+            job_id=job.job_id,
         )
 
         merged_events.pop("checked_energy")
@@ -413,7 +431,7 @@ class Validator(BaseValidatorNeuron):
                     logger.info("Job queue is full. Sleeping 60 seconds before next job creation loop.")
 
             except Exception as e:
-                logger.error(f"Error in create_jobs: {e}")
+                logger.error(f"Error in create_jobs: {traceback.format_exc()}")
 
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 

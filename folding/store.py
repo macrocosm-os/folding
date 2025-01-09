@@ -261,7 +261,6 @@ class SQLiteJobStore:
         epsilon: float,
         s3_links: Dict[str, str],
         **kwargs,
-
     ):
         """
         Upload a job to the global job pool database.
@@ -293,7 +292,7 @@ class SQLiteJobStore:
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
             system_kwargs=system_kwargs,
-            s3_links = s3_links,
+            s3_links=s3_links,
             **kwargs,
         )
 
@@ -333,6 +332,7 @@ class Job:
     system_kwargs: dict = None
     job_id: str = None
     s3_links: Dict[str, str] = None
+    best_cpt_links: list = None
 
     def to_dict(self):
         return asdict(self)
