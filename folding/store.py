@@ -15,6 +15,7 @@ import pandas as pd
 
 from atom.epistula.epistula import Epistula
 from folding.utils.epistula_utils import get_epistula_body
+from folding.utils.ops import write_pkl
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "db")
 
@@ -220,7 +221,7 @@ class SQLiteJobStore:
         """
 
         body = get_epistula_body(job=job)
-
+        
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 
