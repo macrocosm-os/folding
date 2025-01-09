@@ -369,6 +369,11 @@ class Validator(BaseValidatorNeuron):
             # Upload the best .cpt files to S3
             output_links = []
             for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
+                # If the best_cpt_file is empty, we will append an empty string to the output_links list.
+                if best_cpt_file == "":
+                    output_links.append("")
+                    continue
+
                 output_link = await upload_output_to_s3(
                     handler=protein.handler,
                     output_file=best_cpt_file,
@@ -376,6 +381,7 @@ class Validator(BaseValidatorNeuron):
                     miner_hotkey=job.hotkeys[idx],
                     VALIDATOR_ID=self.validator_hotkey_reference,
                 )
+
                 output_links.append(output_link)
 
             job.best_cpt_links = output_links
