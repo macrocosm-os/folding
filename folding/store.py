@@ -58,7 +58,8 @@ class SQLiteJobStore:
                     system_kwargs TEXT,
                     min_updates INTEGER,
                     job_id TEXT,
-                    s3_links TEXT
+                    s3_links TEXT,
+                    best_cpt_links TEXT
                 )
             """
             )
