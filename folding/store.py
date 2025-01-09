@@ -220,7 +220,7 @@ class SQLiteJobStore:
         """
 
         body = get_epistula_body(job=job)
-
+        
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 

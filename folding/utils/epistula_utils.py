@@ -28,10 +28,16 @@ def get_epistula_body(job: "Job") -> dict:
     body["update_interval"] = body.pop("update_interval").total_seconds()
     body["max_time_no_improvement"] = body.pop("max_time_no_improvement").total_seconds()
     body["best_loss_at"] = (
-         body["best_loss_at"] if pd.notna(body["best_loss_at"]) else datetime.now(timezone.utc).isoformat()
+         body["best_loss_at"] if pd.notna(body["best_loss_at"]) else datetime.now(timezone.utc)
     )
-    body["event"] = json.dumps(body.pop("event"))
     body["best_hotkey"] = "" if body["best_hotkey"] is None else body["best_hotkey"]
-    body["best_loss"] = 0 if body["best_loss"] == np.inf else body["best_loss"]
+    body["best_loss"] = 0.0 if body["best_loss"] == np.inf else body["best_loss"]
+    
+    body["best_cpt_links"] = json.dumps(body.pop("best_cpt_links")) if body["best_cpt_links"] else [""]
+    body["epsilon"] = int(body.pop("epsilon"))
+    body.pop("event")
+    body.pop("job_id")
+    body.pop("gro_hash")
+    body.pop("commit_hash")
 
     return body
