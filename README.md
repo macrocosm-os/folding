@@ -166,7 +166,8 @@ The following environment variables need to be set in your system or application
 - `S3_ENDPOINT = "https://nyc3.digitaloceanspaces.com"`: The endpoint URL for your S3-compatible service.
 - `S3_KEY`: Your S3 access key ID.
 - `S3_SECRET`: Your S3 secret access key.
-- `VALIDATOR_ID`: Unique identifier (hotkey) for your validator.  
+- `VALIDATOR_ID`: Unique identifier (hotkey) for your validator.
+see `.env.example` for an example of how to set these variables.
 
 ### Miner
 There are many parameters that one can configure for a simulation. The base command-line args that are needed to run the miner are below. 
