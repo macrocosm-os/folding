@@ -7,6 +7,8 @@ import boto3
 import os 
 import asyncio
 import datetime
+from dotenv import load_dotenv
+load_dotenv()
 
 S3_CONFIG = {
     "region_name": os.getenv("S3_REGION"),
@@ -38,7 +40,7 @@ def create_s3_client(
     Returns:
         boto3.S3.Client: A boto3 S3 client configured for use.
     """
-
+    
     if not all([region_name, endpoint_url, access_key_id, secret_access_key]):
         raise ValueError("Missing required S3 configuration parameters.")
     logger.info(f"Creating S3 client with region: {region_name}, endpoint: {endpoint_url}")
