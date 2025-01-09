@@ -288,16 +288,19 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
             if "validator_search_status" not in event:
                 logger.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
-                s3_links = await upload_to_s3(
-                    handler = protein.handler, 
-                    pdb_location = protein.pdb_location, 
-                    simulation_cpt = protein.simulation_cpt, 
-                    validator_directory = protein.validator_directory, 
-                    pdb_id = pdb_id, 
-                    VALIDATOR_ID = protein.VALIDATOR_ID
-                )
-                event["s3_links"] = s3_links
-                logger.info("Input files uploaded to s3")
+                try:
+                    s3_links = await upload_to_s3(
+                        handler = protein.handler, 
+                        pdb_location = protein.pdb_location, 
+                        simulation_cpt = protein.simulation_cpt, 
+                        validator_directory = protein.validator_directory, 
+                        pdb_id = pdb_id, 
+                        VALIDATOR_ID = protein.VALIDATOR_ID
+                    )
+                    event["s3_links"] = s3_links
+                    logger.info("Input files uploaded to s3")
+                except Exception as e:
+                    logger.warning(f"Error uploading files to s3: {e}")
                 # break out of the loop if the simulation was successful
                 break
 
