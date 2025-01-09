@@ -25,6 +25,7 @@ openmm = {extras = ["cuda12"], version = "^8.2.0"}
 openmm-cuda-12 = "^8.2.0"
 atom = { git = "https://github.com/macrocosm-os/atom.git", branch = "main" }
 requests = "^2.32.3"
+boto3 = "^1.35.95"
 
 
 [build-system]
