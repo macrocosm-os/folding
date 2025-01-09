@@ -109,10 +109,14 @@ class Protein(OpenMMSimulation):
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
         self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
-        self.handler = DigitalOceanS3Handler(
-            bucket_name="vali-s3-demo-do",
-        )
-
+        try:
+            self.handler = DigitalOceanS3Handler(
+                bucket_name="vali-s3-demo-do",
+            )
+        except ValueError as e:
+            self.handler = None
+            logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
+            
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
