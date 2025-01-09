@@ -45,7 +45,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
                 seed=resp.miner_seed,
             )
             event["process_md_output_time"][i] = time.time() - start_time
-            event["best_cpt"][i] = protein.checkpoint_path
+            event["best_cpt"][i] = protein.checkpoint_path if hasattr(protein, "checkpoint_path") else ""
 
             if not can_process:
                 continue
@@ -53,6 +53,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
             if resp.dendrite.status_code != 200:
                 logger.info(f"uid {uid} responded with status code {resp.dendrite.status_code}")
                 continue
+            
             ns_computed = protein.get_ns_computed()
             energy = protein.get_energy()
             rmsd = protein.get_rmsd()

@@ -202,13 +202,13 @@ class SQLiteJobStore:
 
             cur.execute(query, list(data.values()) + [pdb])
 
-    def update_gjp_job(self, job: "Job", gjp_address: str, hotkey, job_id: str):
+    def update_gjp_job(self, job: "Job", gjp_address: str, keypair, job_id: str):
         """
         Updates a GJP job with the given parameters.
         Args:
             job (Job): The job object containing job details.
             gjp_address (str): The address of the GJP server.
-            hotkey (str): The hotkey for authentication.
+            keypair (Keypair): The keypair for authentication.
             job_id (str): The ID of the job to be updated.
         Raises:
             ValueError: If the job update fails (response status code is not 200).
@@ -219,7 +219,7 @@ class SQLiteJobStore:
         body = get_epistula_body(job=job)
 
         body_bytes = self.epistula.create_message_body(body)
-        headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
+        headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 
         response = requests.post(
             f"http://{gjp_address}/jobs/update/{job_id}",
@@ -257,7 +257,7 @@ class SQLiteJobStore:
         water: str,
         hotkeys: list,
         system_kwargs: dict,
-        hotkey,
+        keypair,
         gjp_address: str,
         epsilon: float,
         s3_links: Dict[str, str],
@@ -273,7 +273,7 @@ class SQLiteJobStore:
             water (str): The water configuration.
             hotkeys (list): A list of hotkeys.
             system_kwargs (dict): Additional system configuration arguments.
-            hotkey: The hotkey for generating headers.
+            keypair (Keypair): The keypair for generating headers.
             gjp_address (str): The address of the api server.
             event (dict): Additional event data.
 
@@ -300,7 +300,7 @@ class SQLiteJobStore:
         body = get_epistula_body(job=job)
 
         body_bytes = self.epistula.create_message_body(body)
-        headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
+        headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 
         response = requests.post(f"http://{gjp_address}/jobs", headers=headers, data=body_bytes)
         if response.status_code != 200:

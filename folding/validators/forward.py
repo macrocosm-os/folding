@@ -277,7 +277,7 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
                         simulation_cpt=protein.simulation_cpt,
                         validator_directory=protein.validator_directory,
                         pdb_id=pdb_id,
-                        VALIDATOR_ID=self.wallet.hotkey,
+                        VALIDATOR_ID=self.validator_hotkey_reference,
                     )
                     event["s3_links"] = s3_links
                     logger.info("Input files uploaded to s3")

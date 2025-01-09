@@ -52,6 +52,8 @@ class Validator(BaseValidatorNeuron):
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
+        self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
+
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
 
@@ -219,7 +221,7 @@ class Validator(BaseValidatorNeuron):
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
                     system_kwargs=job_event["system_kwargs"],
-                    hotkey=self.wallet.hotkey,
+                    keypair=self.wallet.hotkey,
                     gjp_address=self.config.neuron.gjp_address,
                     epsilon=job_event["epsilon"],
                     event=job_event,
@@ -363,7 +365,7 @@ class Validator(BaseValidatorNeuron):
         )
 
         # Only upload the best .cpt files to S3 if the job is inactive
-        if job.active is False:
+        if job.active is not False:
             # Upload the best .cpt files to S3
             output_links = []
             for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
@@ -372,7 +374,7 @@ class Validator(BaseValidatorNeuron):
                     output_file=best_cpt_file,
                     pdb_id=job.pdb,
                     miner_hotkey=job.hotkeys[idx],
-                    VALIDATOR_ID=self.wallet.hotkey,
+                    VALIDATOR_ID=self.validator_hotkey_reference,
                 )
                 output_links.append(output_link)
 
@@ -383,7 +385,7 @@ class Validator(BaseValidatorNeuron):
         self.store.update_gjp_job(
             job=job,
             gjp_address=self.config.neuron.gjp_address,
-            hotkey=self.wallet.hotkey,
+            keypair=self.wallet.hotkey,
             job_id=job.job_id,
         )
 
@@ -451,7 +453,7 @@ class Validator(BaseValidatorNeuron):
                         self.store.update_gjp_job(
                             job=job,
                             gjp_address=self.config.neuron.gjp_address,
-                            hotkey=self.wallet.hotkey,
+                            keypair=self.wallet.hotkey,
                             job_id=job.job_id,
                         )
                         continue
@@ -466,7 +468,7 @@ class Validator(BaseValidatorNeuron):
                         self.store.update_gjp_job(
                             job=job,
                             gjp_address=self.config.neuron.gjp_address,
-                            hotkey=self.wallet.hotkey,
+                            keypair=self.wallet.hotkey,
                             job_id=job.job_id,
                         )
                         continue
