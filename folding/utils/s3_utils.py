@@ -132,7 +132,7 @@ async def upload_output_to_s3(
     """
     try:
         output_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        location = f"outputs/{pdb_id}/{VALIDATOR_ID}/{miner_hotkey[:8]}/{output_time}"
+        location = os.path.join("outputs", pdb_id, VALIDATOR_ID, miner_hotkey[:8], output_time)
         key = await asyncio.to_thread(
             handler.put,
             file_path=output_file,
