@@ -33,7 +33,7 @@ def get_epistula_body(job: "Job") -> dict:
     body["best_hotkey"] = "" if body["best_hotkey"] is None else body["best_hotkey"]
     body["best_loss"] = 0.0 if body["best_loss"] == np.inf else body["best_loss"]
     
-    body["best_cpt_links"] = json.dumps(body.pop("best_cpt_links")) if body["best_cpt_links"] else [""]
+    body["best_cpt_links"] = body.pop("best_cpt_links") if body["best_cpt_links"] else [""]
     body["epsilon"] = int(body.pop("epsilon"))
     body.pop("event")
     body.pop("job_id")
