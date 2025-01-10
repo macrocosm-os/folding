@@ -19,6 +19,7 @@ logger.add(
     diagnose=False,
 )
 
+
 def setup_file_logging(log_path, retention):
     """Setup file logging with rotation"""
     logger.add(
@@ -32,9 +33,11 @@ def setup_file_logging(log_path, retention):
         format=FORMAT,
     )
 
+
 def add_events_level():
     """Add custom EVENTS level if it doesn't exist"""
     if "EVENTS" not in logger._core.levels:
         logger.level("EVENTS", no=38, icon="📝")
 
-__all__ = ['logger', 'setup_file_logging', 'add_events_level']
+
+__all__ = ["logger", "setup_file_logging", "add_events_level"]
