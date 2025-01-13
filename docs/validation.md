@@ -17,15 +17,11 @@ As a researcher, determining what hyperparameters to run for a protein folding s
 
 Once the above procedure is done, the flow chart below outlines the rest of the procedure:
 
-<div align="center">
-    <img src="./assets/validator_flow.png" alt="Validator-flow">
-</div>
+![Validator flow](./assets/validator_flow.png)
 
 Once the miner has recieved the protein, the validator can query the miner at any frequency to obtain intermediate results from the miner. This is important for the following reasons:
 
 1. Miners are graded periodically. This means that if 10 miners were given this job, every miner has the opportunity to obtain rewards for their work, rather than the best final step being rewarded.
 2. On each step, the validator **MUST** log the progress of their jobs over time for the set of hotkeys they have queried. Validators will record this information in a database called `protein_jobs.csv`, which is created automatically. Below is an example of the first few elements of the db.
 
-<div align="center">
-    <img src="./assets/protein_jobs_db.png" alt="protein-jobs">
-</div>
+![Protein jobs](./assets/protein_jobs_db.png)
