@@ -5,7 +5,7 @@ import random
 import sqlite3
 import requests
 from queue import Queue
-from typing import List
+from typing import Dict, List
 
 from datetime import datetime, timezone
 from dataclasses import asdict, dataclass
@@ -57,7 +57,9 @@ class SQLiteJobStore:
                     epsilon REAL,
                     system_kwargs TEXT,
                     min_updates INTEGER,
-                    job_id TEXT
+                    job_id TEXT,
+                    s3_links TEXT,
+                    best_cpt_links TEXT
                 )
             """
             )
@@ -93,10 +95,13 @@ class SQLiteJobStore:
         """Convert a Job object to a dictionary for database storage."""
         data = job.to_dict()
 
-        # Convert Python objects to JSON strings
-        data["hotkeys"] = json.dumps(data["hotkeys"])
-        data["event"] = json.dumps(data["event"]) if data["event"] else None
-        data["system_kwargs"] = json.dumps(data["system_kwargs"]) if data["system_kwargs"] else None
+        # Convert Python list or dict objects to JSON strings for sqlite
+        data_to_update = {}
+        for k, v in data.items():
+            if isinstance(v, (list, dict)):
+                data_to_update[k] = json.dumps(v)
+
+        data.update(data_to_update)
 
         # Convert timestamps to strings
         for field in ["created_at", "updated_at", "best_loss_at"]:
@@ -200,13 +205,13 @@ class SQLiteJobStore:
 
             cur.execute(query, list(data.values()) + [pdb])
 
-    def update_gjp_job(self, job: "Job", gjp_address: str, hotkey, job_id: str):
+    def update_gjp_job(self, job: "Job", gjp_address: str, keypair, job_id: str):
         """
         Updates a GJP job with the given parameters.
         Args:
             job (Job): The job object containing job details.
             gjp_address (str): The address of the GJP server.
-            hotkey (str): The hotkey for authentication.
+            keypair (Keypair): The keypair for authentication.
             job_id (str): The ID of the job to be updated.
         Raises:
             ValueError: If the job update fails (response status code is not 200).
@@ -217,7 +222,7 @@ class SQLiteJobStore:
         body = get_epistula_body(job=job)
 
         body_bytes = self.epistula.create_message_body(body)
-        headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
+        headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 
         response = requests.post(
             f"http://{gjp_address}/jobs/update/{job_id}",
@@ -255,9 +260,10 @@ class SQLiteJobStore:
         water: str,
         hotkeys: list,
         system_kwargs: dict,
-        hotkey,
+        keypair,
         gjp_address: str,
         epsilon: float,
+        s3_links: Dict[str, str],
         **kwargs,
     ):
         """
@@ -270,7 +276,7 @@ class SQLiteJobStore:
             water (str): The water configuration.
             hotkeys (list): A list of hotkeys.
             system_kwargs (dict): Additional system configuration arguments.
-            hotkey: The hotkey for generating headers.
+            keypair (Keypair): The keypair for generating headers.
             gjp_address (str): The address of the api server.
             event (dict): Additional event data.
 
@@ -290,13 +296,14 @@ class SQLiteJobStore:
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
             system_kwargs=system_kwargs,
+            s3_links=s3_links,
             **kwargs,
         )
 
         body = get_epistula_body(job=job)
 
         body_bytes = self.epistula.create_message_body(body)
-        headers = self.epistula.generate_header(hotkey=hotkey, body=body_bytes)
+        headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 
         response = requests.post(f"http://{gjp_address}/jobs", headers=headers, data=body_bytes)
         if response.status_code != 200:
@@ -328,6 +335,8 @@ class Job:
     event: dict = None
     system_kwargs: dict = None
     job_id: str = None
+    s3_links: Dict[str, str] = None
+    best_cpt_links: list = None
 
     def to_dict(self):
         return asdict(self)

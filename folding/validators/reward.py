@@ -9,9 +9,7 @@ from folding.validators.protein import Protein
 from folding.utils.logger import logger
 
 
-def get_energies(
-    protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]
-):
+def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]):
     """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
 
     Args:
@@ -32,6 +30,7 @@ def get_energies(
     event["is_run_valid_time"] = [0] * len(uids)
     event["ns_computed"] = [0] * len(uids)
     event["reason"] = [""] * len(uids)
+    event["best_cpt"] = [""] * len(uids)
 
     energies = np.zeros(len(uids))
 
@@ -46,15 +45,15 @@ def get_energies(
                 seed=resp.miner_seed,
             )
             event["process_md_output_time"][i] = time.time() - start_time
+            event["best_cpt"][i] = protein.checkpoint_path if hasattr(protein, "checkpoint_path") else ""
 
             if not can_process:
                 continue
 
             if resp.dendrite.status_code != 200:
-                logger.info(
-                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
-                )
+                logger.info(f"uid {uid} responded with status code {resp.dendrite.status_code}")
                 continue
+
             ns_computed = protein.get_ns_computed()
             energy = protein.get_energy()
             rmsd = protein.get_rmsd()
