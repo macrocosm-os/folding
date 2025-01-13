@@ -70,6 +70,7 @@ git clone https://github.com/macrocosm-os/folding.git
 cd folding
 
 conda create --name folding python=3.11
+conda activate folding 
 bash install.sh
 ```
 
