@@ -9,6 +9,8 @@ from collections import defaultdict
 from typing import Dict, List, Tuple
 import copy
 import traceback
+import asyncio 
+import sqlite3
 
 import bittensor as bt
 import openmm as mm
@@ -18,7 +20,6 @@ import openmm.app as app
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
 from folding.protocol import JobSubmissionSynapse
-from folding.utils.logging import log_event
 from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -119,6 +120,36 @@ def check_synapse(
 
     return synapse
 
+class SqliteUtils(): 
+    def __init__(self, config=None, max_workers=None):
+        self.loop = asyncio.get_event_loop()
+        self.db_path="db/db.sqlite"
+        self.max_workers = max_workers
+
+    async def check_sqlite_table(self):
+        while True:
+            try:
+                # conn=sqlite3.connect(self.db_path)
+                # cursor=conn.cursor()
+                ## query to select the highest priority job 
+                # cursor.execute(f"SELECT * from jobs ORDER BY priority DESC LIMIT {self.max_workers}")
+                # cursor.close()
+                # conn.close()
+
+                logger.info("Most recent check") # {jobs}
+                await asyncio.sleep(10)
+
+            except Exception as e:
+                logger.warning(f"Failed to check sqlite table with error: {e}")
+
+    def run_task(self):
+        try:
+            # schedule the check_sqlite_table task 
+            self.loop.create_task(self.check_sqlite_table())
+            # run the event loop indefinitely 
+
+        except KeyboardInterrupt:
+            logger.warning("keyboard interrupt")
 
 class FoldingMiner(BaseMinerNeuron):
     def __init__(self, config=None, base_data_path: str = None):
@@ -139,6 +170,9 @@ class FoldingMiner(BaseMinerNeuron):
         logger.info(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
+        self.gjp = SqliteUtils(max_workers = self.max_workers)
+        self.gjp.run_check_sqlite_table()
+        self.gjp.run_task()
 
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=self.max_workers
