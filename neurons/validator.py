@@ -366,18 +366,22 @@ class Validator(BaseValidatorNeuron):
 
         # Only upload the single best cpt file of the job.
         if job.active is False:
-            idx = job.hotkeys.index(job.best_hotkey)
+            # in the situation where no one replied:
+            if job.best_hotkey is None:
+                job.best_cpt_links = [""]
 
-            output_link = await upload_output_to_s3(
-                handler=protein.handler,
-                output_file=job.event["best_cpt"][idx],
-                pdb_id=job.pdb,
-                miner_hotkey=job.best_hotkey,
-                VALIDATOR_ID=self.validator_hotkey_reference,
-            )
+            else:
+                idx = job.hotkeys.index(job.best_hotkey)
+                output_link = await upload_output_to_s3(
+                    handler=protein.handler,
+                    output_file=job.event["best_cpt"][idx],
+                    pdb_id=job.pdb,
+                    miner_hotkey=job.best_hotkey,
+                    VALIDATOR_ID=self.validator_hotkey_reference,
+                )
 
-            # TODO: Change this so it doesn't need to be a list.
-            job.best_cpt_links = [output_link]
+                # TODO: Change this so it doesn't need to be a list.
+                job.best_cpt_links = [output_link]
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
