@@ -364,26 +364,20 @@ class Validator(BaseValidatorNeuron):
             folded_protein_location=folded_protein_location,
         )
 
-        # Only upload the best .cpt files to S3 if the job is inactive
+        # Only upload the single best cpt file of the job.
         if job.active is False:
-            output_links = []
-            for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
-                # If the best_cpt_file is empty, we will append an empty string to the output_links list.
-                if best_cpt_file == "":
-                    output_links.append("")
-                    continue
+            idx = job.hotkeys.index(job.best_hotkey)
 
-                output_link = await upload_output_to_s3(
-                    handler=protein.handler,
-                    output_file=best_cpt_file,
-                    pdb_id=job.pdb,
-                    miner_hotkey=job.hotkeys[idx],
-                    VALIDATOR_ID=self.validator_hotkey_reference,
-                )
+            output_link = await upload_output_to_s3(
+                handler=protein.handler,
+                output_file=job.event["best_cpt"][idx],
+                pdb_id=job.pdb,
+                miner_hotkey=job.best_hotkey,
+                VALIDATOR_ID=self.validator_hotkey_reference,
+            )
 
-                output_links.append(output_link)
-
-            job.best_cpt_links = output_links
+            # TODO: Change this so it doesn't need to be a list.
+            job.best_cpt_links = [output_link]
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update(job=job)
