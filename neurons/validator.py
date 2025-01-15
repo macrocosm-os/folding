@@ -62,17 +62,22 @@ class Validator(BaseValidatorNeuron):
 
         ROOT_DIR = Path(__file__).resolve().parents[1]
 
-        with open(os.path.join(ROOT_DIR, "blacklist.txt", "r")) as f:
+        with open(os.path.join(ROOT_DIR, "blacklist.txt"), 'r') as f:
             blacklist = f.read()
 
         blacklist: List[str] = blacklist.split()
+
+        logger.warning(f"Blacklist on the following coldkeys: {blacklist}")
         malicious_uids = np.where(np.isin(self.metagraph.coldkeys, blacklist))[0]
 
         # Remove the malicious uids from the list of all miner uids
         logger.warning(f"Removing {len(malicious_uids)} malicious uids from the list of all miner uids.")
         mask = ~np.isin(self.all_miner_uids, malicious_uids)
 
-        return self.all_miner_uids[mask]
+        all_miner_uids = list(np.array(self.all_miner_uids)[mask])
+        logger.info(f"Initial number of uids: {len(self.all_miner_uids)}. After filter: {len(all_miner_uids)}")
+
+        return all_miner_uids
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
