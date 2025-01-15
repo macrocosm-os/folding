@@ -95,10 +95,10 @@ class SQLiteJobStore:
         """Convert a Job object to a dictionary for database storage."""
         data = job.to_dict()
 
-        # Convert Python list or dict objects to JSON strings for sqlite 
+        # Convert Python list or dict objects to JSON strings for sqlite
         data_to_update = {}
         for k, v in data.items():
-            if isinstance(v, (list,dict)):
+            if isinstance(v, (list, dict)):
                 data_to_update[k] = json.dumps(v)
 
         data.update(data_to_update)
@@ -220,7 +220,7 @@ class SQLiteJobStore:
         """
 
         body = get_epistula_body(job=job)
-        
+
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 

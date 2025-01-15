@@ -34,7 +34,6 @@ def create_s3_client(
     access_key_id: str = S3_CONFIG["access_key_id"],
     secret_access_key: str = S3_CONFIG["secret_access_key"],
 ) -> boto3.client:
-
     """Creates a configured S3 client using the environment variables defined in S3_CONFIG.
 
     Raises:
@@ -86,7 +85,6 @@ async def upload_to_s3(
         input_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         for file_type in ["pdb", "cpt"]:
-
             if file_type == "cpt":
                 file_path = os.path.join(validator_directory, simulation_cpt)
             else:
@@ -96,7 +94,11 @@ async def upload_to_s3(
             logger.debug(f"putting file: {file_path} at {location} with type {file_type}")
 
             key = await asyncio.to_thread(
-                handler.put, file_path=file_path, location=location, public=True, file_type=file_type
+                handler.put,
+                file_path=file_path,
+                location=location,
+                public=True,
+                file_type=file_type,
             )
             s3_links[file_type] = os.path.join("https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key)
             await asyncio.sleep(0.10)

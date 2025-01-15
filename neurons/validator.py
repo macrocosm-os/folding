@@ -6,9 +6,11 @@ import re
 import time
 import random
 import asyncio
+import traceback
+
+from pathlib import Path
 from itertools import chain
 from typing import Any, Dict, List, Tuple
-import traceback
 
 import torch
 import numpy as np
@@ -48,11 +50,34 @@ class Validator(BaseValidatorNeuron):
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(self, k=int(self.metagraph.n), exclude=None).tolist()
+        self.all_miner_uids: List = self.filter_miners()
 
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
+
+    def filter_miners(self) -> List[int]:
+        """This is a function to filter miners from the network that are acting maliciously."""
+
+        ROOT_DIR = Path(__file__).resolve().parents[1]
+
+        with open(os.path.join(ROOT_DIR, "blacklist.txt"), 'r') as f:
+            blacklist = f.read()
+
+        blacklist: List[str] = blacklist.split()
+
+        logger.warning(f"Blacklist on the following coldkeys: {blacklist}")
+        malicious_uids = np.where(np.isin(self.metagraph.coldkeys, blacklist))[0]
+
+        # Remove the malicious uids from the list of all miner uids
+        logger.warning(f"Removing {len(malicious_uids)} malicious uids from the list of all miner uids.")
+        mask = ~np.isin(self.all_miner_uids, malicious_uids)
+
+        all_miner_uids = list(np.array(self.all_miner_uids)[mask])
+        logger.info(f"Initial number of uids: {len(self.all_miner_uids)}. After filter: {len(all_miner_uids)}")
+
+        return all_miner_uids
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""

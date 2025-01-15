@@ -85,7 +85,7 @@ class BaseNeuron(ABC):
         else:
             self.wallet = bt.wallet(config=self.config)
             self.subtensor = bt.subtensor(config=self.config)
-            self.metagraph = self.subtensor.metagraph(self.config.netuid, lite = False)
+            self.metagraph = self.subtensor.metagraph(self.config.netuid, lite=False)
 
             # Check OpenMM version if we are not in mock mode.
             self.check_openmm_version()
@@ -126,9 +126,7 @@ class BaseNeuron(ABC):
 
     def setup_wandb_logging(self):
         if os.path.isfile(f"{self.config.neuron.full_path}/wandb_ids.pkl"):
-            self.wandb_ids = load_pkl(
-                f"{self.config.neuron.full_path}/wandb_ids.pkl", "rb"
-            )
+            self.wandb_ids = load_pkl(f"{self.config.neuron.full_path}/wandb_ids.pkl", "rb")
         else:
             self.wandb_ids = {}
 
@@ -161,7 +159,7 @@ class BaseNeuron(ABC):
         self.save_state()
 
     def weight_setter(self):
-        """ method to set weights for the validator. """
+        """method to set weights for the validator."""
         try:
             logger.info("Attempting to set weights...")
             weights_are_set = self.set_weights()
@@ -188,9 +186,7 @@ class BaseNeuron(ABC):
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
-        return (
-            self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.metagraph_resync_length
+        return (self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.metagraph_resync_length
 
     def should_set_weights(self) -> bool:
         # Don't set weights on initialization.
@@ -206,9 +202,7 @@ class BaseNeuron(ABC):
             return False
 
         # Define appropriate logic for when set weights.
-        return (
-            self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.epoch_length
+        return (self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.epoch_length
 
     def save_state(self):
         pass

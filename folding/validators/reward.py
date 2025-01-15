@@ -53,7 +53,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
             if resp.dendrite.status_code != 200:
                 logger.info(f"uid {uid} responded with status code {resp.dendrite.status_code}")
                 continue
-            
+
             ns_computed = protein.get_ns_computed()
             energy = protein.get_energy()
             rmsd = protein.get_rmsd()

@@ -40,12 +40,8 @@ class OrganicValidator(OrganicScoringBase):
         self._validator: BaseNeuron = validator
 
         protected_args = ["ff", "water", "box"]
-        simulation_args = list(
-            SimulationConfig(ff="organic", water="organic", box="cube").to_dict().keys()
-        )
-        self.simulation_args = [
-            arg for arg in simulation_args if arg not in protected_args
-        ]
+        simulation_args = list(SimulationConfig(ff="organic", water="organic", box="cube").to_dict().keys())
+        self.simulation_args = [arg for arg in simulation_args if arg not in protected_args]
 
     async def _on_organic_entry(self, synapse: OrganicSynapse) -> bt.Synapse:
         """
@@ -55,9 +51,7 @@ class OrganicValidator(OrganicScoringBase):
 
         config: dict = synapse.get_simulation_params()
         self._organic_queue.add(config)
-        logger.success(
-            f"Query received: organic queue size = {self._organic_queue.size}"
-        )
+        logger.success(f"Query received: organic queue size = {self._organic_queue.size}")
 
         # TODO: This is still False on the API side.... Why!???!
         synapse.is_processed = True
@@ -77,21 +71,15 @@ class OrganicValidator(OrganicScoringBase):
                 logs = await self.forward()
 
                 total_elapsed_time = logs.get("total_elapsed_time", 0)
-                logger.info(
-                    f"Organic scoring iteration completed in {total_elapsed_time:.2f} seconds."
-                )
+                logger.info(f"Organic scoring iteration completed in {total_elapsed_time:.2f} seconds.")
 
                 logger.warning(
                     f"Sleeping for {self._validator.config.neuron.organic_trigger_frequency} seconds before next organic check."
                 )
-                await asyncio.sleep(
-                    self._validator.config.neuron.organic_trigger_frequency
-                )
+                await asyncio.sleep(self._validator.config.neuron.organic_trigger_frequency)
 
             except Exception as e:
-                logger.error(
-                    f"Error occured during organic scoring iteration:\n{e}"
-                )
+                logger.error(f"Error occured during organic scoring iteration:\n{e}")
                 await asyncio.sleep(1)
 
     async def sample(self) -> dict[str, Any]:
