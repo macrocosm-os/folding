@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "folding"
-version = "1.4.2"
+version = "1.4.1"
 description = "Macrocosmos Subnet 25: Folding"
 authors = ["Brian McCrindle <brian@macrocosmos.ai>", "Sergio Champoux <sergio@macrocosmos.ai>", "Szymon Fonau <szymon.fonau@macrocosmos.ai>"]
 
@@ -26,7 +26,7 @@ openmm-cuda-12 = "^8.2.0"
 atom = { git = "https://github.com/macrocosm-os/atom.git", branch = "main" }
 requests = "^2.32.3"
 boto3 = "^1.35.95"
-
+pytest-mock = "^3.14.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
