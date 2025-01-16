@@ -120,36 +120,50 @@ def check_synapse(
 
     return synapse
 
-class SqliteUtils(): 
-    def __init__(self, config=None, max_workers=None):
-        self.loop = asyncio.get_event_loop()
-        self.db_path="db/db.sqlite"
-        self.max_workers = max_workers
 
-    async def check_sqlite_table(self):
-        while True:
-            try:
-                # conn=sqlite3.connect(self.db_path)
-                # cursor=conn.cursor()
-                ## query to select the highest priority job 
-                # cursor.execute(f"SELECT * from jobs ORDER BY priority DESC LIMIT {self.max_workers}")
-                # cursor.close()
-                # conn.close()
+def check_sqlite_table(db_path: str, max_workers: int) -> Dict:
+    """
+    Fetches a limited number of job records from an SQLite database, ordering them by priority.
+    
+    This function connects to an SQLite database at the given path and retrieves job details
+    based on the specified maximum number of worker processes. It returns a dictionary where each
+    key is the unique job 'id' and the value is another dictionary containing selected details
+    of the job such as job ID, pdb ID, creation date, priority, organic flag, s3 links, and system configuration.
 
-                logger.info("Most recent check") # {jobs}
-                await asyncio.sleep(10)
+    Parameters:
+        db_path (str): The file path to the SQLite database.
+        max_workers (int): The maximum number of job records to fetch, which are sorted by priority in descending order.
 
-            except Exception as e:
-                logger.warning(f"Failed to check sqlite table with error: {e}")
+    Returns:
+        Dict: A dictionary where each key is a job 'id' and the value is another dictionary with job details.
 
-    def run_task(self):
-        try:
-            # schedule the check_sqlite_table task 
-            self.loop.create_task(self.check_sqlite_table())
-            # run the event loop indefinitely 
+    Raises:
+        sqlite3.Error: If there is an error fetching data from the database, it logs the error message.
 
-        except KeyboardInterrupt:
-            logger.warning("keyboard interrupt")
+    """
+    logger.info("Checking sqlite table for jobs")
+    # Define the columns to be selected
+    columns_to_select = "id, job_id, pdb_id, created_at, priority, is_organic, s3_links, system_config"
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            query = f"SELECT {columns_to_select} from jobs ORDER BY priority DESC LIMIT ?"
+            cursor.execute(query, (max_workers,))
+
+            columns = [description[0] for description in cursor.description]
+            jobs = cursor.fetchall()
+
+            jobs_dict = {}
+            for job in jobs:
+                job_dict = {columns[i]: job[i] for i in range(len(job))}
+                job_id = job_dict.pop('id')  
+                jobs_dict[job_id] = job_dict
+            cursor.close()
+            return jobs_dict
+    except sqlite3.Error as e:
+        logger.info(f"Error fetching sqlite data: {e}")
+
 
 class FoldingMiner(BaseMinerNeuron):
     def __init__(self, config=None, base_data_path: str = None):
@@ -170,9 +184,6 @@ class FoldingMiner(BaseMinerNeuron):
         logger.info(
             f"🚀 Starting FoldingMiner that handles {self.max_workers} workers 🚀"
         )
-        self.gjp = SqliteUtils(max_workers = self.max_workers)
-        self.gjp.run_check_sqlite_table()
-        self.gjp.run_task()
 
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=self.max_workers
@@ -180,6 +191,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.mock = None
         self.generate_random_seed = lambda: random.randint(0, 1000)
+        self.db_path = "/db/db.sqlite"
 
         # hardcorded for now -- TODO: make this more flexible
         self.STATES = ["nvt", "npt", "md_0_1"]
@@ -395,6 +407,7 @@ class FoldingMiner(BaseMinerNeuron):
 
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(self=self, synapse=synapse, event=event)
+
 
     def submit_simulation(
         self,
