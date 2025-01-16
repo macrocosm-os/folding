@@ -220,7 +220,6 @@ class BaseValidatorNeuron(BaseNeuron):
             # Replace any NaN values in rewards with 0.
             rewards = torch.nan_to_num(rewards, 0)
 
-        # Check if `uids` is already a tensor and clone it to avoid the warning.
         if isinstance(uids, torch.Tensor):
             uids_tensor = uids.clone().detach()
         else:
@@ -239,6 +238,13 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores: torch.FloatTensor = alpha * scattered_rewards + (
             1 - alpha
         ) * self.scores.to(self.device)
+
+        # Suppress scores for malicious hotkeys if they exist. Temp.
+        mask = np.isin(self.metagraph.hotkeys, self.malicious_hotkeys)
+        uids_to_suppress = self.metagraph.uids[mask]
+        if len(uids_to_suppress) > 0:
+            self.scores[uids_to_suppress] = 0
+
         logger.debug(f"Updated moving avg scores: {self.scores}")
 
     def save_state(self):
