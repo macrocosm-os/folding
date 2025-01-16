@@ -1,13 +1,13 @@
 import os
-from abc import ABC, abstractmethod
-from typing import Optional
-import mimetypes
-from folding.utils.logging import logger
 import boto3
-import os
 import asyncio
 import datetime
+import mimetypes
+from typing import Optional
 from dotenv import load_dotenv
+from abc import ABC, abstractmethod
+
+from folding.utils.logging import logger
 
 load_dotenv()
 
@@ -100,7 +100,7 @@ async def upload_to_s3(
                 public=True,
                 file_type=file_type,
             )
-            s3_links[file_type] = os.path.join("https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key)
+            s3_links[file_type] = os.path.join(f"https://{S3_CONFIG["region_name"]}.digitaloceanspaces.com/{S3_CONFIG["endpoint_url"]}/", key)
             await asyncio.sleep(0.10)
 
         return s3_links
@@ -172,7 +172,6 @@ class DigitalOceanS3Handler(BaseHandler):
         location: str,
         content_type: Optional[str] = None,
         public: bool = False,
-        file_type: str = None,
     ):
         """Uploads a file to a specified location in the S3 bucket, optionally setting its access permissions and MIME type.
 
@@ -181,7 +180,6 @@ class DigitalOceanS3Handler(BaseHandler):
             location (str): Destination path within the bucket.
             content_type (str, optional): MIME type of the file. If None, it's inferred.
             public (bool): Whether to make the file publicly accessible.
-            file_type (str, optional): Type of the file, used to determine custom MIME types.
 
         Returns:
             str: The S3 key of the uploaded file.
