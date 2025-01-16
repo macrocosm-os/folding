@@ -241,8 +241,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Suppress scores for malicious hotkeys if they exist. Temp.
         mask = np.isin(self.metagraph.hotkeys, self.malicious_hotkeys)
-        if len(mask) > 0: 
-            uids_to_suppress = self.metagraph.uids[mask]
+        uids_to_suppress = self.metagraph.uids[mask]
+        if len(uids_to_suppress) > 0:
             self.scores[uids_to_suppress] = 0
 
         logger.debug(f"Updated moving avg scores: {self.scores}")
