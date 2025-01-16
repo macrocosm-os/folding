@@ -106,7 +106,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
 
     for idx, is_valid in enumerate(event["is_valid"]):
         if is_valid: 
-            energies[idx] = np.median(event["checked_energy"][idx][-10:])
+            energies[idx] = np.median(event["checked_energy"][idx][-10:]) #energy that we computed... 
         else:
             energies[idx] = 0
 
