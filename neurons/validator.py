@@ -305,6 +305,14 @@ class Validator(BaseValidatorNeuron):
         top_reward = 0.80
         apply_pipeline = False
 
+        # In the situation where there are entities that are malicious. 
+        mask = np.isin(self.metagraph.hotkeys, self.malicious_hotkeys)
+        uids_to_suppress = self.metagraph.uids[mask]
+        for idx, uid in enumerate(event["uids"]):
+            if uid in uids_to_suppress:
+                job.event["energies"][idx] = 0 
+
+
         # There could be hotkeys that have decided to stop serving. We need to remove them from the store.
         serving_hotkeys = []
         for ii, state in enumerate(job.event["response_miners_serving"]):
