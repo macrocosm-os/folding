@@ -16,7 +16,6 @@ import pandas as pd
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
-from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
 from folding.utils.opemm_simulation_config import SimulationConfig
@@ -105,13 +104,6 @@ class Protein(OpenMMSimulation):
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
         self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
-        try:
-            self.handler = DigitalOceanS3Handler(
-                bucket_name="vali-s3-demo-do",
-            )
-        except ValueError as e:
-            self.handler = None
-            logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"

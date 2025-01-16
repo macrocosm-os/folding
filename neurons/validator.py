@@ -21,13 +21,14 @@ from folding.base.validator import BaseValidatorNeuron
 from folding.rewards.reward_pipeline import reward_pipeline
 
 # import base validator class which takes care of most of the boilerplate
-from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
-from folding.validators.forward import create_new_challenge, run_ping_step, run_step
+from folding.store import Job, SQLiteJobStore
 from folding.validators.protein import Protein
 from folding.utils.s3_utils import upload_output_to_s3
+from folding.utils.s3_utils import DigitalOceanS3Handler
+from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 
 
 class Validator(BaseValidatorNeuron):
@@ -57,12 +58,19 @@ class Validator(BaseValidatorNeuron):
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
 
+        try:
+            self.s3_handler = DigitalOceanS3Handler(
+                bucket_name="vali-s3-demo-do",
+            )
+        except ValueError as e:
+            raise logger.error(f"Failed to create S3 handler, check your .env file: {e}")
+
     def filter_miners(self) -> List[int]:
         """This is a function to filter miners from the network that are acting maliciously."""
 
         ROOT_DIR = Path(__file__).resolve().parents[1]
 
-        with open(os.path.join(ROOT_DIR, "blacklist.txt"), 'r') as f:
+        with open(os.path.join(ROOT_DIR, "blacklist.txt"), "r") as f:
             blacklist = f.read()
 
         blacklist: List[str] = blacklist.split()
@@ -399,7 +407,7 @@ class Validator(BaseValidatorNeuron):
                     continue
 
                 output_link = await upload_output_to_s3(
-                    handler=protein.handler,
+                    handler=self.s3_handler,
                     output_file=best_cpt_file,
                     pdb_id=job.pdb,
                     miner_hotkey=job.hotkeys[idx],
