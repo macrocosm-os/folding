@@ -12,10 +12,13 @@ from folding.utils.logger import logger
 def check_if_identical(event):
     """ method to check if any of the submissions are idential. If they are, 0 reward for any uids involved.
     This should only happen for uids that are submitting the same results from a single owner. 
+
+    We look at the simulated energy via the validator to avoid tampering. Anything that is not fully reprod will be 
+    caught inside of the protein.is_run_valid method.
     """
 
     groups = defaultdict(list)
-    for idx, energy_list in enumerate(event["miner_energy"]):
+    for idx, energy_list in enumerate(event["checked_energy"]):
         if energy_list == 0:
             continue
 
