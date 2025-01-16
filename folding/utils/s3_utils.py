@@ -100,7 +100,9 @@ async def upload_to_s3(
                 public=True,
                 file_type=file_type,
             )
-            s3_links[file_type] = os.path.join(f"https://{S3_CONFIG["region_name"]}.digitaloceanspaces.com/{S3_CONFIG["endpoint_url"]}/", key)
+            s3_links[file_type] = os.path.join(
+                f"https://{S3_CONFIG['region_name']}.digitaloceanspaces.com/{S3_CONFIG['endpoint_url']}/", key
+            )
             await asyncio.sleep(0.10)
 
         return s3_links
