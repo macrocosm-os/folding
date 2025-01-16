@@ -221,6 +221,12 @@ class BaseValidatorNeuron(BaseNeuron):
             rewards = torch.nan_to_num(rewards, 0)
 
         # Check if `uids` is already a tensor and clone it to avoid the warning.
+        mask = np.isin(self.metagraph.hotkeys, self.malicious_hotkeys)
+        if len(mask) > 0: 
+            uids_to_suppress = self.metagraph.uids[mask]
+            uids = uids + uids_to_suppress # lists extend. 
+            rewards = rewards + torch.zeros(len(uids_to_suppress)).to(self.device)
+        
         if isinstance(uids, torch.Tensor):
             uids_tensor = uids.clone().detach()
         else:

@@ -50,7 +50,7 @@ class Validator(BaseValidatorNeuron):
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(self, k=int(self.metagraph.n), exclude=None).tolist()
-        self.all_miner_uids: List = self.filter_miners()
+        self.all_miner_uids, self.malicious_hotkeys = self.filter_miners()
 
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
@@ -69,6 +69,7 @@ class Validator(BaseValidatorNeuron):
 
         logger.warning(f"Blacklist on the following coldkeys: {blacklist}")
         malicious_uids = np.where(np.isin(self.metagraph.coldkeys, blacklist))[0]
+        malicious_hotkeys = [self.metagraph.hotkeys[uid] for uid in malicious_uids]
 
         # Remove the malicious uids from the list of all miner uids
         logger.warning(f"Removing {len(malicious_uids)} malicious uids from the list of all miner uids.")
@@ -77,7 +78,7 @@ class Validator(BaseValidatorNeuron):
         all_miner_uids = list(np.array(self.all_miner_uids)[mask])
         logger.info(f"Initial number of uids: {len(self.all_miner_uids)}. After filter: {len(all_miner_uids)}")
 
-        return all_miner_uids
+        return all_miner_uids, malicious_hotkeys
 
     def parse_mdrun_args(self) -> str:
         mdrun_args = ""
