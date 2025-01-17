@@ -190,7 +190,7 @@ pm2 start pm2_configs/validator.config.js
 ```
 Keep in mind that you will need to change the default parameters for either the [miner](./scripts/run_miner.sh) or the [validator](./scripts/run_validator.sh). 
 
-Miners now have the opportunity to interact with the global job pool (GJP) locally. By creating a read-only node via `start_read_node.sh`, miners sync with the GJP and create snapshots on their local machine. We have provided a function in `folding/miners/folding_miner.py` that returns jobs based on their priority in the GJP. With this information, you can experiment with customizing your job queue. 
+Miners now have the opportunity to interact with the global job pool (GJP) locally. By creating a read-only node via `start_read_node.sh`, miners sync with the GJP and create snapshots on their local machine. We have provided a script in `scripts/query_rqlite.py` that returns jobs based on their priority in the GJP. With this information, you can experiment with customizing your job queue. This script can also be helpful for analyzing checkpoint files from other miners. 
 ## How does the Subnet Work?
 
 In this subnet, validators create protein folding challenges for miners, who in turn run simulations using OpenMM to obtain stable protein configurations. At a high level, each role can be broken down into parts: 
