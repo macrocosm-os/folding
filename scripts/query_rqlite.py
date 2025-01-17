@@ -121,13 +121,6 @@ def download_s3_files(job_details: dict, output_dir: str = "./local-gjp"):
                 logger.error(f"Error decoding JSON for pdb_id {pdb_id}: {links_str}")
 
 
-def is_valid_url(url: str) -> bool:
-    """
-    Checks if the given URL is a valid URL by checking its scheme and netloc.
-    """
-    parsed = urlparse(url)
-    return bool(parsed.scheme and parsed.netloc)
-
 if __name__ == "__main__":
     db_path = "db/db.sqlite"
     max_workers = 30
@@ -135,4 +128,4 @@ if __name__ == "__main__":
     job_details = fetch_job_details(db_path, max_workers, columns, pdb_id="3a8a")
     logger.info(job_details)
     download_files(job_details)
-    # download_best_cpt_files(job_details)
+
