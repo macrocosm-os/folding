@@ -151,16 +151,23 @@ def check_sqlite_table(db_path: str, max_workers: int) -> Dict:
             query = f"SELECT {columns_to_select} from jobs ORDER BY priority DESC LIMIT ?"
             cursor.execute(query, (max_workers,))
 
-            columns = [description[0] for description in cursor.description]
-            jobs = cursor.fetchall()
+            selected_columns = [description[0] for description in cursor.description]
 
+            # jobs = tuple containing all selected jobs
+            jobs = cursor.fetchall()
+            if not jobs:
+                logger.info("No jobs found in local snapshot of GJP")
+                return {}
+            
             jobs_dict = {}
             for job in jobs:
-                job_dict = {columns[i]: job[i] for i in range(len(job))}
+                job_dict = {selected_columns[i]: job[i] for i in range(len(job))}
                 job_id = job_dict.pop('id')  
                 jobs_dict[job_id] = job_dict
             cursor.close()
+            
             return jobs_dict
+        
     except sqlite3.Error as e:
         logger.info(f"Error fetching sqlite data: {e}")
 
