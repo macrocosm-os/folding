@@ -43,9 +43,9 @@ def download_files(job_details: Dict, base_directory: str = "./local-gjp"):
             if pdb_id and links_str:
                 try:
                     links = json.loads(links_str)
-                    if isinstance(links, dict):  # Assuming the structure contains multiple file types per link_type
+                    if isinstance(links, dict): 
                         for key, url in links.items():
-                            dir_path = os.path.join(base_directory, pdb_id, link_type)  # Differentiates s3 and cpt by directory
+                            dir_path = os.path.join(base_directory, pdb_id, link_type) 
                             os.makedirs(dir_path, exist_ok=True)
                             file_name = f"{key}-{pdb_id}{os.path.splitext(url)[1]}"  # Name files uniquely to avoid overwrites
                             file_path = os.path.join(dir_path, file_name)
