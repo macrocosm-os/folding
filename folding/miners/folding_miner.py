@@ -10,7 +10,6 @@ from typing import Dict, List, Tuple
 import copy
 import traceback
 import asyncio 
-import sqlite3
 
 import bittensor as bt
 import openmm as mm
@@ -119,57 +118,6 @@ def check_synapse(
     event["query_forward_time"] = time.time() - self.query_start_time
 
     return synapse
-
-
-def check_sqlite_table(db_path: str, max_workers: int) -> Dict:
-    """
-    Fetches a limited number of job records from an SQLite database, ordering them by priority.
-    
-    This function connects to an SQLite database at the given path and retrieves job details
-    based on the specified maximum number of worker processes. It returns a dictionary where each
-    key is the unique job 'id' and the value is another dictionary containing selected details
-    of the job such as job ID, pdb ID, creation date, priority, organic flag, s3 links, and system configuration.
-
-    Parameters:
-        db_path (str): The file path to the SQLite database.
-        max_workers (int): The maximum number of job records to fetch, which are sorted by priority in descending order.
-
-    Returns:
-        Dict: A dictionary where each key is a job 'id' and the value is another dictionary with job details.
-
-    Raises:
-        sqlite3.Error: If there is an error fetching data from the database, it logs the error message.
-
-    """
-    logger.info("Checking sqlite table for jobs")
-    # Define the columns to be selected
-    columns_to_select = "id, job_id, pdb_id, created_at, priority, is_organic, s3_links, system_config"
-    try:
-        with sqlite3.connect(db_path) as conn:
-            cursor = conn.cursor()
-
-            query = f"SELECT {columns_to_select} from jobs ORDER BY priority DESC LIMIT ?"
-            cursor.execute(query, (max_workers,))
-
-            selected_columns = [description[0] for description in cursor.description]
-
-            # jobs = tuple containing all selected jobs
-            jobs = cursor.fetchall()
-            if not jobs:
-                logger.info("No jobs found in local snapshot of GJP")
-                return {}
-            
-            jobs_dict = {}
-            for job in jobs:
-                job_dict = {selected_columns[i]: job[i] for i in range(len(job))}
-                job_id = job_dict.pop('id')  
-                jobs_dict[job_id] = job_dict
-            cursor.close()
-            
-            return jobs_dict
-        
-    except sqlite3.Error as e:
-        logger.info(f"Error fetching sqlite data: {e}")
 
 
 class FoldingMiner(BaseMinerNeuron):
