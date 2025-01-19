@@ -482,9 +482,10 @@ class Protein(OpenMMSimulation):
 
             self.cpt_step = self.simulation.currentStep
             self.checkpoint_path = checkpoint_path
+            self.state_xml_path = state_xml_path
 
             # Create the state file here because it could have been loaded after MIN_SIMULATION_STEPS check
-            self.simulation.saveState(state_xml_path)
+            self.simulation.saveState(self.state_xml_path)
 
             # Save the system config to the miner data directory
             system_config_path = os.path.join(self.miner_data_directory, f"miner_system_config_{seed}.pkl")
@@ -564,6 +565,34 @@ class Protein(OpenMMSimulation):
         # Run the simulation at most 3000 steps
         steps_to_run = min(3000, self.log_step - self.cpt_step)
 
+
+        # This is where we are going to check the xml files for the state.
+        logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
+        self.simulation, self.system_config = self.create_simulation(
+            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            system_config=self.system_config.get_config(),
+            seed=self.miner_seed,
+        )
+        self.simulation.loadState(self.state_xml_path)
+        state_energies = []
+        for _ in range(100):
+            self.simulation.step(100)
+            energy = self.simulation.context.getState(getEnergy=True).getPotentialEnergy()._value
+            state_energies.append(energy)
+
+        if not self.check_gradient(check_energies=state_energies):
+            logger.warning(f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!")
+            return False, [], [], "state-gradient"
+
+
+        # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
+        self.simulation, self.system_config = self.create_simulation(
+            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            system_config=self.system_config.get_config(),
+            seed=self.miner_seed,
+        )
+        self.simulation.loadCheckpoint(self.checkpoint_path)
+
         current_state_logfile = os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
         self.simulation.reporters.append(
             app.StateDataReporter(
@@ -611,26 +640,6 @@ class Protein(OpenMMSimulation):
 
         if median_percent_diff > ANOMALY_THRESHOLD:
             return False, check_energies.tolist(), miner_energies.tolist(), "anomaly"
-
-
-        # This is where we are going to check the xml files for the state.
-        logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
-        self.simulation, self.system_config = self.create_simulation(
-            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
-            system_config=self.system_config.get_config(),
-            seed=self.miner_seed,
-        )
-
-        self.simulation.loadState(self.state_xml_path)
-        state_energies = []
-        for _ in range(100):
-            self.simulation.step(100)
-            energy = self.simulation.context.getState(getEnergy=True).getPotentialEnergy()._value
-            state_energies.append(energy)
-
-        if not self.check_gradient(check_energies=state_energies):
-            logger.warning(f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!")
-            return False, [], [], "state-gradient"
 
         # Save the folded pdb file if the run is valid
         self.save_pdb(output_path=os.path.join(self.miner_data_directory, f"{self.pdb_id}_folded.pdb"))
