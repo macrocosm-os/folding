@@ -609,7 +609,6 @@ class SimulationManager:
                 pdb=self.pdb_obj,
                 system_config=system_config.get_config(),
                 seed=seed,
-                state=state,
             )
             simulation.reporters.append(
                 LastTwoCheckpointsReporter(

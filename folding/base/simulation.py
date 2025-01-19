@@ -37,7 +37,7 @@ class GenericSimulation(ABC):
 class OpenMMSimulation(GenericSimulation):
     @GenericSimulation.timeit
     def create_simulation(
-        self, pdb: app.PDBFile, system_config: dict, state: str, seed: int = None
+        self, pdb: app.PDBFile, system_config: dict, seed: int = None
     ) -> Tuple[app.Simulation, SimulationConfig]:
         """Recreates a simulation object based on the provided parameters.
 

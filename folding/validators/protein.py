@@ -331,7 +331,6 @@ class Protein(OpenMMSimulation):
             self.create_simulation,
             self.load_pdb_file(pdb_file=self.pdb_file),
             self.system_config.get_config(),
-            "em",
         )
 
         # load in information from the velm memory
@@ -413,6 +412,7 @@ class Protein(OpenMMSimulation):
         required_files_extensions = ["cpt", "log"]
         self.hotkey_alias = hotkey[:8]
         self.current_state = state
+        self.miner_seed = seed
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
         self.md_outputs_exts = {k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0}
@@ -442,15 +442,15 @@ class Protein(OpenMMSimulation):
             self.simulation, self.system_config = self.create_simulation(
                 pdb=self.load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
-                seed=seed,
-                state=state,
+                seed=self.miner_seed,
             )
 
             checkpoint_path = os.path.join(self.miner_data_directory, f"{self.current_state}.cpt")
-
+            state_xml_path = os.path.join(self.miner_data_directory, f"{self.current_state}.xml")
             log_file_path = os.path.join(self.miner_data_directory, self.md_outputs_exts["log"])
 
             self.simulation.loadCheckpoint(checkpoint_path)
+
             self.log_file = pd.read_csv(log_file_path)
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
@@ -482,6 +482,10 @@ class Protein(OpenMMSimulation):
 
             self.cpt_step = self.simulation.currentStep
             self.checkpoint_path = checkpoint_path
+            self.state_xml_path = state_xml_path
+
+            # Create the state file here because it could have been loaded after MIN_SIMULATION_STEPS check
+            self.simulation.saveState(self.state_xml_path)
 
             # Save the system config to the miner data directory
             system_config_path = os.path.join(self.miner_data_directory, f"miner_system_config_{seed}.pkl")
@@ -504,7 +508,7 @@ class Protein(OpenMMSimulation):
 
     def check_gradient(self, check_energies: np.ndarray) -> True:
         """This method checks the gradient of the potential energy within the first
-        WINODW size of the check_energies array. Miners that return gradients that are too high,
+        WINDOW size of the check_energies array. Miners that return gradients that are too high,
         there is a *high* probability that they have not run the simulation as the validator specified.
         """
         WINDOW = 50  # Number of steps to calculate the gradient over
@@ -561,9 +565,38 @@ class Protein(OpenMMSimulation):
         # Run the simulation at most 3000 steps
         steps_to_run = min(3000, self.log_step - self.cpt_step)
 
+
+        # This is where we are going to check the xml files for the state.
+        logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
+        self.simulation, self.system_config = self.create_simulation(
+            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            system_config=self.system_config.get_config(),
+            seed=self.miner_seed,
+        )
+        self.simulation.loadState(self.state_xml_path)
+        state_energies = []
+        for _ in range(100):
+            self.simulation.step(100)
+            energy = self.simulation.context.getState(getEnergy=True).getPotentialEnergy()._value
+            state_energies.append(energy)
+
+        if not self.check_gradient(check_energies=state_energies):
+            logger.warning(f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!")
+            return False, [], [], "state-gradient"
+
+
+        # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
+        self.simulation, self.system_config = self.create_simulation(
+            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            system_config=self.system_config.get_config(),
+            seed=self.miner_seed,
+        )
+        self.simulation.loadCheckpoint(self.checkpoint_path)
+
+        current_state_logfile = os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
         self.simulation.reporters.append(
             app.StateDataReporter(
-                os.path.join(self.miner_data_directory, f"check_{self.current_state}.log"),
+                current_state_logfile,
                 10,
                 step=True,
                 potentialEnergy=True,
@@ -573,15 +606,13 @@ class Protein(OpenMMSimulation):
         logger.info(f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}")
 
         max_step = self.cpt_step + steps_to_run
-
         miner_energies: np.ndarray = self.log_file[
             (self.log_file['#"Step"'] > self.cpt_step) & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
-        self.simulation.step(steps_to_run)
+        self.simulation.step(steps_to_run)     
 
-        check_log_file = pd.read_csv(os.path.join(self.miner_data_directory, f"check_{self.current_state}.log"))
-
+        check_log_file = pd.read_csv(current_state_logfile)
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
 
         if len(np.unique(check_energies)) == 1:
@@ -589,8 +620,8 @@ class Protein(OpenMMSimulation):
             return False, [], [], "energies_non_unique"
 
         if not self.check_gradient(check_energies=check_energies):
-            logger.warning(f"hotkey {self.hotkey_alias} failed gradient check for {self.pdb_id}, ... Skipping!")
-            return False, [], [], "gradient"
+            logger.warning(f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!")
+            return False, [], [], "cpt-gradient"
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
