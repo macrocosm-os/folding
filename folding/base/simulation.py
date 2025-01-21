@@ -149,8 +149,17 @@ class OpenMMSimulation(GenericSimulation):
         positions = temp_sim.context.getState(getPositions=True).getPositions()
         velocities = temp_sim.context.getState(getVelocities=True).getVelocities()
         step = temp_sim.currentStep
+        
+        integrator = mm.LangevinIntegrator(
+            system_config["temperature"] * unit.kelvin,
+            system_config["friction"] / unit.picosecond,
+            system_config["time_step_size"] * unit.picoseconds,
+        )
 
-        clean_sim = app.Simulation(modeller.topology, system, temp_sim.integrator, platform, properties)
+        seed = seed if seed is not None else system_config["seed"]
+        integrator.setRandomNumberSeed(seed)
+
+        clean_sim = app.Simulation(modeller.topology, system, integrator, platform, properties)
         clean_sim.context.setPositions(positions)
         clean_sim.context.setVelocities(velocities)
         clean_sim.currentStep = step
