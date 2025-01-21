@@ -553,7 +553,6 @@ class Protein(OpenMMSimulation):
         percent_diff = abs((state_median - checkpoint_median) / checkpoint_median) * 100
 
         if percent_diff > self.epsilon:
-            logger.error(f"State and checkpoint files have different energy values. State: {state_median}, Checkpoint: {checkpoint_median}")
             return False
         return True
         
