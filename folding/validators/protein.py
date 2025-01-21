@@ -592,14 +592,14 @@ class Protein(OpenMMSimulation):
         if not self.check_gradient(check_energies=state_energies):
             logger.warning(f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!")
             return False, [], [], "state-gradient"
-
+        
         # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
-        self.simulation, self.system_config = self.create_simulation(
+        self.simulation, self.system_config = self.create_simulation_from_checkpoint(
             pdb=self.load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
+            checkpoint_path=self.checkpoint_path,
             seed=self.miner_seed,
         )
-        self.simulation.loadCheckpoint(self.checkpoint_path)
 
         current_state_logfile = os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
         self.simulation.reporters.append(
