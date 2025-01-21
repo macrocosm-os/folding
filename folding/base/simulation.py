@@ -142,7 +142,7 @@ class OpenMMSimulation(GenericSimulation):
         seed: int = None,
     ) -> Tuple[app.Simulation, SimulationConfig]:
         """Creates a simulation object from a checkpoint file."""
-        temp_sim, system, _, platform, properties = self._prepare_simulation(pdb, system_config, seed)
+        temp_sim, system, modeller, platform, properties = self._prepare_simulation(pdb, system_config, seed)
 
         # Load checkpoint state
         temp_sim.loadCheckpoint(checkpoint_path)
@@ -150,7 +150,7 @@ class OpenMMSimulation(GenericSimulation):
         velocities = temp_sim.context.getState(getVelocities=True).getVelocities()
         step = temp_sim.currentStep
 
-        clean_sim = app.Simulation(system.topology, system, temp_sim.integrator, platform, properties)
+        clean_sim = app.Simulation(modeller.topology, system, temp_sim.integrator, platform, properties)
         clean_sim.context.setPositions(positions)
         clean_sim.context.setVelocities(velocities)
         clean_sim.currentStep = step
