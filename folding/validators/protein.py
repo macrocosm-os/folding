@@ -596,8 +596,8 @@ class Protein(OpenMMSimulation):
         )
         self.simulation.loadState(self.state_xml_path)
         state_energies = []
-        for _ in range(100):
-            self.simulation.step(100)
+        for _ in range(steps_to_run // 10):
+            self.simulation.step(10)
             energy = self.simulation.context.getState(getEnergy=True).getPotentialEnergy()._value
             state_energies.append(energy)
 
