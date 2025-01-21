@@ -294,7 +294,7 @@ class Validator(BaseValidatorNeuron):
         logger.info(f"event information: {job.event['reason']},  {job.event['uids']}")
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             if reason == "state-checkpoint":
-                logger.warning(f"----------- Setting uid {uid} score to zero, State-checkpoint check failed. -----------")
+                logger.warning(f"Setting uid {uid} score to zero, State-checkpoint check failed.")
                 self.scores[uid] = 0
 
         best_index = np.argmin(energies)
