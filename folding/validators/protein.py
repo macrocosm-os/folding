@@ -1,36 +1,34 @@
-import os
-import time
-import glob
+import asyncio
 import base64
+import glob
+import os
 import random
 import shutil
-import asyncio
-import datetime
-from pathlib import Path
-from dataclasses import dataclass
+import time
 from collections import defaultdict
-from typing import Dict, List, Literal, Any
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Literal
 
 import numpy as np
 import pandas as pd
 from openmm import app, unit
 from pdbfixer import PDBFixer
 
-from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.base.simulation import OpenMMSimulation
 from folding.store import Job
+from folding.utils.logger import logger
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
     ValidationError,
-    write_pkl,
-    load_pkl,
     check_and_download_pdbs,
     check_if_directory_exists,
+    load_pkl,
     plot_miner_validator_curves,
+    write_pkl,
 )
-
-from folding.utils.logger import logger
+from folding.utils.s3_utils import DigitalOceanS3Handler
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -537,6 +535,30 @@ class Protein(OpenMMSimulation):
                 logger.error(f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}")
                 return False
         return True
+    
+    def compare_state_to_cpt(self, state_energies: list, checkpoint_energies: list) -> bool:
+        """
+        Check if the state file is the same as the checkpoint file by comparing the median of the first few energy values
+        in the simulation created by the checkpoint and the state file respectively.
+        """
+        
+        WINDOW = 50
+        ANOMALY_THRESHOLD = 1.0
+
+        state_energies = np.array(state_energies)
+        checkpoint_energies = np.array(checkpoint_energies)
+
+        state_median = np.median(state_energies[:WINDOW])
+        checkpoint_median = np.median(checkpoint_energies[:WINDOW])
+
+        percent_diff = abs((state_median - checkpoint_median) / checkpoint_median) * 100
+
+        if percent_diff > ANOMALY_THRESHOLD:
+            logger.error(f"State and checkpoint files have different energy values. State: {state_median}, Checkpoint: {checkpoint_median}")
+            return False
+        return True
+        
+        
 
     def is_run_valid(self):
         """
@@ -622,6 +644,10 @@ class Protein(OpenMMSimulation):
         if not self.check_gradient(check_energies=check_energies):
             logger.warning(f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!")
             return False, [], [], "cpt-gradient"
+        
+        if not self.compare_state_to_cpt(state_energies=state_energies, checkpoint_energies=check_energies):
+            logger.warning(f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!")
+            return False, [], [], "state-checkpoint"
 
         # calculating absolute percent difference per step
         percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
