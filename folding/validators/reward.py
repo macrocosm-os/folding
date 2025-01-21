@@ -32,7 +32,8 @@ def check_if_identical(event):
         logger.warning(f"Setting {len(flattened_list)} / {len(event['checked_energy'])} uids to 0 reward due to identical submissions.")
         for idx in flattened_list:
             event["is_valid"][idx] = False
-            event["reason"][idx] = "Identical submission to another hotkey in the group"
+            if event["reason"]== "":
+                event["reason"][idx] = "Identical submission to another hotkey in the group"
 
     return event 
 

@@ -52,19 +52,19 @@ class OpenMMSimulation(GenericSimulation):
         """
         start_time = time.time()
         forcefield = app.ForceField(system_config["ff"], system_config["water"])
-        logger.warning(f"Creating ff took {time.time() - start_time:.4f} seconds")
+        logger.debug(f"Creating ff took {time.time() - start_time:.4f} seconds")
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
         start_time = time.time()
         modeller.deleteWater()
-        logger.warning(f"Deleting water took {time.time() - start_time:.4f} seconds")
+        logger.debug(f"Deleting water took {time.time() - start_time:.4f} seconds")
 
         # modeller.addExtraParticles(forcefield)
 
         start_time = time.time()
         modeller.addHydrogens(forcefield)
-        logger.warning(f"Adding hydrogens took {time.time() - start_time:.4f} seconds")
+        logger.debug(f"Adding hydrogens took {time.time() - start_time:.4f} seconds")
 
         start_time = time.time()
         # modeller.addSolvent(
@@ -72,7 +72,7 @@ class OpenMMSimulation(GenericSimulation):
         #     padding=system_config.box_padding * unit.nanometer,
         #     boxShape=system_config.box,
         # )
-        logger.warning(f"Adding solvent took {time.time() - start_time:.4f} seconds")
+        logger.debug(f"Adding solvent took {time.time() - start_time:.4f} seconds")
 
         # Create the system
         start_time = time.time()
@@ -84,7 +84,7 @@ class OpenMMSimulation(GenericSimulation):
             nonbondedCutoff = threshold * mm.unit.nanometers
             # set the attribute in the config for the pipeline.
             system_config["cutoff"] = threshold
-            logger.warning(
+            logger.debug(
                 f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm"
             )
         else:
@@ -132,14 +132,14 @@ class OpenMMSimulation(GenericSimulation):
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
-        logger.warning(
+        logger.debug(
             f"Creating simulation took {time.time() - start_time:.4f} seconds"
         )
         # Set initial positions
 
         start_time = time.time()
         simulation.context.setPositions(modeller.positions)
-        logger.warning(f"Setting positions took {time.time() - start_time:.4f} seconds")
+        logger.debug(f"Setting positions took {time.time() - start_time:.4f} seconds")
 
         # Converting the system config into a Dict[str,str] and ensure all values in system_config are of the correct type
         for k, v in system_config.items():
