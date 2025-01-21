@@ -290,6 +290,11 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
+        # If there is an exploit on the cpt file detected via the state-checkpoint reason, we will reset the score to 0.
+        for uid, reason in zip(job.event["uids"], job.event["reason"]):
+            if reason == "state-checkpoint":
+                self.scores[uid] = 0
+
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
         best_hotkey = serving_hotkeys[best_index]
