@@ -32,7 +32,8 @@ def check_if_identical(event):
         logger.warning(f"Setting {len(flattened_list)} / {len(event['checked_energy'])} uids to 0 reward due to identical submissions.")
         for idx in flattened_list:
             event["is_valid"][idx] = False
-            event["reason"][idx] = "Identical submission to another hotkey in the group"
+            if event["reason"]== "":
+                event["reason"][idx] = "Identical submission to another hotkey in the group"
 
     return event 
 
@@ -58,6 +59,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
     event["ns_computed"] = [0] * len(uids)
     event["reason"] = [""] * len(uids)
     event["best_cpt"] = [""] * len(uids)
+    event["seed"] = []
 
     energies = np.zeros(len(uids))
 
@@ -71,6 +73,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
                 state=resp.miner_state,
                 seed=resp.miner_seed,
             )
+            event['seed'].append(resp.miner_seed)
             event["process_md_output_time"][i] = time.time() - start_time
             event["best_cpt"][i] = protein.checkpoint_path if hasattr(protein, "checkpoint_path") else ""
 
