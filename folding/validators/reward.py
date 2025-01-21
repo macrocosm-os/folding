@@ -58,6 +58,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
     event["ns_computed"] = [0] * len(uids)
     event["reason"] = [""] * len(uids)
     event["best_cpt"] = [""] * len(uids)
+    event["seed"] = []
 
     energies = np.zeros(len(uids))
 
@@ -71,6 +72,7 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
                 state=resp.miner_state,
                 seed=resp.miner_seed,
             )
+            event['seed'].append(resp.miner_seed)
             event["process_md_output_time"][i] = time.time() - start_time
             event["best_cpt"][i] = protein.checkpoint_path if hasattr(protein, "checkpoint_path") else ""
 
