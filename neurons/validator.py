@@ -281,12 +281,6 @@ class Validator(BaseValidatorNeuron):
         top_reward = 0.80
         apply_pipeline = False
 
-        # There could be hotkeys that have decided to stop serving. We need to remove them from the store.
-        serving_hotkeys = []
-        for ii, state in enumerate(job.event["response_miners_serving"]):
-            if state:
-                serving_hotkeys.append(job.hotkeys[ii])
-
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
@@ -299,10 +293,10 @@ class Validator(BaseValidatorNeuron):
 
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
-        best_hotkey = serving_hotkeys[best_index]
+        best_hotkey = job.hotkeys[best_index]
 
         await job.update(
-            hotkeys=serving_hotkeys,
+            hotkeys=job.hotkeys,
             loss=best_loss,
             hotkey=best_hotkey,
         )
