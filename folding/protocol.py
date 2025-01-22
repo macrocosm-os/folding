@@ -41,7 +41,6 @@ class JobSubmissionSynapse(bt.Synapse):
     - pdb_id: A Protein id, which contains the necessary details of the protein to be folded.
     - md_inputs: A dictionary containing the input files for the openmm simulation.
     - system_config: A dictionary containing the system configuration for the simulation.
-    - miner_serving: A boolean value which determines if the miner can serve the request.
     - md_output: A dictionary containing the output files of the openmm simulation.
     - miner_seed: An integer value which is the seed for the simulation.
     - miner_state: A string value which is the state of the miner.
@@ -51,9 +50,6 @@ class JobSubmissionSynapse(bt.Synapse):
     pdb_contents: str
     md_inputs: dict  # Right now this is just a "em.cpt" file.
     system_config: dict = {}
-
-    # Miner can decide if they are serving the request or not.
-    miner_serving: bool = True
 
     best_submitted_energy: typing.Optional[float] = None
 
