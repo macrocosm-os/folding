@@ -289,7 +289,6 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
     response_status_codes = []
     response_returned_files = []
     response_returned_files_sizes = []
-    response_miners_serving = []
 
     for resp in responses:
         if resp.dendrite.process_time != None:
@@ -301,7 +300,6 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
         response_status_codes.append(str(resp.dendrite.status_code))
         response_returned_files.append(list(resp.md_output.keys()))
         response_returned_files_sizes.append(list(map(len, resp.md_output.values())))
-        response_miners_serving.append(resp.miner_serving)
 
     return {
         "response_times": response_times,
@@ -309,7 +307,6 @@ def get_response_info(responses: List[JobSubmissionSynapse]) -> Dict:
         "response_status_codes": response_status_codes,
         "response_returned_files": response_returned_files,
         "response_returned_files_sizes": response_returned_files_sizes,
-        "response_miners_serving": response_miners_serving,
     }
 
 

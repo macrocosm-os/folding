@@ -280,10 +280,7 @@ class FoldingMiner(BaseMinerNeuron):
                 )
 
                 logger.warning(f"❗ Removing miner from job pool ❗")
-
                 event["condition"] = "cpu_limit_reached"
-                synapse.miner_serving = False
-
                 return check_synapse(self=self, synapse=synapse, event=event)
 
         # The set of RUNNING simulations.
@@ -327,7 +324,6 @@ class FoldingMiner(BaseMinerNeuron):
                     # If the state is failed, we should not return the files.
                     if state == "failed":
                         synapse.miner_state = state
-                        synapse.miner_serving = False
                         event["condition"] = "failed_simulation"
                         event["state"] = state
                         logger.warning(
