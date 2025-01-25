@@ -1,9 +1,9 @@
-from typing import Dict, Any, List, Tuple
 from folding.base.reward import BaseReward
 
 
 class SyntheticMDReward(BaseReward):
-    def __init__(self, **kwargs):
+    def __init__(self, priority: float = 1, **kwargs):
+        self.priority = priority
         self.kwargs = kwargs
 
     def calculate_reward(self) -> float:
@@ -14,7 +14,8 @@ class SyntheticMDReward(BaseReward):
 
 
 class OrganicMDReward(BaseReward):
-    def __init__(self, **kwargs):
+    def __init__(self, priority: float = 1, **kwargs):
+        self.priority = priority
         self.kwargs = kwargs
 
     def calculate_reward(self) -> float:
@@ -25,7 +26,8 @@ class OrganicMDReward(BaseReward):
 
 
 class SyntheticMLReward(BaseReward):
-    def __init__(self, **kwargs):
+    def __init__(self, priority: float = 1, **kwargs):
+        self.priority = priority
         self.kwargs = kwargs
 
     def calculate_reward(self) -> float:
@@ -36,7 +38,8 @@ class SyntheticMLReward(BaseReward):
 
 
 class OrganicMLReward(BaseReward):
-    def __init__(self, **kwargs):
+    def __init__(self, priority: float = 1, **kwargs):
+        self.priority = priority
         self.kwargs = kwargs
 
     def calculate_reward(self) -> float:

@@ -2,7 +2,7 @@ import copy
 from typing import List, Callable
 
 import numpy as np
-from folding.tasks.task_registry import TaskRegistry
+from folding.rewards.reward_registry import RewardRegistry
 
 
 class MinerRegistry:
@@ -14,8 +14,8 @@ class MinerRegistry:
     STARTING_CREDIBILITY = 0.50
 
     def __init__(self, miner_uids: List[int]):
-        task_registry = TaskRegistry()
-        self.tasks = copy.deepcopy(task_registry.tasks)
+        reward_registry = RewardRegistry()
+        self.tasks = copy.deepcopy(reward_registry.tasks)
 
         self.registry = dict.fromkeys(miner_uids)
         for miner_uid in miner_uids:
