@@ -8,7 +8,6 @@ import random
 import asyncio
 import traceback
 
-from pathlib import Path
 from itertools import chain
 from typing import Any, Dict, List, Tuple
 
@@ -42,10 +41,7 @@ class Validator(BaseValidatorNeuron):
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
-
-        # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = SQLiteJobStore()
-        self.mdrun_args = self.parse_mdrun_args()
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
@@ -55,20 +51,6 @@ class Validator(BaseValidatorNeuron):
         self.RSYNC_EXCEPTION_COUNT = 0
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
-
-    def parse_mdrun_args(self) -> str:
-        mdrun_args = ""
-
-        # There are unwanted keys in mdrun_args, like __is_set. Remove all of these
-        filtered_args = {
-            key: value for key, value in self.config.mdrun_args.items() if not re.match(r"^[^a-zA-Z0-9]", key)
-        }
-
-        for arg, value in filtered_args.items():
-            if value is not None:
-                mdrun_args += f"-{arg} {value} "
-
-        return mdrun_args
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
         """Returns the uids corresponding to the hotkeys.
@@ -112,7 +94,6 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
-            mdrun_args=self.mdrun_args,
             best_submitted_energy=job.best_loss,
         )
 
