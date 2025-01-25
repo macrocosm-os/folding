@@ -75,10 +75,10 @@ class MinerRegistry:
             self.cred_alpha * current_credibility + (1 - self.cred_alpha) * previous_credibility
         )
 
-    def reset(self, uid: int) -> None:
+    def reset(self, miner_uid: int) -> None:
         """Resets the score and credibility of miner 'uid'."""
         for task in self.tasks.keys():
-            self.registry[uid][task]["credibility"] = self.STARTING_CREDIBILITY
-            self.registry[uid][task]["credibilities"] = []
-            self.registry[uid][task]["score"] = 0.0
-            self.registry[uid][task]["results"] = []
+            self.registry[miner_uid][task]["credibility"] = self.STARTING_CREDIBILITY
+            self.registry[miner_uid][task]["credibilities"] = []
+            self.registry[miner_uid][task]["score"] = 0.0
+            self.registry[miner_uid][task]["results"] = []
