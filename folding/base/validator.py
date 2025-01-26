@@ -132,13 +132,8 @@ class BaseValidatorNeuron(BaseNeuron):
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0).to("cpu").numpy()
-        # loading in consensus weights and performing weighted merge with raw weights
-        valid_indices = np.where(self.metagraph.validator_permit)[0]
-        valid_weights = self.metagraph.weights[valid_indices]
-        valid_stakes = self.metagraph.S[valid_indices]
-        normalized_stakes = valid_stakes / np.sum(valid_stakes)
+        consensus_weights = self.get_chain_weights()
 
-        consensus_weights = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(self.device)
         raw_weights = CONSENSUS_WEIGHTS_FACTOR * consensus_weights + (1 - CONSENSUS_WEIGHTS_FACTOR) * raw_weights
 
         logger.debug("raw_weights", raw_weights)
@@ -264,13 +259,18 @@ class BaseValidatorNeuron(BaseNeuron):
         except:
             logger.info("Previous validator state not found... Weight copying the average of the network.")
 
-            valid_indices = np.where(self.metagraph.validator_permit)[0]
-            valid_weights = self.metagraph.weights[valid_indices]
-            valid_stakes = self.metagraph.S[valid_indices]
-            normalized_stakes = valid_stakes / np.sum(valid_stakes)
-
+            self.scores = self.get_chain_weights()
             self.step = 1
-            self.scores = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(self.device)
+
+    def get_chain_weights(self) -> torch.Tensor:
+        """Obtain the stake weighted average of all validator weights on chain."""
+        valid_indices = np.where(self.metagraph.validator_permit)[0]
+        valid_weights = self.metagraph.weights[valid_indices]
+        valid_stakes = self.metagraph.S[valid_indices]
+        normalized_stakes = valid_stakes / np.sum(valid_stakes)
+
+        weights = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(self.device)
+        return weights
 
     def load_config_json(self):
         config_json_path = os.path.join(str(ROOT_DIR), "folding/utils/config_input.json")
