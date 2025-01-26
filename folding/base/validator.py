@@ -133,7 +133,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Replace any NaN values with 0.
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0).to("cpu").numpy()
         # loading in consensus weights and performing weighted merge with raw weights
-        consensus = torch.from_numpy(self.metagraph.C)
+        consensus = torch.from_numpy(self.metagraph.W)
         raw_weights = CONSENSUS_WEIGHT * consensus + (1 - CONSENSUS_WEIGHT) * raw_weights
 
         logger.debug("raw_weights", raw_weights)
