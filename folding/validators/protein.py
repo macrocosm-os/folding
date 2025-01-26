@@ -535,14 +535,15 @@ class Protein(OpenMMSimulation):
                 logger.error(f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}")
                 return False
         return True
-    
+
     def compare_state_to_cpt(self, state_energies: list, checkpoint_energies: list) -> bool:
         """
         Check if the state file is the same as the checkpoint file by comparing the median of the first few energy values
         in the simulation created by the checkpoint and the state file respectively.
         """
-        
+
         WINDOW = 50
+        ANOMALY_THRESHOLD = 2
 
         state_energies = np.array(state_energies)
         checkpoint_energies = np.array(checkpoint_energies)
@@ -552,11 +553,9 @@ class Protein(OpenMMSimulation):
 
         percent_diff = abs((state_median - checkpoint_median) / checkpoint_median) * 100
 
-        if percent_diff > self.epsilon:
+        if percent_diff > ANOMALY_THRESHOLD:
             return False
         return True
-        
-        
 
     def is_run_valid(self):
         """
@@ -585,7 +584,6 @@ class Protein(OpenMMSimulation):
         # Run the simulation at most 3000 steps
         steps_to_run = min(3000, self.log_step - self.cpt_step)
 
-
         # This is where we are going to check the xml files for the state.
         logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
         self.simulation, self.system_config = self.create_simulation(
@@ -603,7 +601,6 @@ class Protein(OpenMMSimulation):
         if not self.check_gradient(check_energies=state_energies):
             logger.warning(f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!")
             return False, [], [], "state-gradient"
-
 
         # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
         self.simulation, self.system_config = self.create_simulation(
@@ -630,7 +627,7 @@ class Protein(OpenMMSimulation):
             (self.log_file['#"Step"'] > self.cpt_step) & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
-        self.simulation.step(steps_to_run)     
+        self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(current_state_logfile)
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
@@ -642,9 +639,11 @@ class Protein(OpenMMSimulation):
         if not self.check_gradient(check_energies=check_energies):
             logger.warning(f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!")
             return False, [], [], "cpt-gradient"
-        
+
         if not self.compare_state_to_cpt(state_energies=state_energies, checkpoint_energies=check_energies):
-            logger.warning(f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!")
+            logger.warning(
+                f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!"
+            )
             return False, [], [], "state-checkpoint"
 
         # calculating absolute percent difference per step
