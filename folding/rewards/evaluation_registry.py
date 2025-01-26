@@ -4,7 +4,7 @@ from typing import Dict, Any
 import pandas as pd
 
 from folding.utils.logger import logger
-from folding.base.reward import BaseReward
+from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
 from folding.utils import constants as c
 from folding.utils.ops import (
@@ -15,14 +15,14 @@ from folding.utils.ops import (
 )
 
 
-class SyntheticMDReward(BaseReward):
+class SyntheticMDEvaluator(BaseEvaluator):
     def __init__(self, priority: float = 1, **kwargs):
         self.priority = priority
         self.kwargs = kwargs
         self.md_simulator = OpenMMSimulation()
 
     def process_md_output(
-        self, md_output: dict, seed: int, state: str, hotkey: str, basepath: str, pdb_location: str
+        self, md_output: dict, seed: int, state: str, hotkey: str, basepath: str, pdb_location: str, **kwargs
     ) -> bool:
         required_files_extensions = ["cpt", "log"]
         self.hotkey_alias = hotkey[:8]
@@ -122,50 +122,52 @@ class SyntheticMDReward(BaseReward):
 
         return True
 
-    def calculate_reward(self, data: Dict[str, Any]) -> float:
+    def _evaluate(self, data: Dict[str, Any]) -> float:
+        if self.process_md_output(**data):
+            return 1.0  # Reward for successful simulation
         return 0.0
 
     def name(self) -> str:
         return "SyntheticMDReward"
 
 
-class OrganicMDReward(BaseReward):
+class OrganicMDEvaluator(BaseEvaluator):
     def __init__(self, priority: float = 1, **kwargs):
         self.priority = priority
         self.kwargs = kwargs
 
-    def calculate_reward(self, data: Dict[str, Any]) -> float:
+    def _evaluate(self, data: Dict[str, Any]) -> float:
         return 0.0
 
     def name(self) -> str:
         return "OrganicMDReward"
 
 
-class SyntheticMLReward(BaseReward):
+class SyntheticMLEvaluator(BaseEvaluator):
     def __init__(self, priority: float = 1, **kwargs):
         self.priority = priority
         self.kwargs = kwargs
 
-    def calculate_reward(self, data: Dict[str, Any]) -> float:
+    def _evaluate(self, data: Dict[str, Any]) -> float:
         return 0.0
 
     def name(self) -> str:
         return "SyntheticMLReward"
 
 
-class OrganicMLReward(BaseReward):
+class OrganicMLEvaluator(BaseEvaluator):
     def __init__(self, priority: float = 1, **kwargs):
         self.priority = priority
         self.kwargs = kwargs
 
-    def calculate_reward(self, data: Dict[str, Any]) -> float:
+    def _evaluate(self, data: Dict[str, Any]) -> float:
         return 0.0
 
     def name(self) -> str:
         return "OrganicMLReward"
 
 
-class RewardRegistry:
+class EvaluationRegistry:
     """
     Handles the organization of all tasks that we want inside of SN25, which includes:
         - Molecular Dynamics (MD)
@@ -175,8 +177,8 @@ class RewardRegistry:
     """
 
     def __init__(self):
-        reward_pipelines = [SyntheticMDReward, OrganicMDReward, SyntheticMLReward, OrganicMLReward]
+        evaluation_pipelines = [SyntheticMDEvaluator, OrganicMDReward, SyntheticMLReward, OrganicMLReward]
 
         self.tasks = []
-        for pipe in reward_pipelines:
+        for pipe in evaluation_pipelines:
             self.tasks.append(pipe().name())
