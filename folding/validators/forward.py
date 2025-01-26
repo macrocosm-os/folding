@@ -130,9 +130,10 @@ def parse_config(config) -> Dict[str, str]:
     return exclude_in_hp_search
 
 
+# TODO: We need to be able to create a bunch of different challenges.
 async def create_new_challenge(self, exclude: List) -> Dict:
     """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
-    using the try_prepare_challenge function.
+    using the try_prepare_md_challenge function.
 
     Args:
         exclude (List): list of pdb_ids to exclude from the search
@@ -159,7 +160,7 @@ async def create_new_challenge(self, exclude: List) -> Dict:
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         logger.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = await try_prepare_challenge(self, config=self.config, pdb_id=pdb_id)
+        event = await try_prepare_md_challenge(self, config=self.config, pdb_id=pdb_id)
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
@@ -192,7 +193,7 @@ def create_random_modifications_to_system_config(config) -> Dict:
     return system_kwargs
 
 
-async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
+async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
@@ -259,6 +260,7 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
 
         finally:
             event["pdb_id"] = pdb_id
+            event["job_type"] = "SyntheticMDReward"
             event.update(hps)  # add the dictionary of hyperparameters to the event
             event["hp_sample_time"] = time.time() - hp_sampler_time
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]

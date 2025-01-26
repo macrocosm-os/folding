@@ -114,7 +114,8 @@ class OrganicValidator(OrganicScoringBase):
 
         sample_copy = copy.deepcopy(sample)
 
-        job_event = {"system_kwargs": {}, "is_organic": True}
+        # TODO: Need to set the job type programmatically.
+        job_event = {"system_kwargs": {}, "is_organic": True, "job_type": "OrganicMDReward"}
         for arg in self.simulation_args:
             if arg in sample:
                 job_event["system_kwargs"][arg] = sample.pop(arg)
