@@ -24,9 +24,10 @@ from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
+from folding.utils.s3_utils import upload_output_to_s3
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
-from folding.utils.s3_utils import upload_output_to_s3
+from folding.rewards.miner_registry import MinerRegistry
 
 
 class Validator(BaseValidatorNeuron):
@@ -46,6 +47,8 @@ class Validator(BaseValidatorNeuron):
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(self, k=int(self.metagraph.n), exclude=None).tolist()
+
+        self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
@@ -203,6 +206,7 @@ class Validator(BaseValidatorNeuron):
                     water=job_event["water"],
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
+                    job_type=job_event["job_type"],
                     system_kwargs=job_event["system_kwargs"],
                     keypair=self.wallet.hotkey,
                     gjp_address=self.config.neuron.gjp_address,
@@ -221,6 +225,7 @@ class Validator(BaseValidatorNeuron):
                 water=job_event["water"],
                 box=job_event["box"],
                 hotkeys=selected_hotkeys,
+                job_type=job_event["job_type"],
                 epsilon=job_event["epsilon"],
                 system_kwargs=job_event["system_kwargs"],
                 job_id=job_event["job_id"],
