@@ -14,13 +14,13 @@ class MinerRegistry:
     STARTING_CREDIBILITY = 0.50
 
     def __init__(self, miner_uids: List[int]):
-        reward_registry = RewardRegistry()
-        self.tasks = copy.deepcopy(reward_registry.tasks)
-
+        reward_registry = RewardRegistry()  # TODO: Needs to be a class?
+        self.tasks: List[str] = copy.deepcopy(reward_registry.tasks)
         self.registry = dict.fromkeys(miner_uids)
+
         for miner_uid in miner_uids:
             self.registry[miner_uid] = {}
-            for task in self.tasks.keys():
+            for task in self.tasks:
                 self.registry[miner_uid][task] = {
                     "credibility": self.STARTING_CREDIBILITY,
                     "credibilities": [],
@@ -77,7 +77,7 @@ class MinerRegistry:
 
     def reset(self, miner_uid: int) -> None:
         """Resets the score and credibility of miner 'uid'."""
-        for task in self.tasks.keys():
+        for task in self.tasks:
             self.registry[miner_uid][task]["credibility"] = self.STARTING_CREDIBILITY
             self.registry[miner_uid][task]["credibilities"] = []
             self.registry[miner_uid][task]["score"] = 0.0

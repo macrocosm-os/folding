@@ -62,6 +62,6 @@ class RewardRegistry:
     def __init__(self):
         reward_pipelines = [SyntheticMDReward, OrganicMDReward, SyntheticMLReward, OrganicMLReward]
 
-        self.tasks = {}
+        self.tasks = []
         for pipe in reward_pipelines:
-            self.tasks[pipe().name()] = pipe
+            self.tasks.append(pipe().name())
