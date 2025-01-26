@@ -29,6 +29,8 @@ from folding.utils.ops import (
     write_pkl,
     load_pdb_file,
     save_files,
+    save_pdb,
+    create_velm,
 )
 from folding.utils.s3_utils import DigitalOceanS3Handler
 
@@ -276,37 +278,6 @@ class Protein(OpenMMSimulation):
             file=open(self.pdb_location, "w"),
         )
 
-    def create_velm(self, simulation: app.Simulation) -> Dict[str, Any]:
-        """Alters the initial state of the simulation using initial velocities
-        at the beginning and the end of the protein chain to use as a lookup in memory.
-
-        Args:
-            simulation (app.Simulation): The simulation object.
-
-        Returns:
-            simulation: original simulation object.
-        """
-
-        mass_index = 0
-        mass_indicies = []
-        atom_masses: List[unit.quantity.Quantity] = []
-
-        while True:
-            try:
-                atom_masses.append(simulation.system.getParticleMass(mass_index))
-                mass_indicies.append(mass_index)
-                mass_index += 1
-            except:
-                # When there are no more atoms.
-                break
-
-        velm = {
-            "mass_indicies": mass_indicies,
-            "pdb_masses": atom_masses,
-        }
-
-        return velm
-
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
     async def generate_input_files(self):
@@ -330,7 +301,7 @@ class Protein(OpenMMSimulation):
         )
 
         # load in information from the velm memory
-        velm = self.create_velm(simulation=self.simulation)
+        velm = create_velm(simulation=self.simulation)
 
         logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
         start_time = time.time()
@@ -495,7 +466,7 @@ class Protein(OpenMMSimulation):
         """
 
         validator_velm_data = load_pkl(self.velm_array_pkl, "rb")
-        miner_velm_data = self.create_velm(simulation=self.simulation)
+        miner_velm_data = create_velm(simulation=self.simulation)
 
         validator_masses = validator_velm_data["pdb_masses"]
         miner_masses = miner_velm_data["pdb_masses"]
@@ -634,7 +605,13 @@ class Protein(OpenMMSimulation):
             return False, check_energies.tolist(), miner_energies.tolist(), "anomaly"
 
         # Save the folded pdb file if the run is valid
-        self.save_pdb(output_path=os.path.join(self.miner_data_directory, f"{self.pdb_id}_folded.pdb"))
+        positions = self.simulation.context.getState(getPositions=True).getPositions()
+        topology = self.simulation.topology
+        save_pdb(
+            positions=positions,
+            topology=topology,
+            output_path=os.path.join(self.miner_data_directory, f"{self.pdb_id}_folded.pdb"),
+        )
 
         return True, check_energies.tolist(), miner_energies.tolist(), ""
 
@@ -642,13 +619,6 @@ class Protein(OpenMMSimulation):
         """Calculate the number of nanoseconds computed by the miner."""
 
         return (self.cpt_step * self.system_config.time_step_size) / 1e3
-
-    def save_pdb(self, output_path: str):
-        """Save the pdb file to the output path."""
-        positions = self.simulation.context.getState(getPositions=True).getPositions()
-        topology = self.simulation.topology
-        with open(output_path, "w") as f:
-            app.PDBFile.writeFile(topology, positions, f)
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)

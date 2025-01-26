@@ -1,7 +1,5 @@
-import re
 import os
 import sys
-import tqdm
 import signal
 import random
 import shutil
@@ -10,12 +8,12 @@ import functools
 import traceback
 import subprocess
 import pickle as pkl
-from typing import Dict, List
+from typing import Dict, List, Any
 
 import numpy as np
 import pandas as pd
 import parmed as pmd
-from openmm import app
+from openmm import app, unit
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
@@ -377,3 +375,41 @@ def save_files(files: Dict, output_directory: str, write_mode: str = "wb") -> Di
             f.write(content)
 
     return filetypes
+
+
+def save_pdb(positions, topology, output_path: str):
+    """Save the pdb file to the output path."""
+    with open(output_path, "w") as f:
+        app.PDBFile.writeFile(topology, positions, f)
+
+
+def create_velm(simulation: app.Simulation) -> Dict[str, Any]:
+    """Alters the initial state of the simulation using initial velocities
+    at the beginning and the end of the protein chain to use as a lookup in memory.
+
+    Args:
+        simulation (app.Simulation): The simulation object.
+
+    Returns:
+        simulation: original simulation object.
+    """
+
+    mass_index = 0
+    mass_indicies = []
+    atom_masses: List[unit.quantity.Quantity] = []
+
+    while True:
+        try:
+            atom_masses.append(simulation.system.getParticleMass(mass_index))
+            mass_indicies.append(mass_index)
+            mass_index += 1
+        except:
+            # When there are no more atoms.
+            break
+
+    velm = {
+        "mass_indicies": mass_indicies,
+        "pdb_masses": atom_masses,
+    }
+
+    return velm
