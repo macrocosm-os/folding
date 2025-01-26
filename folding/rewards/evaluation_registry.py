@@ -177,7 +177,7 @@ class EvaluationRegistry:
     """
 
     def __init__(self):
-        evaluation_pipelines = [SyntheticMDEvaluator, OrganicMDReward, SyntheticMLReward, OrganicMLReward]
+        evaluation_pipelines = [SyntheticMDEvaluator, OrganicMDEvaluator, SyntheticMLEvaluator, OrganicMLEvaluator]
 
         self.tasks = []
         for pipe in evaluation_pipelines:
