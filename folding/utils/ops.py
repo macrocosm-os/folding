@@ -15,6 +15,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 import parmed as pmd
+from openmm import app
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
@@ -77,9 +78,7 @@ def timeout(seconds):
 def print_on_retry(retry_state):
     function_name = retry_state.fn.__name__
     max_retries = retry_state.retry_object.stop.max_attempt_number
-    logger.warning(
-        f"Retrying {function_name}: retry #{retry_state.attempt_number} out of {max_retries}"
-    )
+    logger.warning(f"Retrying {function_name}: retry #{retry_state.attempt_number} out of {max_retries}")
 
 
 def delete_directory(directory: str):
@@ -124,22 +123,16 @@ def load_and_sample_random_pdb_ids(
     PDB_PATH = os.path.join(root_dir, filename)
 
     if not os.path.exists(PDB_PATH):
-        raise ValueError(
-            f"Required pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first."
-        )
+        raise ValueError(f"Required pdb file {PDB_PATH!r} was not found. Run `python scripts/gather_pdbs.py` first.")
 
     with open(PDB_PATH, "rb") as f:
         file = pkl.load(f)
 
     if input_source is not None:
         if input_source not in VALID_SOURCES:
-            raise ValueError(
-                f"Invalid input source: {input_source}. Valid sources are {VALID_SOURCES}"
-            )
+            raise ValueError(f"Invalid input source: {input_source}. Valid sources are {VALID_SOURCES}")
 
-        pdb_ids = file[input_source][
-            "pdbs"
-        ]  # get the pdb_ids from the specified source
+        pdb_ids = file[input_source]["pdbs"]  # get the pdb_ids from the specified source
         pdb_id = select_random_pdb_id(PDB_IDS=pdb_ids, exclude=exclude)
 
     else:  # randomly sample all pdbs from all sources
@@ -223,9 +216,7 @@ async def check_and_download_pdbs(
 
                 return True
             else:
-                logger.warning(
-                    f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫"
-                )
+                logger.warning(f"🚫 PDB file {pdb_id} downloaded successfully but contains missing values. 🚫")
                 return False
         else:
             logger.error(f"Failed to download PDB file with ID {pdb_id} from {url}")
@@ -258,9 +249,7 @@ async def check_and_download_pdbs(
             )
             return True
         except subprocess.CalledProcessError as e:
-            raise RsyncException(
-                f"Failed to download PDB file with ID {pdb_id} using rsync."
-            )
+            raise RsyncException(f"Failed to download PDB file with ID {pdb_id} using rsync.")
 
     else:
         raise ValueError(f"Unknown input source: {input_source}")
@@ -354,3 +343,37 @@ def plot_miner_validator_curves(
         width=1400,
     )
     fig.write_image(os.path.join(miner_data_directory, filename + "_percent_diff.png"))
+
+
+def load_pdb_file(pdb_file: str) -> app.PDBFile:
+    """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
+    return app.PDBFile(pdb_file)
+
+
+def save_files(files: Dict, output_directory: str, write_mode: str = "wb") -> Dict:
+    """Save files generated on the validator side to a desired output directory.
+
+    Args:
+        files (Dict): Dictionary mapping between filename and content
+        output_directory (str)
+        write_mode (str, optional): How the file should be written. Defaults to "wb".
+
+    Returns:
+        _type_: _description_
+    """
+    logger.info(f"⏰ Saving files to {output_directory}...")
+    check_if_directory_exists(output_directory=output_directory)
+
+    filetypes = {}
+    for filename, content in files.items():
+        filetypes[filename.split(".")[-1]] = filename
+
+        logger.info(f"Saving file {filename} to {output_directory}")
+        if "em.cpt" in filename:
+            filename = "em_binary.cpt"
+
+        # loop over all of the output files and save to local disk
+        with open(os.path.join(output_directory, filename), write_mode) as f:
+            f.write(content)
+
+    return filetypes

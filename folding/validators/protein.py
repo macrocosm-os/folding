@@ -27,6 +27,8 @@ from folding.utils.ops import (
     load_pkl,
     plot_miner_validator_curves,
     write_pkl,
+    load_pdb_file,
+    save_files,
 )
 from folding.utils.s3_utils import DigitalOceanS3Handler
 
@@ -222,7 +224,7 @@ class Protein(OpenMMSimulation):
         # Read the files that should exist now based on generate_input_files.
         self.md_inputs = self.read_and_return_files(filenames=self.input_files)
 
-        self.save_files(
+        save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
             write_mode="w",
@@ -242,10 +244,6 @@ class Protein(OpenMMSimulation):
 
     def __repr__(self):
         return self.__str__()
-
-    def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
-        """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
-        return app.PDBFile(pdb_file)
 
     async def fix_pdb_file(self):
         """
@@ -327,7 +325,7 @@ class Protein(OpenMMSimulation):
 
         self.simulation, self.system_config = await asyncio.to_thread(
             self.create_simulation,
-            self.load_pdb_file(pdb_file=self.pdb_file),
+            load_pdb_file(pdb_file=self.pdb_file),
             self.system_config.get_config(),
         )
 
@@ -366,34 +364,6 @@ class Protein(OpenMMSimulation):
         """Generate a random seed"""
         return random.randint(1000, 999999)
 
-    def save_files(self, files: Dict, output_directory: str, write_mode: str = "wb") -> Dict:
-        """Save the simulation files generated on the validator side to a desired output directory.
-
-        Args:
-            files (Dict): Dictionary mapping between filename and content
-            output_directory (str)
-            write_mode (str, optional): How the file should be written. Defaults to "wb".
-
-        Returns:
-            _type_: _description_
-        """
-        logger.info(f"⏰ Saving files to {output_directory}...")
-        check_if_directory_exists(output_directory=output_directory)
-
-        filetypes = {}
-        for filename, content in files.items():
-            filetypes[filename.split(".")[-1]] = filename
-
-            logger.info(f"Saving file {filename} to {output_directory}")
-            if "em.cpt" in filename:
-                filename = "em_binary.cpt"
-
-            # loop over all of the output files and save to local disk
-            with open(os.path.join(output_directory, filename), write_mode) as f:
-                f.write(content)
-
-        return filetypes
-
     def delete_files(self, directory: str):
         logger.info(f"Deleting files in {directory}")
         for file in os.listdir(directory):
@@ -427,7 +397,7 @@ class Protein(OpenMMSimulation):
         self.get_miner_data_directory(hotkey=hotkey)
 
         # Save files so we can check the hash later.
-        self.save_files(
+        save_files(
             files=md_output,
             output_directory=self.miner_data_directory,
         )
@@ -438,7 +408,7 @@ class Protein(OpenMMSimulation):
 
             logger.info(f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}")
             self.simulation, self.system_config = self.create_simulation(
-                pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+                pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
             )
@@ -535,13 +505,13 @@ class Protein(OpenMMSimulation):
                 logger.error(f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}")
                 return False
         return True
-    
+
     def compare_state_to_cpt(self, state_energies: list, checkpoint_energies: list) -> bool:
         """
         Check if the state file is the same as the checkpoint file by comparing the median of the first few energy values
         in the simulation created by the checkpoint and the state file respectively.
         """
-        
+
         WINDOW = 50
 
         state_energies = np.array(state_energies)
@@ -555,8 +525,6 @@ class Protein(OpenMMSimulation):
         if percent_diff > self.epsilon:
             return False
         return True
-        
-        
 
     def is_run_valid(self):
         """
@@ -585,11 +553,10 @@ class Protein(OpenMMSimulation):
         # Run the simulation at most 3000 steps
         steps_to_run = min(3000, self.log_step - self.cpt_step)
 
-
         # This is where we are going to check the xml files for the state.
         logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
         self.simulation, self.system_config = self.create_simulation(
-            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
             seed=self.miner_seed,
         )
@@ -604,10 +571,9 @@ class Protein(OpenMMSimulation):
             logger.warning(f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!")
             return False, [], [], "state-gradient"
 
-
         # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
         self.simulation, self.system_config = self.create_simulation(
-            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
             seed=self.miner_seed,
         )
@@ -630,7 +596,7 @@ class Protein(OpenMMSimulation):
             (self.log_file['#"Step"'] > self.cpt_step) & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
-        self.simulation.step(steps_to_run)     
+        self.simulation.step(steps_to_run)
 
         check_log_file = pd.read_csv(current_state_logfile)
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
@@ -642,9 +608,11 @@ class Protein(OpenMMSimulation):
         if not self.check_gradient(check_energies=check_energies):
             logger.warning(f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!")
             return False, [], [], "cpt-gradient"
-        
+
         if not self.compare_state_to_cpt(state_energies=state_energies, checkpoint_energies=check_energies):
-            logger.warning(f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!")
+            logger.warning(
+                f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!"
+            )
             return False, [], [], "state-checkpoint"
 
         # calculating absolute percent difference per step
