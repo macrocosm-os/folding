@@ -123,7 +123,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return True
 
-    def check_masses(self) -> bool:
+    def check_masses(self, velm_array_location: str) -> bool:
         """
         Check if the masses reported in the miner file are identical to the masses given
         in the initial pdb file. If not, they have modified the system in unintended ways.
@@ -132,7 +132,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         https://github.com/openmm/openmm/blob/53770948682c40bd460b39830d4e0f0fd3a4b868/platforms/common/src/kernels/langevinMiddle.cc#L11
         """
 
-        validator_velm_data = load_pkl(self.velm_array_pkl, "rb")
+        validator_velm_data = load_pkl(velm_array_location, "rb")
         miner_velm_data = create_velm(simulation=self.simulation)
 
         validator_masses = validator_velm_data["pdb_masses"]
@@ -282,7 +282,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         if not self.process_md_output(**data):
             return 0.0
 
-        if not self.check_masses():
+        if not self.check_masses(velm_array_location=data["velm_array_location"]):
             return 0.0
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
