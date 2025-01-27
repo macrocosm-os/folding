@@ -34,19 +34,6 @@ class MinerRegistry:
         """
         self.registry[miner_uid][task]["results"].extend(results)
 
-    def compute_results(self, miner_uid: int, task: str) -> List[float]:
-        """computes the results of the miner
-
-        Args:
-            miner_uid (int): the miner's unique identifier
-            task (str): the task the miner completed
-        """
-        computed_results = []
-        for result in self.registry[miner_uid][task]["results"]:
-            computed_results.append(result.calculate_reward())
-
-        return computed_results
-
     def add_credibilities(self, miner_uid: int, task: str, credibilities: List[float]):
         """adds credibilities to the miner registry
 
