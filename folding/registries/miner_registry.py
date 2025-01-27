@@ -78,6 +78,8 @@ class MinerRegistry:
 
     def reset(self, miner_uid: int) -> None:
         """Resets the score and credibility of miner 'uid'."""
+        self.registry[miner_uid]["overall_credibility"] = c.STARTING_CREDIBILITY
+
         for task in self.tasks:
             self.registry[miner_uid][task]["credibility"] = c.STARTING_CREDIBILITY
             self.registry[miner_uid][task]["credibilities"] = []

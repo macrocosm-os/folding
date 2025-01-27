@@ -66,9 +66,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Set up initial scoring weights for validation
         logger.info("Building validation weights.")
-        self.scores = torch.zeros(
-            self.metagraph.n, dtype=torch.float32, device=self.device
-        )
+        self.scores = torch.zeros(self.metagraph.n, dtype=torch.float32, device=self.device)
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
@@ -115,9 +113,7 @@ class BaseValidatorNeuron(BaseNeuron):
     @retry(
         stop=stop_after_attempt(3),  # Retry up to 3 times
         wait=wait_fixed(1),  # Wait 1 second between retries
-        retry=retry_if_result(
-            lambda result: result is False
-        ),  # Retry if the result is False
+        retry=retry_if_result(lambda result: result is False),  # Retry if the result is False
         after=print_on_retry,
     )
     def set_weights(self):
@@ -133,9 +129,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
-        raw_weights = (
-            torch.nn.functional.normalize(self.scores, p=1, dim=0).to("cpu").numpy()
-        )
+        raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0).to("cpu").numpy()
 
         logger.debug("raw_weights", raw_weights)
         logger.debug("raw_weight_uids", self.metagraph.uids)
@@ -191,13 +185,12 @@ class BaseValidatorNeuron(BaseNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        logger.info(
-            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
-        )
+        logger.info("Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages")
         # Zero out all hotkeys that have been replaced.
         for uid, hotkey in enumerate(self.hotkeys):
             if hotkey != self.metagraph.hotkeys[uid]:
                 self.scores[uid] = 0  # hotkey has been replaced
+                self.miner_registry.reset(miner_uid=uid)
 
         # Check to see if the metagraph has changed size.
         # If so, we need to add new hotkeys and moving averages.
@@ -227,17 +220,13 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # shape: [ metagraph.n ]
-        scattered_rewards: torch.FloatTensor = self.scores.scatter(
-            0, uids_tensor, rewards
-        ).to(self.device)
+        scattered_rewards: torch.FloatTensor = self.scores.scatter(0, uids_tensor, rewards).to(self.device)
         logger.debug(f"Scattered rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.FloatTensor = alpha * scattered_rewards + (
-            1 - alpha
-        ) * self.scores.to(self.device)
+        self.scores: torch.FloatTensor = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
 
         logger.debug(f"Updated moving avg scores: {self.scores}")
 
@@ -264,9 +253,7 @@ class BaseValidatorNeuron(BaseNeuron):
             self.hotkeys = state["hotkeys"]
             logger.info("Loaded previously saved validator state information.")
         except:
-            logger.info(
-                "Previous validator state not found... Weight copying the average of the network."
-            )
+            logger.info("Previous validator state not found... Weight copying the average of the network.")
 
             valid_indices = np.where(self.metagraph.validator_permit)[0]
             valid_weights = self.metagraph.weights[valid_indices]
@@ -274,14 +261,10 @@ class BaseValidatorNeuron(BaseNeuron):
             normalized_stakes = valid_stakes / np.sum(valid_stakes)
 
             self.step = 1
-            self.scores = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(
-                self.device
-            )
+            self.scores = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(self.device)
 
     def load_config_json(self):
-        config_json_path = os.path.join(
-            str(ROOT_DIR), "folding/utils/config_input.json"
-        )
+        config_json_path = os.path.join(str(ROOT_DIR), "folding/utils/config_input.json")
         with open(config_json_path, "r") as file:
             config = json.load(file)
         return config
