@@ -46,7 +46,9 @@ class BaseReward(ABC):
         pass
 
     @abstractmethod
-    async def get_rewards(self, data: BatchRewardInput, rewards: torch.Tensor) -> BatchRewardOutput:
+    async def get_rewards(
+        self, data: BatchRewardInput, rewards: torch.Tensor
+    ) -> BatchRewardOutput:
         pass
 
     @abstractmethod
@@ -60,8 +62,12 @@ class BaseReward(ABC):
     async def apply(self, data: BatchRewardInput) -> RewardEvent:
         self.rewards: torch.Tensor = await self.setup_rewards(energies=data.energies)
         t0: float = time.time()
-        batch_rewards_output: BatchRewardOutput = await self.get_rewards(data=data, rewards=self.rewards)
-        batch_rewards_output.rewards = await self.calculate_final_reward(rewards=batch_rewards_output.rewards)
+        batch_rewards_output: BatchRewardOutput = await self.get_rewards(
+            data=data, rewards=self.rewards
+        )
+        batch_rewards_output.rewards = await self.calculate_final_reward(
+            rewards=batch_rewards_output.rewards
+        )
         batch_rewards_time: float = time.time() - t0
 
         return RewardEvent(

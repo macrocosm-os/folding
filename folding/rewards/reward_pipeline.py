@@ -4,7 +4,9 @@ from folding.rewards.linear_reward import divide_decreasing
 from folding.utils.logger import logger
 
 
-async def reward_pipeline(energies: torch.Tensor, rewards: torch.Tensor, top_reward: float, job: Job):
+async def reward_pipeline(
+    energies: torch.Tensor, rewards: torch.Tensor, top_reward: float, job: Job
+):
     """A reward pipeline that determines how to place rewards onto the miners sampled within the batch.
     Currently applies a linearly decreasing reward on all miners that are not the current best / previously
     best loss using the function "divide_decreasing".
@@ -19,7 +21,9 @@ async def reward_pipeline(energies: torch.Tensor, rewards: torch.Tensor, top_rew
 
     # If the best hotkey is not in the set of hotkeys in the job, this means that the top miner has stopped replying.
     if job.best_hotkey not in job.hotkeys:
-        logger.warning(f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}. Assigning no reward.")
+        logger.warning(
+            f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}. Assigning no reward."
+        )
         return rewards  # rewards of all 0s.
 
     best_index = job.hotkeys.index(job.best_hotkey)

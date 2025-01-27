@@ -8,4 +8,9 @@ class TaskRegistry:
     """
 
     def __init__(self):
-        self.tasks = {"md_synthetic": None, "md_organic": None, "ml_synthetic": None, "ml_organic": None}
+        self.tasks = {
+            "md_synthetic": None,
+            "md_organic": None,
+            "ml_synthetic": None,
+            "ml_organic": None,
+        }

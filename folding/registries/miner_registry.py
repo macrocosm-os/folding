@@ -56,14 +56,17 @@ class MinerRegistry:
         4. The EMA with credibility_alpha as the smoothing factor
         """
 
-        task_credibilities = list(chain.from_iterable(self.registry[miner_uid][task]["credibilities"]))
+        task_credibilities = list(
+            chain.from_iterable(self.registry[miner_uid][task]["credibilities"])
+        )
 
         current_credibility = np.mean(task_credibilities)
         previous_credibility = self.registry[miner_uid][task]["credibility"]
 
         # Use EMA to update the miner's credibility.
         self.registry[miner_uid][task]["credibility"] = (
-            c.CREDIBILITY_ALPHA * current_credibility + (1 - c.CREDIBILITY_ALPHA) * previous_credibility
+            c.CREDIBILITY_ALPHA * current_credibility
+            + (1 - c.CREDIBILITY_ALPHA) * previous_credibility
         )
 
         # Reset the credibilities.
