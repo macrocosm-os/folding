@@ -13,9 +13,8 @@ from folding.utils.ops import ValidationError, load_pkl, write_pkl, load_pdb_fil
 
 
 class SyntheticMDEvaluator(BaseEvaluator):
-    def __init__(self, pdb_id: str, priority: float = 1, **kwargs):
+    def __init__(self, pdb_id: str, **kwargs):
         self.pdb_id = pdb_id
-        self.priority = priority
         self.kwargs = kwargs
         self.md_simulator = OpenMMSimulation()
 
@@ -316,8 +315,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
 
 class OrganicMDEvaluator(BaseEvaluator):
-    def __init__(self, priority: float = 1, **kwargs):
-        self.priority = priority
+    def __init__(self, **kwargs):
         self.kwargs = kwargs
 
     def _evaluate(self, data: Dict[str, Any]) -> float:
@@ -328,8 +326,7 @@ class OrganicMDEvaluator(BaseEvaluator):
 
 
 class SyntheticMLEvaluator(BaseEvaluator):
-    def __init__(self, priority: float = 1, **kwargs):
-        self.priority = priority
+    def __init__(self, **kwargs):
         self.kwargs = kwargs
 
     def _evaluate(self, data: Dict[str, Any]) -> float:
@@ -340,8 +337,7 @@ class SyntheticMLEvaluator(BaseEvaluator):
 
 
 class OrganicMLEvaluator(BaseEvaluator):
-    def __init__(self, priority: float = 1, **kwargs):
-        self.priority = priority
+    def __init__(self, **kwargs):
         self.kwargs = kwargs
 
     def _evaluate(self, data: Dict[str, Any]) -> float:
