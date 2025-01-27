@@ -296,7 +296,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         return np.median(checked_energies[-10:])  # Last portion of the reproduced energy vector
 
     def name(self) -> str:
-        return "SyntheticMDReward"
+        return "SyntheticMDEvaluator"
 
 
 class OrganicMDEvaluator(BaseEvaluator):
@@ -308,7 +308,7 @@ class OrganicMDEvaluator(BaseEvaluator):
         return 0.0
 
     def name(self) -> str:
-        return "OrganicMDReward"
+        return "OrganicMDEvaluator"
 
 
 class SyntheticMLEvaluator(BaseEvaluator):
@@ -320,7 +320,7 @@ class SyntheticMLEvaluator(BaseEvaluator):
         return 0.0
 
     def name(self) -> str:
-        return "SyntheticMLReward"
+        return "SyntheticMLEvaluator"
 
 
 class OrganicMLEvaluator(BaseEvaluator):
@@ -332,7 +332,7 @@ class OrganicMLEvaluator(BaseEvaluator):
         return 0.0
 
     def name(self) -> str:
-        return "OrganicMLReward"
+        return "OrganicMLEvaluator"
 
 
 class EvaluationRegistry:
