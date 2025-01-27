@@ -24,8 +24,26 @@ class SyntheticMDEvaluator(BaseEvaluator):
     def process_md_output(
         self, md_output: dict, seed: int, state: str, hotkey: str, basepath: str, pdb_location: str, **kwargs
     ) -> bool:
-        self.pdb_location = pdb_location
+        """Method to process molecular dynamics data from a miner and recreate the simulation.
+
+        Args:
+            md_output (dict): Data from the miner containing the output files.
+            seed (int): Miner's seed used in the simulation.
+            state (str): The state of the simulation.
+            hotkey (str): The hotkey of the miner.
+            basepath (str): The basepath of the validator to hold all the miner data.
+            pdb_location (str): The location of the pdb file.
+
+        Raises:
+            ValidationError: Miner not running enough simulation steps
+
+        Returns:
+            bool: True if the simulation was successfully recreated, False otherwise.
+        """
+
         required_files_extensions = ["cpt", "log"]
+
+        self.pdb_location = pdb_location
         self.hotkey_alias = hotkey[:8]
         self.current_state = state
         self.miner_seed = seed
