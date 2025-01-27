@@ -4,7 +4,7 @@ from typing import List, Callable
 import numpy as np
 
 import folding.utils.constants as c
-from folding.rewards.evaluation_registry import EvaluationRegistry
+from folding.registries.evaluation_registry import EvaluationRegistry
 
 
 class MinerRegistry:
