@@ -11,7 +11,9 @@ class MDReward(BaseReward):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    async def get_rewards(self, data: BatchRewardInput, rewards: torch.Tensor) -> BatchRewardOutput:
+    async def get_rewards(
+        self, data: BatchRewardInput, rewards: torch.Tensor
+    ) -> BatchRewardOutput:
         """
         A reward pipeline that determines how to place rewards onto the miners sampled within the batch.
         Currently applies a linearly decreasing reward on all miners that are not the current best / previously
@@ -35,8 +37,12 @@ class MDReward(BaseReward):
 
         # If the best hotkey is not in the set of hotkeys in the job, this means that the top miner has stopped replying.
         if job.best_hotkey not in job.hotkeys:
-            logger.warning(f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}. Assigning no reward.")
-            return BatchRewardOutput(rewards=rewards, extra_info=info)  # rewards of all 0s.
+            logger.warning(
+                f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}. Assigning no reward."
+            )
+            return BatchRewardOutput(
+                rewards=rewards, extra_info=info
+            )  # rewards of all 0s.
 
         best_index: int = job.hotkeys.index(job.best_hotkey)
 
@@ -90,7 +96,7 @@ class SyntheticMDReward(MDReward):
         super().__init__(**kwargs)
 
     def name(self) -> str:
-        return "SyntheticMDReward"
+        return "SyntheticMD"
 
     async def calculate_final_reward(self, rewards: torch.Tensor) -> torch.Tensor:
         """
@@ -115,7 +121,7 @@ class OrganicFoldingReward(MDReward):
         super().__init__(**kwargs)
 
     def name(self) -> str:
-        return "OrganicFoldingReward"
+        return "OrganicFolding"
 
     async def calculate_final_reward(self, rewards: torch.Tensor) -> torch.Tensor:
         """

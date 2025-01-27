@@ -78,7 +78,9 @@ async def run_step(
         md_inputs=protein.md_inputs,
         pdb_contents=protein.pdb_contents,
         system_config=system_config,
-        best_submitted_energy=0 if np.isinf(best_submitted_energy) else best_submitted_energy,
+        best_submitted_energy=0
+        if np.isinf(best_submitted_energy)
+        else best_submitted_energy,
     )
 
     # Make calls to the network with the prompt - this is synchronous.
@@ -100,7 +102,9 @@ async def run_step(
         **response_info,
     }
 
-    energies, energy_event = get_energies(protein=protein, responses=responses, uids=uids)
+    energies, energy_event = get_energies(
+        protein=protein, responses=responses, uids=uids
+    )
 
     # Log the step event.
     event.update({"energies": energies.tolist(), **energy_event})
@@ -171,7 +175,9 @@ async def create_new_challenge(self, exclude: List) -> Dict:
 
             # only log the event if the simulation was not successful
             log_event(self, event, failed=True)
-            logger.debug(f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌")
+            logger.debug(
+                f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
+            )
             exclude.append(pdb_id)
 
 
@@ -206,19 +212,31 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
     system_kwargs = create_random_modifications_to_system_config(config=config)
 
     protein = None
-    for tries in tqdm(range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS):
+    for tries in tqdm(
+        range(hp_sampler.TOTAL_COMBINATIONS), total=hp_sampler.TOTAL_COMBINATIONS
+    ):
         hp_sampler_time = time.time()
 
         event = {"hp_tries": tries}
         sampled_combination: Dict = hp_sampler.sample_hyperparameters()
 
         if config.protein.ff is not None:
-            if config.protein.ff is not None and config.protein.ff not in FORCEFIELD_REGISTRY:
-                raise ValueError(f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTRY")
+            if (
+                config.protein.ff is not None
+                and config.protein.ff not in FORCEFIELD_REGISTRY
+            ):
+                raise ValueError(
+                    f"Forcefield {config.protein.ff} not found in FORCEFIELD_REGISTRY"
+                )
 
         if config.protein.water is not None:
-            if config.protein.water is not None and config.protein.water not in FORCEFIELD_REGISTRY:
-                raise ValueError(f"Water {config.protein.water} not found in FORCEFIELD_REGISTRY")
+            if (
+                config.protein.water is not None
+                and config.protein.water not in FORCEFIELD_REGISTRY
+            ):
+                raise ValueError(
+                    f"Water {config.protein.water} not found in FORCEFIELD_REGISTRY"
+                )
 
         hps = {
             "ff": config.protein.ff or sampled_combination["FF"],
@@ -238,7 +256,9 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                 await protein.setup_simulation()
 
             if protein.init_energy > 0:
-                raise ValueError(f"Initial energy is positive: {protein.init_energy}. Simulation failed.")
+                raise ValueError(
+                    f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                )
 
         except TimeoutException as e:
             logger.info(e)
@@ -260,7 +280,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
 
         finally:
             event["pdb_id"] = pdb_id
-            event["job_type"] = "SyntheticMDReward"
+            event["job_type"] = "SyntheticMD"
             event.update(hps)  # add the dictionary of hyperparameters to the event
             event["hp_sample_time"] = time.time() - hp_sampler_time
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
@@ -271,21 +291,25 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             if "validator_search_status" not in event:
                 logger.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
-                try:
-                    s3_links = await upload_to_s3(
-                        handler=protein.handler,
-                        pdb_location=protein.pdb_location,
-                        simulation_cpt=protein.simulation_cpt,
-                        validator_directory=protein.validator_directory,
-                        pdb_id=pdb_id,
-                        VALIDATOR_ID=self.validator_hotkey_reference,
-                    )
-                    event["s3_links"] = s3_links
-                    logger.info("Input files uploaded to s3")
-                except Exception as e:
-                    logger.warning(f"Error uploading files to s3: {e}")
-                # break out of the loop if the simulation was successful
-                break
+
+                if not config.s3.off:
+                    try:
+                        s3_links = await upload_to_s3(
+                            handler=protein.handler,
+                            pdb_location=protein.pdb_location,
+                            simulation_cpt=protein.simulation_cpt,
+                            validator_directory=protein.validator_directory,
+                            pdb_id=pdb_id,
+                            VALIDATOR_ID=self.validator_hotkey_reference,
+                        )
+                        event["s3_links"] = s3_links
+                        logger.info("Input files uploaded to s3")
+                    except Exception as e:
+                        logger.warning(f"Error uploading files to s3: {e}")
+                        event["s3_links"] = {"testing": "testing"}
+
+                    # break out of the loop if the simulation was successful
+                    break
 
             if tries == 10:
                 logger.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")

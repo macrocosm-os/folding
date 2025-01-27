@@ -46,7 +46,9 @@ class Validator(BaseValidatorNeuron):
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
-        self.all_miner_uids: List = get_random_uids(self, k=int(self.metagraph.n), exclude=None).tolist()
+        self.all_miner_uids: List = get_random_uids(
+            self, k=int(self.metagraph.n), exclude=None
+        ).tolist()
 
         self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
@@ -114,9 +116,13 @@ class Validator(BaseValidatorNeuron):
            Tuple(List,List): Lists of active and inactive uids
         """
 
-        current_miner_uids = list(set(self.all_miner_uids).difference(set(exclude_uids)))
+        current_miner_uids = list(
+            set(self.all_miner_uids).difference(set(exclude_uids))
+        )
 
-        ping_report = await run_ping_step(self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout)
+        ping_report = await run_ping_step(
+            self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout
+        )
         can_serve = ping_report["miner_status"]  # list of booleans
 
         active_uids = np.array(current_miner_uids)[can_serve].tolist()
@@ -139,7 +145,9 @@ class Validator(BaseValidatorNeuron):
         """
 
         if exclude_uids is not None:
-            all_miner_uids = list(set(self.all_miner_uids).difference(set(exclude_uids)))
+            all_miner_uids = list(
+                set(self.all_miner_uids).difference(set(exclude_uids))
+            )
         else:
             all_miner_uids = self.all_miner_uids
 
@@ -162,7 +170,9 @@ class Validator(BaseValidatorNeuron):
 
         return valid_uids
 
-    async def add_job(self, job_event: dict[str, Any], uids: List[int] = None, protein: Protein = None) -> bool:
+    async def add_job(
+        self, job_event: dict[str, Any], uids: List[int] = None, protein: Protein = None
+    ) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
         If uids are not provided, then the function will sample random uids from the network.
 
@@ -188,12 +198,18 @@ class Validator(BaseValidatorNeuron):
 
                 try:
                     async with timeout(180):
-                        logger.info(f"setup_simulation for organic query: {job_event['pdb_id']}")
+                        logger.info(
+                            f"setup_simulation for organic query: {job_event['pdb_id']}"
+                        )
                         await protein.setup_simulation()
-                        logger.success(f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅")
+                        logger.success(
+                            f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
+                        )
 
                     if protein.init_energy > 0:
-                        raise ValueError(f"Initial energy is positive: {protein.init_energy}. Simulation failed.")
+                        raise ValueError(
+                            f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                        )
 
                 except Exception as e:
                     logger.error(f"Error in setting up organic query: {e}")
@@ -274,11 +290,15 @@ class Validator(BaseValidatorNeuron):
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
-                logger.warning(f"Setting uid {uid} score to zero, State-checkpoint check failed.")
+                logger.warning(
+                    f"Setting uid {uid} score to zero, State-checkpoint check failed."
+                )
                 self.scores[uid] = 0.5 * self.scores[uid]
 
             credibility = [0.0] if reason != "" else [1.0]
-            self.miner_registry.add_credibilities(miner_uid=uid, task=job.task_name, credibilities=credibility)
+            self.miner_registry.add_credibilities(
+                miner_uid=uid, task=job.job_type, credibilities=credibility
+            )
 
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
@@ -316,7 +336,9 @@ class Validator(BaseValidatorNeuron):
                 uids=uids,  # pretty confident these are in the correct order.
             )
         else:
-            logger.warning(f"All energies zero for job {job.pdb} and job has never been updated... Skipping")
+            logger.warning(
+                f"All energies zero for job {job.pdb} and job has never been updated... Skipping"
+            )
 
         async def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
@@ -328,7 +350,9 @@ class Validator(BaseValidatorNeuron):
         simulation_event = event.pop("event")  # contains information from hp search
         merged_events = simulation_event | event  # careful: this overwrites.
 
-        merged_events["rewards"] = list(rewards.numpy())  # add the rewards to the logging event.
+        merged_events["rewards"] = list(
+            rewards.numpy()
+        )  # add the rewards to the logging event.
 
         event = await prepare_event_for_logging(merged_events)
 
@@ -343,7 +367,9 @@ class Validator(BaseValidatorNeuron):
                     pdb_location = protein.pdb_location
 
                 protein.get_miner_data_directory(event["best_hotkey"])
-                folded_protein_location = os.path.join(protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb")
+                folded_protein_location = os.path.join(
+                    protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb"
+                )
 
         else:
             logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
@@ -365,13 +391,16 @@ class Validator(BaseValidatorNeuron):
                     output_links.append("")
                     continue
 
-                output_link = await upload_output_to_s3(
-                    handler=protein.handler,
-                    output_file=best_cpt_file,
-                    pdb_id=job.pdb,
-                    miner_hotkey=job.hotkeys[idx],
-                    VALIDATOR_ID=self.validator_hotkey_reference,
-                )
+                if not self.config.s3.off:
+                    output_link = await upload_output_to_s3(
+                        handler=protein.handler,
+                        output_file=best_cpt_file,
+                        pdb_id=job.pdb,
+                        miner_hotkey=job.hotkeys[idx],
+                        VALIDATOR_ID=self.validator_hotkey_reference,
+                    )
+                else:
+                    output_link = ""
 
                 output_links.append(output_link)
 
@@ -412,7 +441,9 @@ class Validator(BaseValidatorNeuron):
                 if queue.qsize() < self.config.neuron.queue_size:
                     # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
                     # Therefore, this product must be less than the number of uids on the metagraph.
-                    if (self.config.neuron.sample_size * self.config.neuron.queue_size) > self.metagraph.n:
+                    if (
+                        self.config.neuron.sample_size * self.config.neuron.queue_size
+                    ) > self.metagraph.n:
                         raise ValueError(
                             f"sample_size * queue_size must be less than the number of uids on the metagraph ({self.metagraph.n})."
                         )
@@ -421,13 +452,17 @@ class Validator(BaseValidatorNeuron):
                     # Here is where we select, download and preprocess a pdb
                     # We also assign the pdb to a group of workers (miners), based on their workloads
 
-                    await self.add_k_synthetic_jobs(k=self.config.neuron.queue_size - queue.qsize())
+                    await self.add_k_synthetic_jobs(
+                        k=self.config.neuron.queue_size - queue.qsize()
+                    )
 
                     logger.info(
                         f"Sleeping {self.config.neuron.synthetic_job_interval} seconds before next job creation loop."
                     )
                 else:
-                    logger.info("Job queue is full. Sleeping 60 seconds before next job creation loop.")
+                    logger.info(
+                        "Job queue is full. Sleeping 60 seconds before next job creation loop."
+                    )
 
             except Exception as e:
                 logger.error(f"Error in create_jobs: {traceback.format_exc()}")
@@ -482,7 +517,9 @@ class Validator(BaseValidatorNeuron):
 
             self.step += 1
 
-            logger.info(f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop.")
+            logger.info(
+                f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
+            )
 
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())

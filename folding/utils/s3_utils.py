@@ -1,12 +1,13 @@
 import os
-from abc import ABC, abstractmethod
-from typing import Optional
-import mimetypes
-from folding.utils.logging import logger
 import boto3
-import os
 import asyncio
 import datetime
+import mimetypes
+
+from typing import Optional, Dict
+from abc import ABC, abstractmethod
+from folding.utils.logging import logger
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,7 +46,9 @@ def create_s3_client(
 
     if not all([region_name, endpoint_url, access_key_id, secret_access_key]):
         raise ValueError("Missing required S3 configuration parameters.")
-    logger.info(f"Creating S3 client with region: {region_name}, endpoint: {endpoint_url}")
+    logger.info(
+        f"Creating S3 client with region: {region_name}, endpoint: {endpoint_url}"
+    )
 
     return boto3.session.Session().client(
         "s3",
@@ -63,7 +66,7 @@ async def upload_to_s3(
     validator_directory: str,
     pdb_id: str,
     VALIDATOR_ID: str,
-):
+) -> Dict[str]:
     """Asynchronously uploads PDB and CPT files to S3 using the specified handler.
 
     Args:
@@ -91,7 +94,9 @@ async def upload_to_s3(
                 file_path = pdb_location
 
             location = f"inputs/{pdb_id}/{VALIDATOR_ID}/{input_time}"
-            logger.debug(f"putting file: {file_path} at {location} with type {file_type}")
+            logger.debug(
+                f"putting file: {file_path} at {location} with type {file_type}"
+            )
 
             key = await asyncio.to_thread(
                 handler.put,
@@ -100,7 +105,9 @@ async def upload_to_s3(
                 public=True,
                 file_type=file_type,
             )
-            s3_links[file_type] = os.path.join("https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key)
+            s3_links[file_type] = os.path.join(
+                "https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key
+            )
             await asyncio.sleep(0.10)
 
         return s3_links
@@ -134,7 +141,9 @@ async def upload_output_to_s3(
     """
     try:
         output_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        location = os.path.join("outputs", pdb_id, VALIDATOR_ID, miner_hotkey[:8], output_time)
+        location = os.path.join(
+            "outputs", pdb_id, VALIDATOR_ID, miner_hotkey[:8], output_time
+        )
         key = await asyncio.to_thread(
             handler.put,
             file_path=output_file,
@@ -172,7 +181,6 @@ class DigitalOceanS3Handler(BaseHandler):
         location: str,
         content_type: Optional[str] = None,
         public: bool = False,
-        file_type: str = None,
     ):
         """Uploads a file to a specified location in the S3 bucket, optionally setting its access permissions and MIME type.
 
@@ -200,8 +208,12 @@ class DigitalOceanS3Handler(BaseHandler):
             # Infer MIME type
             if not content_type:
                 content_type = (
-                    self.custom_mime_types.get(file_name[file_name.rfind(".") :])  # Check custom MIME types first
-                    or mimetypes.guess_type(file_path)[0]  # Fallback to mimetypes library
+                    self.custom_mime_types.get(
+                        file_name[file_name.rfind(".") :]
+                    )  # Check custom MIME types first
+                    or mimetypes.guess_type(file_path)[
+                        0
+                    ]  # Fallback to mimetypes library
                     or "application/octet-stream"  # Default to generic binary if no MIME type is found
                 )
 

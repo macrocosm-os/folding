@@ -100,20 +100,24 @@ class Protein(OpenMMSimulation):
         self.simulation: app.Simulation = None
         self.input_files = [self.em_cpt_location]
 
-        self.md_inputs = self.read_and_return_files(filenames=self.input_files) if load_md_inputs else {}
+        self.md_inputs = (
+            self.read_and_return_files(filenames=self.input_files)
+            if load_md_inputs
+            else {}
+        )
 
         # set to an arbitrarily high number to ensure that the first miner is always accepted.
         self.init_energy = 0
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
         self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
-        try:
-            self.handler = DigitalOceanS3Handler(
-                bucket_name="vali-s3-demo-do",
-            )
-        except ValueError as e:
-            self.handler = None
-            logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
+        # try:
+        #     self.handler = DigitalOceanS3Handler(
+        #         bucket_name="vali-s3-demo-do",
+        #     )
+        # except ValueError as e:
+        #     self.handler = None
+        #     logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -121,10 +125,16 @@ class Protein(OpenMMSimulation):
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
-        self.em_cpt_location = os.path.join(self.validator_directory, self.simulation_cpt)
-        self.simulation_pkl_location = os.path.join(self.validator_directory, self.simulation_pkl)
+        self.em_cpt_location = os.path.join(
+            self.validator_directory, self.simulation_cpt
+        )
+        self.simulation_pkl_location = os.path.join(
+            self.validator_directory, self.simulation_pkl
+        )
 
-        self.velm_array_pkl = os.path.join(self.pdb_directory, "velm_array_indicies.pkl")
+        self.velm_array_pkl = os.path.join(
+            self.pdb_directory, "velm_array_indicies.pkl"
+        )
 
     @staticmethod
     async def from_job(job: Job, config: Dict):
@@ -181,10 +191,14 @@ class Protein(OpenMMSimulation):
                 download=True,
                 force=self.config.force_use_pdb,
             ):
-                raise Exception(f"Failed to download {self.pdb_file} to {self.pdb_directory}")
+                raise Exception(
+                    f"Failed to download {self.pdb_file} to {self.pdb_directory}"
+                )
             await self.fix_pdb_file()
         else:
-            logger.info(f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}.")
+            logger.info(
+                f"PDB file {self.pdb_file} already exists in path {self.pdb_directory!r}."
+            )
 
     def read_and_return_files(self, filenames: List) -> Dict:
         """Read the files and return them as a dictionary."""
@@ -196,9 +210,13 @@ class Protein(OpenMMSimulation):
                     name = file.split("/")[-1]
                     with open(file, "rb") as f:
                         if "cpt" in name:
-                            files_to_return[name] = base64.b64encode(f.read()).decode("utf-8")
+                            files_to_return[name] = base64.b64encode(f.read()).decode(
+                                "utf-8"
+                            )
                         else:
-                            files_to_return[name] = f.read()  # This would be the pdb file.
+                            files_to_return[
+                                name
+                            ] = f.read()  # This would be the pdb file.
 
                 except Exception:
                     continue
@@ -237,7 +255,9 @@ class Protein(OpenMMSimulation):
 
         # Checking if init energy is nan
         if np.isnan(self.init_energy):
-            raise OpenMMException(f"Failed to calculate initial energy for {self.pdb_id}")
+            raise OpenMMException(
+                f"Failed to calculate initial energy for {self.pdb_id}"
+            )
 
         self._calculate_epsilon()
 
@@ -292,7 +312,9 @@ class Protein(OpenMMSimulation):
         logger.info(f"Changing path to {self.pdb_directory}")
         os.chdir(self.pdb_directory)
 
-        logger.info(f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}")
+        logger.info(
+            f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
+        )
 
         self.simulation, self.system_config = await asyncio.to_thread(
             self.create_simulation,
@@ -344,7 +366,9 @@ class Protein(OpenMMSimulation):
     def get_miner_data_directory(self, hotkey: str):
         self.miner_data_directory = os.path.join(self.validator_directory, hotkey[:8])
 
-    def process_md_output(self, md_output: dict, seed: int, state: str, hotkey: str) -> bool:
+    def process_md_output(
+        self, md_output: dict, seed: int, state: str, hotkey: str
+    ) -> bool:
         MIN_LOGGING_ENTRIES = 500
         MIN_SIMULATION_STEPS = 5000
 
@@ -354,10 +378,14 @@ class Protein(OpenMMSimulation):
         self.miner_seed = seed
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
-        self.md_outputs_exts = {k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0}
+        self.md_outputs_exts = {
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
+        }
 
         if len(md_output.keys()) == 0:
-            logger.warning(f"Miner {self.hotkey_alias} returned empty md_output... Skipping!")
+            logger.warning(
+                f"Miner {self.hotkey_alias} returned empty md_output... Skipping!"
+            )
             return False
 
         for ext in required_files_extensions:
@@ -377,16 +405,24 @@ class Protein(OpenMMSimulation):
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
 
-            logger.info(f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}")
+            logger.info(
+                f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}"
+            )
             self.simulation, self.system_config = self.create_simulation(
                 pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
             )
 
-            checkpoint_path = os.path.join(self.miner_data_directory, f"{self.current_state}.cpt")
-            state_xml_path = os.path.join(self.miner_data_directory, f"{self.current_state}.xml")
-            log_file_path = os.path.join(self.miner_data_directory, self.md_outputs_exts["log"])
+            checkpoint_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.cpt"
+            )
+            state_xml_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.xml"
+            )
+            log_file_path = os.path.join(
+                self.miner_data_directory, self.md_outputs_exts["log"]
+            )
 
             self.simulation.loadCheckpoint(checkpoint_path)
 
@@ -403,14 +439,18 @@ class Protein(OpenMMSimulation):
             # Checks if log_file is MIN_STEPS steps ahead of checkpoint
             if (self.log_step - self.simulation.currentStep) < MIN_SIMULATION_STEPS:
                 # If the miner did not run enough steps, we will load the old checkpoint
-                checkpoint_path = os.path.join(self.miner_data_directory, f"{self.current_state}_old.cpt")
+                checkpoint_path = os.path.join(
+                    self.miner_data_directory, f"{self.current_state}_old.cpt"
+                )
                 if os.path.exists(checkpoint_path):
                     logger.warning(
                         f"Miner {self.hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
                     # Checking to see if the old checkpoint has enough steps to validate
-                    if (self.log_step - self.simulation.currentStep) < MIN_SIMULATION_STEPS:
+                    if (
+                        self.log_step - self.simulation.currentStep
+                    ) < MIN_SIMULATION_STEPS:
                         raise ValidationError(
                             f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
@@ -427,7 +467,9 @@ class Protein(OpenMMSimulation):
             self.simulation.saveState(self.state_xml_path)
 
             # Save the system config to the miner data directory
-            system_config_path = os.path.join(self.miner_data_directory, f"miner_system_config_{seed}.pkl")
+            system_config_path = os.path.join(
+                self.miner_data_directory, f"miner_system_config_{seed}.pkl"
+            )
             if not os.path.exists(system_config_path):
                 write_pkl(
                     data=self.system_config,
@@ -454,7 +496,9 @@ class Protein(OpenMMSimulation):
         GRADIENT_THRESHOLD = 10  # kJ/mol/nm
 
         mean_gradient = np.diff(check_energies[:WINDOW]).mean().item()
-        return mean_gradient <= GRADIENT_THRESHOLD  # includes large negative gradients is passible
+        return (
+            mean_gradient <= GRADIENT_THRESHOLD
+        )  # includes large negative gradients is passible
 
     def check_masses(self) -> bool:
         """
@@ -473,11 +517,15 @@ class Protein(OpenMMSimulation):
 
         for i, (v_mass, m_mass) in enumerate(zip(validator_masses, miner_masses)):
             if v_mass != m_mass:
-                logger.error(f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}")
+                logger.error(
+                    f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}"
+                )
                 return False
         return True
 
-    def compare_state_to_cpt(self, state_energies: list, checkpoint_energies: list) -> bool:
+    def compare_state_to_cpt(
+        self, state_energies: list, checkpoint_energies: list
+    ) -> bool:
         """
         Check if the state file is the same as the checkpoint file by comparing the median of the first few energy values
         in the simulation created by the checkpoint and the state file respectively.
@@ -526,7 +574,9 @@ class Protein(OpenMMSimulation):
         steps_to_run = min(3000, self.log_step - self.cpt_step)
 
         # This is where we are going to check the xml files for the state.
-        logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
+        logger.info(
+            f"Recreating simulation for {self.pdb_id} for state-based analysis..."
+        )
         self.simulation, self.system_config = self.create_simulation(
             pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
@@ -536,11 +586,17 @@ class Protein(OpenMMSimulation):
         state_energies = []
         for _ in range(steps_to_run // 10):
             self.simulation.step(10)
-            energy = self.simulation.context.getState(getEnergy=True).getPotentialEnergy()._value
+            energy = (
+                self.simulation.context.getState(getEnergy=True)
+                .getPotentialEnergy()
+                ._value
+            )
             state_energies.append(energy)
 
         if not self.check_gradient(check_energies=state_energies):
-            logger.warning(f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!")
+            logger.warning(
+                f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!"
+            )
             return False, [], [], "state-gradient"
 
         # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
@@ -551,7 +607,9 @@ class Protein(OpenMMSimulation):
         )
         self.simulation.loadCheckpoint(self.checkpoint_path)
 
-        current_state_logfile = os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
+        current_state_logfile = os.path.join(
+            self.miner_data_directory, f"check_{self.current_state}.log"
+        )
         self.simulation.reporters.append(
             app.StateDataReporter(
                 current_state_logfile,
@@ -561,11 +619,14 @@ class Protein(OpenMMSimulation):
             )
         )
 
-        logger.info(f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}")
+        logger.info(
+            f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
+        )
 
         max_step = self.cpt_step + steps_to_run
         miner_energies: np.ndarray = self.log_file[
-            (self.log_file['#"Step"'] > self.cpt_step) & (self.log_file['#"Step"'] <= max_step)
+            (self.log_file['#"Step"'] > self.cpt_step)
+            & (self.log_file['#"Step"'] <= max_step)
         ]["Potential Energy (kJ/mole)"].values
 
         self.simulation.step(steps_to_run)
@@ -574,14 +635,20 @@ class Protein(OpenMMSimulation):
         check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
 
         if len(np.unique(check_energies)) == 1:
-            logger.warning("All energy values in reproduced simulation are the same. Skipping!")
+            logger.warning(
+                "All energy values in reproduced simulation are the same. Skipping!"
+            )
             return False, [], [], "energies_non_unique"
 
         if not self.check_gradient(check_energies=check_energies):
-            logger.warning(f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!")
+            logger.warning(
+                f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!"
+            )
             return False, [], [], "cpt-gradient"
 
-        if not self.compare_state_to_cpt(state_energies=state_energies, checkpoint_energies=check_energies):
+        if not self.compare_state_to_cpt(
+            state_energies=state_energies, checkpoint_energies=check_energies
+        ):
             logger.warning(
                 f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!"
             )
@@ -611,7 +678,9 @@ class Protein(OpenMMSimulation):
         save_pdb(
             positions=positions,
             topology=topology,
-            output_path=os.path.join(self.miner_data_directory, f"{self.pdb_id}_folded.pdb"),
+            output_path=os.path.join(
+                self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
+            ),
         )
 
         return True, check_energies.tolist(), miner_energies.tolist(), ""
@@ -654,4 +723,7 @@ class Protein(OpenMMSimulation):
             float: potential energy
         """
 
-        return self.simulation.context.getState(getEnergy=True).getPotentialEnergy() / unit.kilojoules_per_mole
+        return (
+            self.simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            / unit.kilojoules_per_mole
+        )

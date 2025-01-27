@@ -9,7 +9,15 @@ from folding.utils.logger import logger
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
 from folding.utils import constants as c
-from folding.utils.ops import ValidationError, load_pkl, write_pkl, load_pdb_file, save_files, save_pdb, create_velm
+from folding.utils.ops import (
+    ValidationError,
+    load_pkl,
+    write_pkl,
+    load_pdb_file,
+    save_files,
+    save_pdb,
+    create_velm,
+)
 
 
 class SyntheticMDEvaluator(BaseEvaluator):
@@ -19,7 +27,14 @@ class SyntheticMDEvaluator(BaseEvaluator):
         self.md_simulator = OpenMMSimulation()
 
     def process_md_output(
-        self, md_output: dict, seed: int, state: str, hotkey: str, basepath: str, pdb_location: str, **kwargs
+        self,
+        md_output: dict,
+        seed: int,
+        state: str,
+        hotkey: str,
+        basepath: str,
+        pdb_location: str,
+        **kwargs,
     ) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
 
@@ -46,10 +61,14 @@ class SyntheticMDEvaluator(BaseEvaluator):
         self.miner_seed = seed
 
         # This is just mapper from the file extension to the name of the file stores in the dict.
-        self.md_outputs_exts = {k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0}
+        self.md_outputs_exts = {
+            k.split(".")[-1]: k for k, v in md_output.items() if len(v) > 0
+        }
 
         if len(md_output.keys()) == 0:
-            logger.warning(f"Miner {self.hotkey_alias} returned empty md_output... Skipping!")
+            logger.warning(
+                f"Miner {self.hotkey_alias} returned empty md_output... Skipping!"
+            )
             return False
 
         for ext in required_files_extensions:
@@ -70,16 +89,24 @@ class SyntheticMDEvaluator(BaseEvaluator):
             # because the miner could have used something different and we want to
             # make sure that we are using the correct seed.
 
-            logger.info(f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}")
+            logger.info(
+                f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}"
+            )
             self.simulation, self.system_config = self.md_simulator.create_simulation(
                 pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
             )
 
-            checkpoint_path = os.path.join(self.miner_data_directory, f"{self.current_state}.cpt")
-            state_xml_path = os.path.join(self.miner_data_directory, f"{self.current_state}.xml")
-            log_file_path = os.path.join(self.miner_data_directory, self.md_outputs_exts["log"])
+            checkpoint_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.cpt"
+            )
+            state_xml_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.xml"
+            )
+            log_file_path = os.path.join(
+                self.miner_data_directory, self.md_outputs_exts["log"]
+            )
 
             self.simulation.loadCheckpoint(checkpoint_path)
 
@@ -96,14 +123,18 @@ class SyntheticMDEvaluator(BaseEvaluator):
             # Checks if log_file is MIN_STEPS steps ahead of checkpoint
             if (self.log_step - self.simulation.currentStep) < c.MIN_SIMULATION_STEPS:
                 # If the miner did not run enough steps, we will load the old checkpoint
-                checkpoint_path = os.path.join(self.miner_data_directory, f"{self.current_state}_old.cpt")
+                checkpoint_path = os.path.join(
+                    self.miner_data_directory, f"{self.current_state}_old.cpt"
+                )
                 if os.path.exists(checkpoint_path):
                     logger.warning(
                         f"Miner {self.hotkey_alias} did not run enough steps since last checkpoint... Loading old checkpoint"
                     )
                     self.simulation.loadCheckpoint(checkpoint_path)
                     # Checking to see if the old checkpoint has enough steps to validate
-                    if (self.log_step - self.simulation.currentStep) < c.MIN_SIMULATION_STEPS:
+                    if (
+                        self.log_step - self.simulation.currentStep
+                    ) < c.MIN_SIMULATION_STEPS:
                         raise ValidationError(
                             f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
@@ -120,7 +151,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
             self.simulation.saveState(self.state_xml_path)
 
             # Save the system config to the miner data directory
-            system_config_path = os.path.join(self.miner_data_directory, f"miner_system_config_{seed}.pkl")
+            system_config_path = os.path.join(
+                self.miner_data_directory, f"miner_system_config_{seed}.pkl"
+            )
             if not os.path.exists(system_config_path):
                 write_pkl(
                     data=self.system_config,
@@ -155,7 +188,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         for i, (v_mass, m_mass) in enumerate(zip(validator_masses, miner_masses)):
             if v_mass != m_mass:
-                logger.error(f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}")
+                logger.error(
+                    f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}"
+                )
                 return False
         return True
 
@@ -168,9 +203,13 @@ class SyntheticMDEvaluator(BaseEvaluator):
         GRADIENT_THRESHOLD = 10  # kJ/mol/nm
 
         mean_gradient = np.diff(check_energies[:WINDOW]).mean().item()
-        return mean_gradient <= GRADIENT_THRESHOLD  # includes large negative gradients is passible
+        return (
+            mean_gradient <= GRADIENT_THRESHOLD
+        )  # includes large negative gradients is passible
 
-    def compare_state_to_cpt(self, state_energies: list, checkpoint_energies: list) -> bool:
+    def compare_state_to_cpt(
+        self, state_energies: list, checkpoint_energies: list
+    ) -> bool:
         """
         Check if the state file is the same as the checkpoint file by comparing the median of the first few energy values
         in the simulation created by the checkpoint and the state file respectively.
@@ -204,10 +243,14 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 The two lists contain the potential energy values from the current simulation and the reference log file.
         """
 
-        steps_to_run = min(c.MAX_SIMULATION_STEPS_FOR_EVALUATION, self.log_step - self.cpt_step)
+        steps_to_run = min(
+            c.MAX_SIMULATION_STEPS_FOR_EVALUATION, self.log_step - self.cpt_step
+        )
 
         # This is where we are going to check the xml files for the state.
-        logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
+        logger.info(
+            f"Recreating simulation for {self.pdb_id} for state-based analysis..."
+        )
         self.simulation, self.system_config = self.md_simulator.create_simulation(
             pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
@@ -217,7 +260,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
         state_energies = []
         for _ in range(steps_to_run // 10):
             self.simulation.step(10)
-            energy = self.simulation.context.getState(getEnergy=True).getPotentialEnergy()._value
+            energy = (
+                self.simulation.context.getState(getEnergy=True)
+                .getPotentialEnergy()
+                ._value
+            )
             state_energies.append(energy)
 
         try:
@@ -235,7 +282,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
             )
             self.simulation.loadCheckpoint(self.checkpoint_path)
 
-            current_state_logfile = os.path.join(self.miner_data_directory, f"check_{self.current_state}.log")
+            current_state_logfile = os.path.join(
+                self.miner_data_directory, f"check_{self.current_state}.log"
+            )
             self.simulation.reporters.append(
                 app.StateDataReporter(
                     current_state_logfile,
@@ -245,47 +294,64 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 )
             )
 
-            logger.info(f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}")
+            logger.info(
+                f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {self.cpt_step}"
+            )
 
             max_step = self.cpt_step + steps_to_run
             miner_energies: np.ndarray = self.log_file[
-                (self.log_file['#"Step"'] > self.cpt_step) & (self.log_file['#"Step"'] <= max_step)
+                (self.log_file['#"Step"'] > self.cpt_step)
+                & (self.log_file['#"Step"'] <= max_step)
             ]["Potential Energy (kJ/mole)"].values
 
             self.simulation.step(steps_to_run)
 
             check_log_file = pd.read_csv(current_state_logfile)
-            check_energies: np.ndarray = check_log_file["Potential Energy (kJ/mole)"].values
+            check_energies: np.ndarray = check_log_file[
+                "Potential Energy (kJ/mole)"
+            ].values
 
             if len(np.unique(check_energies)) == 1:
-                logger.warning("All energy values in reproduced simulation are the same. Skipping!")
+                logger.warning(
+                    "All energy values in reproduced simulation are the same. Skipping!"
+                )
                 raise "reprod-energies-identical"
 
             if not self.check_gradient(check_energies=check_energies):
-                logger.warning(f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!")
+                logger.warning(
+                    f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!"
+                )
                 raise "cpt-gradient"
 
-            if not self.compare_state_to_cpt(state_energies=state_energies, checkpoint_energies=check_energies):
+            if not self.compare_state_to_cpt(
+                state_energies=state_energies, checkpoint_energies=check_energies
+            ):
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!"
                 )
                 raise "state-checkpoint"
 
             # calculating absolute percent difference per step
-            percent_diff = abs(((check_energies - miner_energies) / miner_energies) * 100)
+            percent_diff = abs(
+                ((check_energies - miner_energies) / miner_energies) * 100
+            )
             median_percent_diff = np.median(percent_diff)
 
             if median_percent_diff > c.ANOMALY_THRESHOLD:
                 raise "anomaly"
 
             # Save the folded pdb file if the run is valid
-            positions = self.simulation.context.getState(getPositions=True).getPositions()
+            positions = self.simulation.context.getState(
+                getPositions=True
+            ).getPositions()
             topology = self.simulation.topology
 
             save_pdb(
                 positions=positions,
                 topology=topology,
-                output_path=os.path.join(self.miner_data_directory, f"{self.pdb_id}_folded.pdb"),
+                output_path=os.path.join(
+                    self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
+                ),
             )
 
             return True, check_energies.tolist(), miner_energies.tolist(), "valid"
@@ -308,10 +374,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
         if not is_valid:
             return 0.0
 
-        return np.median(checked_energies[-10:])  # Last portion of the reproduced energy vector
+        return np.median(
+            checked_energies[-10:]
+        )  # Last portion of the reproduced energy vector
 
     def name(self) -> str:
-        return "SyntheticMDEvaluator"
+        return "SyntheticMD"
 
 
 class OrganicMDEvaluator(BaseEvaluator):
@@ -322,7 +390,7 @@ class OrganicMDEvaluator(BaseEvaluator):
         return 0.0
 
     def name(self) -> str:
-        return "OrganicMDEvaluator"
+        return "OrganicMD"
 
 
 class SyntheticMLEvaluator(BaseEvaluator):
@@ -333,7 +401,7 @@ class SyntheticMLEvaluator(BaseEvaluator):
         return 0.0
 
     def name(self) -> str:
-        return "SyntheticMLEvaluator"
+        return "SyntheticML"
 
 
 class OrganicMLEvaluator(BaseEvaluator):
@@ -344,9 +412,9 @@ class OrganicMLEvaluator(BaseEvaluator):
         return 0.0
 
     def name(self) -> str:
-        return "OrganicMLEvaluator"
+        return "OrganicML"
 
 
 EVALUATION_REGISTRY = {}
-for task in ["SyntheticMDEvaluator", "OrganicMDEvaluator", "SyntheticMLEvaluator", "OrganicMLEvaluator"]:
+for task in ["SyntheticMD", "OrganicMD", "SyntheticML", "OrganicML"]:
     EVALUATION_REGISTRY[task] = eval(task)

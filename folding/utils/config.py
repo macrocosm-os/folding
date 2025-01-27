@@ -245,6 +245,13 @@ def add_args(cls, parser):
         default=1,
     )
 
+    parser.add_argument(
+        "--s3.off",
+        action="store_true",
+        help="If set to True, then S3 logging is turned off.",
+        default=False,
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
