@@ -484,6 +484,7 @@ class Protein(OpenMMSimulation):
         """
 
         WINDOW = 50
+        ANOMALY_THRESHOLD = 2
 
         state_energies = np.array(state_energies)
         checkpoint_energies = np.array(checkpoint_energies)
@@ -493,7 +494,7 @@ class Protein(OpenMMSimulation):
 
         percent_diff = abs((state_median - checkpoint_median) / checkpoint_median) * 100
 
-        if percent_diff > self.epsilon:
+        if percent_diff > ANOMALY_THRESHOLD:
             return False
         return True
 

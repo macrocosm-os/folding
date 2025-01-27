@@ -189,3 +189,6 @@ folding/db
 /charmm36-jul2022.ff
 
 tests/mock_data
+
+db
+local-gjp

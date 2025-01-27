@@ -275,7 +275,7 @@ class Validator(BaseValidatorNeuron):
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
                 logger.warning(f"Setting uid {uid} score to zero, State-checkpoint check failed.")
-                self.scores[uid] = 0
+                self.scores[uid] = 0.5 * self.scores[uid]
 
             credibility = [0.0] if reason != "" else [1.0]
             self.miner_registry.add_credibilities(miner_uid=uid, task=job.task_name, credibilities=credibility)
