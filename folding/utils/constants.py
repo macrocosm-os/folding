@@ -8,6 +8,6 @@ ANOMALY_THRESHOLD = 0.5  # The percentage that we allow the energy to differ fro
 XML_CHECKPOINT_THRESHOLD = 2  # Percent
 
 # MinerRegistry constants
-MAX_JOBS_IN_MEMORY = 24
+MAX_JOBS_IN_MEMORY = 1000
 STARTING_CREDIBILITY = 0.50
-CREDIBILITY_ALPHA = 0.05
+CREDIBILITY_ALPHA = 0.15
