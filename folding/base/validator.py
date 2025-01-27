@@ -121,8 +121,6 @@ class BaseValidatorNeuron(BaseNeuron):
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
 
-        CONSENSUS_WEIGHTS_FACTOR = 0.3
-
         # Check if self.scores contains any NaN values and log a warning if it does.
         if torch.isnan(self.scores).any():
             logger.warning(
@@ -132,9 +130,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0).to("cpu").numpy()
-        consensus_weights = self.get_chain_weights()
-
-        raw_weights = CONSENSUS_WEIGHTS_FACTOR * consensus_weights + (1 - CONSENSUS_WEIGHTS_FACTOR) * raw_weights
 
         logger.debug("raw_weights", raw_weights)
         logger.debug("raw_weight_uids", self.metagraph.uids)
