@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import Dict, List, Tuple
 import copy
 import traceback
+import asyncio 
 
 import bittensor as bt
 import openmm as mm
@@ -18,7 +19,6 @@ import openmm.app as app
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
 from folding.protocol import JobSubmissionSynapse
-from folding.utils.logging import log_event
 from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -146,6 +146,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.mock = None
         self.generate_random_seed = lambda: random.randint(0, 1000)
+        self.db_path = "/db/db.sqlite"
 
         # hardcorded for now -- TODO: make this more flexible
         self.STATES = ["nvt", "npt", "md_0_1"]
@@ -357,6 +358,7 @@ class FoldingMiner(BaseMinerNeuron):
 
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(self=self, synapse=synapse, event=event)
+
 
     def submit_simulation(
         self,
