@@ -1,10 +1,8 @@
-import copy
 from typing import List, Callable
 
 import numpy as np
-
 import folding.utils.constants as c
-from folding.registries.evaluation_registry import EvaluationRegistry
+from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 
 
 class MinerRegistry:
@@ -13,8 +11,7 @@ class MinerRegistry:
     """
 
     def __init__(self, miner_uids: List[int]):
-        evaluation_registry = EvaluationRegistry()  # TODO: Needs to be a class?
-        self.tasks: List[str] = copy.deepcopy(evaluation_registry.tasks)
+        self.tasks: List[str] = EVALUATION_REGISTRY.keys()
         self.registry = dict.fromkeys(miner_uids)
 
         for miner_uid in miner_uids:

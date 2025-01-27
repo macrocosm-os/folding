@@ -347,18 +347,6 @@ class OrganicMLEvaluator(BaseEvaluator):
         return "OrganicMLEvaluator"
 
 
-class EvaluationRegistry:
-    """
-    Handles the organization of all tasks that we want inside of SN25, which includes:
-        - Molecular Dynamics (MD)
-        - ML Inference
-
-    It also attaches its corresponding reward pipelines.
-    """
-
-    def __init__(self):
-        evaluation_pipelines = [SyntheticMDEvaluator, OrganicMDEvaluator, SyntheticMLEvaluator, OrganicMLEvaluator]
-
-        self.tasks = []
-        for pipe in evaluation_pipelines:
-            self.tasks.append(pipe().name())
+EVALUATION_REGISTRY = {}
+for task in ["SyntheticMDEvaluator", "OrganicMDEvaluator", "SyntheticMLEvaluator", "OrganicMLEvaluator"]:
+    EVALUATION_REGISTRY[task] = eval(task)
