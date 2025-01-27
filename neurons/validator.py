@@ -27,7 +27,7 @@ from folding.utils.uids import get_random_uids
 from folding.utils.s3_utils import upload_output_to_s3
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
-from folding.rewards.miner_registry import MinerRegistry
+from folding.registries.miner_registry import MinerRegistry
 
 
 class Validator(BaseValidatorNeuron):
