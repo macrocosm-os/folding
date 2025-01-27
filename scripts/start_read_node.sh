@@ -35,7 +35,6 @@ cleanup() {
 # Set trap to catch SIGINT (Ctrl+C) and cleanup
 trap cleanup SIGINT SIGTERM
 
-echo "Using RQLITE_DATA_DIR: $RQLITE_DATA_DIR"
 
 # Start RQLite
 rqlited -node-id ${HOTKEY} \
