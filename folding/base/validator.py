@@ -190,6 +190,7 @@ class BaseValidatorNeuron(BaseNeuron):
         for uid, hotkey in enumerate(self.hotkeys):
             if hotkey != self.metagraph.hotkeys[uid]:
                 self.scores[uid] = 0  # hotkey has been replaced
+                self.miner_registry.reset(miner_uid=uid)
 
         # Check to see if the metagraph has changed size.
         # If so, we need to add new hotkeys and moving averages.

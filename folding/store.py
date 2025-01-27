@@ -40,6 +40,7 @@ class SQLiteJobStore:
                     pdb TEXT PRIMARY KEY,
                     active INTEGER,
                     hotkeys TEXT,
+                    job_type TEXT,
                     created_at TIMESTAMP,
                     updated_at TIMESTAMP,
                     best_loss REAL,
@@ -153,6 +154,7 @@ class SQLiteJobStore:
         box: str,
         water: str,
         hotkeys: List[str],
+        job_type: str,
         epsilon: float,
         system_kwargs: dict,
         job_id: str,
@@ -174,6 +176,7 @@ class SQLiteJobStore:
                 box=box,
                 water=water,
                 hotkeys=hotkeys,
+                job_type=job_type,
                 created_at=pd.Timestamp.now().floor("s"),
                 updated_at=pd.Timestamp.now().floor("s"),
                 epsilon=epsilon,
@@ -259,6 +262,7 @@ class SQLiteJobStore:
         box: str,
         water: str,
         hotkeys: list,
+        job_type: str,
         system_kwargs: dict,
         keypair,
         gjp_address: str,
@@ -292,6 +296,7 @@ class SQLiteJobStore:
             box=box,
             water=water,
             hotkeys=hotkeys,
+            job_type=job_type,
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
@@ -319,6 +324,7 @@ class Job:
     box: str
     water: str
     hotkeys: list
+    job_type: str
     created_at: pd.Timestamp
     updated_at: pd.Timestamp
     active: bool = True

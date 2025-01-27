@@ -8,7 +8,6 @@ import random
 import asyncio
 import traceback
 
-from pathlib import Path
 from itertools import chain
 from typing import Any, Dict, List, Tuple
 
@@ -25,9 +24,10 @@ from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
+from folding.utils.s3_utils import upload_output_to_s3
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
-from folding.utils.s3_utils import upload_output_to_s3
+from folding.registries.miner_registry import MinerRegistry
 
 
 class Validator(BaseValidatorNeuron):
@@ -42,33 +42,18 @@ class Validator(BaseValidatorNeuron):
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
-
-        # TODO: Change the store to SQLiteJobStore if you want to use SQLite
         self.store = SQLiteJobStore()
-        self.mdrun_args = self.parse_mdrun_args()
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(self, k=int(self.metagraph.n), exclude=None).tolist()
 
+        self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
+
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
-
-    def parse_mdrun_args(self) -> str:
-        mdrun_args = ""
-
-        # There are unwanted keys in mdrun_args, like __is_set. Remove all of these
-        filtered_args = {
-            key: value for key, value in self.config.mdrun_args.items() if not re.match(r"^[^a-zA-Z0-9]", key)
-        }
-
-        for arg, value in filtered_args.items():
-            if value is not None:
-                mdrun_args += f"-{arg} {value} "
-
-        return mdrun_args
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
         """Returns the uids corresponding to the hotkeys.
@@ -112,7 +97,6 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
-            mdrun_args=self.mdrun_args,
             best_submitted_energy=job.best_loss,
         )
 
@@ -222,6 +206,7 @@ class Validator(BaseValidatorNeuron):
                     water=job_event["water"],
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
+                    job_type=job_event["job_type"],
                     system_kwargs=job_event["system_kwargs"],
                     keypair=self.wallet.hotkey,
                     gjp_address=self.config.neuron.gjp_address,
@@ -240,6 +225,7 @@ class Validator(BaseValidatorNeuron):
                 water=job_event["water"],
                 box=job_event["box"],
                 hotkeys=selected_hotkeys,
+                job_type=job_event["job_type"],
                 epsilon=job_event["epsilon"],
                 system_kwargs=job_event["system_kwargs"],
                 job_id=job_event["job_id"],
@@ -284,12 +270,15 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
-        # If there is an exploit on the cpt file detected via the state-checkpoint reason, we will reset the score to 0.
         logger.info(f"event information: {job.event['reason']},  {job.event['uids']}")
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
+            # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
                 logger.warning(f"Setting uid {uid} score to zero, State-checkpoint check failed.")
                 self.scores[uid] = 0.5 * self.scores[uid]
+
+            credibility = [0.0] if reason != "" else [1.0]
+            self.miner_registry.add_credibilities(miner_uid=uid, task=job.task_name, credibilities=credibility)
 
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor

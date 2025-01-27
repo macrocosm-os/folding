@@ -27,6 +27,10 @@ from folding.utils.ops import (
     load_pkl,
     plot_miner_validator_curves,
     write_pkl,
+    load_pdb_file,
+    save_files,
+    save_pdb,
+    create_velm,
 )
 from folding.utils.s3_utils import DigitalOceanS3Handler
 
@@ -222,7 +226,7 @@ class Protein(OpenMMSimulation):
         # Read the files that should exist now based on generate_input_files.
         self.md_inputs = self.read_and_return_files(filenames=self.input_files)
 
-        self.save_files(
+        save_files(
             files=self.md_inputs,
             output_directory=self.validator_directory,
             write_mode="w",
@@ -242,10 +246,6 @@ class Protein(OpenMMSimulation):
 
     def __repr__(self):
         return self.__str__()
-
-    def load_pdb_file(self, pdb_file: str) -> app.PDBFile:
-        """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
-        return app.PDBFile(pdb_file)
 
     async def fix_pdb_file(self):
         """
@@ -278,37 +278,6 @@ class Protein(OpenMMSimulation):
             file=open(self.pdb_location, "w"),
         )
 
-    def create_velm(self, simulation: app.Simulation) -> Dict[str, Any]:
-        """Alters the initial state of the simulation using initial velocities
-        at the beginning and the end of the protein chain to use as a lookup in memory.
-
-        Args:
-            simulation (app.Simulation): The simulation object.
-
-        Returns:
-            simulation: original simulation object.
-        """
-
-        mass_index = 0
-        mass_indicies = []
-        atom_masses: List[unit.quantity.Quantity] = []
-
-        while True:
-            try:
-                atom_masses.append(simulation.system.getParticleMass(mass_index))
-                mass_indicies.append(mass_index)
-                mass_index += 1
-            except:
-                # When there are no more atoms.
-                break
-
-        velm = {
-            "mass_indicies": mass_indicies,
-            "pdb_masses": atom_masses,
-        }
-
-        return velm
-
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
     async def generate_input_files(self):
@@ -327,12 +296,12 @@ class Protein(OpenMMSimulation):
 
         self.simulation, self.system_config = await asyncio.to_thread(
             self.create_simulation,
-            self.load_pdb_file(pdb_file=self.pdb_file),
+            load_pdb_file(pdb_file=self.pdb_file),
             self.system_config.get_config(),
         )
 
         # load in information from the velm memory
-        velm = self.create_velm(simulation=self.simulation)
+        velm = create_velm(simulation=self.simulation)
 
         logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
         start_time = time.time()
@@ -365,34 +334,6 @@ class Protein(OpenMMSimulation):
     def gen_seed(self):
         """Generate a random seed"""
         return random.randint(1000, 999999)
-
-    def save_files(self, files: Dict, output_directory: str, write_mode: str = "wb") -> Dict:
-        """Save the simulation files generated on the validator side to a desired output directory.
-
-        Args:
-            files (Dict): Dictionary mapping between filename and content
-            output_directory (str)
-            write_mode (str, optional): How the file should be written. Defaults to "wb".
-
-        Returns:
-            _type_: _description_
-        """
-        logger.info(f"⏰ Saving files to {output_directory}...")
-        check_if_directory_exists(output_directory=output_directory)
-
-        filetypes = {}
-        for filename, content in files.items():
-            filetypes[filename.split(".")[-1]] = filename
-
-            logger.info(f"Saving file {filename} to {output_directory}")
-            if "em.cpt" in filename:
-                filename = "em_binary.cpt"
-
-            # loop over all of the output files and save to local disk
-            with open(os.path.join(output_directory, filename), write_mode) as f:
-                f.write(content)
-
-        return filetypes
 
     def delete_files(self, directory: str):
         logger.info(f"Deleting files in {directory}")
@@ -427,7 +368,7 @@ class Protein(OpenMMSimulation):
         self.get_miner_data_directory(hotkey=hotkey)
 
         # Save files so we can check the hash later.
-        self.save_files(
+        save_files(
             files=md_output,
             output_directory=self.miner_data_directory,
         )
@@ -438,7 +379,7 @@ class Protein(OpenMMSimulation):
 
             logger.info(f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}")
             self.simulation, self.system_config = self.create_simulation(
-                pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+                pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
             )
@@ -525,7 +466,7 @@ class Protein(OpenMMSimulation):
         """
 
         validator_velm_data = load_pkl(self.velm_array_pkl, "rb")
-        miner_velm_data = self.create_velm(simulation=self.simulation)
+        miner_velm_data = create_velm(simulation=self.simulation)
 
         validator_masses = validator_velm_data["pdb_masses"]
         miner_masses = miner_velm_data["pdb_masses"]
@@ -587,7 +528,7 @@ class Protein(OpenMMSimulation):
         # This is where we are going to check the xml files for the state.
         logger.info(f"Recreating simulation for {self.pdb_id} for state-based analysis...")
         self.simulation, self.system_config = self.create_simulation(
-            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
             seed=self.miner_seed,
         )
@@ -604,7 +545,7 @@ class Protein(OpenMMSimulation):
 
         # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
         self.simulation, self.system_config = self.create_simulation(
-            pdb=self.load_pdb_file(pdb_file=self.pdb_location),
+            pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
             seed=self.miner_seed,
         )
@@ -665,7 +606,13 @@ class Protein(OpenMMSimulation):
             return False, check_energies.tolist(), miner_energies.tolist(), "anomaly"
 
         # Save the folded pdb file if the run is valid
-        self.save_pdb(output_path=os.path.join(self.miner_data_directory, f"{self.pdb_id}_folded.pdb"))
+        positions = self.simulation.context.getState(getPositions=True).getPositions()
+        topology = self.simulation.topology
+        save_pdb(
+            positions=positions,
+            topology=topology,
+            output_path=os.path.join(self.miner_data_directory, f"{self.pdb_id}_folded.pdb"),
+        )
 
         return True, check_energies.tolist(), miner_energies.tolist(), ""
 
@@ -673,13 +620,6 @@ class Protein(OpenMMSimulation):
         """Calculate the number of nanoseconds computed by the miner."""
 
         return (self.cpt_step * self.system_config.time_step_size) / 1e3
-
-    def save_pdb(self, output_path: str):
-        """Save the pdb file to the output path."""
-        positions = self.simulation.context.getState(getPositions=True).getPositions()
-        topology = self.simulation.topology
-        with open(output_path, "w") as f:
-            app.PDBFile.writeFile(topology, positions, f)
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)
