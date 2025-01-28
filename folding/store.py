@@ -146,6 +146,7 @@ class SQLiteJobStore:
             raise ValueError(f"Failed to upload job: {response.text}")
         return response.json()["job_id"]
 
+    # TODO: Find a different way to implement this method
     def get_all_pdbs(self) -> list:
         """
         Retrieve all PDB IDs from the job store.
@@ -243,9 +244,9 @@ class Job:
     best_hotkey: str = None
     commit_hash: str = None
     gro_hash: str = None
-    update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
+    update_interval: pd.Timedelta = pd.Timedelta(hours=4)
     updated_count: int = 0
-    min_updates: int = 5
+    min_updates: int = 1
     max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=25)
     epsilon: float = 5  # percentage.
     event: dict = None
