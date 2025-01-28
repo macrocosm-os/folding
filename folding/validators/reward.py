@@ -1,7 +1,7 @@
 import time
 from typing import List
 from itertools import chain
-from collections import defaultdict 
+from collections import defaultdict
 
 import numpy as np
 
@@ -9,11 +9,12 @@ from folding.protocol import JobSubmissionSynapse
 from folding.validators.protein import Protein
 from folding.utils.logger import logger
 
-def check_if_identical(event):
-    """ method to check if any of the submissions are idential. If they are, 0 reward for any uids involved.
-    This should only happen for uids that are submitting the same results from a single owner. 
 
-    We look at the simulated energy via the validator to avoid tampering. Anything that is not fully reprod will be 
+def check_if_identical(event):
+    """method to check if any of the submissions are idential. If they are, 0 reward for any uids involved.
+    This should only happen for uids that are submitting the same results from a single owner.
+
+    We look at the simulated energy via the validator to avoid tampering. Anything that is not fully reprod will be
     caught inside of the protein.is_run_valid method.
     """
 
@@ -29,15 +30,22 @@ def check_if_identical(event):
     flattened_list = list(chain.from_iterable(identical_groups))
 
     if len(flattened_list) > 0:
-        logger.warning(f"Setting {len(flattened_list)} / {len(event['checked_energy'])} uids to 0 reward due to identical submissions.")
+        logger.warning(
+            f"Setting {len(flattened_list)} / {len(event['checked_energy'])} uids to 0 reward due to identical submissions."
+        )
         for idx in flattened_list:
             event["is_valid"][idx] = False
-            if event["reason"]== "":
-                event["reason"][idx] = "Identical submission to another hotkey in the group"
+            if event["reason"] == "":
+                event["reason"][
+                    idx
+                ] = "Identical submission to another hotkey in the group"
 
-    return event 
+    return event
 
-def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]):
+
+def get_energies(
+    protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]
+):
     """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
 
     Args:
@@ -73,15 +81,19 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
                 state=resp.miner_state,
                 seed=resp.miner_seed,
             )
-            event['seed'].append(resp.miner_seed)
+            event["seed"].append(resp.miner_seed)
             event["process_md_output_time"][i] = time.time() - start_time
-            event["best_cpt"][i] = protein.checkpoint_path if hasattr(protein, "checkpoint_path") else ""
+            event["best_cpt"][i] = (
+                protein.checkpoint_path if hasattr(protein, "checkpoint_path") else ""
+            )
 
             if not can_process:
                 continue
 
             if resp.dendrite.status_code != 200:
-                logger.info(f"uid {uid} responded with status code {resp.dendrite.status_code}")
+                logger.info(
+                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
+                )
                 continue
 
             ns_computed = protein.get_ns_computed()
@@ -108,12 +120,14 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
             logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
             continue
 
-    # Check if the miners return identical energy results. 
+    # Check if the miners return identical energy results.
     event = check_if_identical(event)
 
     for idx, is_valid in enumerate(event["is_valid"]):
-        if is_valid: 
-            energies[idx] = np.median(event["checked_energy"][idx][-10:]) #energy that we computed... 
+        if is_valid:
+            energies[idx] = np.median(
+                event["checked_energy"][idx][-10:]
+            )  # energy that we computed...
         else:
             energies[idx] = 0
 

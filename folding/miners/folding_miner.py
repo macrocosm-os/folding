@@ -9,7 +9,7 @@ from collections import defaultdict
 from typing import Dict, List, Tuple
 import copy
 import traceback
-import asyncio 
+import asyncio
 
 import bittensor as bt
 import openmm as mm
@@ -358,7 +358,6 @@ class FoldingMiner(BaseMinerNeuron):
 
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(self=self, synapse=synapse, event=event)
-
 
     def submit_simulation(
         self,
