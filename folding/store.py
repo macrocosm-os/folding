@@ -15,8 +15,14 @@ import pandas as pd
 
 from atom.epistula.epistula import Epistula
 from folding.utils.epistula_utils import get_epistula_body
+from dotenv import load_dotenv
 
-DB_DIR = os.path.join(os.path.dirname(__file__), "db")
+load_dotenv()
+
+rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
+if rqlite_data_dir is None:
+    raise ValueError("RQLITE_DATA_DIR environment variable is not set")
+DB_DIR = os.path.join(rqlite_data_dir, "db.sqlite")
 
 
 class SQLiteJobStore:
@@ -29,42 +35,6 @@ class SQLiteJobStore:
         self.db_file = os.path.join(self.db_path, "jobs.db")
         self.epistula = Epistula()
 
-        self.init_db()
-
-    def init_db(self):
-        """Initialize the SQLite database with the required schema."""
-        with sqlite3.connect(self.db_file) as conn:
-            conn.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {self.table_name} (
-                    pdb TEXT PRIMARY KEY,
-                    active INTEGER,
-                    hotkeys TEXT,
-                    job_type TEXT,
-                    created_at TIMESTAMP,
-                    updated_at TIMESTAMP,
-                    best_loss REAL,
-                    best_loss_at TIMESTAMP,
-                    best_hotkey TEXT,
-                    commit_hash TEXT,
-                    gro_hash TEXT,
-                    update_interval INTEGER,
-                    updated_count INTEGER,
-                    max_time_no_improvement INTEGER,
-                    event TEXT,
-                    ff TEXT,
-                    box TEXT,
-                    water TEXT,
-                    epsilon REAL,
-                    system_kwargs TEXT,
-                    min_updates INTEGER,
-                    job_id TEXT,
-                    s3_links TEXT,
-                    best_cpt_links TEXT
-                )
-            """
-            )
-
     def _row_to_job(self, row) -> "Job":
         """Convert a database row to a Job object."""
         if not row:
@@ -74,9 +44,7 @@ class SQLiteJobStore:
         # Convert stored JSON strings back to Python objects
         data["hotkeys"] = json.loads(data["hotkeys"])
         data["event"] = json.loads(data["event"]) if data["event"] else None
-        data["system_kwargs"] = (
-            json.loads(data["system_kwargs"]) if data["system_kwargs"] else None
-        )
+        data["system_kwargs"] = json.loads(data["system_kwargs"]) if data["system_kwargs"] else None
 
         # Convert timestamps
         for field in ["created_at", "updated_at", "best_loss_at"]:
@@ -87,9 +55,7 @@ class SQLiteJobStore:
 
         # Convert intervals
         data["update_interval"] = pd.Timedelta(seconds=data["update_interval"])
-        data["max_time_no_improvement"] = pd.Timedelta(
-            seconds=data["max_time_no_improvement"]
-        )
+        data["max_time_no_improvement"] = pd.Timedelta(seconds=data["max_time_no_improvement"])
 
         # Convert boolean
         data["active"] = bool(data["active"])
@@ -117,16 +83,14 @@ class SQLiteJobStore:
 
         # Convert intervals to seconds
         data["update_interval"] = int(data["update_interval"].total_seconds())
-        data["max_time_no_improvement"] = int(
-            data["max_time_no_improvement"].total_seconds()
-        )
+        data["max_time_no_improvement"] = int(data["max_time_no_improvement"].total_seconds())
 
         # Convert boolean to integer
         data["active"] = int(data["active"])
 
         return data
 
-    def get_queue(self, ready=True) -> Queue:
+    def get_queue(self, hotkey: str, ready=True) -> Queue:
         """Get active jobs as a queue."""
         with sqlite3.connect(self.db_file) as conn:
             conn.row_factory = sqlite3.Row
@@ -139,8 +103,9 @@ class SQLiteJobStore:
                     SELECT * FROM {self.table_name}
                     WHERE active = 1
                     AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime(?)
+                    AND validator_hotkey = ?
                 """
-                cur.execute(query, (now,))
+                cur.execute(query, (now, hotkey))
             else:
                 cur.execute(f"SELECT * FROM {self.table_name} WHERE active = 1")
 
@@ -152,67 +117,6 @@ class SQLiteJobStore:
             queue.put(job)
 
         return queue
-
-    def insert(
-        self,
-        pdb: str,
-        ff: str,
-        box: str,
-        water: str,
-        hotkeys: List[str],
-        job_type: str,
-        epsilon: float,
-        system_kwargs: dict,
-        job_id: str,
-        **kwargs,
-    ):
-        """Insert a new job into the database."""
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
-
-            # Check if job already exists
-            cur.execute(f"SELECT 1 FROM {self.table_name} WHERE pdb = ?", (pdb,))
-            if cur.fetchone():
-                raise ValueError(f"pdb {pdb!r} is already in the store")
-
-            # Create and convert job
-            job = Job(
-                pdb=pdb,
-                ff=ff,
-                box=box,
-                water=water,
-                hotkeys=hotkeys,
-                job_type=job_type,
-                created_at=pd.Timestamp.now().floor("s"),
-                updated_at=pd.Timestamp.now().floor("s"),
-                epsilon=epsilon,
-                system_kwargs=system_kwargs,
-                job_id=job_id,
-                **kwargs,
-            )
-
-            data = self._job_to_dict(job)
-
-            # Build the insert query
-            columns = ", ".join(data.keys())
-            placeholders = ", ".join(["?" for _ in data])
-            query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
-
-            cur.execute(query, list(data.values()))
-
-    def update(self, job: "Job"):
-        """Update an existing job in the database."""
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
-
-            data = self._job_to_dict(job)
-            pdb = data.pop("pdb")  # Remove pdb from update data as it's the primary key
-
-            # Build the update query
-            set_clause = ", ".join([f"{k} = ?" for k in data.keys()])
-            query = f"UPDATE {self.table_name} SET {set_clause} WHERE pdb = ?"
-
-            cur.execute(query, list(data.values()) + [pdb])
 
     def update_gjp_job(self, job: "Job", gjp_address: str, keypair, job_id: str):
         """
@@ -316,9 +220,7 @@ class SQLiteJobStore:
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 
-        response = requests.post(
-            f"http://{gjp_address}/jobs", headers=headers, data=body_bytes
-        )
+        response = requests.post(f"http://{gjp_address}/jobs", headers=headers, data=body_bytes)
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
         return response.json()["job_id"]
@@ -372,9 +274,7 @@ class Job:
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        never_updated_better_loss = (
-            np.isnan(percent_improvement) and loss < self.best_loss
-        )
+        never_updated_better_loss = np.isnan(percent_improvement) and loss < self.best_loss
         better_loss = percent_improvement >= self.epsilon
 
         if never_updated_better_loss or better_loss:
@@ -382,15 +282,13 @@ class Job:
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
         elif (
-            pd.Timestamp.now().floor("s") - self.best_loss_at
-            > self.max_time_no_improvement
+            pd.Timestamp.now().floor("s") - self.best_loss_at > self.max_time_no_improvement
             and self.updated_count >= self.min_updates
         ):
             self.active = False
         elif (
             isinstance(self.best_loss_at, pd._libs.tslibs.nattype.NaTType)
-            and pd.Timestamp.now().floor("s") - self.created_at
-            > self.max_time_no_improvement
+            and pd.Timestamp.now().floor("s") - self.created_at > self.max_time_no_improvement
         ):
             self.active = False
 
@@ -410,10 +308,9 @@ class MockJob(Job):
         self.box = "cube"
         self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
-        self.created_at = (
-            pd.Timestamp.now().floor("s")
-            - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
-        ).floor("s")
+        self.created_at = (pd.Timestamp.now().floor("s") - pd.Timedelta(seconds=random.randint(0, 3600 * 24))).floor(
+            "s"
+        )
         self.updated_at = self.created_at
         self.best_loss = 0
         self.best_hotkey = random.choice(self.hotkeys)
