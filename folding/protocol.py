@@ -45,7 +45,8 @@ class JobSubmissionSynapse(bt.Synapse):
     - miner_seed: An integer value which is the seed for the simulation.
     - miner_state: A string value which is the state of the miner.
     """
-
+    
+    job_id: str
     pdb_id: str
     pdb_contents: str
     md_inputs: dict  # Right now this is just a "em.cpt" file.
