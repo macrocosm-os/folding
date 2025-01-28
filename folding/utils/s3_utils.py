@@ -66,7 +66,7 @@ async def upload_to_s3(
     validator_directory: str,
     pdb_id: str,
     VALIDATOR_ID: str,
-) -> Dict[str]:
+) -> Dict[str, str]:
     """Asynchronously uploads PDB and CPT files to S3 using the specified handler.
 
     Args:

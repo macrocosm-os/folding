@@ -415,6 +415,9 @@ class OrganicMLEvaluator(BaseEvaluator):
         return "OrganicML"
 
 
-EVALUATION_REGISTRY = {}
-for task in ["SyntheticMD", "OrganicMD", "SyntheticML", "OrganicML"]:
-    EVALUATION_REGISTRY[task] = eval(task)
+EVALUATION_REGISTRY = {
+    "SyntheticMD": SyntheticMDEvaluator,
+    "OrganicMD": OrganicMDEvaluator,
+    "SyntheticML": SyntheticMLEvaluator,
+    "OrganicML": OrganicMLEvaluator,
+}

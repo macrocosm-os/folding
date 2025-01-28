@@ -287,6 +287,9 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             event["init_energy"] = protein.init_energy
             event["epsilon"] = protein.epsilon
             event["system_kwargs"] = system_kwargs
+            event["s3_links"] = {
+                "testing": "testing"
+            }  # overwritten below if s3 logging is on.
 
             if "validator_search_status" not in event:
                 logger.success("✅✅ Simulation ran successfully! ✅✅")
@@ -306,10 +309,9 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                         logger.info("Input files uploaded to s3")
                     except Exception as e:
                         logger.warning(f"Error uploading files to s3: {e}")
-                        event["s3_links"] = {"testing": "testing"}
 
-                    # break out of the loop if the simulation was successful
-                    break
+                # break out of the loop if the simulation was successful
+                break
 
             if tries == 10:
                 logger.debug(f"Max tries reached for pdb_id {pdb_id} ❌❌")

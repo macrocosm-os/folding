@@ -77,7 +77,7 @@ class MinerRegistry:
             all_credibilities.append(self.registry[miner_uid][task]["credibility"])
 
         # Your overall credibility is the minimum of all the credibilities.
-        self.registry[miner_uid]["overall_credibility"] = min(all_credibilities)
+        self.registry[miner_uid]["overall_credibility"] = np.mean(all_credibilities)
 
     def reset(self, miner_uid: int) -> None:
         """Resets the score and credibility of miner 'uid'."""
