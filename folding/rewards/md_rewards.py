@@ -137,3 +137,9 @@ class OrganicFoldingReward(MDReward):
         organic_multiplier = 10.0
 
         return rewards * priority_multiplier * organic_multiplier
+
+
+REWARD_REGISTRY = {
+    "SyntheticMD": SyntheticMDReward,
+    "OrganicFolding": OrganicFoldingReward,
+}

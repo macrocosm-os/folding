@@ -16,7 +16,11 @@ import numpy as np
 import pandas as pd
 from async_timeout import timeout
 
+import folding.utils.constants as c
+from folding.base.reward import BatchRewardInput
+from folding.base.reward import BaseReward, RewardEvent
 from folding.base.validator import BaseValidatorNeuron
+from folding.rewards.md_rewards import REWARD_REGISTRY
 from folding.rewards.reward_pipeline import reward_pipeline
 
 # import base validator class which takes care of most of the boilerplate
@@ -280,7 +284,6 @@ class Validator(BaseValidatorNeuron):
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
-        top_reward = 0.80
         apply_pipeline = False
 
         energies = torch.Tensor(job.event["energies"])
@@ -323,16 +326,17 @@ class Validator(BaseValidatorNeuron):
             logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            rewards: torch.Tensor = await reward_pipeline(
-                energies=energies,
-                rewards=rewards,
-                top_reward=top_reward,
-                job=job,
+            model: BaseReward = REWARD_REGISTRY[job.job_type]()
+            output: RewardEvent = model.forward(
+                data=BatchRewardInput(
+                    energies=energies,
+                    top_reward=c.TOP_SYNTHETIC_MD_REWARD,
+                ),
             )
 
             uids = self.get_uids(hotkeys=job.hotkeys)
             await self.update_scores(
-                rewards=rewards,
+                rewards=output.rewards,
                 uids=uids,  # pretty confident these are in the correct order.
             )
         else:
