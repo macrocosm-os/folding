@@ -10,6 +10,7 @@ from typing import Dict, List, Tuple
 import copy
 import traceback
 import asyncio
+import subprocess 
 
 import bittensor as bt
 import openmm as mm
@@ -146,6 +147,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.mock = None
         self.generate_random_seed = lambda: random.randint(0, 1000)
+        self.start_read_node()
         self.db_path = "/db/db.sqlite"
 
         # hardcorded for now -- TODO: make this more flexible
@@ -457,6 +459,12 @@ class FoldingMiner(BaseMinerNeuron):
         logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)
         return priority
 
+    def start_read_node(self):
+        try:
+            subprocess.run(['bash', 'scripts/start_read_node.sh'], check=True)
+            logger.info("Read node started successfully.")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to start read node: {e}")
 
 class SimulationManager:
     def __init__(
