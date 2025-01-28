@@ -6,11 +6,12 @@ import random
 import hashlib
 import concurrent.futures
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import copy
 import traceback
 import asyncio
 import subprocess 
+import sqlite3
 
 import bittensor as bt
 import openmm as mm
@@ -227,6 +228,46 @@ class FoldingMiner(BaseMinerNeuron):
             return False
         return True
 
+    def fetch_sql_job_details(
+            columns: List[str], max_workers: Optional[int]=None, job_id: Optional[str] = None, db_path: str = 'db/db.sqlite'
+        ) -> Dict:
+            """
+            Fetches job records from GJP database based on priority and specified fields.
+            Optionally filters by a specific pdb_id if provided.
+
+            Parameters:
+                db_path (str): The file path to the SQLite database.
+                max_workers (int): The maximum number of job records to fetch, sorted by priority in descending order.
+                columns (List[str]): The list of columns to fetch from the database.
+                pdb_id (Optional[str]): Specific pdb_id to filter the jobs by. If None, fetches jobs without filtering.
+
+            Returns:
+                Dict: A dictionary mapping each job 'id' to its details as specified in the columns list.
+            """
+            logger.info("Fetching job details from the sqlite database")
+            columns_to_select = ", ".join(columns)
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                if job_id:
+                    query = f"SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = ? ORDER BY priority DESC LIMIT 1"
+                    cursor.execute(query, (job_id,))
+                elif max_workers:
+                    query = f"SELECT job_id, {columns_to_select} FROM jobs ORDER BY priority DESC LIMIT ?"
+                    cursor.execute(query, (max_workers,))
+
+                selected_columns = ["job_id"] + [desc[0] for desc in cursor.description[1:]]
+                jobs = cursor.fetchall()
+                if not jobs:
+                    logger.info("No jobs found.")
+                    return {}
+
+                jobs_dict = {}
+                for job in jobs:
+                    job_details = dict(zip(selected_columns, job))
+                    job_id = job_details.pop("job_id")
+                    jobs_dict[job_id] = job_details
+                return jobs_dict
+        
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
@@ -242,8 +283,14 @@ class FoldingMiner(BaseMinerNeuron):
             JobSubmissionSynapse: synapse with md_output attached
         """
 
-        pdb_id = synapse.pdb_id
+        # get the job id from the synapse 
+        job_id = synapse.job_id
 
+        # query rqlite to get pdb_id 
+        sql_job_details = self.fetch_sql_job_details(columns = ["pdb_id"], job_id=job_id)
+
+        pdb_id = sql_job_details[job_id]['pdb_id']
+        
         # If we are already running a process with the same identifier, return intermediate information
         logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
 
@@ -262,6 +309,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
+
         submitted_job_is_unique = self.is_unique_job(
             system_config_filepath=system_config_filepath
         )
