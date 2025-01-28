@@ -44,11 +44,11 @@ class OpenMMSimulation(GenericSimulation):
         This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
         Args:
             seed (str): The seed for the random number generator.
-            system_config (dict): A dictionary containing the system configuration settings. 
+            system_config (dict): A dictionary containing the system configuration settings.
             pdb (app.PDBFile): The PDB file used to initialize the simulation
 
         Returns:
-        Tuple[app.Simulation, SimulationConfig]: A tuple containing the recreated simulation object and the potentially altered system configuration in SystemConfig format. 
+        Tuple[app.Simulation, SimulationConfig]: A tuple containing the recreated simulation object and the potentially altered system configuration in SystemConfig format.
         """
         start_time = time.time()
         forcefield = app.ForceField(system_config["ff"], system_config["water"])
@@ -132,9 +132,7 @@ class OpenMMSimulation(GenericSimulation):
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
-        logger.debug(
-            f"Creating simulation took {time.time() - start_time:.4f} seconds"
-        )
+        logger.debug(f"Creating simulation took {time.time() - start_time:.4f} seconds")
         # Set initial positions
 
         start_time = time.time()
