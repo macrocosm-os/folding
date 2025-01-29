@@ -103,7 +103,6 @@ async def upload_to_s3(
                 file_path=file_path,
                 location=location,
                 public=True,
-                file_type=file_type,
             )
             s3_links[file_type] = os.path.join(
                 "https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key
