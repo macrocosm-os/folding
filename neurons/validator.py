@@ -159,7 +159,9 @@ class Validator(BaseValidatorNeuron):
         Returns:
             valid_uids: List of uids
         """
-        active_jobs = self.store.get_queue(ready=False).queue
+        active_jobs = self.store.get_queue(
+            ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
+        ).queue
         active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
         active_hotkeys = list(chain.from_iterable(active_hotkeys))
         exclude_uids = self.get_uids(hotkeys=active_hotkeys)
@@ -231,24 +233,14 @@ class Validator(BaseValidatorNeuron):
                     s3_links=job_event["s3_links"],
                 )
                 job_event["job_id"] = job_id
+
+                return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
                 job_event["job_id"] = None
 
-            self.store.insert(
-                pdb=job_event["pdb_id"],
-                ff=job_event["ff"],
-                water=job_event["water"],
-                box=job_event["box"],
-                hotkeys=selected_hotkeys,
-                job_type=job_event["job_type"],
-                epsilon=job_event["epsilon"],
-                system_kwargs=job_event["system_kwargs"],
-                job_id=job_event["job_id"],
-                event=job_event,
-            )
+                return False
 
-            return True
         else:
             logger.warning(
                 f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
@@ -316,7 +308,7 @@ class Validator(BaseValidatorNeuron):
             if job.best_loss < 0:
                 apply_pipeline = True
                 logger.warning(
-                    f"Received all zero energies for {job.pdb} but stored best_loss < 0... Applying reward pipeline."
+                    f"Received all zero energies for {job.pdb_id} but stored best_loss < 0... Applying reward pipeline."
                 )
         else:
             apply_pipeline = True
@@ -337,7 +329,7 @@ class Validator(BaseValidatorNeuron):
             )
         else:
             logger.warning(
-                f"All energies zero for job {job.pdb} and job has never been updated... Skipping"
+                f"All energies zero for job {job.pdb_id} and job has never been updated... Skipping"
             )
 
         async def prepare_event_for_logging(event: Dict):
@@ -372,7 +364,7 @@ class Validator(BaseValidatorNeuron):
                 )
 
         else:
-            logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
+            logger.error(f"Protein.from_job returns NONE for protein {job.pdb_id}")
 
         # Remove these keys from the log because they polute the terminal.
         log_event(
@@ -404,7 +396,6 @@ class Validator(BaseValidatorNeuron):
             job.best_cpt_links = output_links
 
         # Finally, we update the job in the store regardless of what happened.
-        self.store.update(job=job)
         self.store.update_gjp_job(
             job=job,
             gjp_address=self.config.neuron.gjp_address,
@@ -434,7 +425,9 @@ class Validator(BaseValidatorNeuron):
         while True:
             try:
                 logger.info("Starting job creation loop.")
-                queue = self.store.get_queue(ready=False)
+                queue = self.store.get_queue(
+                    ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
+                )
                 if queue.qsize() < self.config.neuron.queue_size:
                     # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
                     # Therefore, this product must be less than the number of uids on the metagraph.
@@ -475,10 +468,11 @@ class Validator(BaseValidatorNeuron):
                 logger.info("Updating jobs.")
                 logger.info(f"step({self.step}) block({self.block})")
 
-                for job in self.store.get_queue(ready=False).queue:
+                for job in self.store.get_queue(
+                    ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
+                ).queue:
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
                     if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
-                        self.store.update(job=job)
                         self.store.update_gjp_job(
                             job=job,
                             gjp_address=self.config.neuron.gjp_address,
@@ -493,7 +487,6 @@ class Validator(BaseValidatorNeuron):
                     # If we don't have any miners reply to the query, we will make it inactive.
                     if len(job_event["energies"]) == 0:
                         job.active = False
-                        self.store.update(job=job)
                         self.store.update_gjp_job(
                             job=job,
                             gjp_address=self.config.neuron.gjp_address,
@@ -510,7 +503,7 @@ class Validator(BaseValidatorNeuron):
                     # Update the DB with the current status
                     await self.update_job(job=job)
             except Exception as e:
-                logger.error(f"Error in update_jobs: {e}")
+                logger.error(f"Error in update_jobs: {traceback.format_exc()}")
 
             self.step += 1
 
