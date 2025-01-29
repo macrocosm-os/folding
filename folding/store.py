@@ -22,7 +22,7 @@ load_dotenv()
 
 rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
 if rqlite_data_dir is None:
-    raise ValueError("RQLITE_DATA_DIR environment variable is not set")
+    raise ValueError("RQLITE_DATA_DIR environment variable is not set inside the .env file")
 DB_DIR = os.path.abspath(rqlite_data_dir)
 
 
