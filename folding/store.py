@@ -43,9 +43,13 @@ class SQLiteJobStore:
         data = dict(row)
         # Convert stored JSON strings back to Python objects
         data["hotkeys"] = json.loads(data["hotkeys"])
-        data["system_config"] = json.loads(data["system_config"]) if data["system_config"] else None
+        data["system_config"] = (
+            json.loads(data["system_config"]) if data["system_config"] else None
+        )
         data["s3_links"] = json.loads(data["s3_links"]) if data["s3_links"] else None
-        data["best_cpt_links"] = json.loads(data["best_cpt_links"]) if data["best_cpt_links"] else None
+        data["best_cpt_links"] = (
+            json.loads(data["best_cpt_links"]) if data["best_cpt_links"] else None
+        )
         data["event"] = json.loads(data["event"]) if data["event"] else None
 
         # Convert timestamps
@@ -55,10 +59,8 @@ class SQLiteJobStore:
             else:
                 data[field] = pd.NaT
 
-
         # Convert boolean
         data["active"] = bool(data["active"])
-
 
         return Job(**data)
 
@@ -83,7 +85,9 @@ class SQLiteJobStore:
 
         # Convert intervals to seconds
         data["update_interval"] = int(data["update_interval"].total_seconds())
-        data["max_time_no_improvement"] = int(data["max_time_no_improvement"].total_seconds())
+        data["max_time_no_improvement"] = int(
+            data["max_time_no_improvement"].total_seconds()
+        )
 
         # Convert boolean to integer
         data["active"] = int(data["active"])
@@ -107,7 +111,10 @@ class SQLiteJobStore:
                 """
                 cur.execute(query, (now, hotkey))
             else:
-                cur.execute(f"SELECT * FROM {self.table_name} WHERE active = 1")
+                cur.execute(
+                    f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = ?",
+                    (hotkey,),
+                )
 
             rows = cur.fetchall()
 
@@ -203,7 +210,9 @@ class SQLiteJobStore:
         """
         job = Job(
             pdb_id=pdb,
-            system_config=SystemConfig(ff=ff, box=box, water=water, system_kwargs=system_kwargs),
+            system_config=SystemConfig(
+                ff=ff, box=box, water=water, system_kwargs=system_kwargs
+            ),
             hotkeys=hotkeys,
             job_type=job_type,
             created_at=pd.Timestamp.now().floor("s"),
@@ -219,7 +228,9 @@ class SQLiteJobStore:
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
 
-        response = requests.post(f"http://{gjp_address}/jobs", headers=headers, data=body_bytes)
+        response = requests.post(
+            f"http://{gjp_address}/jobs", headers=headers, data=body_bytes
+        )
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
         return response.json()["job_id"]
@@ -234,7 +245,7 @@ class Job(BaseModel):
     hotkeys: list[str]
     is_organic: bool = False
     active: bool = True
-    update_interval: int = 2*3600
+    update_interval: int = 2 * 3600
     max_time_no_improvement: int = 1500
     epsilon: int
     min_updates: int = 1
@@ -270,7 +281,9 @@ class Job(BaseModel):
         self.updated_at = pd.Timestamp.now().floor("s")
         self.updated_count += 1
 
-        never_updated_better_loss = np.isnan(percent_improvement) and loss < self.best_loss
+        never_updated_better_loss = (
+            np.isnan(percent_improvement) and loss < self.best_loss
+        )
         better_loss = percent_improvement >= self.epsilon
 
         if never_updated_better_loss or better_loss:
@@ -278,13 +291,13 @@ class Job(BaseModel):
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
         elif (
-            (pd.Timestamp.now().floor("s") - self.best_loss_at).total_seconds() > self.max_time_no_improvement
-            and self.updated_count >= self.min_updates
-        ):
+            pd.Timestamp.now().floor("s") - self.best_loss_at
+        ).total_seconds() > self.max_time_no_improvement and self.updated_count >= self.min_updates:
             self.active = False
         elif (
             isinstance(self.best_loss_at, pd._libs.tslibs.nattype.NaTType)
-            and (pd.Timestamp.now().floor("s") - self.created_at).total_seconds() > self.max_time_no_improvement
+            and (pd.Timestamp.now().floor("s") - self.created_at).total_seconds()
+            > self.max_time_no_improvement
         ):
             self.active = False
 
@@ -304,9 +317,10 @@ class MockJob(Job):
         self.box = "cube"
         self.water = "tip3p"
         self.hotkeys = self._make_hotkeys(n_hotkeys)
-        self.created_at = (pd.Timestamp.now().floor("s") - pd.Timedelta(seconds=random.randint(0, 3600 * 24))).floor(
-            "s"
-        )
+        self.created_at = (
+            pd.Timestamp.now().floor("s")
+            - pd.Timedelta(seconds=random.randint(0, 3600 * 24))
+        ).floor("s")
         self.updated_at = self.created_at
         self.best_loss = 0
         self.best_hotkey = random.choice(self.hotkeys)

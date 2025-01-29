@@ -55,9 +55,11 @@ class SimulationConfig(BaseModel):
     def to_dict(self):
         return self.dict()
 
+
 class SystemKwargs(BaseModel):
     class Config:
         extra = "allow"
+
 
 class SystemConfig(BaseModel):
     ff: str
