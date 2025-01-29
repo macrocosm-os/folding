@@ -286,7 +286,7 @@ class Validator(BaseValidatorNeuron):
             if job.best_loss < 0:
                 apply_pipeline = True
                 logger.warning(
-                    f"Received all zero energies for {job.pdb} but stored best_loss < 0... Applying reward pipeline."
+                    f"Received all zero energies for {job.pdb_id} but stored best_loss < 0... Applying reward pipeline."
                 )
         else:
             apply_pipeline = True
@@ -306,7 +306,7 @@ class Validator(BaseValidatorNeuron):
                 uids=uids,  # pretty confident these are in the correct order.
             )
         else:
-            logger.warning(f"All energies zero for job {job.pdb} and job has never been updated... Skipping")
+            logger.warning(f"All energies zero for job {job.pdb_id} and job has never been updated... Skipping")
 
         async def prepare_event_for_logging(event: Dict):
             for key, value in event.items():
@@ -336,7 +336,7 @@ class Validator(BaseValidatorNeuron):
                 folded_protein_location = os.path.join(protein.miner_data_directory, f"{protein.pdb_id}_folded.pdb")
 
         else:
-            logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
+            logger.error(f"Protein.from_job returns NONE for protein {job.pdb_id}")
 
         # Remove these keys from the log because they polute the terminal.
         log_event(
@@ -359,7 +359,7 @@ class Validator(BaseValidatorNeuron):
                     output_link = await upload_output_to_s3(
                         handler=protein.handler,
                         output_file=best_cpt_file,
-                        pdb_id=job.pdb,
+                        pdb_id=job.pdb_id,
                         miner_hotkey=job.hotkeys[idx],
                         VALIDATOR_ID=self.validator_hotkey_reference,
                     )
@@ -468,7 +468,7 @@ class Validator(BaseValidatorNeuron):
                     # Update the DB with the current status
                     await self.update_job(job=job)
             except Exception as e:
-                logger.error(f"Error in update_jobs: {e}")
+                logger.error(f"Error in update_jobs: {traceback.format_exc()}")
 
             self.step += 1
 

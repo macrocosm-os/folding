@@ -111,13 +111,13 @@ class Protein(OpenMMSimulation):
         self.pdb_complexity = defaultdict(int)
         self.epsilon = epsilon
         self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
-        # try:
-        #     self.handler = DigitalOceanS3Handler(
-        #         bucket_name="vali-s3-demo-do",
-        #     )
-        # except ValueError as e:
-        #     self.handler = None
-        #     logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
+        try:
+            self.handler = DigitalOceanS3Handler(
+                bucket_name="vali-s3-demo-do",
+            )
+        except ValueError as e:
+            self.handler = None
+            logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
 
     def setup_filepaths(self):
         self.pdb_file = f"{self.pdb_id}.pdb"
@@ -140,14 +140,14 @@ class Protein(OpenMMSimulation):
     async def from_job(job: Job, config: Dict):
         # Load_md_inputs is set to True to ensure that miners get files every query.
         protein = Protein(
-            pdb_id=job.pdb,
-            ff=job.ff,
-            box=job.box,
-            water=job.water,
+            pdb_id=job.pdb_id,
+            ff=job.system_config.ff,
+            box=job.system_config.box,
+            water=job.system_config.water,
             config=config,
             load_md_inputs=True,
             epsilon=job.epsilon,
-            system_kwargs=job.system_kwargs,
+            system_kwargs=job.system_config.system_kwargs.model_dump(),
         )
 
         try:

@@ -7,32 +7,32 @@ import requests
 from queue import Queue
 from typing import Dict, List
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time
 from dataclasses import asdict, dataclass
 
 import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
-from folding.utils.epistula_utils import get_epistula_body
 from dotenv import load_dotenv
+from pydantic import BaseModel, constr
+from folding.utils.opemm_simulation_config import SystemConfig
 
 load_dotenv()
 
 rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
 if rqlite_data_dir is None:
     raise ValueError("RQLITE_DATA_DIR environment variable is not set")
-DB_DIR = os.path.join(rqlite_data_dir, "db.sqlite")
+DB_DIR = os.path.abspath(rqlite_data_dir)
 
 
 class SQLiteJobStore:
     """SQLite-based job store replacing the CSV-based implementation."""
 
-    def __init__(self, db_path=DB_DIR, table_name="protein_jobs"):
+    def __init__(self, db_path=DB_DIR, table_name="jobs"):
         self.db_path = db_path
         self.table_name = table_name
-        os.makedirs(self.db_path, exist_ok=True)
-        self.db_file = os.path.join(self.db_path, "jobs.db")
+        self.db_file = os.path.join(self.db_path, "db.sqlite")
         self.epistula = Epistula()
 
     def _row_to_job(self, row) -> "Job":
@@ -43,8 +43,10 @@ class SQLiteJobStore:
         data = dict(row)
         # Convert stored JSON strings back to Python objects
         data["hotkeys"] = json.loads(data["hotkeys"])
+        data["system_config"] = json.loads(data["system_config"]) if data["system_config"] else None
+        data["s3_links"] = json.loads(data["s3_links"]) if data["s3_links"] else None
+        data["best_cpt_links"] = json.loads(data["best_cpt_links"]) if data["best_cpt_links"] else None
         data["event"] = json.loads(data["event"]) if data["event"] else None
-        data["system_kwargs"] = json.loads(data["system_kwargs"]) if data["system_kwargs"] else None
 
         # Convert timestamps
         for field in ["created_at", "updated_at", "best_loss_at"]:
@@ -53,12 +55,10 @@ class SQLiteJobStore:
             else:
                 data[field] = pd.NaT
 
-        # Convert intervals
-        data["update_interval"] = pd.Timedelta(seconds=data["update_interval"])
-        data["max_time_no_improvement"] = pd.Timedelta(seconds=data["max_time_no_improvement"])
 
         # Convert boolean
         data["active"] = bool(data["active"])
+
 
         return Job(**data)
 
@@ -132,7 +132,7 @@ class SQLiteJobStore:
             str: The ID of the updated job.
         """
 
-        body = get_epistula_body(job=job)
+        body = job.model_dump()
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
@@ -156,7 +156,7 @@ class SQLiteJobStore:
         """
         with sqlite3.connect(self.db_file) as conn:
             cur = conn.cursor()
-            cur.execute(f"SELECT pdb FROM {self.table_name}")
+            cur.execute(f"SELECT pdb_id FROM {self.table_name}")
             # Flatten the list of tuples into a list of strings
             return [row[0] for row in cur.fetchall()]
 
@@ -177,7 +177,7 @@ class SQLiteJobStore:
         system_kwargs: dict,
         keypair,
         gjp_address: str,
-        epsilon: float,
+        epsilon: int,
         s3_links: Dict[str, str],
         **kwargs,
     ):
@@ -202,21 +202,19 @@ class SQLiteJobStore:
             ValueError: If the job upload fails.
         """
         job = Job(
-            pdb=pdb,
-            ff=ff,
-            box=box,
-            water=water,
+            pdb_id=pdb,
+            system_config=SystemConfig(ff=ff, box=box, water=water, system_kwargs=system_kwargs),
             hotkeys=hotkeys,
             job_type=job_type,
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
-            system_kwargs=system_kwargs,
             s3_links=s3_links,
+            priority=1,
             **kwargs,
         )
 
-        body = get_epistula_body(job=job)
+        body = job.model_dump()
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
@@ -228,35 +226,32 @@ class SQLiteJobStore:
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
-@dataclass
-class Job:
-    pdb: str
-    ff: str
-    box: str
-    water: str
-    hotkeys: list
-    job_type: str
-    created_at: pd.Timestamp
-    updated_at: pd.Timestamp
+class Job(BaseModel):
+    pdb_id: constr(min_length=4, max_length=10)
+    system_config: SystemConfig
+    s3_links: dict[str, str] | None
+    priority: int
+    hotkeys: list[str]
+    is_organic: bool = False
     active: bool = True
-    best_loss: float = np.inf
-    best_loss_at: pd.Timestamp = pd.NaT
-    best_hotkey: str = None
-    commit_hash: str = None
-    gro_hash: str = None
-    update_interval: pd.Timedelta = pd.Timedelta(hours=4)
-    updated_count: int = 0
+    update_interval: int = 2*3600
+    max_time_no_improvement: int = 1500
+    epsilon: int
     min_updates: int = 1
-    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=25)
-    epsilon: float = 5  # percentage.
-    event: dict = None
-    system_kwargs: dict = None
-    job_id: str = None
-    s3_links: Dict[str, str] = None
-    best_cpt_links: list = None
+    updated_at: datetime = datetime.now(timezone.utc)
+    best_loss: float = np.inf
+    best_loss_at: datetime = datetime.min  # first possible datetime
+    best_hotkey: str = ""
+    updated_count: int = 0
+    created_at: datetime = datetime.now(timezone.utc)
+    best_cpt_links: list[str] | None = None
+    job_type: str
+    event: dict | None = None
+    validator_hotkey: str | None = None
+    job_id: str | None = None
 
     def to_dict(self):
-        return asdict(self)
+        return self.model_dump()
 
     async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
@@ -283,13 +278,13 @@ class Job:
             self.best_loss_at = pd.Timestamp.now().floor("s")
             self.best_hotkey = hotkey
         elif (
-            pd.Timestamp.now().floor("s") - self.best_loss_at > self.max_time_no_improvement
+            (pd.Timestamp.now().floor("s") - self.best_loss_at).total_seconds() > self.max_time_no_improvement
             and self.updated_count >= self.min_updates
         ):
             self.active = False
         elif (
             isinstance(self.best_loss_at, pd._libs.tslibs.nattype.NaTType)
-            and pd.Timestamp.now().floor("s") - self.created_at > self.max_time_no_improvement
+            and (pd.Timestamp.now().floor("s") - self.created_at).total_seconds() > self.max_time_no_improvement
         ):
             self.active = False
 
