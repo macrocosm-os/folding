@@ -246,7 +246,7 @@ class Job(BaseModel):
     is_organic: bool = False
     active: bool = True
     update_interval: int = 2 * 3600
-    max_time_no_improvement: int = 1500
+    max_time_no_improvement: int = 1500 # seconds
     epsilon: int
     min_updates: int = 1
     updated_at: datetime = datetime.now(timezone.utc)
