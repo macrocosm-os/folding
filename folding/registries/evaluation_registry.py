@@ -359,17 +359,21 @@ class SyntheticMDEvaluator(BaseEvaluator):
         except Exception as E:
             return False, [], [], str(E)
 
-    def _evaluate(self, data: Dict[str, Any]) -> float:
+    def _evaluate(self, data: Dict[str, Any]) -> bool:
+        """Checks to see if the miner's data can be passed for validation"""
         if not self.process_md_output(**data):
-            return 0.0
+            return False
 
         if not self.check_masses(velm_array_location=data["velm_array_location"]):
-            return 0.0
+            return False
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
-            return 0.0
+            return False
 
+        return True
+
+    def _validate(self):
         is_valid, checked_energies, miner_energies, result = self.is_run_valid()
         if not is_valid:
             return 0.0
