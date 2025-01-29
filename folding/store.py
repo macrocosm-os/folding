@@ -94,7 +94,7 @@ class SQLiteJobStore:
 
         return data
 
-    def get_queue(self, hotkey: str, ready=True) -> Queue:
+    def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
         """Get active jobs as a queue."""
         with sqlite3.connect(self.db_file) as conn:
             conn.row_factory = sqlite3.Row
@@ -109,11 +109,11 @@ class SQLiteJobStore:
                     AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime(?)
                     AND validator_hotkey = ?
                 """
-                cur.execute(query, (now, hotkey))
+                cur.execute(query, (now, validator_hotkey))
             else:
                 cur.execute(
                     f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = ?",
-                    (hotkey,),
+                    (validator_hotkey,),
                 )
 
             rows = cur.fetchall()

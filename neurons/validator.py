@@ -160,7 +160,7 @@ class Validator(BaseValidatorNeuron):
             valid_uids: List of uids
         """
         active_jobs = self.store.get_queue(
-            ready=False, hotkey=self.wallet.hotkey.ss58_address
+            ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
         ).queue
         active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
         active_hotkeys = list(chain.from_iterable(active_hotkeys))
@@ -426,7 +426,7 @@ class Validator(BaseValidatorNeuron):
             try:
                 logger.info("Starting job creation loop.")
                 queue = self.store.get_queue(
-                    ready=False, hotkey=self.wallet.hotkey.ss58_address
+                    ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
                 )
                 if queue.qsize() < self.config.neuron.queue_size:
                     # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
@@ -469,7 +469,7 @@ class Validator(BaseValidatorNeuron):
                 logger.info(f"step({self.step}) block({self.block})")
 
                 for job in self.store.get_queue(
-                    ready=True, hotkey=self.wallet.hotkey.ss58_address
+                    ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
                 ).queue:
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
                     if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
