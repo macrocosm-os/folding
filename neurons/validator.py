@@ -383,16 +383,13 @@ class Validator(BaseValidatorNeuron):
                     output_links.append("")
                     continue
 
-                if not self.config.s3.off:
-                    output_link = await upload_output_to_s3(
-                        handler=protein.handler,
-                        output_file=best_cpt_file,
-                        pdb_id=job.pdb_id,
-                        miner_hotkey=job.hotkeys[idx],
-                        VALIDATOR_ID=self.validator_hotkey_reference,
-                    )
-                else:
-                    output_link = ""
+                output_link = await upload_output_to_s3(
+                    handler=protein.handler,
+                    output_file=best_cpt_file,
+                    pdb_id=job.pdb,
+                    miner_hotkey=job.hotkeys[idx],
+                    VALIDATOR_ID=self.validator_hotkey_reference,
+                )
 
                 output_links.append(output_link)
 
