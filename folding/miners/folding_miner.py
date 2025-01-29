@@ -12,6 +12,8 @@ import traceback
 import asyncio
 import subprocess 
 import sqlite3
+import requests
+import json 
 
 import bittensor as bt
 import openmm as mm
@@ -148,7 +150,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.mock = None
         self.generate_random_seed = lambda: random.randint(0, 1000)
-        self.start_read_node()
         self.db_path = "/db/db.sqlite"
 
         # hardcorded for now -- TODO: make this more flexible
@@ -251,9 +252,6 @@ class FoldingMiner(BaseMinerNeuron):
                 if job_id:
                     query = f"SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = ? ORDER BY priority DESC LIMIT 1"
                     cursor.execute(query, (job_id,))
-                elif max_workers:
-                    query = f"SELECT job_id, {columns_to_select} FROM jobs ORDER BY priority DESC LIMIT ?"
-                    cursor.execute(query, (max_workers,))
 
                 selected_columns = ["job_id"] + [desc[0] for desc in cursor.description[1:]]
                 jobs = cursor.fetchall()
@@ -267,7 +265,88 @@ class FoldingMiner(BaseMinerNeuron):
                     job_id = job_details.pop("job_id")
                     jobs_dict[job_id] = job_details
                 return jobs_dict
+            
+
+    def download_gjp_input_files(job_id: str, output_dir: str, db_path: str = "db/db.sqlite"):
+            columns = "s3_links, pdb_id"
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                query = f"SELECT job_id, {columns} FROM jobs WHERE job_id = ?"
+                cursor.execute(query, (job_id,))
+                selected_columns = ["job_id"] + [desc[0] for desc in cursor.description[1:]]
+                jobs = cursor.fetchall()
+
+                if not jobs:
+                    logger.info(f"No jobs found matching {job_id}")
+
+                jobs_dict = {}
+                for job in jobs:
+                    job_details = dict(zip(selected_columns, job)) # the details of the job to use as the value
+                    job_id = job_details.pop("job_id") #pop out the ID to use as the key 
+                    jobs_dict[job_id] = job_details
+
+                if job_id in jobs_dict:
+                    try:
+                        s3_links = json.loads(jobs_dict[job_id]["s3_links"])
+                        pdb_id = jobs_dict[job_id]["pdb_id"]
+                        if isinstance(s3_links, dict): 
+                            for key, url in s3_links.items():
+                                if key == "pdb":
+                                    filepath = os.path.join(output_dir, f"{pdb_id}.pdb")
+                                    if not os.path.exists(os.path.dirname(filepath)):
+                                        os.makedirs(os.path.dirname(filepath))
+                                    with requests.get(url, stream=True) as r:
+                                        r.raise_for_status()
+                                        with open(filepath, 'wb') as f:
+                                            for chunk in r.iter_content(chunk_size=8192):
+                                                f.write(chunk)
+                                else: 
+                                    filepath = os.path.join(output_dir, f"{pdb_id}.cpt")
+                                    if not os.path.exists(os.path.dirname(filepath)):
+                                        os.makedirs(os.path.dirname(filepath))
+                                    with requests.get(url, stream=True) as r:
+                                        r.raise_for_status()
+                                        with open(filepath, 'wb') as f:
+                                            for chunk in r.iter_content(chunk_size=8192):
+                                                f.write(chunk)
+                                                
+                    except json.JSONDecodeError:
+                        logger.error(f"Error decoding JSON for 's3_links' for job_id {job_id}: {s3_links}")
+                    except Exception as e:
+                        logger.error(f"Failed to download file for job_id {job_id}: {e}")
+                else: 
+                    logger.error(f"Job ID {job_id} not found in the database.")
+    
+    def create_unique_job(self, 
+                          sql_job_details, 
+                          output_dir, 
+                          pdb_id, 
+                          pdb_hash, 
+                          system_config_filepath, 
+                          job_id: str
+        ) -> SimulationConfig:
         
+        # Make sure the output directory exists and if not, create it
+        check_if_directory_exists(output_directory=output_dir)
+
+        #download the input files from s3 using the gjp 
+        download_gjp_input_files(job_id=job_id, output_dir = output_dir, db_path = "db/db.sqlite")
+
+
+        # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
+
+        # copy the system config 
+        system_config = copy.deepcopy(json.loads(sql_job_details[job_id]['system_config']))
+        if system_config["seed"] is None:
+            system_config["seed"] = self.generate_random_seed()
+
+
+        # create SimualtionConfig and write it to system_config_filepath
+        system_config = SimulationConfig(**system_config)
+        write_pkl(system_config, system_config_filepath)
+
+        return system_config
+   
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
@@ -287,9 +366,10 @@ class FoldingMiner(BaseMinerNeuron):
         job_id = synapse.job_id
 
         # query rqlite to get pdb_id 
-        sql_job_details = self.fetch_sql_job_details(columns = ["pdb_id"], job_id=job_id)
+        sql_job_details = self.fetch_sql_job_details(columns = ["pdb_id", "system_config"], job_id=job_id)
 
-        pdb_id = sql_job_details[job_id]['pdb_id']
+        # str
+        pdb_id = sql_job_details[job_id]['pdb_id'] 
         
         # If we are already running a process with the same identifier, return intermediate information
         logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
@@ -314,8 +394,12 @@ class FoldingMiner(BaseMinerNeuron):
             system_config_filepath=system_config_filepath
         )
 
-        if submitted_job_is_unique:
+        if submitted_job_is_unique: # AND we have available workers 
+
+            create_unique_job()
+
             if len(self.simulations) < self.max_workers:
+
                 return self.submit_simulation(
                     synapse=synapse,
                     pdb_id=pdb_id,
@@ -415,39 +499,9 @@ class FoldingMiner(BaseMinerNeuron):
         output_dir: str,
         pdb_id: str,
         pdb_hash: str,
-        system_config_filepath: str,
+        system_config: str,
         event: Dict,
     ):
-        # Make sure the output directory exists and if not, create it
-        check_if_directory_exists(output_directory=output_dir)
-
-        # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
-
-        # The following files are required for openmm simulations and are received from the validator
-        for filename, content in synapse.md_inputs.items():
-            write_mode = "w"
-            try:
-                if "cpt" in filename:
-                    write_mode = "wb"
-                    content = base64.b64decode(content)
-
-                with open(os.path.join(output_dir, filename), write_mode) as f:
-                    f.write(content)
-
-            except Exception as e:
-                logger.error(f"Failed to write file {filename!r} with error: {e}")
-
-        # Write the contents of the pdb file to the output directory
-        with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
-            f.write(synapse.pdb_contents)
-
-        system_config = copy.deepcopy(synapse.system_config)
-        if system_config["seed"] is None:
-            system_config["seed"] = self.generate_random_seed()
-
-        system_config = SimulationConfig(**system_config)
-        write_pkl(system_config, system_config_filepath)
-
         # Create the job and submit it to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
