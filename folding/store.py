@@ -7,8 +7,7 @@ import requests
 from queue import Queue
 from typing import Dict, List
 
-from datetime import datetime, timezone, time
-from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -22,7 +21,9 @@ load_dotenv()
 
 rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
 if rqlite_data_dir is None:
-    raise ValueError("RQLITE_DATA_DIR environment variable is not set inside the .env file")
+    raise ValueError(
+        "RQLITE_DATA_DIR environment variable is not set inside the .env file"
+    )
 DB_DIR = os.path.abspath(rqlite_data_dir)
 
 
@@ -246,7 +247,7 @@ class Job(BaseModel):
     is_organic: bool = False
     active: bool = True
     update_interval: int = 2 * 3600
-    max_time_no_improvement: int = 1500 # seconds
+    max_time_no_improvement: int = 1500  # seconds
     epsilon: int
     min_updates: int = 1
     updated_at: datetime = datetime.now(timezone.utc)

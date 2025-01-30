@@ -17,10 +17,8 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
-import sys
 import argparse
 import bittensor as bt
-from folding.utils.logger import logger
 from folding.utils.logger import setup_file_logging, add_events_level
 
 
