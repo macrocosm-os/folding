@@ -8,7 +8,7 @@ from folding.base.reward import BaseReward, BatchRewardOutput, BatchRewardInput
 class MDReward(BaseReward):
     """Folding reward class"""
 
-    def __init__(self, priority:float = None, **kwargs):
+    def __init__(self, priority: float = None, **kwargs):
         self.priority = priority
 
     async def get_rewards(
@@ -108,11 +108,11 @@ class SyntheticMDReward(MDReward):
         return rewards * self.priority
 
 
-class OrganicFoldingReward(MDReward):
+class OrganicMDReward(MDReward):
     """Organic Folding reward class"""
 
     def name(self) -> str:
-        return "OrganicFolding"
+        return "OrganicMD"
 
     async def calculate_final_reward(self, rewards: torch.Tensor) -> torch.Tensor:
         """
@@ -130,5 +130,5 @@ class OrganicFoldingReward(MDReward):
 
 REWARD_REGISTRY = {
     "SyntheticMD": SyntheticMDReward,
-    "OrganicFolding": OrganicFoldingReward,
+    "OrganicMD": OrganicMDReward,
 }
