@@ -1,6 +1,3 @@
-from .protocol import JobSubmissionSynapse
-from .validators.protein import Protein
-
 __version__ = "1.5.0"
 version_split = __version__.split(".")
 __spec_version__ = (

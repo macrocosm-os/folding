@@ -1,5 +1,5 @@
-from typing import List, Callable
 from itertools import chain
+from typing import List, Callable
 
 import numpy as np
 import folding.utils.constants as c
@@ -12,7 +12,7 @@ class MinerRegistry:
     """
 
     def __init__(self, miner_uids: List[int]):
-        self.tasks: List[str] = EVALUATION_REGISTRY.keys()
+        self.tasks: List[str] = list(EVALUATION_REGISTRY.keys())
         self.registry = dict.fromkeys(miner_uids)
 
         for miner_uid in miner_uids:
@@ -60,14 +60,18 @@ class MinerRegistry:
             chain.from_iterable(self.registry[miner_uid][task]["credibilities"])
         )
 
-        current_credibility = np.mean(task_credibilities)
-        previous_credibility = self.registry[miner_uid][task]["credibility"]
+        for cred in task_credibilities:
+            previous_credibility = self.registry[miner_uid][task]["credibility"]
+            alpha = (
+                c.CREDIBILITY_ALPHA_POSITIVE
+                if cred > 0
+                else c.CREDIBILITY_ALPHA_NEGATIVE
+            )
 
-        # Use EMA to update the miner's credibility.
-        self.registry[miner_uid][task]["credibility"] = (
-            c.CREDIBILITY_ALPHA * current_credibility
-            + (1 - c.CREDIBILITY_ALPHA) * previous_credibility
-        )
+            # Use EMA to update the miner's credibility.
+            self.registry[miner_uid][task]["credibility"] = (
+                alpha * cred + (1 - alpha) * previous_credibility
+            )
 
         # Reset the credibilities.
         self.registry[miner_uid][task]["credibilities"] = []
