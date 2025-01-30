@@ -32,7 +32,7 @@ fi
 python3.11 -m ensurepip
 
 # Install poetry
-pip install poetry
+pip install poetry==2.0.1
 
 # Install the project dependencies
 poetry install
