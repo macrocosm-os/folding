@@ -4,6 +4,8 @@ from typing import Optional
 from pydantic import BaseModel
 from abc import ABC, abstractmethod
 
+from folding.store import Job
+
 
 class RewardEvent(BaseModel):
     """Contains rewards for all the responses in a batch"""
@@ -31,6 +33,7 @@ class BatchRewardInput(BaseModel):
 
     energies: torch.Tensor
     top_reward: float
+    job: Job
 
     class Config:
         arbitrary_types_allowed = True
