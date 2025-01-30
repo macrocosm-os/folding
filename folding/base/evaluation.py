@@ -15,6 +15,10 @@ class BaseEvaluator(ABC):
     def _evaluate(self) -> float:
         pass
 
+    @abstractmethod
+    def _validate(self):
+        pass
+
     def forward(self, data: Dict[str, Any]) -> Any:
         return self._evaluate(data=data)
 

@@ -59,7 +59,7 @@ class BaseReward(ABC):
         """Setup rewards for the given energies"""
         return torch.zeros(len(energies))
 
-    async def apply(self, data: BatchRewardInput) -> RewardEvent:
+    async def forward(self, data: BatchRewardInput) -> RewardEvent:
         self.rewards: torch.Tensor = await self.setup_rewards(energies=data.energies)
         t0: float = time.time()
         batch_rewards_output: BatchRewardOutput = await self.get_rewards(
