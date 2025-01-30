@@ -270,7 +270,7 @@ class BaseValidatorNeuron(BaseNeuron):
             self.hotkeys = state["hotkeys"]
             logger.info("Loaded previously saved validator state information.")
 
-        except:
+        except FileNotFoundError:
             logger.info(
                 "Previous validator state not found... Weight copying the average of the network."
             )
@@ -278,12 +278,16 @@ class BaseValidatorNeuron(BaseNeuron):
             self.scores = self.get_chain_weights()
             self.step = 1
 
-        finally:
+        try:
+            logger.info("Loading miner registry.")
             self.miner_registry = MinerRegistry.load(
                 input_path=os.path.join(
                     self.config.neuron.full_path, "miner_registry.pkl"
                 )
             )
+
+        except FileNotFoundError:
+            logger.info("No previous miner registry found. Creating new registry.")
 
     def get_chain_weights(self) -> torch.Tensor:
         """Obtain the stake weighted average of all validator weights on chain."""
