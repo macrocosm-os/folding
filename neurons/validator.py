@@ -104,6 +104,7 @@ class Validator(BaseValidatorNeuron):
             uids=uids,
             timeout=self.config.neuron.timeout,
             best_submitted_energy=job.best_loss,
+            job_type=job.job_type,
         )
 
     async def ping_all_miners(
@@ -319,10 +320,11 @@ class Validator(BaseValidatorNeuron):
 
         if apply_pipeline:
             model: BaseReward = REWARD_REGISTRY[job.job_type]()
-            output: RewardEvent = model.forward(
+            output: RewardEvent = await model.forward(
                 data=BatchRewardInput(
                     energies=energies,
                     top_reward=c.TOP_SYNTHETIC_MD_REWARD,
+                    job=job,
                 ),
             )
 

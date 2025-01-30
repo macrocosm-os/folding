@@ -54,6 +54,7 @@ async def run_step(
     protein: Protein,
     uids: List[int],
     timeout: float,
+    job_type: str,
     best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()
@@ -103,7 +104,7 @@ async def run_step(
     }
 
     energies, energy_event = get_energies(
-        protein=protein, responses=responses, uids=uids
+        protein=protein, responses=responses, uids=uids, job_type=job_type
     )
 
     # Log the step event.
