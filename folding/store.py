@@ -7,15 +7,14 @@ import requests
 from queue import Queue
 from typing import Dict, List
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
 from dotenv import load_dotenv
-from pydantic import BaseModel, constr
-from folding.utils.opemm_simulation_config import SystemConfig
+from gjp_models.models import JobBase, SystemConfig, SystemKwargs
 
 load_dotenv()
 
@@ -212,7 +211,7 @@ class SQLiteJobStore:
         job = Job(
             pdb_id=pdb,
             system_config=SystemConfig(
-                ff=ff, box=box, water=water, system_kwargs=system_kwargs
+                ff=ff, box=box, water=water, system_kwargs=SystemKwargs(**system_kwargs)
             ),
             hotkeys=hotkeys,
             job_type=job_type,
@@ -238,32 +237,8 @@ class SQLiteJobStore:
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
-class Job(BaseModel):
-    pdb_id: constr(min_length=4, max_length=10)
-    system_config: SystemConfig
-    s3_links: dict[str, str] | None
-    priority: int
-    hotkeys: list[str]
-    is_organic: bool = False
-    active: bool = True
-    update_interval: int = 2 * 3600
-    max_time_no_improvement: int = 1500  # seconds
-    epsilon: int
-    min_updates: int = 1
-    updated_at: datetime = datetime.now(timezone.utc)
-    best_loss: float = np.inf
-    best_loss_at: datetime = datetime.min  # first possible datetime
-    best_hotkey: str = ""
-    updated_count: int = 0
-    created_at: datetime = datetime.now(timezone.utc)
-    best_cpt_links: list[str] | None = None
-    job_type: str
-    event: dict | None = None
-    validator_hotkey: str | None = None
-    job_id: str | None = None
-
-    def to_dict(self):
-        return self.model_dump()
+class Job(JobBase):
+    """Job class for storing job information."""
 
     async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
@@ -301,14 +276,6 @@ class Job(BaseModel):
             > self.max_time_no_improvement
         ):
             self.active = False
-
-    def check_for_available_hotkeys(self, hotkeys: List[str]) -> bool:
-        """Checks the job's hotkeys to only include those that are still valid."""
-        self.hotkeys = list(set(self.hotkeys) & set(hotkeys))
-        if not self.hotkeys:
-            self.active = False
-            return False
-        return True
 
 
 class MockJob(Job):
