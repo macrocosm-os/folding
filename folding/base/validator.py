@@ -257,7 +257,7 @@ class BaseValidatorNeuron(BaseNeuron):
             self.config.neuron.full_path + "/state.pt",
         )
 
-        self.miner_registry.save(
+        self.miner_registry.save_registry(
             output_path=os.path.join(self.config.neuron.full_path, "miner_registry.pkl")
         )
 
@@ -280,7 +280,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         try:
             logger.info("Loading miner registry.")
-            self.miner_registry = MinerRegistry.load(
+            self.miner_registry = MinerRegistry.load_registry(
                 input_path=os.path.join(
                     self.config.neuron.full_path, "miner_registry.pkl"
                 )

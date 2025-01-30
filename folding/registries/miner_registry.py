@@ -1,7 +1,6 @@
 from itertools import chain
 from typing import List, Callable
 
-import numpy as np
 import folding.utils.constants as c
 from folding.utils.ops import write_pkl, load_pkl
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
@@ -28,10 +27,10 @@ class MinerRegistry:
                 }
 
     @classmethod
-    def load(cls, input_path: str):
-        return load_pkl(path=input_path, write_mode="rb")
+    def load_registry(cls, input_path: str):
+        return load_pkl(path=input_path, read_mode="rb")
 
-    def save(self, output_path: str):
+    def save_registry(self, output_path: str):
         write_pkl(data=self, path=output_path, write_mode="wb")
 
     def add_results(self, miner_uid: int, task: str, results: List[Callable]):
@@ -77,8 +76,8 @@ class MinerRegistry:
             )
 
             # Use EMA to update the miner's credibility.
-            self.registry[miner_uid][task]["credibility"] = (
-                alpha * cred + (1 - alpha) * previous_credibility
+            self.registry[miner_uid][task]["credibility"] = round(
+                (alpha * cred + (1 - alpha) * previous_credibility), 3
             )
 
         # Reset the credibilities.
@@ -89,7 +88,9 @@ class MinerRegistry:
             all_credibilities.append(self.registry[miner_uid][task]["credibility"])
 
         # Your overall credibility is the minimum of all the credibilities.
-        self.registry[miner_uid]["overall_credibility"] = np.mean(all_credibilities)
+        self.registry[miner_uid]["overall_credibility"] = round(
+            sum(all_credibilities) / len(all_credibilities), 3
+        )
 
     def reset(self, miner_uid: int) -> None:
         """Resets the score and credibility of miner 'uid'."""
