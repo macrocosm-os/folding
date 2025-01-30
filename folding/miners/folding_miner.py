@@ -586,13 +586,6 @@ class FoldingMiner(BaseMinerNeuron):
         logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)
         return priority
 
-    def start_read_node(self):
-        try:
-            subprocess.run(['bash', 'scripts/start_read_node.sh'], check=True)
-            logger.info("Read node started successfully.")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to start read node: {e}")
-
 class SimulationManager:
     def __init__(
         self, pdb_id: str, output_dir: str, seed: int, system_config: dict
