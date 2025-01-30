@@ -3,6 +3,7 @@ from typing import List, Callable
 
 import numpy as np
 import folding.utils.constants as c
+from folding.utils.ops import write_pkl, load_pkl
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 
 
@@ -25,6 +26,13 @@ class MinerRegistry:
                     "score": 0.0,
                     "results": [],
                 }
+
+    @classmethod
+    def load(cls, input_path: str):
+        return load_pkl(path=input_path, write_mode="rb")
+
+    def save(self, output_path: str):
+        write_pkl(data=self, path=output_path, write_mode="wb")
 
     def add_results(self, miner_uid: int, task: str, results: List[Callable]):
         """adds scores to the miner registry

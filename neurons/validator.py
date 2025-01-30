@@ -40,18 +40,20 @@ class Validator(BaseValidatorNeuron):
 
         self.load_state()
 
-        # Init sync with the network. Updates the metagraph.
-        self.sync()
-        self.store = SQLiteJobStore()
-
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
 
-        self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
+        # If we do not have any miner registry saved to the machine, create.
+        if not hasattr(self, "miner_registry"):
+            self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
+        # Init sync with the network. Updates the metagraph.
+        self.sync()
+
+        self.store = SQLiteJobStore()
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
