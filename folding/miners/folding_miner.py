@@ -425,11 +425,11 @@ class FoldingMiner(BaseMinerNeuron):
                             system_config_filepath = gjp_config_filepath, 
                             job_id = job_id
                 ) 
-                return self.submit_simulation(
+                return self.create_simulation_from_job(
                     synapse=synapse,
+                    output_dir=output_dir,
                     pdb_id=pdb_id,
                     pdb_hash=pdb_hash,
-                    output_dir=output_dir,
                     system_config=system_config,
                     event=event,
                 )
@@ -518,7 +518,7 @@ class FoldingMiner(BaseMinerNeuron):
             elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
                 return check_synapse(self=self, synapse=synapse, event=event)
 
-    def submit_simulation(
+    def create_simulation_from_job(
         self,
         synapse: JobSubmissionSynapse,
         output_dir: str,
@@ -527,7 +527,7 @@ class FoldingMiner(BaseMinerNeuron):
         system_config: str,
         event: Dict,
     ):
-        # Create the job and submit it to the executor
+        # Submit job to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
             output_dir=output_dir,
