@@ -230,28 +230,26 @@ class FoldingMiner(BaseMinerNeuron):
         return True
 
     def fetch_sql_job_details(
-            columns: List[str], max_workers: Optional[int]=None, job_id: Optional[str] = None, db_path: str = 'db/db.sqlite'
+            columns: List[str], job_id: str, db_path: str = 'db/db.sqlite'
         ) -> Dict:
             """
-            Fetches job records from GJP database based on priority and specified fields.
-            Optionally filters by a specific pdb_id if provided.
+            Fetches job records from a SQLite database with given column details and a specific job_id.
 
             Parameters:
-                db_path (str): The file path to the SQLite database.
-                max_workers (int): The maximum number of job records to fetch, sorted by priority in descending order.
-                columns (List[str]): The list of columns to fetch from the database.
-                pdb_id (Optional[str]): Specific pdb_id to filter the jobs by. If None, fetches jobs without filtering.
+                columns (list): List of column names to retrieve from the database.
+                job_id (str): The identifier for the job to fetch.
+                db_path (str): Path to the SQLite database file.
 
             Returns:
-                Dict: A dictionary mapping each job 'id' to its details as specified in the columns list.
+                dict: A dictionary mapping job_id to its details as specified by the columns list.
             """
+
             logger.info("Fetching job details from the sqlite database")
             columns_to_select = ", ".join(columns)
             with sqlite3.connect(db_path) as conn:
                 cursor = conn.cursor()
-                if job_id:
-                    query = f"SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = ? ORDER BY priority DESC LIMIT 1"
-                    cursor.execute(query, (job_id,))
+                query = f"SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = ? ORDER BY priority DESC LIMIT 1"
+                cursor.execute(query, (job_id,))
 
                 selected_columns = ["job_id"] + [desc[0] for desc in cursor.description[1:]]
                 jobs = cursor.fetchall()
@@ -266,8 +264,19 @@ class FoldingMiner(BaseMinerNeuron):
                     jobs_dict[job_id] = job_details
                 return jobs_dict
             
-
     def download_gjp_input_files(job_id: str, output_dir: str, db_path: str = "db/db.sqlite"):
+            """
+            Downloads input files for a given job ID from S3 links stored in a SQLite database.
+
+            Parameters:
+                job_id (str): Job ID for which to download files.
+                output_dir (str): Directory where downloaded files should be stored.
+                db_path (str): Path to the SQLite database file.
+
+            Raises:
+                Exception: If file download fails or S3 links are malformed.
+            """
+                
             columns = "s3_links, pdb_id"
             with sqlite3.connect(db_path) as conn:
                 cursor = conn.cursor()
@@ -319,30 +328,39 @@ class FoldingMiner(BaseMinerNeuron):
     
     def create_unique_job(self, 
                           sql_job_details, 
+                          gjp_config,
                           output_dir, 
                           pdb_id, 
                           pdb_hash, 
                           system_config_filepath, 
                           job_id: str
         ) -> SimulationConfig:
-        
-        # Make sure the output directory exists and if not, create it
+        """
+        Creates a unique simulation job configuration and initiates file download from S3 based on job details.
+
+        Parameters:
+            sql_job_details (dict): Dictionary containing SQL job details.
+            gjp_config (dict): Configuration details for the GJP.
+            output_dir (str): Output directory to store downloaded files.
+            pdb_id (str): PDB identifier for the job.
+            pdb_hash (str): Hash value associated with the PDB.
+            system_config_filepath (str): File path to write the system configuration.
+            job_id (str): Job ID to process.
+
+        Returns:
+            SimulationConfig: An object containing the configuration for the simulation.
+        """
         check_if_directory_exists(output_directory=output_dir)
 
-        #download the input files from s3 using the gjp 
-        download_gjp_input_files(job_id=job_id, output_dir = output_dir, db_path = "db/db.sqlite")
+        self.download_gjp_input_files(job_id=job_id, output_dir = output_dir, db_path = "db/db.sqlite")
 
-
-        # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
-
-        # copy the system config 
-        system_config = copy.deepcopy(json.loads(sql_job_details[job_id]['system_config']))
-        if system_config["seed"] is None:
-            system_config["seed"] = self.generate_random_seed()
+        # TODO: will the seed be present in the gjp system_config?
+        # if gjp_config["seed"] is None:
+        #     gjp_config["seed"] = self.generate_random_seed()
 
 
         # create SimualtionConfig and write it to system_config_filepath
-        system_config = SimulationConfig(**system_config)
+        system_config = SimulationConfig(**gjp_config)
         write_pkl(system_config, system_config_filepath)
 
         return system_config
@@ -381,31 +399,38 @@ class FoldingMiner(BaseMinerNeuron):
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
 
+        gjp_config = json.loads(sql_job_details[job_id]['system_config'])
+
         pdb_hash = self.get_simulation_hash(
-            pdb_id=pdb_id, system_config=synapse.system_config
+            pdb_id=pdb_id, system_config=gjp_config
         )
         output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
-        system_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
+        gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
 
         submitted_job_is_unique = self.is_unique_job(
-            system_config_filepath=system_config_filepath
+            system_config_filepath=gjp_config_filepath
         )
 
-        if submitted_job_is_unique: # AND we have available workers 
-
-            create_unique_job()
-
+        if submitted_job_is_unique: 
             if len(self.simulations) < self.max_workers:
-
+                system_config = self.create_unique_job( 
+                            sql_job_details = sql_job_details, 
+                            gjp_config = gjp_config,
+                            output_dir = output_dir, 
+                            pdb_id = pdb_id, 
+                            pdb_hash = pdb_hash, 
+                            system_config_filepath = gjp_config_filepath, 
+                            job_id = job_id
+                ) 
                 return self.submit_simulation(
                     synapse=synapse,
                     pdb_id=pdb_id,
                     pdb_hash=pdb_hash,
                     output_dir=output_dir,
-                    system_config_filepath=system_config_filepath,
+                    system_config=system_config,
                     event=event,
                 )
 
