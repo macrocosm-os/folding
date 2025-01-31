@@ -21,7 +21,6 @@ from folding.base.reward import BatchRewardInput
 from folding.base.reward import BaseReward, RewardEvent
 from folding.base.validator import BaseValidatorNeuron
 from folding.rewards.md_rewards import REWARD_REGISTRY
-from folding.rewards.reward_pipeline import reward_pipeline
 
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job, SQLiteJobStore
@@ -478,14 +477,16 @@ class Validator(BaseValidatorNeuron):
                     ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
                 ).queue:
                     # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
-                    if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
-                        self.store.update_gjp_job(
-                            job=job,
-                            gjp_address=self.config.neuron.gjp_address,
-                            keypair=self.wallet.hotkey,
-                            job_id=job.job_id,
-                        )
-                        continue
+                    # NOTE: we don't need to do this anymore but I'm keeping it just in case
+                    # hotkeys_present, job = self.store.check_for_available_hotkeys(job=job, hotkeys=self.metagraph.hotkeys)
+                    # if not hotkeys_present:
+                    #     self.store.update_gjp_job(
+                    #         job=job,
+                    #         gjp_address=self.config.neuron.gjp_address,
+                    #         keypair=self.wallet.hotkey,
+                    #         job_id=job.job_id,
+                    #     )
+                    #     continue
 
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = await self.forward(job=job)

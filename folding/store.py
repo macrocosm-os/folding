@@ -167,6 +167,16 @@ class SQLiteJobStore:
             # Flatten the list of tuples into a list of strings
             return [row[0] for row in cur.fetchall()]
 
+    def check_for_available_hotkeys(
+        self, job: "Job", hotkeys: List[str]
+    ) -> (bool, "Job"):
+        """Checks the job's hotkeys to only include those that are still valid."""
+        job.hotkeys = list(set(job.hotkeys) & set(hotkeys))
+        if not job.hotkeys:
+            job.active = False
+            return False, job
+        return True, job
+
     def __repr__(self):
         """Show current state of the database."""
         with sqlite3.connect(self.db_file) as conn:
