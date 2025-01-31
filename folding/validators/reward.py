@@ -94,8 +94,7 @@ def evaluate(
                 else ""
             )
 
-            reported_energy = evaluator.get_reported_energy()
-            reported_energies[i] = reported_energy
+            reported_energies[i] = evaluator.get_reported_energy()
             process_md_output_time[i] = time.time() - start_time
             evaluators[i] = evaluator
 
