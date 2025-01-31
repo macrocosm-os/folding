@@ -84,7 +84,7 @@ def evaluate(
                 system_config=protein.system_config,
             )
 
-            can_process = evaluator._evaluate()
+            can_process = evaluator.evaluate()
             if not can_process:
                 continue
             seed.append(resp.miner_seed)
@@ -173,7 +173,7 @@ def get_energies(
             ns_computed = evaluator.get_ns_computed()
 
             start_time = time.time()
-            is_valid, checked_energy, miner_energy, reason = evaluator._validate()
+            is_valid, checked_energy, miner_energy, reason = evaluator.validate()
 
             # Update event dictionary for this index
             event["is_run_valid_time"][i] = time.time() - start_time

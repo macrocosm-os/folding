@@ -55,6 +55,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
         self.miner_data_directory = os.path.join(self.basepath, self.hotkey_alias)
         self.velm_array_pkl_path = velm_array_pkl_path
 
+    # TODO: Refactor this method to be more modular, seperate getting energy and setting up simulations and files
+
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
 
@@ -373,7 +375,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         except Exception as E:
             return False, [], [], str(E)
 
-    def _evaluate(self) -> bool:
+    def evaluate(self) -> bool:
         """Checks to see if the miner's data can be passed for validation"""
         if not self.process_md_output():
             return False
@@ -384,7 +386,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return True
 
-    def _validate(self):
+    def validate(self):
         is_valid, checked_energies, miner_energies, result = self.is_run_valid()
         if not is_valid:
             return 0.0, checked_energies, miner_energies, result
