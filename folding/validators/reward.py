@@ -8,13 +8,8 @@ import numpy as np
 from folding.protocol import JobSubmissionSynapse
 from folding.validators.protein import Protein
 from folding.utils.logger import logger
-from folding.registries.evaluation_registry import (
-    EVALUATION_REGISTRY,
-    SyntheticMDEvaluator,
-    SyntheticMLEvaluator,
-    OrganicMDEvaluator,
-    OrganicMLEvaluator,
-)
+from folding.registries.evaluation_registry import EVALUATION_REGISTRY
+from folding.utils import constants as c
 
 
 def check_if_identical(event):
@@ -174,6 +169,12 @@ def get_energies(
             start_time = time.time()
             is_valid, checked_energy, miner_energy, reason = evaluator.validate()
 
+            energy_value = np.median(checked_energy[-10:])
+
+            if not abs(energy_value - reported_energy) < c.DIFFERENCE_THRESHOLD:
+                is_valid = False
+                continue
+
             # Update event dictionary for this index
             event["is_run_valid_time"][i] = time.time() - start_time
             event["reason"][i] = reason
@@ -188,7 +189,8 @@ def get_energies(
                 # Check if this energy value is unique (within some tolerance)
                 energy_value = np.median(checked_energy[-10:])
                 is_duplicate = any(
-                    abs(energy_value - e) < 1e-6 for e in unique_energies
+                    abs(energy_value - e) < c.DIFFERENCE_THRESHOLD
+                    for e in unique_energies
                 )
                 event["is_duplicate"][i] = is_duplicate
 
