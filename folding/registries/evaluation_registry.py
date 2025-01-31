@@ -33,7 +33,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         md_output: dict,
         basepath: str,
         system_config: SimulationConfig,
-        velm_array_pkl: str,
+        velm_array_pkl_path: str,
         **kwargs,
     ):
         self.pdb_id = pdb_id
@@ -53,7 +53,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             k.split(".")[-1]: k for k, v in self.md_output.items() if len(v) > 0
         }
         self.miner_data_directory = os.path.join(self.basepath, self.hotkey_alias)
-        self.velm_array_pkl = velm_array_pkl
+        self.velm_array_pkl_path = velm_array_pkl_path
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
@@ -209,7 +209,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         https://github.com/openmm/openmm/blob/53770948682c40bd460b39830d4e0f0fd3a4b868/platforms/common/src/kernels/langevinMiddle.cc#L11
         """
 
-        validator_velm_data = load_pkl(self.velm_array_pkl, "rb")
+        validator_velm_data = load_pkl(self.velm_array_pkl_path, "rb")
 
         validator_masses = validator_velm_data["pdb_masses"]
         miner_masses = miner_velm_data["pdb_masses"]
