@@ -64,36 +64,6 @@ class SQLiteJobStore:
 
         return Job(**data)
 
-    def _job_to_dict(self, job: "Job") -> dict:
-        """Convert a Job object to a dictionary for database storage."""
-        data = job.to_dict()
-
-        # Convert Python list or dict objects to JSON strings for sqlite
-        data_to_update = {}
-        for k, v in data.items():
-            if isinstance(v, (list, dict)):
-                data_to_update[k] = json.dumps(v)
-
-        data.update(data_to_update)
-
-        # Convert timestamps to strings
-        for field in ["created_at", "updated_at", "best_loss_at"]:
-            if isinstance(data[field], pd.Timestamp):
-                data[field] = data[field].isoformat()
-            elif pd.isna(data[field]):
-                data[field] = None
-
-        # Convert intervals to seconds
-        data["update_interval"] = int(data["update_interval"].total_seconds())
-        data["max_time_no_improvement"] = int(
-            data["max_time_no_improvement"].total_seconds()
-        )
-
-        # Convert boolean to integer
-        data["active"] = int(data["active"])
-
-        return data
-
     def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
         """Get active jobs as a queue."""
         with sqlite3.connect(self.db_file) as conn:
@@ -243,7 +213,8 @@ class SQLiteJobStore:
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
-        return response.json()["job_id"]
+        job.job_id = response.json()["job_id"]
+        return job
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
