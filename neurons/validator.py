@@ -102,6 +102,7 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
+            job_id=job.job_id,
             best_submitted_energy=job.best_loss,
             job_type=job.job_type,
         )
@@ -222,7 +223,7 @@ class Validator(BaseValidatorNeuron):
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
             try:
-                job_id = self.store.upload_job(
+                job = self.store.upload_job(
                     pdb=job_event["pdb_id"],
                     ff=job_event["ff"],
                     water=job_event["water"],
@@ -236,7 +237,9 @@ class Validator(BaseValidatorNeuron):
                     event=job_event,
                     s3_links=job_event["s3_links"],
                 )
-                job_event["job_id"] = job_id
+                job_event["job_id"] = job.job_id
+
+                await self.forward(job=job)
 
                 return True
             except Exception as e:
@@ -267,7 +270,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event)
+            await self.add_job(job_event=job_event, uids=[76])
             await asyncio.sleep(0.01)
 
     async def update_job(self, job: Job):
@@ -343,7 +346,7 @@ class Validator(BaseValidatorNeuron):
                     event[key] = value.total_seconds()
             return event
 
-        event = job.to_dict()
+        event = job.model_dump()
         simulation_event = event.pop("event")  # contains information from hp search
         merged_events = simulation_event | event  # careful: this overwrites.
 
