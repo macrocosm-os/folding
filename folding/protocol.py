@@ -48,9 +48,6 @@ class JobSubmissionSynapse(bt.Synapse):
     
     job_id: str
     pdb_id: str
-    pdb_contents: str
-    md_inputs: dict  # Right now this is just a "em.cpt" file.
-    system_config: dict = {}
 
     best_submitted_energy: typing.Optional[float] = None
 

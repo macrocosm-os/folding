@@ -110,10 +110,7 @@ def check_synapse(
     self, synapse: JobSubmissionSynapse, event: Dict = None
 ) -> JobSubmissionSynapse:
     """Utility function to remove md_inputs if they exist"""
-    if len(synapse.md_inputs) > 0:
-        event["md_inputs_sizes"] = list(map(len, synapse.md_inputs.values()))
-        event["md_inputs_filenames"] = list(synapse.md_inputs.keys())
-        synapse.md_inputs = {}  # remove from synapse
+
 
     if synapse.md_output is not None:
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
@@ -230,7 +227,7 @@ class FoldingMiner(BaseMinerNeuron):
         return True
 
     def fetch_sql_job_details(
-            columns: List[str], job_id: str, db_path: str = 'db/db.sqlite'
+            self, columns: List[str], job_id: str, db_path: str = 'db/db.sqlite'
         ) -> Dict:
             """
             Fetches job records from a SQLite database with given column details and a specific job_id.
@@ -264,7 +261,7 @@ class FoldingMiner(BaseMinerNeuron):
                     jobs_dict[job_id] = job_details
                 return jobs_dict
             
-    def download_gjp_input_files(job_id: str, output_dir: str, db_path: str = "db/db.sqlite"):
+    def download_gjp_input_files(self, job_id: str, output_dir: str, db_path: str = "db/db.sqlite"):
             """
             Downloads input files for a given job ID from S3 links stored in a SQLite database.
 
@@ -354,13 +351,14 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.download_gjp_input_files(job_id=job_id, output_dir = output_dir, db_path = "db/db.sqlite")
 
-        # TODO: will the seed be present in the gjp system_config?
-        # if gjp_config["seed"] is None:
-        #     gjp_config["seed"] = self.generate_random_seed()
-
-
         # create SimualtionConfig and write it to system_config_filepath
         system_config = SimulationConfig(**gjp_config)
+        
+        # TODO: will the seed be present in the gjp system_config?
+        if system_config.seed is None:
+            system_config.seed = self.generate_random_seed()
+
+
         write_pkl(system_config, system_config_filepath)
 
         return system_config
@@ -382,9 +380,13 @@ class FoldingMiner(BaseMinerNeuron):
 
         # get the job id from the synapse 
         job_id = synapse.job_id
-
+        columns = ["pdb_id", "system_config"]
         # query rqlite to get pdb_id 
-        sql_job_details = self.fetch_sql_job_details(columns = ["pdb_id", "system_config"], job_id=job_id)
+        sql_job_details = self.fetch_sql_job_details(columns=columns, job_id=job_id)
+        
+        if not sql_job_details:
+            logger.error(f"Job ID {job_id} not found in the database.")
+            return synapse
 
         # str
         pdb_id = sql_job_details[job_id]['pdb_id'] 
@@ -515,8 +517,6 @@ class FoldingMiner(BaseMinerNeuron):
 
                     return check_synapse(self=self, synapse=synapse, event=event)
 
-            elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
-                return check_synapse(self=self, synapse=synapse, event=event)
 
     def create_simulation_from_job(
         self,
@@ -524,14 +524,14 @@ class FoldingMiner(BaseMinerNeuron):
         output_dir: str,
         pdb_id: str,
         pdb_hash: str,
-        system_config: str,
+        system_config: SimulationConfig,
         event: Dict,
     ):
         # Submit job to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
             output_dir=output_dir,
-            system_config=system_config.to_dict(),
+            system_config=system_config.model_dump(),
             seed=system_config.seed,
         )
 
@@ -583,7 +583,7 @@ class FoldingMiner(BaseMinerNeuron):
         priority = float(
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
-        logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)
+        logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}")
         return priority
 
 class SimulationManager:
