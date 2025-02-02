@@ -111,7 +111,6 @@ def check_synapse(
 ) -> JobSubmissionSynapse:
     """Utility function to remove md_inputs if they exist"""
 
-
     if synapse.md_output is not None:
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
         event["md_output_filenames"] = list(synapse.md_output.keys())
@@ -354,10 +353,8 @@ class FoldingMiner(BaseMinerNeuron):
         # create SimualtionConfig and write it to system_config_filepath
         system_config = SimulationConfig(**gjp_config)
         
-        # TODO: will the seed be present in the gjp system_config?
         if system_config.seed is None:
             system_config.seed = self.generate_random_seed()
-
 
         write_pkl(system_config, system_config_filepath)
 
