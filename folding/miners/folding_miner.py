@@ -67,7 +67,7 @@ def attach_files_to_synapse(
     Args:
         synapse (JobSubmissionSynapse): Recently received synapse object
         data_directory (str): directory where the miner is holding the necessary data for the validator.
-        state (str): the current state of the simulation
+        state (str): the current                         state of the simulation
 
     state is either:
      1. nvt
@@ -226,7 +226,7 @@ class FoldingMiner(BaseMinerNeuron):
         return True
 
     def fetch_sql_job_details(
-            self, columns: List[str], job_id: str, db_path: str = 'db/db.sqlite'
+            self, columns: List[str], job_id: str, local_db_address: str
         ) -> Dict:
             """
             Fetches job records from a SQLite database with given column details and a specific job_id.
@@ -241,105 +241,88 @@ class FoldingMiner(BaseMinerNeuron):
             """
 
             logger.info("Fetching job details from the sqlite database")
-            columns_to_select = ", ".join(columns)
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-                query = f"SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = ? ORDER BY priority DESC LIMIT 1"
-                cursor.execute(query, (job_id,))
-
-                selected_columns = ["job_id"] + [desc[0] for desc in cursor.description[1:]]
-                jobs = cursor.fetchall()
-                if not jobs:
-                    logger.info("No jobs found.")
-                    return {}
-
-                jobs_dict = {}
-                for job in jobs:
-                    job_details = dict(zip(selected_columns, job))
-                    job_id = job_details.pop("job_id")
-                    jobs_dict[job_id] = job_details
-                return jobs_dict
             
-    def download_gjp_input_files(self, job_id: str, output_dir: str, db_path: str = "db/db.sqlite"):
-            """
-            Downloads input files for a given job ID from S3 links stored in a SQLite database.
+            full_local_db_address = f"http://{local_db_address}/db/query"
+            columns_to_select = ", ".join(columns)
+            query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = {job_id}"""
+            
+            try:
+                response = requests.get(full_local_db_address, params={"q": query, "level": "strong"})
+                response.raise_for_status()
+                data = response.json()
 
-            Parameters:
-                job_id (str): Job ID for which to download files.
-                output_dir (str): Directory where downloaded files should be stored.
-                db_path (str): Path to the SQLite database file.
-
-            Raises:
-                Exception: If file download fails or S3 links are malformed.
-            """
-                
-            columns = "s3_links, pdb_id"
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-                query = f"SELECT job_id, {columns} FROM jobs WHERE job_id = ?"
-                cursor.execute(query, (job_id,))
-                selected_columns = ["job_id"] + [desc[0] for desc in cursor.description[1:]]
-                jobs = cursor.fetchall()
-
-                if not jobs:
+                if not data or 'results' not in data or not data['results'][0]['values']:
                     logger.info(f"No jobs found matching {job_id}")
+                    return {}
+                return data
 
-                jobs_dict = {}
-                for job in jobs:
-                    job_details = dict(zip(selected_columns, job)) # the details of the job to use as the value
-                    job_id = job_details.pop("job_id") #pop out the ID to use as the key 
-                    jobs_dict[job_id] = job_details
+            except requests.RequestException as e:
+                logger.error(f"Failed to fetch job details {e}")
+                return
+            
+    def download_gjp_input_files(self, job_id: str, output_dir: str, local_db_address: str):
+        columns_str = "pdb_id, s3_links"
+        
+        query = f"""SELECT {columns_str} FROM jobs WHERE job_id = '{job_id}'"""
+        full_local_db_address = f"http://{local_db_address}/db/query"
+        logger.info(query)
+        try:
+            # Send a POST request with the SQL query
+            response = requests.get(full_local_db_address, params={"q": query, "level": "strong"})
+            response.raise_for_status()
+            logger.info("response sent")
+            data = response.json()
+            logger.info(f"data: {data}")
+            
+            # Check if data is returned
+            if not data or 'results' not in data or not data['results'][0]['values']:
+                logger.info("No jobs found.")
 
-                if job_id in jobs_dict:
-                    try:
-                        s3_links = json.loads(jobs_dict[job_id]["s3_links"])
-                        pdb_id = jobs_dict[job_id]["pdb_id"]
-                        if isinstance(s3_links, dict): 
-                            for key, url in s3_links.items():
-                                if key == "pdb":
-                                    filepath = os.path.join(output_dir, f"{pdb_id}.pdb")
-                                    if not os.path.exists(os.path.dirname(filepath)):
-                                        os.makedirs(os.path.dirname(filepath))
-                                    with requests.get(url, stream=True) as r:
-                                        r.raise_for_status()
-                                        with open(filepath, 'wb') as f:
-                                            for chunk in r.iter_content(chunk_size=8192):
-                                                f.write(chunk)
-                                else: 
-                                    filepath = os.path.join(output_dir, f"{pdb_id}.cpt")
-                                    if not os.path.exists(os.path.dirname(filepath)):
-                                        os.makedirs(os.path.dirname(filepath))
-                                    with requests.get(url, stream=True) as r:
-                                        r.raise_for_status()
-                                        with open(filepath, 'wb') as f:
-                                            for chunk in r.iter_content(chunk_size=8192):
-                                                f.write(chunk)
-                                                
-                    except json.JSONDecodeError:
-                        logger.error(f"Error decoding JSON for 's3_links' for job_id {job_id}: {s3_links}")
-                    except Exception as e:
-                        logger.error(f"Failed to download file for job_id {job_id}: {e}")
-                else: 
-                    logger.error(f"Job ID {job_id} not found in the database.")
-    
+
+            s3_links_string = data['results'][0]['values'][0][1]
+            s3_links = json.loads(s3_links_string)
+            pdb_id = data['results'][0]['values'][0][0]
+            logger.info(f"{s3_links}")
+            
+            for key, url in s3_links.items():
+                
+                if key == "pdb":
+                    filepath = os.path.join(output_dir, f"{pdb_id}.pdb")
+                    if not os.path.exists(os.path.dirname(filepath)):
+                        os.makedirs(os.path.dirname(filepath))
+                    with requests.get(url, stream=True) as r:
+                        r.raise_for_status()
+                        with open(filepath, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                else:
+                    filepath = os.path.join(output_dir, f"{pdb_id}.cpt")
+                    if not os.path.exists(os.path.dirname(filepath)):
+                        os.makedirs(os.path.dirname(filepath))
+                    with requests.get(url, stream=True) as r:
+                        r.raise_for_status()
+                        with open(filepath, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                                
+        except json.JSONDecodeError:
+            logger.error("Failed to decode JSON string.")
+        except Exception as e:
+            logger.error(f"Failed to download files: {e}")
+        
     def create_unique_job(self, 
-                          sql_job_details, 
                           gjp_config,
                           output_dir, 
-                          pdb_id, 
-                          pdb_hash, 
                           system_config_filepath, 
-                          job_id: str
+                          job_id: str,
+                          local_db_address: str
         ) -> SimulationConfig:
         """
         Creates a unique simulation job configuration and initiates file download from S3 based on job details.
 
         Parameters:
-            sql_job_details (dict): Dictionary containing SQL job details.
             gjp_config (dict): Configuration details for the GJP.
             output_dir (str): Output directory to store downloaded files.
-            pdb_id (str): PDB identifier for the job.
-            pdb_hash (str): Hash value associated with the PDB.
             system_config_filepath (str): File path to write the system configuration.
             job_id (str): Job ID to process.
 
@@ -348,7 +331,7 @@ class FoldingMiner(BaseMinerNeuron):
         """
         check_if_directory_exists(output_directory=output_dir)
 
-        self.download_gjp_input_files(job_id=job_id, output_dir = output_dir, db_path = "db/db.sqlite")
+        self.download_gjp_input_files(job_id=job_id, output_dir = output_dir, local_db_address = local_db_address)
 
         # create SimualtionConfig and write it to system_config_filepath
         system_config = SimulationConfig(**gjp_config)
@@ -378,15 +361,16 @@ class FoldingMiner(BaseMinerNeuron):
         # get the job id from the synapse 
         job_id = synapse.job_id
         columns = ["pdb_id", "system_config"]
+        local_db_address = os.getenv("RQLITE_HTTP_ADDR")
         # query rqlite to get pdb_id 
-        sql_job_details = self.fetch_sql_job_details(columns=columns, job_id=job_id)
+        sql_job_details = self.fetch_sql_job_details(columns=columns, job_id=job_id, local_db_address=local_db_address)
         
         if not sql_job_details:
             logger.error(f"Job ID {job_id} not found in the database.")
             return synapse
 
         # str
-        pdb_id = sql_job_details[job_id]['pdb_id'] 
+        pdb_id = sql_job_details['results'][0]['values'][0][0]
         
         # If we are already running a process with the same identifier, return intermediate information
         logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
@@ -419,8 +403,6 @@ class FoldingMiner(BaseMinerNeuron):
                             sql_job_details = sql_job_details, 
                             gjp_config = gjp_config,
                             output_dir = output_dir, 
-                            pdb_id = pdb_id, 
-                            pdb_hash = pdb_hash, 
                             system_config_filepath = gjp_config_filepath, 
                             job_id = job_id
                 ) 
