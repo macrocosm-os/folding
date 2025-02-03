@@ -19,6 +19,8 @@ from gjp_models.models import JobBase, SystemConfig, SystemKwargs
 load_dotenv()
 
 rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
+rqlite_ip = os.getenv("JOIN_ADDR").split(":")[0]
+
 if rqlite_data_dir is None:
     raise ValueError(
         "RQLITE_DATA_DIR environment variable is not set inside the .env file"
@@ -236,6 +238,25 @@ class SQLiteJobStore:
             raise ValueError(f"Failed to upload job: {response.text}")
         job.job_id = response.json()["job_id"]
         return job
+
+    async def confirm_upload(self, job: "Job"):
+        """
+        Confirm the upload of a job to the global job pool by trying to read in the uploaded job.
+
+        Args:
+            job (Job): The job object to be confirmed.
+
+        Returns:
+            str: The job ID of the confirmed job.
+        """
+
+        response = requests.get(
+            f"http://{rqlite_ip}/db/query",
+            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job.job_id}'"},
+        )
+        if response.status_code != 200:
+            raise ValueError(f"Failed to confirm job: {response.text}")
+        return response.json()["job_id"]
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations

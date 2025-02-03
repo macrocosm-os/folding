@@ -238,7 +238,8 @@ class Validator(BaseValidatorNeuron):
                     event=job_event,
                     s3_links=job_event["s3_links"],
                 )
-                job_event["job_id"] = job.job_id
+
+                job_event["job_id"] = self.store.confirm_upload(job)
 
                 await self.forward(job=job)
 
