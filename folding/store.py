@@ -20,6 +20,7 @@ load_dotenv()
 
 rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
 rqlite_ip = os.getenv("JOIN_ADDR").split(":")[0]
+local_db_addr = os.getenv("RQLITE_HTTP_ADDR")
 
 if rqlite_data_dir is None:
     raise ValueError(
@@ -68,27 +69,45 @@ class SQLiteJobStore:
 
     def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
         """Get active jobs as a queue."""
-        with sqlite3.connect(self.db_file) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
+        print(f"Getting jobs for {validator_hotkey}")
 
-            if ready:
-                # Calculate the threshold time for ready jobs
-                now = datetime.utcnow().isoformat()
-                query = f"""
-                    SELECT * FROM {self.table_name}
-                    WHERE active = 1
-                    AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime(?)
-                    AND validator_hotkey = ?
-                """
-                cur.execute(query, (now, validator_hotkey))
-            else:
-                cur.execute(
-                    f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = ?",
-                    (validator_hotkey,),
-                )
+        if ready:
+            # Calculate the threshold time for ready jobs
+            now = datetime.utcnow().isoformat()
+            query = f"""
+                SELECT * FROM {self.table_name}
+                WHERE active = 1
+                AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime('{now}')
+                AND validator_hotkey = '{validator_hotkey}'
+            """
+            print(f"query: {query}, args: {now}, {validator_hotkey}")
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={"q": query, "level": "strong"},
+            )
+        else:
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={
+                    "q": f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = '{validator_hotkey}'",
+                    "level": "strong",
+                },
+            )
+        print(f"Response: {response.json()}")
 
-            rows = cur.fetchall()
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
+        elif "values" not in response.keys():
+            return Queue()
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
 
         queue = Queue()
         for row in rows:
@@ -102,14 +121,27 @@ class SQLiteJobStore:
 
         # TODO: Implement a way to filter it based on time. We should keep track of the last time
         # we read the db?
-        with sqlite3.connect(self.db_file) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": f"SELECT * FROM {self.table_name} WHERE active = 0 AND validator_hotkey != {validator_hotkey}",
+                "consistency": "strong",
+            },
+        )
 
-            query = f"SELECT * FROM {self.table_name} WHERE active = 0 AND validator_hotkey = ?"
-            cur.execute(query, (validator_hotkey,))
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
 
-            rows = cur.fetchall()
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
+        elif "values" not in response.keys():
+            return Queue()
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
 
         queue = Queue()
         for row in rows:
@@ -154,11 +186,29 @@ class SQLiteJobStore:
         Returns:
             list: List of PDB IDs as strings
         """
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
-            cur.execute(f"SELECT pdb_id FROM {self.table_name}")
-            # Flatten the list of tuples into a list of strings
-            return [row[0] for row in cur.fetchall()]
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": f"SELECT pdb_id FROM {self.table_name}",
+                "consistency": "strong",
+            },
+        )
+
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get all PDBs: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return []
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+
+        return [row["pdb_id"] for row in rows]
 
     def check_for_available_hotkeys(
         self, job: "Job", hotkeys: List[str]
@@ -251,12 +301,23 @@ class SQLiteJobStore:
         """
 
         response = requests.get(
-            f"http://{rqlite_ip}/db/query",
+            f"http://{rqlite_ip}:4001/db/query",
             params={"q": f"SELECT * FROM jobs WHERE job_id = '{job.job_id}'"},
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to confirm job: {response.text}")
-        return response.json()["job_id"]
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return []
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+        return rows[0]["job_id"]
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
