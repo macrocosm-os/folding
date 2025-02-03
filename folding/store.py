@@ -312,7 +312,7 @@ class SQLiteJobStore:
         if "error" in response.keys():
             raise ValueError(f"Failed to get all PDBs: {response['error']}")
         elif "values" not in response.keys():
-            return []
+            return None
 
         columns = response["columns"]
         values = response["values"]

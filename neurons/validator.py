@@ -239,7 +239,10 @@ class Validator(BaseValidatorNeuron):
                     s3_links=job_event["s3_links"],
                 )
 
-                job_event["job_id"] = self.store.confirm_upload(job)
+                job_event["job_id"] = await self.store.confirm_upload(job)
+
+                if job_event["job_id"] is None:
+                    raise ValueError("job_id is None")
 
                 await self.forward(job=job)
 
@@ -536,11 +539,12 @@ class Validator(BaseValidatorNeuron):
         inactive_jobs_queue = self.store.get_inactive_queue(
             validator_hotkey=self.wallet.hotkey.ss58_address
         )
-        if len(inactive_jobs_queue) == 0:
+        if inactive_jobs_queue.qsize() == 0:
             logger.info("No inactive jobs to update.")
             return
 
-        for inactive_job in inactive_jobs_queue:
+        while not inactive_jobs_queue.empty():
+            inactive_job = inactive_jobs_queue.get()
             for uid, reward in zip(inactive_job.uids, inactive_job.rewards):
                 # ema is weird and you can't simply aggregate and update. To keep things consistent, you
                 # need to do it one by one.
