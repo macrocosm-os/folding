@@ -4,7 +4,6 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 from openmm import app
-import asyncio
 
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation

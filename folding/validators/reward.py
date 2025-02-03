@@ -5,11 +5,11 @@ from collections import defaultdict
 
 import numpy as np
 
-from folding.protocol import JobSubmissionSynapse
-from folding.validators.protein import Protein
 from folding.utils.logger import logger
-from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 from folding.utils import constants as c
+from folding.validators.protein import Protein
+from folding.protocol import JobSubmissionSynapse
+from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 
 
 def check_if_identical(event):
@@ -60,7 +60,6 @@ def evaluate(
 
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         try:
-
             if resp.dendrite.status_code != 200:
                 logger.info(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
