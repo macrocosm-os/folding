@@ -5,7 +5,7 @@ The **Global Job Pool** is a blockchain-integrated tool that enables decentraliz
 
 ## Architecture
 - The **Global Job Pool** is centrally hosted, allowing all participants to read job data.
-- **Validators** have write access to the pool and must use an API distributed by **Macrocosmos**.
+- **Validators** have write access to the pool and must use an API hosted by **Macrocosmos**.
 - **Miners** can only read job data but cannot write to the database.
 - **RQLite** is used to ensure that any additions by a validator are automatically synchronized across all nodes.
 
