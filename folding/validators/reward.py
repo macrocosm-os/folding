@@ -77,6 +77,7 @@ def evaluate(
                 md_output=resp.md_output,
                 basepath=protein.base_directory,
                 system_config=protein.system_config,
+                velm_array_pkl_path=protein.velm_array_pkl,
             )
 
             can_process = evaluator.evaluate()
@@ -219,15 +220,15 @@ def get_energies(
             process_md_output_time,
         ) = zip(*processed_data)
 
-        # Update event dictionary with processed data
-        event.update(
-            {
-                "seed": seed,
-                "best_cpt": best_cpt,
-                "process_md_output_time": process_md_output_time,
-                "reported_energy": reported_energies,
-            }
-        )
+    # Update event dictionary with processed data
+    event.update(
+        {
+            "seed": seed,
+            "best_cpt": best_cpt,
+            "process_md_output_time": process_md_output_time,
+            "reported_energy": reported_energies,
+        }
+    )
 
     # Calculate final energies for valid and non-duplicate responses
     for idx, (is_valid, is_duplicate) in enumerate(

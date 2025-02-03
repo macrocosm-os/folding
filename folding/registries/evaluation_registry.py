@@ -398,6 +398,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
             result,
         )  # Last portion of the reproduced energy vector
 
+    def _evaluate(self, data: Dict[str, Any]):
+        pass
+
+    def _validate(self):
+        pass
+
     def get_ns_computed(self):
         """Calculate the number of nanoseconds computed by the miner."""
 
