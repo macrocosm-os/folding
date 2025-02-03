@@ -2,14 +2,13 @@
 # Copyright © 2024 Macrocosmos
 
 import os
-import re
 import time
 import random
 import asyncio
 import traceback
+import subprocess
 
 from itertools import chain
-from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
 import torch
@@ -581,8 +580,8 @@ class Validator(BaseValidatorNeuron):
         try:
             os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
             os.system("pkill rqlited")
-            os.system(
-                f"bash {os.path.join(project_path, 'scripts', 'start_read_node.sh')}"
+            subprocess.Popen(
+                ["bash", os.path.join(project_path, "scripts", "start_read_node.sh")]
             )
         except Exception as e:
             logger.error(f"Error restarting rqlite: {traceback.format_exc()}")
