@@ -55,6 +55,7 @@ async def run_step(
     uids: List[int],
     timeout: float,
     job_type: str,
+    job_id: str,
     best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()
@@ -76,9 +77,7 @@ async def run_step(
 
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
-        md_inputs=protein.md_inputs,
-        pdb_contents=protein.pdb_contents,
-        system_config=system_config,
+        job_id=job_id,
         best_submitted_energy=0
         if np.isinf(best_submitted_energy)
         else best_submitted_energy,
@@ -298,6 +297,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
 
                 if not config.s3.off:
                     try:
+                        logger.info(f"Uploading to {protein.handler}")
                         s3_links = await upload_to_s3(
                             handler=protein.handler,
                             pdb_location=protein.pdb_location,
