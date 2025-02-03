@@ -69,7 +69,6 @@ class SQLiteJobStore:
 
     def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
         """Get active jobs as a queue."""
-        print(f"Getting jobs for {validator_hotkey}")
 
         if ready:
             # Calculate the threshold time for ready jobs
@@ -80,7 +79,6 @@ class SQLiteJobStore:
                 AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime('{now}')
                 AND validator_hotkey = '{validator_hotkey}'
             """
-            print(f"query: {query}, args: {now}, {validator_hotkey}")
             response = requests.get(
                 f"http://{local_db_addr}/db/query",
                 params={"q": query, "level": "strong"},
@@ -93,7 +91,6 @@ class SQLiteJobStore:
                     "level": "strong",
                 },
             )
-        print(f"Response: {response.json()}")
 
         if response.status_code != 200:
             raise ValueError(f"Failed to get jobs: {response.text}")
