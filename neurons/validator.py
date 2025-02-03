@@ -24,7 +24,7 @@ from folding.base.validator import BaseValidatorNeuron
 from folding.rewards.md_rewards import REWARD_REGISTRY
 
 # import base validator class which takes care of most of the boilerplate
-from folding.store import Job, SQLiteJobStore
+from folding.store import Job, SQLiteJobStore, rqlite_data_dir
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
@@ -545,7 +545,7 @@ class Validator(BaseValidatorNeuron):
 
         while not inactive_jobs_queue.empty():
             inactive_job = inactive_jobs_queue.get()
-            for uid, reward in zip(inactive_job.uids, inactive_job.rewards):
+            for uid, reward in zip(inactive_job["uids"], inactive_job["rewards"]):
                 # ema is weird and you can't simply aggregate and update. To keep things consistent, you
                 # need to do it one by one.
                 await self.update_scores_wrapper(
@@ -553,11 +553,46 @@ class Validator(BaseValidatorNeuron):
                     hotkeys=[self.metagraph.hotkeys[uid]],
                 )
 
+    async def monitor_db(self):
+        """
+        Monitors the database for any changes.
+        """
+        while True:
+            try:
+                await asyncio.sleep(60)
+                outdated = await self.store.monitor_db()
+                if outdated:
+                    logger.error("Database is outdated. Restarting rqlite.")
+                    await self.restart_rqlite()
+                else:
+                    logger.debug("Database is up-to-date.")
+            except Exception as e:
+                logger.error(f"Error in monitor_db: {traceback.format_exc()}")
+
+    async def restart_rqlite(self):
+        """
+        Deletes the local DB and restarts the rqlite service.
+        """
+        # get path of the project folder
+        project_path = os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))
+        )  # God help me for I have sinned
+
+        try:
+            os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
+            os.system("pkill rqlited")
+            os.system(
+                f"bash {os.path.join(project_path, 'scripts', 'start_read_node.sh')}"
+            )
+        except Exception as e:
+            logger.error(f"Error restarting rqlite: {traceback.format_exc()}")
+
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
         self.loop.create_task(self.read_and_update_rewards())
+        self.loop.create_task(self.monitor_db())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self

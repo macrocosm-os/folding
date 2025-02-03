@@ -316,6 +316,26 @@ class SQLiteJobStore:
         rows = [dict(zip(columns, row)) for row in values]
         return rows[0]["job_id"]
 
+    async def monitor_db(self):
+        """
+        Monitor the database for any changes.
+
+        Returns:
+            bool: True if the database has changed, False otherwise.
+        """
+        response = requests.get(f"http://{rqlite_ip}:4001/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+
+        last_log_leader = response.json()["store"]["raft"]["last_log_index"]
+
+        response = requests.get(f"http://{local_db_addr}/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+        last_log_read = response.json()["store"]["raft"]["last_log_index"]
+
+        return (last_log_leader - last_log_read) > 0
+
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
 class Job(JobBase):
