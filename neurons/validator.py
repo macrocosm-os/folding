@@ -9,6 +9,7 @@ import asyncio
 import traceback
 
 from itertools import chain
+from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
 import torch
@@ -273,6 +274,16 @@ class Validator(BaseValidatorNeuron):
             await self.add_job(job_event=job_event, uids=[76])
             await asyncio.sleep(0.01)
 
+    async def update_scores_wrapper(
+        self, rewards: torch.FloatTensor, hotkeys: List[str]
+    ):
+        """Wrapper function to update the scores of the miners based on the rewards they received."""
+        uids = self.get_uids(hotkeys=hotkeys)
+        await self.update_scores(
+            rewards=rewards,
+            uids=uids,
+        )
+
     async def update_job(self, job: Job):
         """Updates the job status based on the event information
 
@@ -330,10 +341,9 @@ class Validator(BaseValidatorNeuron):
                 ),
             )
 
-            uids = self.get_uids(hotkeys=job.hotkeys)
-            await self.update_scores(
+            self.update_scores_wrapper(
                 rewards=output.rewards,
-                uids=uids,  # pretty confident these are in the correct order.
+                hotkeys=job.hotkeys,
             )
         else:
             logger.warning(
@@ -521,10 +531,28 @@ class Validator(BaseValidatorNeuron):
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
 
+    async def read_and_update_rewards(self):
+        inactive_jobs_queue = self.store.get_inactive_queue(
+            validator_hotkey=self.wallet.hotkey.ss58_address
+        )
+        if len(inactive_jobs_queue) == 0:
+            logger.info("No inactive jobs to update.")
+            return
+
+        for inactive_job in inactive_jobs_queue:
+            for uid, reward in zip(inactive_job.uids, inactive_job.rewards):
+                # ema is weird and you can't simply aggregate and update. To keep things consistent, you
+                # need to do it one by one.
+                await self.update_scores_wrapper(
+                    rewards=torch.Tensor([reward]),
+                    hotkeys=[self.metagraph.hotkeys[uid]],
+                )
+
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
+        self.loop.create_task(self.read_and_update_rewards())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self
