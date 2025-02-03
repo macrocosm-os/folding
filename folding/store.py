@@ -97,6 +97,27 @@ class SQLiteJobStore:
 
         return queue
 
+    def get_inactive_queue(self, validator_hotkey: str) -> Queue:
+        """Get inactive jobs as a queue."""
+
+        # TODO: Implement a way to filter it based on time. We should keep track of the last time
+        # we read the db?
+        with sqlite3.connect(self.db_file) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+
+            query = f"SELECT * FROM {self.table_name} WHERE active = 0 AND validator_hotkey = ?"
+            cur.execute(query, (validator_hotkey,))
+
+            rows = cur.fetchall()
+
+        queue = Queue()
+        for row in rows:
+            job = self._row_to_job(row)
+            queue.put(job)
+
+        return queue
+
     def update_gjp_job(self, job: "Job", gjp_address: str, keypair, job_id: str):
         """
         Updates a GJP job with the given parameters.
