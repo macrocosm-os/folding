@@ -480,18 +480,6 @@ class Validator(BaseValidatorNeuron):
                 for job in self.store.get_queue(
                     ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
                 ).queue:
-                    # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
-                    # NOTE: we don't need to do this anymore but I'm keeping it just in case
-                    # hotkeys_present, job = self.store.check_for_available_hotkeys(job=job, hotkeys=self.metagraph.hotkeys)
-                    # if not hotkeys_present:
-                    #     self.store.update_gjp_job(
-                    #         job=job,
-                    #         gjp_address=self.config.neuron.gjp_address,
-                    #         keypair=self.wallet.hotkey,
-                    #         job_id=job.job_id,
-                    #     )
-                    #     continue
-
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = await self.forward(job=job)
 
@@ -531,12 +519,13 @@ class Validator(BaseValidatorNeuron):
             return
 
         for inactive_job in inactive_jobs_queue:
-            for uid, reward in zip(inactive_job.uids, inactive_job.rewards):
+            for hotkey, reward in zip(
+                inactive_job.hotkeys, inactive_job.computed_rewards
+            ):
                 # ema is weird and you can't simply aggregate and update. To keep things consistent, you
                 # need to do it one by one.
                 await self.update_scores_wrapper(
-                    rewards=torch.Tensor([reward]),
-                    hotkeys=[self.metagraph.hotkeys[uid]],
+                    rewards=torch.Tensor([reward]), hotkeys=[hotkey]
                 )
 
     async def sync_loop(self):
