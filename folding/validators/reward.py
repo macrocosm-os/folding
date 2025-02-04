@@ -171,7 +171,7 @@ def get_energies(
 
             energy_value = np.median(checked_energy[-10:])
 
-            if not abs(energy_value - reported_energy) < c.DIFFERENCE_THRESHOLD:
+            if not abs(energy_value - reported_energy) < c.ENERGY_DIFFERENCE_THRESHOLD:
                 is_valid = False
                 continue
 
@@ -189,7 +189,7 @@ def get_energies(
                 # Check if this energy value is unique (within some tolerance)
                 energy_value = np.median(checked_energy[-10:])
                 is_duplicate = any(
-                    abs(energy_value - e) < c.DIFFERENCE_THRESHOLD
+                    abs(energy_value - e) < c.ENERGY_DIFFERENCE_THRESHOLD
                     for e in unique_energies
                 )
                 event["is_duplicate"][i] = is_duplicate

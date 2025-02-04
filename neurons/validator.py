@@ -28,6 +28,7 @@ from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
 from folding.utils.s3_utils import upload_output_to_s3
+from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
@@ -59,6 +60,14 @@ class Validator(BaseValidatorNeuron):
         self.RSYNC_EXCEPTION_COUNT = 0
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
+
+        try:
+            self.handler = DigitalOceanS3Handler(
+                bucket_name=self.config.s3.bucket_name,
+            )
+        except ValueError as e:
+            self.handler = None
+            logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
         """Returns the uids corresponding to the hotkeys.
@@ -238,7 +247,7 @@ class Validator(BaseValidatorNeuron):
                     s3_links=job_event["s3_links"],
                 )
 
-                job_event["job_id"] = await self.store.confirm_upload(job_id = job.job_id)
+                job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
 
                 if job_event["job_id"] is None:
                     raise ValueError("job_id is None")

@@ -250,6 +250,13 @@ def add_args(cls, parser):
         default=False,
     )
 
+    parser.add_argument(
+        "--s3.bucket_name",
+        type=str,
+        help="The name of the S3 bucket to log to.",
+        default="sn25-vali-testnet-bucket",
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
