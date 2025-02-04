@@ -415,7 +415,7 @@ class Validator(BaseValidatorNeuron):
                     continue
 
                 output_link = await upload_output_to_s3(
-                    handler=protein.handler,
+                    handler=self.handler,
                     output_file=best_cpt_file,
                     pdb_id=job.pdb,
                     miner_hotkey=job.hotkeys[idx],
