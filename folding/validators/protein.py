@@ -113,7 +113,7 @@ class Protein(OpenMMSimulation):
         self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
         try:
             self.handler = DigitalOceanS3Handler(
-                bucket_name="sn25-vali-testnet-bucket",
+                bucket_name="vali-s3-demo-do",
             )
         except ValueError as e:
             self.handler = None
