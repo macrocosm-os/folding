@@ -238,7 +238,7 @@ class Validator(BaseValidatorNeuron):
                     s3_links=job_event["s3_links"],
                 )
 
-                job_event["job_id"] = await self.store.confirm_upload(job_id = job.job_id)
+                job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
 
                 if job_event["job_id"] is None:
                     raise ValueError("job_id is None")
@@ -275,7 +275,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event)
+            await self.add_job(job_event=job_event, uids=[76])
             await asyncio.sleep(0.01)
 
     async def update_scores_wrapper(
@@ -408,7 +408,7 @@ class Validator(BaseValidatorNeuron):
                 output_link = await upload_output_to_s3(
                     handler=protein.handler,
                     output_file=best_cpt_file,
-                    pdb_id=job.pdb,
+                    pdb_id=job.pdb_id,
                     miner_hotkey=job.hotkeys[idx],
                     VALIDATOR_ID=self.validator_hotkey_reference,
                 )
@@ -579,6 +579,7 @@ class Validator(BaseValidatorNeuron):
         )  # God help me for I have sinned
 
         try:
+            logger.info("")
             os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
             os.system("pkill rqlited")
             subprocess.Popen(
