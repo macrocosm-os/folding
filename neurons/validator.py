@@ -2,14 +2,13 @@
 # Copyright © 2024 Macrocosmos
 
 import os
-import re
 import time
 import random
 import asyncio
 import traceback
+import subprocess
 
 from itertools import chain
-from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
 import torch
@@ -24,7 +23,7 @@ from folding.base.validator import BaseValidatorNeuron
 from folding.rewards.md_rewards import REWARD_REGISTRY
 
 # import base validator class which takes care of most of the boilerplate
-from folding.store import Job, SQLiteJobStore
+from folding.store import Job, SQLiteJobStore, rqlite_data_dir
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
@@ -239,10 +238,14 @@ class Validator(BaseValidatorNeuron):
                     s3_links=job_event["s3_links"],
                 )
 
-                job_event["job_id"] = self.store.confirm_upload(job)
+                job_event["job_id"] = await self.store.confirm_upload(job_id = job.job_id)
+
+                if job_event["job_id"] is None:
+                    raise ValueError("job_id is None")
+
+                logger.success("Job was uploaded successfully!")
 
                 await self.forward(job=job)
-
                 return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
@@ -272,7 +275,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event, uids=[76])
+            await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
     async def update_scores_wrapper(
@@ -514,7 +517,7 @@ class Validator(BaseValidatorNeuron):
         inactive_jobs_queue = self.store.get_inactive_queue(
             validator_hotkey=self.wallet.hotkey.ss58_address
         )
-        if len(inactive_jobs_queue) == 0:
+        if inactive_jobs_queue.qsize() == 0:
             logger.info("No inactive jobs to update.")
             return
 
@@ -538,12 +541,47 @@ class Validator(BaseValidatorNeuron):
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
             self.sync()
+    
+    async def monitor_db(self):
+        """
+        Monitors the database for any changes.
+        """
+        while True:
+            try:
+                await asyncio.sleep(60)
+                outdated = await self.store.monitor_db()
+                if outdated:
+                    logger.error("Database is outdated. Restarting rqlite.")
+                    await self.restart_rqlite()
+                else:
+                    logger.debug("Database is up-to-date.")
+            except Exception as e:
+                logger.error(f"Error in monitor_db: {traceback.format_exc()}")
+
+    async def restart_rqlite(self):
+        """
+        Deletes the local DB and restarts the rqlite service.
+        """
+        # get path of the project folder
+        project_path = os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))
+        )  # God help me for I have sinned
+
+        try:
+            os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
+            os.system("pkill rqlited")
+            subprocess.Popen(
+                ["bash", os.path.join(project_path, "scripts", "start_read_node.sh")]
+            )
+        except Exception as e:
+            logger.error(f"Error restarting rqlite: {traceback.format_exc()}")
 
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.update_jobs())
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.read_and_update_rewards())
+        self.loop.create_task(self.monitor_db())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self

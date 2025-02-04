@@ -21,6 +21,7 @@ load_dotenv()
 
 rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
 rqlite_ip = os.getenv("JOIN_ADDR").split(":")[0]
+local_db_addr = os.getenv("RQLITE_HTTP_ADDR")
 
 if rqlite_data_dir is None:
     raise ValueError(
@@ -68,28 +69,48 @@ class SQLiteJobStore:
         return Job(**data)
 
     def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
-        """Get active jobs as a queue."""
-        with sqlite3.connect(self.db_file) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
+        """
+        Get active jobs as a queue that were submitted by the validator_hotkey
 
-            if ready:
-                # Calculate the threshold time for ready jobs
-                now = datetime.utcnow().isoformat()
-                query = f"""
-                    SELECT * FROM {self.table_name}
-                    WHERE active = 1
-                    AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime(?)
-                    AND validator_hotkey = ?
-                """
-                cur.execute(query, (now, validator_hotkey))
-            else:
-                cur.execute(
-                    f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = ?",
-                    (validator_hotkey,),
-                )
+        validator_hotkey (str): hotkey of the validator 
+        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter. 
+        """
 
-            rows = cur.fetchall()
+        if ready:
+            # Calculate the threshold time for ready jobs
+            now = datetime.utcnow().isoformat()
+            query = f"""
+                SELECT * FROM {self.table_name}
+                WHERE active = 1
+                AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime('{now}')
+                AND validator_hotkey = '{validator_hotkey}'
+            """
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={"q": query, "level": "strong"},
+            )
+        else:
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={
+                    "q": f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = '{validator_hotkey}'",
+                    "level": "strong",
+                },
+            )
+
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
+        elif "values" not in response.keys():
+            return Queue()
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
 
         queue = Queue()
         for row in rows:
@@ -103,14 +124,27 @@ class SQLiteJobStore:
 
         # TODO: Implement a way to filter it based on time. We should keep track of the last time
         # we read the db?
-        with sqlite3.connect(self.db_file) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": f"SELECT * FROM {self.table_name} WHERE active = 0 AND validator_hotkey != {validator_hotkey}",
+                "consistency": "strong",
+            },
+        )
 
-            query = f"SELECT * FROM {self.table_name} WHERE active = 0 AND validator_hotkey = ?"
-            cur.execute(query, (validator_hotkey,))
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
 
-            rows = cur.fetchall()
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
+        elif "values" not in response.keys():
+            return Queue()
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
 
         queue = Queue()
         for row in rows:
@@ -155,11 +189,29 @@ class SQLiteJobStore:
         Returns:
             list: List of PDB IDs as strings
         """
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
-            cur.execute(f"SELECT pdb_id FROM {self.table_name}")
-            # Flatten the list of tuples into a list of strings
-            return [row[0] for row in cur.fetchall()]
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": f"SELECT pdb_id FROM {self.table_name}",
+                "consistency": "strong",
+            },
+        )
+
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get all PDBs: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return []
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+
+        return [row["pdb_id"] for row in rows]
 
     def check_for_available_hotkeys(
         self, job: "Job", hotkeys: List[str]
@@ -240,24 +292,55 @@ class SQLiteJobStore:
         job.job_id = response.json()["job_id"]
         return job
 
-    async def confirm_upload(self, job: "Job"):
+    async def confirm_upload(self, job_id:str):
         """
         Confirm the upload of a job to the global job pool by trying to read in the uploaded job.
 
         Args:
-            job (Job): The job object to be confirmed.
+            job_id: the job id that you want to confirm is in the pool. 
 
         Returns:
             str: The job ID of the confirmed job.
         """
 
         response = requests.get(
-            f"http://{rqlite_ip}/db/query",
-            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job.job_id}'"},
+            f"http://{rqlite_ip}:4001/db/query",
+            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job_id}'"},
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to confirm job: {response.text}")
-        return response.json()["job_id"]
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return None
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+        return rows[0]["job_id"]
+
+    async def monitor_db(self):
+        """
+        Monitor the database for any changes.
+
+        Returns:
+            bool: True if the database has changed, False otherwise.
+        """
+        response = requests.get(f"http://{rqlite_ip}:4001/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+
+        last_log_leader = response.json()["store"]["raft"]["last_log_index"]
+
+        response = requests.get(f"http://{local_db_addr}/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+        last_log_read = response.json()["store"]["raft"]["last_log_index"]
+
+        return (last_log_leader - last_log_read) > 0
 
 
 class Job(GJPJob):
