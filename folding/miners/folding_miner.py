@@ -1,21 +1,17 @@
 import os
 import time
 import glob
+import copy
+import json
 import base64
 import random
 import hashlib
+import requests
+import traceback
 import concurrent.futures
 from collections import defaultdict
-from typing import Dict, List, Tuple, Optional, Any
-import copy
-import traceback
-import asyncio
-import subprocess 
-import sqlite3
-import requests
-import json 
+from typing import Dict, List, Tuple, Any
 
-import bittensor as bt
 import openmm as mm
 import openmm.app as app
 
@@ -225,12 +221,16 @@ class FoldingMiner(BaseMinerNeuron):
             return False
         return True
 
-    def response_to_dict(self, response) -> dict[str,Any]
+    def response_to_dict(self, response, job_id: str) -> dict[str, Any]:
         response = response.json()
         data = response["values"][0][0]
 
-        if not response or 'results' not in response or not response['results'][0]['values']:
-            logger.info(f"No jobs found matching {job_id}")
+        if (
+            not response
+            or "results" not in response
+            or not response["results"][0]["values"]
+        ):
+            logger.error(f"No jobs found matching {job_id}")
             return {}
 
         if "error" in response.keys():
@@ -244,71 +244,76 @@ class FoldingMiner(BaseMinerNeuron):
         return data[0]
 
     def fetch_sql_job_details(
-            self, columns: List[str], job_id: str, local_db_address: str
-        ) -> Dict:
-            """
-            Fetches job records from a SQLite database with given column details and a specific job_id.
+        self, columns: List[str], job_id: str, local_db_address: str
+    ) -> Dict:
+        """
+        Fetches job records from a SQLite database with given column details and a specific job_id.
 
-            Parameters:
-                columns (list): List of column names to retrieve from the database.
-                job_id (str): The identifier for the job to fetch.
-                db_path (str): Path to the SQLite database file.
+        Parameters:
+            columns (list): List of column names to retrieve from the database.
+            job_id (str): The identifier for the job to fetch.
+            db_path (str): Path to the SQLite database file.
 
-            Returns:
-                dict: A dictionary mapping job_id to its details as specified by the columns list.
-            """
+        Returns:
+            dict: A dictionary mapping job_id to its details as specified by the columns list.
+        """
 
-            logger.info("Fetching job details from the sqlite database")
-            
-            full_local_db_address = f"http://{local_db_address}/db/query"
-            columns_to_select = ", ".join(columns)
-            query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = '{job_id}'"""
-            
-            try:
-                response = requests.get(full_local_db_address, params={"q": query, "level": "strong"})
-                response.raise_for_status()
+        logger.info("Fetching job details from the sqlite database")
 
-                data : dict = self.response_to_dict(response = response)
+        full_local_db_address = f"http://{local_db_address}/db/query"
+        columns_to_select = ", ".join(columns)
+        query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = '{job_id}'"""
 
-                logger.info(f"data response: {data['results']}")
-                logger.info(f"data response: {data['results'][0]}")
-                return data
+        try:
+            response = requests.get(
+                full_local_db_address, params={"q": query, "level": "strong"}
+            )
+            response.raise_for_status()
 
-            except requests.RequestException as e:
-                logger.error(f"Failed to fetch job details {e}")
-                return
-            
-    def download_gjp_input_files(self, job_id: str, output_dir: str, local_db_address: str):
+            data: dict = self.response_to_dict(response=response, job_id=job_id)
+
+            logger.info(f"data response: {data['results']}")
+            logger.info(f"data response: {data['results'][0]}")
+            return data
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch job details {e}")
+            return
+
+    def download_gjp_input_files(
+        self, job_id: str, output_dir: str, local_db_address: str
+    ):
         columns_str = "pdb_id, s3_links"
-        
+
         query = f"""SELECT {columns_str} FROM jobs WHERE job_id = '{job_id}'"""
         full_local_db_address = f"http://{local_db_address}/db/query"
         logger.info(f"Query to the db: {query}")
 
         try:
             # Send a POST request with the SQL query
-            response = requests.get(full_local_db_address, params={"q": query, "level": "strong"})
+            response = requests.get(
+                full_local_db_address, params={"q": query, "level": "strong"}
+            )
             response.raise_for_status()
 
-            data = self.response_to_dict(response = response)
-            
+            data = self.response_to_dict(response=response, job_id=job_id)
+
             if len(data) > 0:
                 raise FileNotFoundError
 
-            s3_links_string = data['results'][0]['values'][0][1]
+            s3_links_string = data["results"][0]["values"][0][1]
             s3_links = json.loads(s3_links_string)
-            pdb_id = data['results'][0]['values'][0][0]
+            pdb_id = data["results"][0]["values"][0][0]
             logger.info(f"{s3_links}")
-            
+
             for key, url in s3_links.items():
-                
                 if key == "pdb":
                     filepath = os.path.join(output_dir, f"{pdb_id}.pdb")
                     if not os.path.exists(os.path.dirname(filepath)):
                         os.makedirs(os.path.dirname(filepath))
                     with requests.get(url, stream=True) as r:
                         r.raise_for_status()
-                        with open(filepath, 'wb') as f:
+                        with open(filepath, "wb") as f:
                             for chunk in r.iter_content(chunk_size=8192):
                                 f.write(chunk)
                 else:
@@ -317,22 +322,23 @@ class FoldingMiner(BaseMinerNeuron):
                         os.makedirs(os.path.dirname(filepath))
                     with requests.get(url, stream=True) as r:
                         r.raise_for_status()
-                        with open(filepath, 'wb') as f:
+                        with open(filepath, "wb") as f:
                             for chunk in r.iter_content(chunk_size=8192):
                                 f.write(chunk)
-                                
+
         except json.JSONDecodeError:
             logger.error("Failed to decode JSON string.")
-        except FileNotFoundError: 
+        except FileNotFoundError:
             logger.error(f"Failed to download files: {e}")
-        
-    def create_unique_job(self, 
-                          gjp_config,
-                          output_dir, 
-                          system_config_filepath, 
-                          job_id: str,
-                          local_db_address: str
-        ) -> SimulationConfig:
+
+    def create_unique_job(
+        self,
+        gjp_config,
+        output_dir,
+        system_config_filepath,
+        job_id: str,
+        local_db_address: str,
+    ) -> SimulationConfig:
         """
         Creates a unique simulation job configuration and initiates file download from S3 based on job details.
 
@@ -347,18 +353,20 @@ class FoldingMiner(BaseMinerNeuron):
         """
         check_if_directory_exists(output_directory=output_dir)
 
-        self.download_gjp_input_files(job_id=job_id, output_dir = output_dir, local_db_address = local_db_address)
+        self.download_gjp_input_files(
+            job_id=job_id, output_dir=output_dir, local_db_address=local_db_address
+        )
 
         # create SimualtionConfig and write it to system_config_filepath
         system_config = SimulationConfig(**gjp_config)
-        
+
         if system_config.seed is None:
             system_config.seed = self.generate_random_seed()
 
         write_pkl(system_config, system_config_filepath)
 
         return system_config
-   
+
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
@@ -374,20 +382,22 @@ class FoldingMiner(BaseMinerNeuron):
             JobSubmissionSynapse: synapse with md_output attached
         """
 
-        # get the job id from the synapse 
+        # get the job id from the synapse
         job_id = synapse.job_id
         columns = ["pdb_id", "system_config"]
         local_db_address = os.getenv("RQLITE_HTTP_ADDR")
-        # query rqlite to get pdb_id 
-        sql_job_details = self.fetch_sql_job_details(columns=columns, job_id=job_id, local_db_address=local_db_address)
-        
+        # query rqlite to get pdb_id
+        sql_job_details = self.fetch_sql_job_details(
+            columns=columns, job_id=job_id, local_db_address=local_db_address
+        )
+
         if not sql_job_details:
             logger.error(f"Job ID {job_id} not found in the database.")
             return synapse
 
         # str
-        pdb_id = sql_job_details['results'][0]['values'][0][0]
-        
+        pdb_id = sql_job_details["results"][0]["values"][0][0]
+
         # If we are already running a process with the same identifier, return intermediate information
         logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
 
@@ -398,11 +408,9 @@ class FoldingMiner(BaseMinerNeuron):
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
 
-        gjp_config = json.loads(sql_job_details[job_id]['system_config'])
+        gjp_config = json.loads(sql_job_details[job_id]["system_config"])
 
-        pdb_hash = self.get_simulation_hash(
-            pdb_id=pdb_id, system_config=gjp_config
-        )
+        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=gjp_config)
         output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
         gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
 
@@ -413,15 +421,15 @@ class FoldingMiner(BaseMinerNeuron):
             system_config_filepath=gjp_config_filepath
         )
 
-        if submitted_job_is_unique: 
+        if submitted_job_is_unique:
             if len(self.simulations) < self.max_workers:
-                system_config = self.create_unique_job( 
-                            sql_job_details = sql_job_details, 
-                            gjp_config = gjp_config,
-                            output_dir = output_dir, 
-                            system_config_filepath = gjp_config_filepath, 
-                            job_id = job_id
-                ) 
+                system_config = self.create_unique_job(
+                    sql_job_details=sql_job_details,
+                    gjp_config=gjp_config,
+                    output_dir=output_dir,
+                    system_config_filepath=gjp_config_filepath,
+                    job_id=job_id,
+                )
                 return self.create_simulation_from_job(
                     synapse=synapse,
                     output_dir=output_dir,
@@ -512,7 +520,6 @@ class FoldingMiner(BaseMinerNeuron):
 
                     return check_synapse(self=self, synapse=synapse, event=event)
 
-
     def create_simulation_from_job(
         self,
         synapse: JobSubmissionSynapse,
@@ -579,6 +586,7 @@ class FoldingMiner(BaseMinerNeuron):
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
         return priority
+
 
 class SimulationManager:
     def __init__(
