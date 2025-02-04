@@ -68,7 +68,12 @@ class SQLiteJobStore:
         return Job(**data)
 
     def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
-        """Get active jobs as a queue."""
+        """
+        Get active jobs as a queue that were submitted by the validator_hotkey
+
+        validator_hotkey (str): hotkey of the validator 
+        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter. 
+        """
 
         if ready:
             # Calculate the threshold time for ready jobs
@@ -286,12 +291,12 @@ class SQLiteJobStore:
         job.job_id = response.json()["job_id"]
         return job
 
-    async def confirm_upload(self, job: "Job"):
+    async def confirm_upload(self, job_id:str):
         """
         Confirm the upload of a job to the global job pool by trying to read in the uploaded job.
 
         Args:
-            job (Job): The job object to be confirmed.
+            job_id: the job id that you want to confirm is in the pool. 
 
         Returns:
             str: The job ID of the confirmed job.
@@ -299,7 +304,7 @@ class SQLiteJobStore:
 
         response = requests.get(
             f"http://{rqlite_ip}:4001/db/query",
-            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job.job_id}'"},
+            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job_id}'"},
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to confirm job: {response.text}")

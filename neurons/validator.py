@@ -238,13 +238,14 @@ class Validator(BaseValidatorNeuron):
                     s3_links=job_event["s3_links"],
                 )
 
-                job_event["job_id"] = await self.store.confirm_upload(job)
+                job_event["job_id"] = await self.store.confirm_upload(job_id = job.job_id)
 
                 if job_event["job_id"] is None:
                     raise ValueError("job_id is None")
 
-                await self.forward(job=job)
+                logger.success("Job was uploaded successfully!")
 
+                await self.forward(job=job)
                 return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
