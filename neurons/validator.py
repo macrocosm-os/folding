@@ -292,9 +292,7 @@ class Validator(BaseValidatorNeuron):
         """
 
         apply_pipeline = False
-
         energies = torch.Tensor(job.event["energies"])
-        rewards = torch.zeros(len(energies))  # one-hot per update step
 
         logger.info(f"event information: {job.event['reason']},  {job.event['uids']}")
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
@@ -334,7 +332,7 @@ class Validator(BaseValidatorNeuron):
 
         if apply_pipeline:
             model: BaseReward = REWARD_REGISTRY[job.job_type]()
-            output: RewardEvent = await model.forward(
+            reward_event: RewardEvent = await model.forward(
                 data=BatchRewardInput(
                     energies=energies,
                     top_reward=c.TOP_SYNTHETIC_MD_REWARD,
@@ -343,9 +341,12 @@ class Validator(BaseValidatorNeuron):
             )
 
             self.update_scores_wrapper(
-                rewards=output.rewards,
+                rewards=reward_event.rewards,
                 hotkeys=job.hotkeys,
             )
+
+            job.computed_rewards = reward_event.rewards.numpy().tolist()
+
         else:
             logger.warning(
                 f"All energies zero for job {job.pdb_id} and job has never been updated... Skipping"
@@ -360,10 +361,6 @@ class Validator(BaseValidatorNeuron):
         event = job.model_dump()
         simulation_event = event.pop("event")  # contains information from hp search
         merged_events = simulation_event | event  # careful: this overwrites.
-
-        merged_events["rewards"] = list(
-            rewards.numpy()
-        )  # add the rewards to the logging event.
 
         event = await prepare_event_for_logging(merged_events)
 
@@ -405,7 +402,7 @@ class Validator(BaseValidatorNeuron):
                 output_link = await upload_output_to_s3(
                     handler=protein.handler,
                     output_file=best_cpt_file,
-                    pdb_id=job.pdb,
+                    pdb_id=job.pdb_id,
                     miner_hotkey=job.hotkeys[idx],
                     VALIDATOR_ID=self.validator_hotkey_reference,
                 )
@@ -428,13 +425,6 @@ class Validator(BaseValidatorNeuron):
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
-
-    async def sync_loop(self):
-        logger.info("Starting sync loop.")
-        while True:
-            seconds_per_block = 12
-            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
-            self.sync()
 
     async def create_synthetic_jobs(self):
         """
@@ -549,10 +539,17 @@ class Validator(BaseValidatorNeuron):
                     hotkeys=[self.metagraph.hotkeys[uid]],
                 )
 
+    async def sync_loop(self):
+        logger.info("Starting sync loop.")
+        while True:
+            seconds_per_block = 12
+            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+            self.sync()
+
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
-        self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
+        self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.read_and_update_rewards())
         self.is_running = True
         logger.debug("Starting validator in background thread.")

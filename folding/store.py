@@ -6,6 +6,7 @@ import sqlite3
 import requests
 from queue import Queue
 from typing import Dict, List
+from dotenv import load_dotenv
 
 from datetime import datetime
 
@@ -13,8 +14,8 @@ import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
-from dotenv import load_dotenv
-from gjp_models.models import JobBase, SystemConfig, SystemKwargs
+from gjp_models.models import Job as GJPJob
+from gjp_models.models import SystemConfig, SystemKwargs
 
 load_dotenv()
 
@@ -259,8 +260,7 @@ class SQLiteJobStore:
         return response.json()["job_id"]
 
 
-# Keep the Job and MockJob classes as they are, they work well with both implementations
-class Job(JobBase):
+class Job(GJPJob):
     """Job class for storing job information."""
 
     async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):

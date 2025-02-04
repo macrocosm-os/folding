@@ -60,7 +60,6 @@ def evaluate(
 
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         try:
-
             if resp.dendrite.status_code != 200:
                 logger.info(
                     f"uid {uid} responded with status code {resp.dendrite.status_code}"
@@ -198,7 +197,7 @@ def get_energies(
                 if not is_duplicate:
                     unique_energies.add(energy_value)
                     valid_unique_count += 1
-                    if valid_unique_count >= TOP_K:
+                    if valid_unique_count == TOP_K:
                         break
 
         except Exception as E:
