@@ -299,7 +299,6 @@ class FoldingMiner(BaseMinerNeuron):
         self,
         gjp_config,
         system_config_filepath: str,
-        LOCAL_DB_ADDRESS: str,
     ) -> SimulationConfig:
         """
         Creates a SimulationConfig for the gjp job the miner is working on.
@@ -377,15 +376,20 @@ class FoldingMiner(BaseMinerNeuron):
 
         if submitted_job_is_unique:
             check_if_directory_exists(output_directory=output_dir)
-            self.download_gjp_input_files(
-                pdb_id=pdb_id, output_dir=output_dir, s3_links=s3_links
+
+            success = self.download_gjp_input_files(
+                pdb_id=pdb_id,
+                output_dir=output_dir,
+                s3_links=sql_job_details["s3_links"],
             )
+
+            if not success:
+                return synapse
 
             if len(self.simulations) < self.max_workers:
                 system_config = self.get_simulation_config(
                     gjp_config=gjp_config,
                     system_config_filepath=gjp_config_filepath,
-                    local_db_address=LOCAL_DB_ADDRESS,
                 )
                 return self.create_simulation_from_job(
                     synapse=synapse,
