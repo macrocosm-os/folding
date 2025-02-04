@@ -163,7 +163,6 @@ class BaseNeuron(ABC):
     def weight_setter(self):
         """method to set weights for the validator."""
         try:
-            logger.info("Attempting to set weights...")
             weights_are_set = self.set_weights()
             if weights_are_set:
                 logger.success("Weight setting successful!")

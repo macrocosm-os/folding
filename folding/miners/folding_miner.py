@@ -6,7 +6,7 @@ import random
 import hashlib
 import concurrent.futures
 from collections import defaultdict
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import copy
 import traceback
 import asyncio
@@ -225,6 +225,24 @@ class FoldingMiner(BaseMinerNeuron):
             return False
         return True
 
+    def response_to_dict(self, response) -> dict[str,Any]
+        response = response.json()
+        data = response["values"][0][0]
+
+        if not response or 'results' not in response or not response['results'][0]['values']:
+            logger.info(f"No jobs found matching {job_id}")
+            return {}
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return None
+
+        columns = response["columns"]
+        values = response["values"]
+        data = [dict(zip(columns, row)) for row in values]
+        return data[0]
+
     def fetch_sql_job_details(
             self, columns: List[str], job_id: str, local_db_address: str
         ) -> Dict:
@@ -244,16 +262,16 @@ class FoldingMiner(BaseMinerNeuron):
             
             full_local_db_address = f"http://{local_db_address}/db/query"
             columns_to_select = ", ".join(columns)
-            query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = {job_id}"""
+            query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = '{job_id}'"""
             
             try:
                 response = requests.get(full_local_db_address, params={"q": query, "level": "strong"})
                 response.raise_for_status()
-                data = response.json()
 
-                if not data or 'results' not in data or not data['results'][0]['values']:
-                    logger.info(f"No jobs found matching {job_id}")
-                    return {}
+                data : dict = self.response_to_dict(response = response)
+
+                logger.info(f"data response: {data['results']}")
+                logger.info(f"data response: {data['results'][0]}")
                 return data
 
             except requests.RequestException as e:
@@ -265,19 +283,17 @@ class FoldingMiner(BaseMinerNeuron):
         
         query = f"""SELECT {columns_str} FROM jobs WHERE job_id = '{job_id}'"""
         full_local_db_address = f"http://{local_db_address}/db/query"
-        logger.info(query)
+        logger.info(f"Query to the db: {query}")
+
         try:
             # Send a POST request with the SQL query
             response = requests.get(full_local_db_address, params={"q": query, "level": "strong"})
             response.raise_for_status()
-            logger.info("response sent")
-            data = response.json()
-            logger.info(f"data: {data}")
-            
-            # Check if data is returned
-            if not data or 'results' not in data or not data['results'][0]['values']:
-                logger.info("No jobs found.")
 
+            data = self.response_to_dict(response = response)
+            
+            if len(data) > 0:
+                raise FileNotFoundError
 
             s3_links_string = data['results'][0]['values'][0][1]
             s3_links = json.loads(s3_links_string)
@@ -307,7 +323,7 @@ class FoldingMiner(BaseMinerNeuron):
                                 
         except json.JSONDecodeError:
             logger.error("Failed to decode JSON string.")
-        except Exception as e:
+        except FileNotFoundError: 
             logger.error(f"Failed to download files: {e}")
         
     def create_unique_job(self, 
@@ -562,7 +578,6 @@ class FoldingMiner(BaseMinerNeuron):
         priority = float(
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
-        logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}")
         return priority
 
 class SimulationManager:
