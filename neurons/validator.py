@@ -61,13 +61,13 @@ class Validator(BaseValidatorNeuron):
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
 
-        try:
-            self.handler = DigitalOceanS3Handler(
-                bucket_name=self.config.s3.bucket_name,
-            )
-        except ValueError as e:
-            self.handler = None
-            logger.warning(f"Failed to create S3 handler, check your .env file: {e}")
+        if not self.config.s3.off:
+            try:
+                self.handler = DigitalOceanS3Handler(
+                    bucket_name=self.config.s3.bucket_name,
+                )
+            except ValueError as e:
+                raise f"Failed to create S3 handler, check your .env file: {e}"
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
         """Returns the uids corresponding to the hotkeys.

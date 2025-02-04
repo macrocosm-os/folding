@@ -295,7 +295,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                 logger.success("✅✅ Simulation ran successfully! ✅✅")
                 event["validator_search_status"] = True  # simulation passed!
 
-                if not config.s3.off or self.handler is not None:
+                if not config.s3.off:
                     try:
                         logger.info(f"Uploading to {protein.handler}")
                         s3_links = await upload_to_s3(
