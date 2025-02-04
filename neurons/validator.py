@@ -518,14 +518,18 @@ class Validator(BaseValidatorNeuron):
             logger.info("No inactive jobs to update.")
             return
 
-        for inactive_job in inactive_jobs_queue:
+        while (
+            not inactive_jobs_queue.qsize() == 0
+        ):  # recommended to use qsize() instead of empty()
+            inactive_job = inactive_jobs_queue.get()
             for hotkey, reward in zip(
                 inactive_job.hotkeys, inactive_job.computed_rewards
             ):
                 # ema is weird and you can't simply aggregate and update. To keep things consistent, you
                 # need to do it one by one.
                 await self.update_scores_wrapper(
-                    rewards=torch.Tensor([reward]), hotkeys=[hotkey]
+                    rewards=torch.Tensor([reward]),
+                    hotkeys=[hotkey],
                 )
 
     async def sync_loop(self):
