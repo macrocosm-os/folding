@@ -277,7 +277,8 @@ class FoldingMiner(BaseMinerNeuron):
         pdb_id: str,
         s3_links: dict[str, str],
     ) -> bool:
-        def stream_download(url: str, output_path: str):
+        
+        def stream_download(url:str, output_path:str):
             if not os.path.exists(os.path.dirname(output_path)):
                 os.makedirs(os.path.dirname(output_path))
             with requests.get(url, stream=True) as r:
@@ -380,7 +381,7 @@ class FoldingMiner(BaseMinerNeuron):
             success = self.download_gjp_input_files(
                 pdb_id=pdb_id,
                 output_dir=output_dir,
-                s3_links=sql_job_details["s3_links"],
+                s3_links=json.loads(sql_job_details["s3_links"]),
             )
 
             if not success:
