@@ -9,6 +9,7 @@ import hashlib
 import requests
 import traceback
 import concurrent.futures
+import subprocess
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any
 
@@ -143,6 +144,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.mock = None
         self.generate_random_seed = lambda: random.randint(0, 1000)
+        self.start_read_node()
         self.db_path = "/db/db.sqlite"
 
         # hardcorded for now -- TODO: make this more flexible
@@ -235,6 +237,13 @@ class FoldingMiner(BaseMinerNeuron):
         data = [dict(zip(columns, row)) for row in values]
         return data[0]
 
+    def start_read_node(self):
+        try:
+            subprocess.run(['bash', 'scripts/start_read_node.sh'], check=True)
+            logger.info("GJP read-node started successfully")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to start read-node with error: {e}")
+            
     def fetch_sql_job_details(
         self, columns: List[str], job_id: str, local_db_address: str
     ) -> Dict:
@@ -568,7 +577,7 @@ class SimulationManager:
         self.start_time = time.time()
 
         self.cpt_file_mapper = {
-            "nvt": f"{output_dir}/em.cpt",
+            "nvt": f"{output_dir}/{self.pdb_id}.cpt",
             "npt": f"{output_dir}/nvt.cpt",
             "md_0_1": f"{output_dir}/npt.cpt",
         }
