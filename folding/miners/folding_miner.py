@@ -272,9 +272,12 @@ class FoldingMiner(BaseMinerNeuron):
             return
 
     def download_gjp_input_files(
-        self, output_dir: str, pdb_id:str, s3_links:dict[str,str], 
-    ):
-        def stream_download(url:str, output_path:str):
+        self,
+        output_dir: str,
+        pdb_id: str,
+        s3_links: dict[str, str],
+    ) -> bool:
+        def stream_download(url: str, output_path: str):
             if not os.path.exists(os.path.dirname(output_path)):
                 os.makedirs(os.path.dirname(output_path))
             with requests.get(url, stream=True) as r:
@@ -285,21 +288,21 @@ class FoldingMiner(BaseMinerNeuron):
 
         for key, url in s3_links.items():
             output_path = os.path.join(output_dir, f"{pdb_id}.{key}")
-            stream_download(url = url, output_path = output_path)
-
-        except json.JSONDecodeError:
-            logger.error("Failed to decode JSON string.")
-        except FileNotFoundError:
-            logger.error(f"Failed to download files: {e}")
+            try:
+                stream_download(url=url, output_path=output_path)
+            except Exception as e:
+                logger.error(f"Failed to download file {key} with error: {e}")
+                return False
+        return True
 
     def get_simulation_config(
         self,
         gjp_config,
-        system_config_filepath:str,
+        system_config_filepath: str,
         LOCAL_DB_ADDRESS: str,
     ) -> SimulationConfig:
         """
-        Creates a SimulationConfig for the gjp job the miner is working on. 
+        Creates a SimulationConfig for the gjp job the miner is working on.
 
         Parameters:
             gjp_config (dict): Configuration details for the GJP.
@@ -373,7 +376,6 @@ class FoldingMiner(BaseMinerNeuron):
         )
 
         if submitted_job_is_unique:
-
             check_if_directory_exists(output_directory=output_dir)
             self.download_gjp_input_files(
                 pdb_id=pdb_id, output_dir=output_dir, s3_links=s3_links
@@ -383,7 +385,7 @@ class FoldingMiner(BaseMinerNeuron):
                 system_config = self.get_simulation_config(
                     gjp_config=gjp_config,
                     system_config_filepath=gjp_config_filepath,
-                    local_db_address=LOCAL_DB_ADDRESS
+                    local_db_address=LOCAL_DB_ADDRESS,
                 )
                 return self.create_simulation_from_job(
                     synapse=synapse,
