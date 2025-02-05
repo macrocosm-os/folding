@@ -14,8 +14,7 @@ import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
-from gjp_models.models import Job as GJPJob
-from gjp_models.models import SystemConfig, SystemKwargs
+from gjp_models.models import JobBase, SystemConfig, SystemKwargs
 
 load_dotenv()
 
@@ -72,8 +71,8 @@ class SQLiteJobStore:
         """
         Get active jobs as a queue that were submitted by the validator_hotkey
 
-        validator_hotkey (str): hotkey of the validator 
-        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter. 
+        validator_hotkey (str): hotkey of the validator
+        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter.
         """
 
         if ready:
@@ -292,12 +291,12 @@ class SQLiteJobStore:
         job.job_id = response.json()["job_id"]
         return job
 
-    async def confirm_upload(self, job_id:str):
+    async def confirm_upload(self, job_id: str):
         """
         Confirm the upload of a job to the global job pool by trying to read in the uploaded job.
 
         Args:
-            job_id: the job id that you want to confirm is in the pool. 
+            job_id: the job id that you want to confirm is in the pool.
 
         Returns:
             str: The job ID of the confirmed job.
@@ -343,7 +342,7 @@ class SQLiteJobStore:
         return (last_log_leader - last_log_read) > 0
 
 
-class Job(GJPJob):
+class Job(JobBase):
     """Job class for storing job information."""
 
     async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
