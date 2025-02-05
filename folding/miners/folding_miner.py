@@ -312,7 +312,8 @@ class FoldingMiner(BaseMinerNeuron):
         """
 
         # create SimualtionConfig and write it to system_config_filepath
-        system_config = SimulationConfig(**gjp_config)
+        system_config = SimulationConfig(ff=gjp_config["ff"], water=gjp_config["water"], box=gjp_config["box"], **gjp_config["system_kwargs"])
+
         if system_config.seed is None:
             system_config.seed = self.generate_random_seed()
 
