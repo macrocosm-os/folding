@@ -35,15 +35,6 @@ class MDReward(BaseReward):
             "top_reward": top_reward,
         }
 
-        # If the best hotkey is not in the set of hotkeys in the job, this means that the top miner has stopped replying.
-        if job.best_hotkey not in job.hotkeys:
-            logger.warning(
-                f"Best hotkey {job.best_hotkey} not in hotkeys {job.hotkeys}. Assigning no reward."
-            )
-            return BatchRewardOutput(
-                rewards=rewards, extra_info=info
-            )  # rewards of all 0s.
-
         best_index: int = job.hotkeys.index(job.best_hotkey)
 
         # There are cases where the top_miner stops replying. ensure to assign reward.
