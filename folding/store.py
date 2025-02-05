@@ -99,12 +99,13 @@ class SQLiteJobStore:
 
         if response.status_code != 200:
             raise ValueError(f"Failed to get jobs: {response.text}")
-
-        response = response.json()["results"][0]
-
+        response = response.json()
         if "error" in response.keys():
             raise ValueError(f"Failed to get jobs: {response['error']}")
-        elif "values" not in response.keys():
+
+        response = response["results"][0]
+
+        if "values" not in response.keys():
             return Queue()
 
         columns = response["columns"]
@@ -280,9 +281,7 @@ class SQLiteJobStore:
             epsilon=epsilon,
             s3_links=s3_links,
             priority=1,
-            update_interval=random.randint(
-                1800, 7200
-            ),  # between 30 minutes and 2 hours in seconds
+            update_interval=300,  # between 30 minutes and 2 hours in seconds
             max_time_no_improvement=1,
             **kwargs,
         )
