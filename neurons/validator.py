@@ -9,6 +9,7 @@ import traceback
 import subprocess
 
 from itertools import chain
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 import torch
@@ -59,6 +60,9 @@ class Validator(BaseValidatorNeuron):
         self.RSYNC_EXCEPTION_COUNT = 0
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
+
+        # The last time that we checked the global job pool.
+        self.last_time_checked = datetime.now()
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
         """Returns the uids corresponding to the hotkeys.
@@ -238,7 +242,7 @@ class Validator(BaseValidatorNeuron):
                     s3_links=job_event["s3_links"],
                 )
 
-                job_event["job_id"] = await self.store.confirm_upload(job_id = job.job_id)
+                job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
 
                 if job_event["job_id"] is None:
                     raise ValueError("job_id is None")
@@ -341,11 +345,6 @@ class Validator(BaseValidatorNeuron):
                     top_reward=c.TOP_SYNTHETIC_MD_REWARD,
                     job=job,
                 ),
-            )
-
-            self.update_scores_wrapper(
-                rewards=reward_event.rewards,
-                hotkeys=job.hotkeys,
             )
 
             job.computed_rewards = reward_event.rewards.numpy().tolist()
@@ -515,8 +514,10 @@ class Validator(BaseValidatorNeuron):
 
     async def read_and_update_rewards(self):
         inactive_jobs_queue = self.store.get_inactive_queue(
-            validator_hotkey=self.wallet.hotkey.ss58_address
+            last_time_checked=self.last_time_checked
         )
+        self.last_time_checked = datetime.now()
+
         if inactive_jobs_queue.qsize() == 0:
             logger.info("No inactive jobs to update.")
             return
@@ -541,7 +542,7 @@ class Validator(BaseValidatorNeuron):
             seconds_per_block = 12
             await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
             self.sync()
-    
+
     async def monitor_db(self):
         """
         Monitors the database for any changes.

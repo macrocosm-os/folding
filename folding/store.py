@@ -118,15 +118,20 @@ class SQLiteJobStore:
 
         return queue
 
-    def get_inactive_queue(self, validator_hotkey: str) -> Queue:
+    def get_inactive_queue(self, last_time_checked: datetime) -> Queue:
         """Get inactive jobs as a queue."""
 
         # TODO: Implement a way to filter it based on time. We should keep track of the last time
         # we read the db?
+        query = f"""
+            SELECT * FROM {self.table_name}
+            WHERE active = 0
+            AND updated_at >= '{last_time_checked}'
+        """
         response = requests.get(
             f"http://{local_db_addr}/db/query",
             params={
-                "q": f"SELECT * FROM {self.table_name} WHERE active = 0 AND validator_hotkey != {validator_hotkey}",
+                "q": query,
                 "consistency": "strong",
             },
         )
