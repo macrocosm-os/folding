@@ -29,6 +29,7 @@ from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
 from folding.utils.s3_utils import upload_output_to_s3
+from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
@@ -44,18 +45,20 @@ class Validator(BaseValidatorNeuron):
 
         self.load_state()
 
-        # Init sync with the network. Updates the metagraph.
-        self.sync()
-        self.store = SQLiteJobStore()
-
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
 
-        self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
+        # If we do not have any miner registry saved to the machine, create.
+        if not hasattr(self, "miner_registry"):
+            self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
+        # Init sync with the network. Updates the metagraph.
+        self.sync()
+
+        self.store = SQLiteJobStore()
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
@@ -63,6 +66,14 @@ class Validator(BaseValidatorNeuron):
 
         # The last time that we checked the global job pool.
         self.last_time_checked = datetime.now()
+
+        if not self.config.s3.off:
+            try:
+                self.handler = DigitalOceanS3Handler(
+                    bucket_name=self.config.s3.bucket_name,
+                )
+            except ValueError as e:
+                raise f"Failed to create S3 handler, check your .env file: {e}"
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
         """Returns the uids corresponding to the hotkeys.
@@ -301,7 +312,6 @@ class Validator(BaseValidatorNeuron):
         apply_pipeline = False
         energies = torch.Tensor(job.event["energies"])
 
-        logger.info(f"event information: {job.event['reason']},  {job.event['uids']}")
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
@@ -402,7 +412,7 @@ class Validator(BaseValidatorNeuron):
                     continue
 
                 output_link = await upload_output_to_s3(
-                    handler=protein.handler,
+                    handler=self.handler,
                     output_file=best_cpt_file,
                     pdb_id=job.pdb_id,
                     miner_hotkey=job.hotkeys[idx],
@@ -569,6 +579,7 @@ class Validator(BaseValidatorNeuron):
         )  # God help me for I have sinned
 
         try:
+            logger.info("")
             os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
             os.system("pkill rqlited")
             subprocess.Popen(

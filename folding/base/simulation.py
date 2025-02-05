@@ -37,7 +37,7 @@ class GenericSimulation(ABC):
 class OpenMMSimulation(GenericSimulation):
     @GenericSimulation.timeit
     def create_simulation(
-        self, pdb: app.PDBFile, system_config: dict, seed: int = None
+        self, pdb: app.PDBFile, system_config: dict, seed: int = None, verbose=False
     ) -> Tuple[app.Simulation, SimulationConfig]:
         """Recreates a simulation object based on the provided parameters.
 
@@ -50,21 +50,23 @@ class OpenMMSimulation(GenericSimulation):
         Returns:
         Tuple[app.Simulation, SimulationConfig]: A tuple containing the recreated simulation object and the potentially altered system configuration in SystemConfig format.
         """
+        setup_times = {}
+
         start_time = time.time()
         forcefield = app.ForceField(system_config["ff"], system_config["water"])
-        logger.debug(f"Creating ff took {time.time() - start_time:.4f} seconds")
+        setup_times["add_ff"] = time.time() - start_time
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
         start_time = time.time()
         modeller.deleteWater()
-        logger.debug(f"Deleting water took {time.time() - start_time:.4f} seconds")
+        setup_times["delete_water"] = time.time() - start_time
 
         # modeller.addExtraParticles(forcefield)
 
         start_time = time.time()
         modeller.addHydrogens(forcefield)
-        logger.debug(f"Adding hydrogens took {time.time() - start_time:.4f} seconds")
+        setup_times["add_hydrogens"] = time.time() - start_time
 
         start_time = time.time()
         # modeller.addSolvent(
@@ -72,7 +74,7 @@ class OpenMMSimulation(GenericSimulation):
         #     padding=system_config.box_padding * unit.nanometer,
         #     boxShape=system_config.box,
         # )
-        logger.debug(f"Adding solvent took {time.time() - start_time:.4f} seconds")
+        setup_times["add_solvent"] = time.time() - start_time
 
         # Create the system
         start_time = time.time()
@@ -96,7 +98,7 @@ class OpenMMSimulation(GenericSimulation):
             nonbondedCutoff=nonbondedCutoff,
             constraints=system_config["constraints"],
         )
-        logger.warning(f"Creating system took {time.time() - start_time:.4f} seconds")
+        setup_times["create_system"] = time.time() - start_time
 
         # Integrator settings
         integrator = mm.LangevinIntegrator(
@@ -132,16 +134,20 @@ class OpenMMSimulation(GenericSimulation):
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
-        logger.debug(f"Creating simulation took {time.time() - start_time:.4f} seconds")
+        setup_times["create_simulation"] = time.time() - start_time
         # Set initial positions
 
         start_time = time.time()
         simulation.context.setPositions(modeller.positions)
-        logger.debug(f"Setting positions took {time.time() - start_time:.4f} seconds")
+        setup_times["set_positions"] = time.time() - start_time
 
         # Converting the system config into a Dict[str,str] and ensure all values in system_config are of the correct type
         for k, v in system_config.items():
             if not isinstance(v, (str, int, float, dict)):
                 system_config[k] = str(v)
+
+        if verbose:
+            for key, time in setup_times:
+                logger.debug(f"Took {round(time, 3)} to {key}")
 
         return simulation, SimulationConfig(**system_config)

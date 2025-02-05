@@ -32,9 +32,10 @@ from typing import List, Optional
 
 from folding.mock import MockDendrite
 from folding.base.neuron import BaseNeuron
+from folding.utils.ops import print_on_retry
 from folding.utils.config import add_validator_args
 from folding.organic.validator import OrganicValidator
-from folding.utils.ops import print_on_retry
+from folding.registries.miner_registry import MinerRegistry
 
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
 
@@ -256,6 +257,10 @@ class BaseValidatorNeuron(BaseNeuron):
             self.config.neuron.full_path + "/state.pt",
         )
 
+        self.miner_registry.save_registry(
+            output_path=os.path.join(self.config.neuron.full_path, "miner_registry.pkl")
+        )
+
     def load_state(self):
         """Loads the state of the validator from a file."""
         try:
@@ -264,13 +269,25 @@ class BaseValidatorNeuron(BaseNeuron):
             self.scores = state["scores"]
             self.hotkeys = state["hotkeys"]
             logger.info("Loaded previously saved validator state information.")
-        except:
+
+        except FileNotFoundError:
             logger.info(
                 "Previous validator state not found... Weight copying the average of the network."
             )
 
             self.scores = self.get_chain_weights()
             self.step = 1
+
+        try:
+            logger.info("Loading miner registry.")
+            self.miner_registry = MinerRegistry.load_registry(
+                input_path=os.path.join(
+                    self.config.neuron.full_path, "miner_registry.pkl"
+                )
+            )
+
+        except FileNotFoundError:
+            logger.info("No previous miner registry found. Creating new registry.")
 
     def get_chain_weights(self) -> torch.Tensor:
         """Obtain the stake weighted average of all validator weights on chain."""

@@ -128,7 +128,7 @@ class OrganicValidator(OrganicScoringBase):
         job_event = {
             "system_kwargs": {},
             "is_organic": True,
-            "job_type": "OrganicMDEvaluator",
+            "job_type": "OrganicMD",
         }
         for arg in self.simulation_args:
             if arg in sample:

@@ -280,6 +280,8 @@ class SQLiteJobStore:
             epsilon=epsilon,
             s3_links=s3_links,
             priority=1,
+            update_interval=300,
+            max_time_no_improvement=1,
             **kwargs,
         )
 
@@ -344,7 +346,7 @@ class SQLiteJobStore:
             raise ValueError(f"Failed to monitor db: {response.text}")
         last_log_read = response.json()["store"]["raft"]["last_log_index"]
 
-        return (last_log_leader - last_log_read) > 0
+        return (last_log_leader - last_log_read) != 0
 
 
 class Job(JobBase):

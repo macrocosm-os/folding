@@ -169,12 +169,6 @@ def get_energies(
             start_time = time.time()
             is_valid, checked_energy, miner_energy, reason = evaluator.validate()
 
-            energy_value = np.median(checked_energy[-10:])
-
-            if not abs(energy_value - reported_energy) < c.DIFFERENCE_THRESHOLD:
-                is_valid = False
-                continue
-
             # Update event dictionary for this index
             event["is_run_valid_time"][i] = time.time() - start_time
             event["reason"][i] = reason
@@ -187,15 +181,20 @@ def get_energies(
 
             if is_valid:
                 # Check if this energy value is unique (within some tolerance)
-                energy_value = np.median(checked_energy[-10:])
+                median_energy = np.median(checked_energy[-c.ENERGY_WINDOW_SIZE :])
+
+                if not abs(median_energy - reported_energy) < c.DIFFERENCE_THRESHOLD:
+                    event["is_valid"][i] = False
+                    continue
+
                 is_duplicate = any(
-                    abs(energy_value - e) < c.DIFFERENCE_THRESHOLD
-                    for e in unique_energies
+                    abs(median_energy - energy) < c.DIFFERENCE_THRESHOLD
+                    for energy in unique_energies
                 )
                 event["is_duplicate"][i] = is_duplicate
 
                 if not is_duplicate:
-                    unique_energies.add(energy_value)
+                    unique_energies.add(median_energy)
                     valid_unique_count += 1
                     if valid_unique_count == TOP_K:
                         break
@@ -234,6 +233,8 @@ def get_energies(
         zip(event["is_valid"], event["is_duplicate"])
     ):
         if is_valid and not is_duplicate:
-            energies[idx] = np.median(event["checked_energy"][idx][-10:])
+            energies[idx] = np.median(
+                event["checked_energy"][idx][-c.ENERGY_WINDOW_SIZE :]
+            )
 
     return energies, event
