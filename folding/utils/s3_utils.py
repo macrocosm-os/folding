@@ -16,6 +16,7 @@ S3_CONFIG = {
     "endpoint_url": os.getenv("S3_ENDPOINT"),
     "access_key_id": os.getenv("S3_KEY"),
     "secret_access_key": os.getenv("S3_SECRET"),
+    "bucket_name": os.getenv("S3_BUCKET_NAME"),
 }
 
 
@@ -101,7 +102,7 @@ async def upload_to_s3(
                 file_type=file_type,
             )
             s3_links[file_type] = os.path.join(
-                f"https://{S3_CONFIG['region_name']}.digitaloceanspaces.com/{S3_CONFIG['endpoint_url']}/", key
+                f"https://{S3_CONFIG['region_name']}.digitaloceanspaces.com/{S3_CONFIG['bucket_name']}/", key
             )
             await asyncio.sleep(0.10)
 
