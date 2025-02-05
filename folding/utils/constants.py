@@ -19,5 +19,6 @@ CREDIBILITY_ALPHA = 0.15
 
 # Reward Constants
 TOP_SYNTHETIC_MD_REWARD = 0.80
-
 DIFFERENCE_THRESHOLD = 1e-6  # The threshold for 2 energy values to be considered equal
+CREDIBILITY_ALPHA_POSITIVE = 0.15
+CREDIBILITY_ALPHA_NEGATIVE = 0.25

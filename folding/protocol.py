@@ -21,8 +21,6 @@ import base64
 import bittensor as bt
 from folding.utils.logger import logger
 
-from folding.utils.opemm_simulation_config import SimulationConfig
-
 
 class PingSynapse(bt.Synapse):
     """Responsible for determining if a miner can accept a request"""
