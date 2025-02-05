@@ -67,6 +67,9 @@ class Validator(BaseValidatorNeuron):
         # The last time that we checked the global job pool.
         self.last_time_checked = datetime.now()
 
+        # Get the path of the project folder
+        self.project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
         if not self.config.s3.off:
             try:
                 self.handler = DigitalOceanS3Handler(
@@ -563,32 +566,34 @@ class Validator(BaseValidatorNeuron):
                 outdated = await self.store.monitor_db()
                 if outdated:
                     logger.error("Database is outdated. Restarting rqlite.")
-                    await self.restart_rqlite()
+                    await self.start_rqlite()
                 else:
                     logger.debug("Database is up-to-date.")
             except Exception as e:
                 logger.error(f"Error in monitor_db: {traceback.format_exc()}")
 
-    async def restart_rqlite(self):
+    async def start_rqlite(self):
         """
-        Deletes the local DB and restarts the rqlite service.
+        Starts the rqlite service.
         """
-        # get path of the project folder
-        project_path = os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__))
-        )  # God help me for I have sinned
+        logger.info("Starting rqlite service...")
 
-        try:
-            logger.info("")
-            os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
-            os.system("pkill rqlited")
-            subprocess.Popen(
-                ["bash", os.path.join(project_path, "scripts", "start_read_node.sh")]
-            )
-        except Exception as e:
-            logger.error(f"Error restarting rqlite: {traceback.format_exc()}")
+        # stops the rqlite service if it is running
+        os.system("pkill rqlited")
+
+        # checks if db exists and if yes deletes it
+        if os.path.exists(os.path.join(self.project_path, rqlite_data_dir)):
+            logger.info("Deleting existing db")
+            os.system(f"sudo rm -rf {os.path.join(self.project_path, rqlite_data_dir)}")
+
+        # starts the rqlite read node
+        subprocess.Popen(
+            ["bash", os.path.join(self.project_path, "scripts", "start_read_node.sh")]
+        )
+        logger.info("rqlite service started.")
 
     async def __aenter__(self):
+        await self.start_rqlite()
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.update_jobs())
         self.loop.create_task(self.create_synthetic_jobs())
