@@ -71,8 +71,8 @@ class SQLiteJobStore:
         """
         Get active jobs as a queue that were submitted by the validator_hotkey
 
-        validator_hotkey (str): hotkey of the validator 
-        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter. 
+        validator_hotkey (str): hotkey of the validator
+        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter.
         """
 
         if ready:
@@ -275,6 +275,8 @@ class SQLiteJobStore:
             epsilon=epsilon,
             s3_links=s3_links,
             priority=1,
+            update_interval=300,
+            max_time_no_improvement=1,
             **kwargs,
         )
 
@@ -291,12 +293,12 @@ class SQLiteJobStore:
         job.job_id = response.json()["job_id"]
         return job
 
-    async def confirm_upload(self, job_id:str):
+    async def confirm_upload(self, job_id: str):
         """
         Confirm the upload of a job to the global job pool by trying to read in the uploaded job.
 
         Args:
-            job_id: the job id that you want to confirm is in the pool. 
+            job_id: the job id that you want to confirm is in the pool.
 
         Returns:
             str: The job ID of the confirmed job.
@@ -339,7 +341,7 @@ class SQLiteJobStore:
             raise ValueError(f"Failed to monitor db: {response.text}")
         last_log_read = response.json()["store"]["raft"]["last_log_index"]
 
-        return (last_log_leader - last_log_read) > 0
+        return (last_log_leader - last_log_read) != 0
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
