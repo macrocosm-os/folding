@@ -65,7 +65,7 @@ def attach_files_to_synapse(
     Args:
         synapse (JobSubmissionSynapse): Recently received synapse object
         data_directory (str): directory where the miner is holding the necessary data for the validator.
-        state (str): the current                         state of the simulation
+        state (str): the current state of the simulation
 
     state is either:
      1. nvt
