@@ -54,6 +54,9 @@ class SQLiteJobStore:
             json.loads(data["best_cpt_links"]) if data["best_cpt_links"] else None
         )
         data["event"] = json.loads(data["event"]) if data["event"] else None
+        data["computed_rewards"] = (
+            json.loads(data["computed_rewards"]) if data["computed_rewards"] else None
+        )
 
         # Convert timestamps
         for field in ["created_at", "updated_at", "best_loss_at"]:
@@ -353,42 +356,12 @@ class SQLiteJobStore:
 class Job(JobBase):
     """Job class for storing job information."""
 
-    async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
+    async def update(self, loss: float, hotkey: str):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
-        if hotkeys is not None:
-            assert len(hotkeys) > 0, "hotkeys must be a non-empty list"
-            self.hotkeys = hotkeys
 
-        if hotkey not in self.hotkeys:
-            raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
-
-        percent_improvement = (
-            100 * (loss - self.best_loss) / self.best_loss
-            if not np.isinf(self.best_loss) and not self.best_loss == 0
-            else np.nan
-        )
-        self.updated_at = pd.Timestamp.now().floor("s")
-        self.updated_count += 1
-
-        never_updated_better_loss = (
-            np.isnan(percent_improvement) and loss < self.best_loss
-        )
-        better_loss = percent_improvement >= self.epsilon
-
-        if never_updated_better_loss or better_loss:
-            self.best_loss = loss
-            self.best_loss_at = pd.Timestamp.now().floor("s")
-            self.best_hotkey = hotkey
-        elif (
-            pd.Timestamp.now().floor("s") - self.best_loss_at
-        ).total_seconds() > self.max_time_no_improvement and self.updated_count >= self.min_updates:
-            self.active = False
-        elif (
-            isinstance(self.best_loss_at, pd._libs.tslibs.nattype.NaTType)
-            and (pd.Timestamp.now().floor("s") - self.created_at).total_seconds()
-            > self.max_time_no_improvement
-        ):
-            self.active = False
+        self.best_loss = loss
+        self.best_loss_at = pd.Timestamp.now().floor("s")
+        self.best_hotkey = hotkey
 
 
 class MockJob(Job):
