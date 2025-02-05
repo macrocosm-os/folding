@@ -196,7 +196,7 @@ def get_energies(
                 if not is_duplicate:
                     unique_energies.add(median_energy)
                     valid_unique_count += 1
-                    if valid_unique_count >= TOP_K:
+                    if valid_unique_count == TOP_K:
                         break
 
         except Exception as E:

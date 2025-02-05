@@ -9,6 +9,7 @@ import traceback
 import subprocess
 
 from itertools import chain
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 import torch
@@ -62,6 +63,9 @@ class Validator(BaseValidatorNeuron):
         self.RSYNC_EXCEPTION_COUNT = 0
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
+
+        # The last time that we checked the global job pool.
+        self.last_time_checked = datetime.now()
 
         if not self.config.s3.off:
             try:
@@ -306,9 +310,7 @@ class Validator(BaseValidatorNeuron):
         """
 
         apply_pipeline = False
-
         energies = torch.Tensor(job.event["energies"])
-        rewards = torch.zeros(len(energies))  # one-hot per update step
 
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
@@ -347,7 +349,7 @@ class Validator(BaseValidatorNeuron):
 
         if apply_pipeline:
             model: BaseReward = REWARD_REGISTRY[job.job_type]()
-            output: RewardEvent = await model.forward(
+            reward_event: RewardEvent = await model.forward(
                 data=BatchRewardInput(
                     energies=energies,
                     top_reward=c.TOP_SYNTHETIC_MD_REWARD,
@@ -355,10 +357,8 @@ class Validator(BaseValidatorNeuron):
                 ),
             )
 
-            self.update_scores_wrapper(
-                rewards=output.rewards,
-                hotkeys=job.hotkeys,
-            )
+            job.computed_rewards = reward_event.rewards.numpy().tolist()
+
         else:
             logger.warning(
                 f"All energies zero for job {job.pdb_id} and job has never been updated... Skipping"
@@ -373,10 +373,6 @@ class Validator(BaseValidatorNeuron):
         event = job.model_dump()
         simulation_event = event.pop("event")  # contains information from hp search
         merged_events = simulation_event | event  # careful: this overwrites.
-
-        merged_events["rewards"] = list(
-            rewards.numpy()
-        )  # add the rewards to the logging event.
 
         event = await prepare_event_for_logging(merged_events)
 
@@ -441,13 +437,6 @@ class Validator(BaseValidatorNeuron):
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
-
-    async def sync_loop(self):
-        logger.info("Starting sync loop.")
-        while True:
-            seconds_per_block = 12
-            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
-            self.sync()
 
     async def create_synthetic_jobs(self):
         """
@@ -535,21 +524,34 @@ class Validator(BaseValidatorNeuron):
 
     async def read_and_update_rewards(self):
         inactive_jobs_queue = self.store.get_inactive_queue(
-            validator_hotkey=self.wallet.hotkey.ss58_address
+            last_time_checked=self.last_time_checked
         )
+        self.last_time_checked = datetime.now()
+
         if inactive_jobs_queue.qsize() == 0:
             logger.info("No inactive jobs to update.")
             return
 
-        while not inactive_jobs_queue.empty():
+        while (
+            not inactive_jobs_queue.qsize() == 0
+        ):  # recommended to use qsize() instead of empty()
             inactive_job = inactive_jobs_queue.get()
-            for uid, reward in zip(inactive_job["uids"], inactive_job["rewards"]):
+            for hotkey, reward in zip(
+                inactive_job.hotkeys, inactive_job.computed_rewards
+            ):
                 # ema is weird and you can't simply aggregate and update. To keep things consistent, you
                 # need to do it one by one.
                 await self.update_scores_wrapper(
                     rewards=torch.Tensor([reward]),
-                    hotkeys=[self.metagraph.hotkeys[uid]],
+                    hotkeys=[hotkey],
                 )
+
+    async def sync_loop(self):
+        logger.info("Starting sync loop.")
+        while True:
+            seconds_per_block = 12
+            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+            self.sync()
 
     async def monitor_db(self):
         """
@@ -588,8 +590,8 @@ class Validator(BaseValidatorNeuron):
 
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
-        self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
+        self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.read_and_update_rewards())
         self.loop.create_task(self.monitor_db())
         self.is_running = True
