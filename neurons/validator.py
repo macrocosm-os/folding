@@ -6,7 +6,6 @@ import time
 import random
 import asyncio
 import traceback
-import subprocess
 
 from itertools import chain
 from datetime import datetime
@@ -24,7 +23,7 @@ from folding.base.validator import BaseValidatorNeuron
 from folding.rewards.md_rewards import REWARD_REGISTRY
 
 # import base validator class which takes care of most of the boilerplate
-from folding.store import Job, SQLiteJobStore, rqlite_data_dir
+from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
@@ -66,9 +65,6 @@ class Validator(BaseValidatorNeuron):
 
         # The last time that we checked the global job pool.
         self.last_time_checked = datetime.now()
-
-        # Get the path of the project folder
-        self.project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         if not self.config.s3.off:
             try:
@@ -572,28 +568,10 @@ class Validator(BaseValidatorNeuron):
             except Exception as e:
                 logger.error(f"Error in monitor_db: {traceback.format_exc()}")
 
-    async def start_rqlite(self):
-        """
-        Starts the rqlite service.
-        """
-        logger.info("Starting rqlite service...")
-
-        # stops the rqlite service if it is running
-        os.system("pkill rqlited")
-
-        # checks if db exists and if yes deletes it
-        if os.path.exists(os.path.join(self.project_path, rqlite_data_dir)):
-            logger.info("Deleting existing db")
-            os.system(f"sudo rm -rf {os.path.join(self.project_path, rqlite_data_dir)}")
-
-        # starts the rqlite read node
-        subprocess.Popen(
-            ["bash", os.path.join(self.project_path, "scripts", "start_read_node.sh")]
-        )
-        logger.info("rqlite service started.")
-
     async def __aenter__(self):
         await self.start_rqlite()
+        await asyncio.sleep(10)  # Wait for rqlite to start
+
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.update_jobs())
         self.loop.create_task(self.create_synthetic_jobs())

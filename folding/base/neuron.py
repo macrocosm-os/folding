@@ -2,6 +2,7 @@ import os
 import copy
 import bittensor as bt
 from abc import ABC, abstractmethod
+import subprocess
 
 import openmm
 from tenacity import RetryError
@@ -15,6 +16,7 @@ from folding import __OPENMM_VERSION_TAG__
 from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
 from folding.utils.logger import logger
+from folding.store import rqlite_data_dir
 
 
 class BaseNeuron(ABC):
@@ -88,6 +90,11 @@ class BaseNeuron(ABC):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
+
+        # Get the path of the project folder
+        self.project_path: str = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
 
         logger.info(f"Running spec version: {spec_version} --> Version: {version}")
 
@@ -201,3 +208,23 @@ class BaseNeuron(ABC):
         logger.warning(
             "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
         )
+
+    async def start_rqlite(self):
+        """
+        Starts the rqlite service.
+        """
+        logger.info("Starting rqlite service...")
+
+        # stops the rqlite service if it is running
+        os.system("pkill rqlited")
+
+        # checks if db exists and if yes deletes it
+        if os.path.exists(os.path.join(self.project_path, rqlite_data_dir)):
+            logger.info("Deleting existing db")
+            os.system(f"sudo rm -rf {os.path.join(self.project_path, rqlite_data_dir)}")
+
+        # starts the rqlite read node
+        subprocess.Popen(
+            ["bash", os.path.join(self.project_path, "scripts", "start_read_node.sh")]
+        )
+        logger.info("rqlite service started.")
