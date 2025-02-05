@@ -6,7 +6,7 @@ import openmm as mm
 from openmm import app
 from openmm import unit
 
-import bittensor as bt
+
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.logger import logger
 
@@ -147,7 +147,7 @@ class OpenMMSimulation(GenericSimulation):
                 system_config[k] = str(v)
 
         if verbose:
-            for key, time in setup_times:
-                logger.debug(f"Took {round(time, 3)} to {key}")
+            for key, t in setup_times:
+                logger.debug(f"Took {round(t, 3)} to {key}")
 
         return simulation, SimulationConfig(**system_config)

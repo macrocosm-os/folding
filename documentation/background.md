@@ -10,7 +10,7 @@ An ideal incentive mechanism defines an asymmetric workload between the validato
 Protein folding is also a research topic that is of incredibly high value. Research groups all over the world dedicate their time to solving particular niches within this space. Providing a solution to attack this problem at scale is what Bittensor is meant to provide to the global community. 
 
 # Simulation Backend and Reproducability
-Moleccular dynamics (MD) simulations require a physics-based engine to run them, and SN25 utilizes the open-source project [OpenMM](https://openmm.org). As their tagline suggests, they are a "high performance, customizable molecular simulation" package. 
+Molecular dynamics (MD) simulations require a physics-based engine to run them, and SN25 utilizes the open-source project [OpenMM](https://openmm.org). As their tagline suggests, they are a "high performance, customizable molecular simulation" package. 
 
 One of the key advantages of using OpenMM for MD-simulations is the built-in capabilities for *reproducability*. This is a key component in the reward stack and all miners should be intimately familiar with this. For more information, please read this [document](./reproducibility.md). 
 
@@ -23,7 +23,7 @@ While the process of simulation is exceedingly compute-intensive, the evaluation
     <img src="../assets/8emf_pdb_loss.gif" alt="Alt Folded-protein" width="500" height="350">
 </div>
 
-When the simulations finally converge (ΔE/t < threshold), they produce the form of the proteins as they are observed in real physical contexts, and this form gives rise to their biological function. Thus, the miners provide utility by preparing ready-for-study proteins on demand. An example of such a protein is shown below. 
+When simulation reach convergence (ΔE/t < threshold), they obtain the structural form of proteins as they are observed in real physical environments, and this form gives rise to their biological function. Thus, the miners provide utility by preparing ready-for-study proteins on demand. An example of such a protein is shown below. 
 
 <div align="center">
     <img src="../assets/8emf_pdb_protein.gif" alt="Alt Folded-protein" width="600" height="500">

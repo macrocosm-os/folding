@@ -297,9 +297,9 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
 
                 if not config.s3.off:
                     try:
-                        logger.info(f"Uploading to {protein.handler}")
+                        logger.info(f"Uploading to {self.handler}")
                         s3_links = await upload_to_s3(
-                            handler=protein.handler,
+                            handler=self.handler,
                             pdb_location=protein.pdb_location,
                             simulation_cpt=protein.simulation_cpt,
                             validator_directory=protein.validator_directory,
