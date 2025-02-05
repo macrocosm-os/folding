@@ -6,6 +6,11 @@ ANOMALY_THRESHOLD = 0.5  # The percentage that we allow the energy to differ fro
 
 # Evaluation constants
 XML_CHECKPOINT_THRESHOLD = 2  # Percent
+GRADIENT_THRESHOLD = 10  # kJ/mol/nm
+GRADIENT_WINDOW_SIZE = 50  # Number of steps to calculate the gradients over.
+ENERGY_WINDOW_SIZE = (
+    10  # Number of steps to compute median/mean energies when comparing
+)
 
 # MinerRegistry constants
 MAX_JOBS_IN_MEMORY = 1000
