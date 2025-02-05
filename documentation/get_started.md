@@ -12,10 +12,10 @@ Core hard/firmware requirements include:
 ```
 linux
 CUDA 
-RXT 4090
+RTX 4090
 ```
 
-To start, simply clone this repository and run the [install.sh](./install.sh) script. Below are all the steps needed to ensure that your machine is running properly.
+To start, simply clone this repository and run the [install.sh](./install.sh) script. Below are steps to ensure your machine is running properly.
 
 Firstly, you must install conda: 
 ```bash 
@@ -48,7 +48,7 @@ Bash install will use poetry to build the environment correctly.
 ## Launch Commands
 ### Validator
 
-SN25 runs off DigitalOcean S3 data buckets for data transfer. Therefore, the following environment variables need to be set in your system or application environment (`.env` file):
+SN25 uses DigitalOcean S3 data buckets for data transfer. Therefore, the following environment variables need to be set in your system or application environment (`.env` file):
 - `S3_REGION = "nyc3"`: The AWS region or S3-compatible region where the bucket is located.
 - `S3_ENDPOINT = "https://nyc3.digitaloceanspaces.com"`: The endpoint URL for your S3-compatible service.
 - `S3_KEY`: Your S3 access key ID.
