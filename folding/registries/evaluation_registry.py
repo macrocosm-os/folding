@@ -355,6 +355,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
             median_percent_diff = np.median(percent_diff)
 
             if median_percent_diff > c.ANOMALY_THRESHOLD:
+                logger.warning(
+                    f"hotkey {self.hotkey_alias} failed anomaly check for {self.pdb_id}, ... Skipping!"
+                )
                 raise "anomaly"
 
             # Save the folded pdb file if the run is valid

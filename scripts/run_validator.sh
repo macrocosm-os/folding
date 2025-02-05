@@ -53,17 +53,11 @@ RQLITE_PID=$!
 
 # Execute the Python script
 python3 ./neurons/validator.py \
-    --netuid 141 \
-    --subtensor.network test \
-    --wallet.name folding_testnet \
-    --wallet.hotkey v3 \
-    --neuron.queue_size 1 \
-    --neuron.sample_size 1 \
-    --neuron.update_interval 60 \
-    --neuron.epoch_length 100 \
-    --wandb.off true \
-    --axon.port 8030 \
-    --neuron.gjp_address 167.99.209.27:8030
+    --netuid 25 \
+    --subtensor.network finney \
+    --wallet.name <test_coldkey> \
+    --wallet.hotkey <test_hotkey> \
+    --axon.port <your_port> \
 
 # Wait for the background process
 wait $RQLITE_PID
