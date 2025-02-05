@@ -29,11 +29,6 @@ from folding.utils.ops import (
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.logger import logger
 
-# root level directory for the project (I HATE THIS)
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
-LOCAL_DB_ADDRESS = os.getenv("RQLITE_HTTP_ADDR")
-
 
 def attach_files(
     files_to_attach: List, synapse: JobSubmissionSynapse
@@ -119,18 +114,18 @@ def check_synapse(
 
 
 class FoldingMiner(BaseMinerNeuron):
-    def __init__(self, config=None, base_data_path: str = None):
+    def __init__(self, config=None):
         super().__init__(config=config)
 
         # TODO: There needs to be a timeout manager. Right now, if
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
-
+        self.miner_data_path = os.path.join(self.project_path, "miner-data")
+        
         self.base_data_path = (
-            base_data_path
-            if base_data_path is not None
-            else os.path.join(BASE_DATA_PATH, self.wallet.hotkey.ss58_address[:8])
+            os.path.join(self.miner_data_path, self.wallet.hotkey.ss58_address[:8])
         )
+        self.local_db_address = os.getenv("RQLITE_HTTP_ADDR")
         self.simulations = self.create_default_dict()
 
         self.max_workers = self.config.neuron.max_workers
@@ -274,7 +269,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         logger.info("Fetching job details from the sqlite database")
 
-        full_local_db_address = f"http://{LOCAL_DB_ADDRESS}/db/query"
+        full_local_db_address = f"http://{self.local_db_address}/db/query"
         columns_to_select = ", ".join(columns)
         query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = '{job_id}'"""
 
@@ -364,7 +359,7 @@ class FoldingMiner(BaseMinerNeuron):
 
         # query rqlite to get pdb_id
         sql_job_details = self.fetch_sql_job_details(
-            columns=columns, job_id=job_id, local_db_address=LOCAL_DB_ADDRESS
+            columns=columns, job_id=job_id, local_db_address=self.local_db_address
         )
 
         if len(sql_job_details) == 0:
