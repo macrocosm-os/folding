@@ -167,7 +167,12 @@ def get_energies(
             ns_computed = evaluator.get_ns_computed()
 
             start_time = time.time()
-            is_valid, checked_energy, miner_energy, reason = evaluator.validate()
+            median_energy, checked_energy, miner_energy, reason = evaluator.validate()
+
+            if median_energy != 0.0:
+                is_valid = True
+            else:
+                is_valid = False
 
             # Update event dictionary for this index
             event["is_run_valid_time"][i] = time.time() - start_time
@@ -180,8 +185,6 @@ def get_energies(
             processed_indices.append(i)
 
             if is_valid:
-                # Check if this energy value is unique (within some tolerance)
-                median_energy = np.median(checked_energy[-c.ENERGY_WINDOW_SIZE :])
 
                 if not abs(median_energy - reported_energy) < c.DIFFERENCE_THRESHOLD:
                     event["is_valid"][i] = False

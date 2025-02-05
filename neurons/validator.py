@@ -289,7 +289,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event)
+            await self.add_job(job_event=job_event, uids=[76])
             await asyncio.sleep(0.01)
 
     async def update_scores_wrapper(
@@ -329,7 +329,6 @@ class Validator(BaseValidatorNeuron):
         best_hotkey = job.hotkeys[best_index]
 
         await job.update(
-            hotkeys=job.hotkeys,
             loss=best_loss,
             hotkey=best_hotkey,
         )
@@ -347,7 +346,7 @@ class Validator(BaseValidatorNeuron):
             logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            model: BaseReward = REWARD_REGISTRY[job.job_type]()
+            model: BaseReward = REWARD_REGISTRY[job.job_type](priority=job.priority)
             reward_event: RewardEvent = await model.forward(
                 data=BatchRewardInput(
                     energies=energies,
@@ -359,6 +358,7 @@ class Validator(BaseValidatorNeuron):
             job.computed_rewards = reward_event.rewards.numpy().tolist()
 
         else:
+            job.computed_rewards = [0.0] * len(job.hotkeys)
             logger.warning(
                 f"All energies zero for job {job.pdb_id} and job has never been updated... Skipping"
             )
