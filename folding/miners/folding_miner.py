@@ -10,6 +10,7 @@ import requests
 import traceback
 import concurrent.futures
 import subprocess
+import asyncio
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any
 
@@ -120,8 +121,8 @@ class FoldingMiner(BaseMinerNeuron):
         # TODO: There needs to be a timeout manager. Right now, if
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
-        self.miner_data_path = os.path.join(self.project_path, "miner-data")
         
+        self.miner_data_path = os.path.join(self.project_path, "miner-data")
         self.base_data_path = (
             os.path.join(self.miner_data_path, self.wallet.hotkey.ss58_address[:8])
         )
@@ -139,9 +140,8 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.mock = None
         self.generate_random_seed = lambda: random.randint(0, 1000)
-        self.db_dir = "/db"
-        self.db_path = "/db/db.sqlite"
-        self.restart_rqlite(rqlite_data_dir=self.db_dir)
+        asyncio.run(self.start_rqlite())
+        time.sleep(5)
 
         # hardcorded for now -- TODO: make this more flexible
         self.STATES = ["nvt", "npt", "md_0_1"]
@@ -232,25 +232,6 @@ class FoldingMiner(BaseMinerNeuron):
         values = response["values"]
         data = [dict(zip(columns, row)) for row in values]
         return data[0]
-      
-    def restart_rqlite(self, rqlite_data_dir: str):
-        """
-        Deletes the local DB and restarts the rqlite service.
-        """
-        # get path of the project folder
-        project_path = os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__))
-        ))  # God help me for I have sinned
-
-        try:
-            logger.info("")
-            os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
-            os.system("pkill rqlited")
-            subprocess.Popen(
-                ["bash", os.path.join(project_path, "scripts", "start_read_node.sh")]
-            )
-        except Exception as e:
-            logger.error(f"Error restarting rqlite: {traceback.format_exc()}")   
             
     def fetch_sql_job_details(
         self, columns: List[str], job_id: str, local_db_address: str
