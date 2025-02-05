@@ -2,11 +2,11 @@
 # Copyright © 2024 Macrocosmos
 
 import os
-import re
 import time
 import random
 import asyncio
 import traceback
+import subprocess
 
 from itertools import chain
 from typing import Any, Dict, List, Tuple
@@ -16,11 +16,14 @@ import numpy as np
 import pandas as pd
 from async_timeout import timeout
 
+import folding.utils.constants as c
+from folding.base.reward import BatchRewardInput
+from folding.base.reward import BaseReward, RewardEvent
 from folding.base.validator import BaseValidatorNeuron
-from folding.rewards.reward_pipeline import reward_pipeline
+from folding.rewards.md_rewards import REWARD_REGISTRY
 
 # import base validator class which takes care of most of the boilerplate
-from folding.store import Job, SQLiteJobStore
+from folding.store import Job, SQLiteJobStore, rqlite_data_dir
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
@@ -101,7 +104,9 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
+            job_id=job.job_id,
             best_submitted_energy=job.best_loss,
+            job_type=job.job_type,
         )
 
     async def ping_all_miners(
@@ -220,7 +225,7 @@ class Validator(BaseValidatorNeuron):
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
             try:
-                job_id = self.store.upload_job(
+                job = self.store.upload_job(
                     pdb=job_event["pdb_id"],
                     ff=job_event["ff"],
                     water=job_event["water"],
@@ -234,8 +239,15 @@ class Validator(BaseValidatorNeuron):
                     event=job_event,
                     s3_links=job_event["s3_links"],
                 )
-                job_event["job_id"] = job_id
 
+                job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
+
+                if job_event["job_id"] is None:
+                    raise ValueError("job_id is None")
+
+                logger.success("Job was uploaded successfully!")
+
+                await self.forward(job=job)
                 return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
@@ -268,19 +280,27 @@ class Validator(BaseValidatorNeuron):
             await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
+    async def update_scores_wrapper(
+        self, rewards: torch.FloatTensor, hotkeys: List[str]
+    ):
+        """Wrapper function to update the scores of the miners based on the rewards they received."""
+        uids = self.get_uids(hotkeys=hotkeys)
+        await self.update_scores(
+            rewards=rewards,
+            uids=uids,
+        )
+
     async def update_job(self, job: Job):
         """Updates the job status based on the event information
 
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
-        top_reward = 0.80
         apply_pipeline = False
 
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
-        logger.info(f"event information: {job.event['reason']},  {job.event['uids']}")
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
@@ -317,17 +337,18 @@ class Validator(BaseValidatorNeuron):
             logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            rewards: torch.Tensor = await reward_pipeline(
-                energies=energies,
-                rewards=rewards,
-                top_reward=top_reward,
-                job=job,
+            model: BaseReward = REWARD_REGISTRY[job.job_type]()
+            output: RewardEvent = await model.forward(
+                data=BatchRewardInput(
+                    energies=energies,
+                    top_reward=c.TOP_SYNTHETIC_MD_REWARD,
+                    job=job,
+                ),
             )
 
-            uids = self.get_uids(hotkeys=job.hotkeys)
-            await self.update_scores(
-                rewards=rewards,
-                uids=uids,  # pretty confident these are in the correct order.
+            self.update_scores_wrapper(
+                rewards=output.rewards,
+                hotkeys=job.hotkeys,
             )
         else:
             logger.warning(
@@ -340,7 +361,7 @@ class Validator(BaseValidatorNeuron):
                     event[key] = value.total_seconds()
             return event
 
-        event = job.to_dict()
+        event = job.model_dump()
         simulation_event = event.pop("event")  # contains information from hp search
         merged_events = simulation_event | event  # careful: this overwrites.
 
@@ -388,7 +409,7 @@ class Validator(BaseValidatorNeuron):
                 output_link = await upload_output_to_s3(
                     handler=protein.handler,
                     output_file=best_cpt_file,
-                    pdb_id=job.pdb,
+                    pdb_id=job.pdb_id,
                     miner_hotkey=job.hotkeys[idx],
                     VALIDATOR_ID=self.validator_hotkey_reference,
                 )
@@ -473,16 +494,6 @@ class Validator(BaseValidatorNeuron):
                 for job in self.store.get_queue(
                     ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
                 ).queue:
-                    # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
-                    if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
-                        self.store.update_gjp_job(
-                            job=job,
-                            gjp_address=self.config.neuron.gjp_address,
-                            keypair=self.wallet.hotkey,
-                            job_id=job.job_id,
-                        )
-                        continue
-
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = await self.forward(job=job)
 
@@ -513,10 +524,65 @@ class Validator(BaseValidatorNeuron):
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
 
+    async def read_and_update_rewards(self):
+        inactive_jobs_queue = self.store.get_inactive_queue(
+            validator_hotkey=self.wallet.hotkey.ss58_address
+        )
+        if inactive_jobs_queue.qsize() == 0:
+            logger.info("No inactive jobs to update.")
+            return
+
+        while not inactive_jobs_queue.empty():
+            inactive_job = inactive_jobs_queue.get()
+            for uid, reward in zip(inactive_job["uids"], inactive_job["rewards"]):
+                # ema is weird and you can't simply aggregate and update. To keep things consistent, you
+                # need to do it one by one.
+                await self.update_scores_wrapper(
+                    rewards=torch.Tensor([reward]),
+                    hotkeys=[self.metagraph.hotkeys[uid]],
+                )
+
+    async def monitor_db(self):
+        """
+        Monitors the database for any changes.
+        """
+        while True:
+            try:
+                await asyncio.sleep(60)
+                outdated = await self.store.monitor_db()
+                if outdated:
+                    logger.error("Database is outdated. Restarting rqlite.")
+                    await self.restart_rqlite()
+                else:
+                    logger.debug("Database is up-to-date.")
+            except Exception as e:
+                logger.error(f"Error in monitor_db: {traceback.format_exc()}")
+
+    async def restart_rqlite(self):
+        """
+        Deletes the local DB and restarts the rqlite service.
+        """
+        # get path of the project folder
+        project_path = os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))
+        )  # God help me for I have sinned
+
+        try:
+            logger.info("")
+            os.system(f"sudo rm -rf {os.path.join(project_path, rqlite_data_dir)}")
+            os.system("pkill rqlited")
+            subprocess.Popen(
+                ["bash", os.path.join(project_path, "scripts", "start_read_node.sh")]
+            )
+        except Exception as e:
+            logger.error(f"Error restarting rqlite: {traceback.format_exc()}")
+
     async def __aenter__(self):
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
+        self.loop.create_task(self.read_and_update_rewards())
+        self.loop.create_task(self.monitor_db())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self

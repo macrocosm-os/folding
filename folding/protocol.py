@@ -45,9 +45,7 @@ class JobSubmissionSynapse(bt.Synapse):
     """
 
     pdb_id: str
-    pdb_contents: str
-    md_inputs: dict  # Right now this is just a "em.cpt" file.
-    system_config: dict = {}
+    job_id: str
 
     best_submitted_energy: typing.Optional[float] = None
 
@@ -82,18 +80,6 @@ class JobSubmissionSynapse(bt.Synapse):
 
             self.md_output = md_output
 
-        if not isinstance(self.md_inputs, dict):
-            self.md_inputs = {}
-        else:
-            md_inputs = {}
-            for k, v in self.md_inputs.items():
-                try:
-                    md_inputs[k] = base64.b64decode(v)
-                except Exception as e:
-                    logger.error(f"Error decoding {k} from md_inputs: {e}")
-                    md_inputs[k] = None
-
-            self.md_inputs = md_inputs
         return self
 
 

@@ -4,6 +4,8 @@ from typing import Optional
 from pydantic import BaseModel
 from abc import ABC, abstractmethod
 
+from folding.store import Job
+
 
 class RewardEvent(BaseModel):
     """Contains rewards for all the responses in a batch"""
@@ -31,6 +33,7 @@ class BatchRewardInput(BaseModel):
 
     energies: torch.Tensor
     top_reward: float
+    job: Job
 
     class Config:
         arbitrary_types_allowed = True
@@ -59,7 +62,7 @@ class BaseReward(ABC):
         """Setup rewards for the given energies"""
         return torch.zeros(len(energies))
 
-    async def apply(self, data: BatchRewardInput) -> RewardEvent:
+    async def forward(self, data: BatchRewardInput) -> RewardEvent:
         self.rewards: torch.Tensor = await self.setup_rewards(energies=data.energies)
         t0: float = time.time()
         batch_rewards_output: BatchRewardOutput = await self.get_rewards(
