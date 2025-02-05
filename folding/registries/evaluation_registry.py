@@ -199,7 +199,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
     def get_reported_energy(self) -> float:
         """Get the energy from the simulation"""
-        return float(np.median(self.miner_energies[-10:]))
+        return float(np.median(self.miner_energies[-c.ENERGY_WINDOW_SIZE :]))
 
     def check_masses(self, miner_velm_data) -> bool:
         """
@@ -228,12 +228,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
         WINDOW size of the check_energies array. Miners that return gradients that are too high,
         there is a *high* probability that they have not run the simulation as the validator specified.
         """
-        WINDOW = 50  # Number of steps to calculate the gradient over
-        GRADIENT_THRESHOLD = 10  # kJ/mol/nm
-
-        mean_gradient = np.diff(check_energies[:WINDOW]).mean().item()
+        mean_gradient = np.diff(check_energies[: c.GRADIENT_WINDOW_SIZE]).mean().item()
         return (
-            mean_gradient <= GRADIENT_THRESHOLD
+            mean_gradient <= c.GRADIENT_THRESHOLD
         )  # includes large negative gradients is passible
 
     def compare_state_to_cpt(
@@ -244,13 +241,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
         in the simulation created by the checkpoint and the state file respectively.
         """
 
-        WINDOW = 50
-
         state_energies = np.array(state_energies)
         checkpoint_energies = np.array(checkpoint_energies)
 
-        state_median = np.median(state_energies[:WINDOW])
-        checkpoint_median = np.median(checkpoint_energies[:WINDOW])
+        state_median = np.median(state_energies[: c.GRADIENT_WINDOW_SIZE])
+        checkpoint_median = np.median(checkpoint_energies[: c.GRADIENT_WINDOW_SIZE])
 
         percent_diff = abs((state_median - checkpoint_median) / checkpoint_median) * 100
 
@@ -292,10 +287,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         try:
             if not self.check_gradient(check_energies=state_energies):
+                logger.warning(f"state energies: {state_energies}")
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!"
                 )
-                raise "state-gradient"
+                raise ValidationError(message="state-gradient")
 
             # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
             simulation, system_config = self.md_simulator.create_simulation(
@@ -332,13 +328,14 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 logger.warning(
                     "All energy values in reproduced simulation are the same. Skipping!"
                 )
-                raise "reprod-energies-identical"
+                raise ValidationError(message="reprod-energies-identical")
 
             if not self.check_gradient(check_energies=check_energies):
+                logger.warning(f"check_energies: {check_energies}")
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!"
                 )
-                raise "cpt-gradient"
+                raise ValidationError(message="cpt-gradient")
 
             if not self.compare_state_to_cpt(
                 state_energies=state_energies, checkpoint_energies=check_energies
@@ -346,7 +343,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!"
                 )
-                raise "state-checkpoint"
+                raise ValidationError(message="state-checkpoint")
 
             # calculating absolute percent difference per step
             percent_diff = abs(
@@ -358,7 +355,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed anomaly check for {self.pdb_id}, ... Skipping!"
                 )
-                raise "anomaly"
+                raise ValidationError(message="anomaly")
 
             # Save the folded pdb file if the run is valid
             positions = simulation.context.getState(getPositions=True).getPositions()
@@ -375,7 +372,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return True, check_energies.tolist(), self.miner_energies.tolist(), "valid"
 
         except Exception as E:
-            return False, [], [], str(E)
+            return False, [], [], E.message
 
     def evaluate(self) -> bool:
         """Checks to see if the miner's data can be passed for validation"""
@@ -394,7 +391,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return 0.0, checked_energies, miner_energies, result
 
         return (
-            np.median(checked_energies[-10:]),
+            np.median(checked_energies[-c.ENERGY_WINDOW_SIZE :]),
             checked_energies,
             miner_energies,
             result,
