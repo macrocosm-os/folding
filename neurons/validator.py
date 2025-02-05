@@ -44,18 +44,20 @@ class Validator(BaseValidatorNeuron):
 
         self.load_state()
 
-        # Init sync with the network. Updates the metagraph.
-        self.sync()
-        self.store = SQLiteJobStore()
-
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
 
-        self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
+        # If we do not have any miner registry saved to the machine, create.
+        if not hasattr(self, "miner_registry"):
+            self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
+        # Init sync with the network. Updates the metagraph.
+        self.sync()
+
+        self.store = SQLiteJobStore()
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
@@ -284,7 +286,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event, uids=[76])
+            await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
     async def update_scores_wrapper(
@@ -308,7 +310,6 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
         rewards = torch.zeros(len(energies))  # one-hot per update step
 
-        logger.info(f"event information: {job.event['reason']},  {job.event['uids']}")
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
@@ -502,18 +503,6 @@ class Validator(BaseValidatorNeuron):
                 for job in self.store.get_queue(
                     ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
                 ).queue:
-                    # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
-                    # NOTE: we don't need to do this anymore but I'm keeping it just in case
-                    # hotkeys_present, job = self.store.check_for_available_hotkeys(job=job, hotkeys=self.metagraph.hotkeys)
-                    # if not hotkeys_present:
-                    #     self.store.update_gjp_job(
-                    #         job=job,
-                    #         gjp_address=self.config.neuron.gjp_address,
-                    #         keypair=self.wallet.hotkey,
-                    #         job_id=job.job_id,
-                    #     )
-                    #     continue
-
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = await self.forward(job=job)
 
