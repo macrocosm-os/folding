@@ -1,17 +1,19 @@
 import os
 import time
 import glob
+import copy
+import json
 import base64
 import random
 import hashlib
-import concurrent.futures
-from collections import defaultdict
-from typing import Dict, List, Tuple
-import copy
+import requests
 import traceback
+import concurrent.futures
+import subprocess
 import asyncio
+from collections import defaultdict
+from typing import Dict, List, Tuple, Any
 
-import bittensor as bt
 import openmm as mm
 import openmm.app as app
 
@@ -27,10 +29,6 @@ from folding.utils.ops import (
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.logger import logger
-
-# root level directory for the project (I HATE THIS)
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-BASE_DATA_PATH = os.path.join(ROOT_DIR, "miner-data")
 
 
 def attach_files(
@@ -106,10 +104,6 @@ def check_synapse(
     self, synapse: JobSubmissionSynapse, event: Dict = None
 ) -> JobSubmissionSynapse:
     """Utility function to remove md_inputs if they exist"""
-    if len(synapse.md_inputs) > 0:
-        event["md_inputs_sizes"] = list(map(len, synapse.md_inputs.values()))
-        event["md_inputs_filenames"] = list(synapse.md_inputs.keys())
-        synapse.md_inputs = {}  # remove from synapse
 
     if synapse.md_output is not None:
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
@@ -121,18 +115,18 @@ def check_synapse(
 
 
 class FoldingMiner(BaseMinerNeuron):
-    def __init__(self, config=None, base_data_path: str = None):
+    def __init__(self, config=None):
         super().__init__(config=config)
 
         # TODO: There needs to be a timeout manager. Right now, if
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
-
+        
+        self.miner_data_path = os.path.join(self.project_path, "miner-data")
         self.base_data_path = (
-            base_data_path
-            if base_data_path is not None
-            else os.path.join(BASE_DATA_PATH, self.wallet.hotkey.ss58_address[:8])
+            os.path.join(self.miner_data_path, self.wallet.hotkey.ss58_address[:8])
         )
+        self.local_db_address = os.getenv("RQLITE_HTTP_ADDR")
         self.simulations = self.create_default_dict()
 
         self.max_workers = self.config.neuron.max_workers
@@ -146,7 +140,8 @@ class FoldingMiner(BaseMinerNeuron):
 
         self.mock = None
         self.generate_random_seed = lambda: random.randint(0, 1000)
-        self.db_path = "/db/db.sqlite"
+        asyncio.run(self.start_rqlite())
+        time.sleep(5)
 
         # hardcorded for now -- TODO: make this more flexible
         self.STATES = ["nvt", "npt", "md_0_1"]
@@ -225,6 +220,106 @@ class FoldingMiner(BaseMinerNeuron):
             return False
         return True
 
+    def response_to_dict(self, response) -> dict[str, Any]:
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return {}
+
+        columns = response["columns"]
+        values = response["values"]
+        data = [dict(zip(columns, row)) for row in values]
+        return data[0]
+            
+    def fetch_sql_job_details(
+        self, columns: List[str], job_id: str, local_db_address: str
+    ) -> Dict:
+        """
+        Fetches job records from a SQLite database with given column details and a specific job_id.
+
+        Parameters:
+            columns (list): List of column names to retrieve from the database.
+            job_id (str): The identifier for the job to fetch.
+            db_path (str): Path to the SQLite database file.
+
+        Returns:
+            dict: A dictionary mapping job_id to its details as specified by the columns list.
+        """
+
+        logger.info("Fetching job details from the sqlite database")
+
+        full_local_db_address = f"http://{self.local_db_address}/db/query"
+        columns_to_select = ", ".join(columns)
+        query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = '{job_id}'"""
+
+        try:
+            response = requests.get(
+                full_local_db_address, params={"q": query, "level": "strong"}
+            )
+            response.raise_for_status()
+
+            data: dict = self.response_to_dict(response=response)
+            logger.info(f"data response: {data}")
+
+            return data
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch job details {e}")
+            return
+
+    def download_gjp_input_files(
+        self,
+        output_dir: str,
+        pdb_id: str,
+        s3_links: dict[str, str],
+    ) -> bool:
+        
+        def stream_download(url:str, output_path:str):
+            if not os.path.exists(os.path.dirname(output_path)):
+                os.makedirs(os.path.dirname(output_path))
+            with requests.get(url, stream=True) as r:
+                r.raise_for_status()
+                with open(output_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+        for key, url in s3_links.items():
+            output_path = os.path.join(output_dir, f"{pdb_id}.{key}")
+            try:
+                stream_download(url=url, output_path=output_path)
+            except Exception as e:
+                logger.error(f"Failed to download file {key} with error: {e}")
+                return False
+        return True
+
+    def get_simulation_config(
+        self,
+        gjp_config,
+        system_config_filepath: str,
+    ) -> SimulationConfig:
+        """
+        Creates a SimulationConfig for the gjp job the miner is working on.
+
+        Parameters:
+            gjp_config (dict): Configuration details for the GJP.
+            system_config_filepath (str): File path to write the system configuration.
+            job_id (str): Job ID to process.
+
+        Returns:
+            SimulationConfig: An object containing the configuration for the simulation.
+        """
+
+        # create SimualtionConfig and write it to system_config_filepath
+        system_config = SimulationConfig(ff=gjp_config["ff"], water=gjp_config["water"], box=gjp_config["box"], **gjp_config["system_kwargs"])
+
+        if system_config.seed is None:
+            system_config.seed = self.generate_random_seed()
+
+        write_pkl(system_config, system_config_filepath)
+        return system_config
+
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
@@ -240,7 +335,21 @@ class FoldingMiner(BaseMinerNeuron):
             JobSubmissionSynapse: synapse with md_output attached
         """
 
-        pdb_id = synapse.pdb_id
+        # get the job id from the synapse
+        job_id = synapse.job_id
+        columns = ["pdb_id", "system_config", "pdb_id, s3_links"]
+
+        # query rqlite to get pdb_id
+        sql_job_details = self.fetch_sql_job_details(
+            columns=columns, job_id=job_id, local_db_address=self.local_db_address
+        )
+
+        if len(sql_job_details) == 0:
+            logger.error(f"Job ID {job_id} not found in the database.")
+            return synapse
+
+        # str
+        pdb_id = sql_job_details["pdb_id"]
 
         # If we are already running a process with the same identifier, return intermediate information
         logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
@@ -252,26 +361,42 @@ class FoldingMiner(BaseMinerNeuron):
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
 
-        pdb_hash = self.get_simulation_hash(
-            pdb_id=pdb_id, system_config=synapse.system_config
-        )
+        gjp_config = json.loads(sql_job_details["system_config"])
+
+        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=gjp_config)
         output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
-        system_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
+        gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
 
         # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
+
         submitted_job_is_unique = self.is_unique_job(
-            system_config_filepath=system_config_filepath
+            system_config_filepath=gjp_config_filepath
         )
 
         if submitted_job_is_unique:
+            check_if_directory_exists(output_directory=output_dir)
+
+            success = self.download_gjp_input_files(
+                pdb_id=pdb_id,
+                output_dir=output_dir,
+                s3_links=json.loads(sql_job_details["s3_links"]),
+            )
+
+            if not success:
+                return synapse
+
             if len(self.simulations) < self.max_workers:
-                return self.submit_simulation(
+                system_config = self.get_simulation_config(
+                    gjp_config=gjp_config,
+                    system_config_filepath=gjp_config_filepath,
+                )
+                return self.create_simulation_from_job(
                     synapse=synapse,
+                    output_dir=output_dir,
                     pdb_id=pdb_id,
                     pdb_hash=pdb_hash,
-                    output_dir=output_dir,
-                    system_config_filepath=system_config_filepath,
+                    system_config=system_config,
                     event=event,
                 )
 
@@ -356,53 +481,20 @@ class FoldingMiner(BaseMinerNeuron):
 
                     return check_synapse(self=self, synapse=synapse, event=event)
 
-            elif len(synapse.md_inputs) == 0:  # The vali sends nothing to the miner
-                return check_synapse(self=self, synapse=synapse, event=event)
-
-    def submit_simulation(
+    def create_simulation_from_job(
         self,
         synapse: JobSubmissionSynapse,
         output_dir: str,
         pdb_id: str,
         pdb_hash: str,
-        system_config_filepath: str,
+        system_config: SimulationConfig,
         event: Dict,
     ):
-        # Make sure the output directory exists and if not, create it
-        check_if_directory_exists(output_directory=output_dir)
-
-        # We are going to use a hash based on the pdb_id and the system config to index the simulation dict
-
-        # The following files are required for openmm simulations and are received from the validator
-        for filename, content in synapse.md_inputs.items():
-            write_mode = "w"
-            try:
-                if "cpt" in filename:
-                    write_mode = "wb"
-                    content = base64.b64decode(content)
-
-                with open(os.path.join(output_dir, filename), write_mode) as f:
-                    f.write(content)
-
-            except Exception as e:
-                logger.error(f"Failed to write file {filename!r} with error: {e}")
-
-        # Write the contents of the pdb file to the output directory
-        with open(os.path.join(output_dir, f"{pdb_id}.pdb"), "w") as f:
-            f.write(synapse.pdb_contents)
-
-        system_config = copy.deepcopy(synapse.system_config)
-        if system_config["seed"] is None:
-            system_config["seed"] = self.generate_random_seed()
-
-        system_config = SimulationConfig(**system_config)
-        write_pkl(system_config, system_config_filepath)
-
-        # Create the job and submit it to the executor
+        # Submit job to the executor
         simulation_manager = SimulationManager(
             pdb_id=pdb_id,
             output_dir=output_dir,
-            system_config=system_config.to_dict(),
+            system_config=system_config.model_dump(),
             seed=system_config.seed,
         )
 
@@ -454,7 +546,6 @@ class FoldingMiner(BaseMinerNeuron):
         priority = float(
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
-        logger.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)
         return priority
 
 
@@ -476,7 +567,7 @@ class SimulationManager:
         self.start_time = time.time()
 
         self.cpt_file_mapper = {
-            "nvt": f"{output_dir}/em.cpt",
+            "nvt": f"{output_dir}/{self.pdb_id}.cpt",
             "npt": f"{output_dir}/nvt.cpt",
             "md_0_1": f"{output_dir}/npt.cpt",
         }

@@ -2,6 +2,7 @@ import os
 import copy
 import bittensor as bt
 from abc import ABC, abstractmethod
+from dotenv import load_dotenv
 import subprocess
 
 import openmm
@@ -16,8 +17,8 @@ from folding import __OPENMM_VERSION_TAG__
 from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
 from folding.utils.logger import logger
-from folding.store import rqlite_data_dir
 
+load_dotenv()
 
 class BaseNeuron(ABC):
     """
@@ -55,7 +56,9 @@ class BaseNeuron(ABC):
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
-
+        
+        self.rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
+        
         # Log the configuration for reference.
         logger.info(self.config)
 
@@ -154,7 +157,6 @@ class BaseNeuron(ABC):
     def weight_setter(self):
         """method to set weights for the validator."""
         try:
-            logger.info("Attempting to set weights...")
             weights_are_set = self.set_weights()
             if weights_are_set:
                 logger.success("Weight setting successful!")
@@ -219,9 +221,9 @@ class BaseNeuron(ABC):
         os.system("pkill rqlited")
 
         # checks if db exists and if yes deletes it
-        if os.path.exists(os.path.join(self.project_path, rqlite_data_dir)):
+        if os.path.exists(os.path.join(self.project_path, self.rqlite_data_dir)):
             logger.info("Deleting existing db")
-            os.system(f"sudo rm -rf {os.path.join(self.project_path, rqlite_data_dir)}")
+            os.system(f"sudo rm -rf {os.path.join(self.project_path, self.rqlite_data_dir)}")
 
         # starts the rqlite read node
         subprocess.Popen(

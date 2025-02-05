@@ -43,10 +43,10 @@ class JobSubmissionSynapse(bt.Synapse):
     - miner_seed: An integer value which is the seed for the simulation.
     - miner_state: A string value which is the state of the miner.
     """
-
+    
     pdb_id: str
     job_id: str
-
+      
     best_submitted_energy: typing.Optional[float] = None
 
     # Optional request output, filled by receiving axon.
