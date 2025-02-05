@@ -289,7 +289,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event)
+            await self.add_job(job_event=job_event, uids=[76])
             await asyncio.sleep(0.01)
 
     async def update_scores_wrapper(
@@ -544,6 +544,13 @@ class Validator(BaseValidatorNeuron):
                     rewards=torch.Tensor([reward]),
                     hotkeys=[hotkey],
                 )
+                await asyncio.sleep(0.01)
+
+    async def reward_loop(self):
+        logger.info("Starting reward loop.")
+        while True:
+            await asyncio.sleep(60)
+            await self.read_and_update_rewards()
 
     async def sync_loop(self):
         logger.info("Starting sync loop.")
@@ -575,7 +582,7 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.update_jobs())
         self.loop.create_task(self.create_synthetic_jobs())
-        self.loop.create_task(self.read_and_update_rewards())
+        self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
