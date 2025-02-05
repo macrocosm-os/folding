@@ -5,9 +5,11 @@ from collections import defaultdict
 
 import numpy as np
 
-from folding.protocol import JobSubmissionSynapse
-from folding.validators.protein import Protein
 from folding.utils.logger import logger
+from folding.utils import constants as c
+from folding.validators.protein import Protein
+from folding.protocol import JobSubmissionSynapse
+from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 
 
 def check_if_identical(event):
@@ -43,8 +45,66 @@ def check_if_identical(event):
     return event
 
 
+def evaluate(
+    protein: Protein,
+    responses: List[JobSubmissionSynapse],
+    uids: List[int],
+    job_type: str,
+    event: dict,
+):
+    reported_energies = np.zeros(len(uids))
+    evaluators = [None] * len(uids)
+    seed = []
+    best_cpt = [""] * len(uids)
+    process_md_output_time = [0.0] * len(uids)
+
+    for i, (uid, resp) in enumerate(zip(uids, responses)):
+        try:
+            if resp.dendrite.status_code != 200:
+                logger.info(
+                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
+                )
+                continue
+
+            start_time = time.time()
+            evaluator = EVALUATION_REGISTRY[job_type](
+                pdb_id=protein.pdb_id,
+                pdb_location=protein.pdb_location,
+                hotkey=resp.axon.hotkey,
+                state=resp.miner_state,
+                seed=resp.miner_seed,
+                md_output=resp.md_output,
+                basepath=protein.base_directory,
+                system_config=protein.system_config,
+                velm_array_pkl_path=protein.velm_array_pkl,
+            )
+
+            can_process = evaluator.evaluate()
+            if not can_process:
+                continue
+            seed.append(resp.miner_seed)
+            best_cpt[i] = (
+                evaluator.checkpoint_path
+                if hasattr(evaluator, "checkpoint_path")
+                else ""
+            )
+
+            reported_energies[i] = evaluator.get_reported_energy()
+            process_md_output_time[i] = time.time() - start_time
+            evaluators[i] = evaluator
+
+        except Exception as E:
+            # If any of the above methods have an error, we will catch here.
+            logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
+            continue
+    return reported_energies, evaluators, seed, best_cpt, process_md_output_time
+
+
 def get_energies(
-    protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int]
+    protein: Protein,
+    responses: List[JobSubmissionSynapse],
+    uids: List[int],
+    job_type: str,
 ):
     """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
 
@@ -56,79 +116,125 @@ def get_energies(
     Returns:
         Tuple: Tuple containing the energies and the event dictionary
     """
-    event = {}
-    event["is_valid"] = [False] * len(uids)
-    event["checked_energy"] = [0] * len(uids)
-    event["reported_energy"] = [0] * len(uids)
-    event["miner_energy"] = [0] * len(uids)
-    event["rmsds"] = [0] * len(uids)
-    event["process_md_output_time"] = [0] * len(uids)
-    event["is_run_valid_time"] = [0] * len(uids)
-    event["ns_computed"] = [0] * len(uids)
-    event["reason"] = [""] * len(uids)
-    event["best_cpt"] = [""] * len(uids)
-    event["seed"] = []
 
+    TOP_K = 5
+
+    # Initialize event dictionary with lists matching uids length
+    event = {
+        "is_valid": [False] * len(uids),
+        "checked_energy": [0] * len(uids),
+        "reported_energy": [0] * len(uids),
+        "miner_energy": [0] * len(uids),
+        "rmsds": [0] * len(uids),
+        "is_run_valid_time": [0] * len(uids),
+        "ns_computed": [0] * len(uids),
+        "reason": [""] * len(uids),
+        "is_duplicate": [False] * len(uids),  # Initialize is_duplicate field
+    }
     energies = np.zeros(len(uids))
 
-    for i, (uid, resp) in enumerate(zip(uids, responses)):
-        # Ensures that the md_outputs from the miners are parsed correctly
+    # Get initial evaluations
+    reported_energies, evaluators, seed, best_cpt, process_md_output_time = evaluate(
+        protein, responses, uids, job_type, event
+    )
+
+    # Sort all lists by reported energy
+    sorted_data = sorted(
+        zip(
+            reported_energies,
+            responses,
+            uids,
+            evaluators,
+            seed,
+            best_cpt,
+            process_md_output_time,
+        ),
+        key=lambda x: x[0] if x[0] != 0 else float("inf"),  # Push zeros to the end
+    )
+
+    valid_unique_count = 0
+    processed_indices = []
+    unique_energies = set()  # Track unique energy values
+
+    # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
+    for i, (reported_energy, response, uid, evaluator, s, bc, pmt) in enumerate(
+        sorted_data
+    ):
         try:
-            start_time = time.time()
-            can_process = protein.process_md_output(
-                md_output=resp.md_output,
-                hotkey=resp.axon.hotkey,
-                state=resp.miner_state,
-                seed=resp.miner_seed,
-            )
-            event["seed"].append(resp.miner_seed)
-            event["process_md_output_time"][i] = time.time() - start_time
-            event["best_cpt"][i] = (
-                protein.checkpoint_path if hasattr(protein, "checkpoint_path") else ""
-            )
-
-            if not can_process:
+            if reported_energy == 0:
                 continue
 
-            if resp.dendrite.status_code != 200:
-                logger.info(
-                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
-                )
-                continue
-
-            ns_computed = protein.get_ns_computed()
-            energy = protein.get_energy()
-            rmsd = protein.get_rmsd()
-
-            if energy == 0:
-                continue
+            ns_computed = evaluator.get_ns_computed()
 
             start_time = time.time()
-            is_valid, checked_energy, miner_energy, reason = protein.is_run_valid()
+            is_valid, checked_energy, miner_energy, reason = evaluator.validate()
+
+            # Update event dictionary for this index
             event["is_run_valid_time"][i] = time.time() - start_time
             event["reason"][i] = reason
-
             event["checked_energy"][i] = checked_energy
             event["miner_energy"][i] = miner_energy
             event["is_valid"][i] = is_valid
-            event["reported_energy"][i] = float(energy)
-            event["rmsds"][i] = float(rmsd)
             event["ns_computed"][i] = float(ns_computed)
 
+            processed_indices.append(i)
+
+            if is_valid:
+                # Check if this energy value is unique (within some tolerance)
+                median_energy = np.median(checked_energy[-c.ENERGY_WINDOW_SIZE :])
+
+                if not abs(median_energy - reported_energy) < c.DIFFERENCE_THRESHOLD:
+                    event["is_valid"][i] = False
+                    continue
+
+                is_duplicate = any(
+                    abs(median_energy - energy) < c.DIFFERENCE_THRESHOLD
+                    for energy in unique_energies
+                )
+                event["is_duplicate"][i] = is_duplicate
+
+                if not is_duplicate:
+                    unique_energies.add(median_energy)
+                    valid_unique_count += 1
+                    if valid_unique_count >= TOP_K:
+                        break
+
         except Exception as E:
-            # If any of the above methods have an error, we will catch here.
             logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
             continue
 
-    # Check if the miners return identical energy results.
-    event = check_if_identical(event)
+    # Update event with only the processed entries
+    if processed_indices:
+        # Get the data for processed indices
+        processed_data = [sorted_data[i] for i in processed_indices]
+        # Unzip the processed data
+        (
+            reported_energies,
+            responses,
+            uids,
+            evaluators,
+            seed,
+            best_cpt,
+            process_md_output_time,
+        ) = zip(*processed_data)
 
-    for idx, is_valid in enumerate(event["is_valid"]):
-        if is_valid:
+    # Update event dictionary with processed data
+    event.update(
+        {
+            "seed": seed,
+            "best_cpt": best_cpt,
+            "process_md_output_time": process_md_output_time,
+            "reported_energy": reported_energies,
+        }
+    )
+
+    # Calculate final energies for valid and non-duplicate responses
+    for idx, (is_valid, is_duplicate) in enumerate(
+        zip(event["is_valid"], event["is_duplicate"])
+    ):
+        if is_valid and not is_duplicate:
             energies[idx] = np.median(
-                event["checked_energy"][idx][-10:]
-            )  # energy that we computed...
-        else:
-            energies[idx] = 0
+                event["checked_energy"][idx][-c.ENERGY_WINDOW_SIZE :]
+            )
 
     return energies, event

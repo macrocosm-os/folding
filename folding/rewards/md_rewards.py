@@ -8,8 +8,8 @@ from folding.base.reward import BaseReward, BatchRewardOutput, BatchRewardInput
 class MDReward(BaseReward):
     """Folding reward class"""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, priority: float = None, **kwargs):
+        self.priority = priority
 
     async def get_rewards(
         self, data: BatchRewardInput, rewards: torch.Tensor
@@ -92,9 +92,6 @@ class MDReward(BaseReward):
 class SyntheticMDReward(MDReward):
     """Synthetic Folding reward class"""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def name(self) -> str:
         return "SyntheticMD"
 
@@ -107,21 +104,15 @@ class SyntheticMDReward(MDReward):
         Returns:
             torch.Tensor: tensor of rewards, floats.
         """
-        # priority_multiplier = 1 + (job.priority - 1) * 0.1 TODO: Implement priority
-        priority_multiplier = 1.0
-        organic_multiplier = 1.0
 
-        return rewards * priority_multiplier * organic_multiplier
+        return rewards * self.priority
 
 
-class OrganicFoldingReward(MDReward):
+class OrganicMDReward(MDReward):
     """Organic Folding reward class"""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def name(self) -> str:
-        return "OrganicFolding"
+        return "OrganicMD"
 
     async def calculate_final_reward(self, rewards: torch.Tensor) -> torch.Tensor:
         """
@@ -132,8 +123,12 @@ class OrganicFoldingReward(MDReward):
         Returns:
             torch.Tensor: tensor of rewards, floats.
         """
-        # priority_multiplier = 1 + (job.priority - 1) * 0.1 TODO: Implement priority
-        priority_multiplier = 1.0
-        organic_multiplier = 10.0
+        organic_priority_multiplier = 10
 
-        return rewards * priority_multiplier * organic_multiplier
+        return rewards * self.priority * organic_priority_multiplier
+
+
+REWARD_REGISTRY = {
+    "SyntheticMD": SyntheticMDReward,
+    "OrganicMD": OrganicMDReward,
+}

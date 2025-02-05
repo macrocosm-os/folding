@@ -21,8 +21,6 @@ import base64
 import bittensor as bt
 from folding.utils.logger import logger
 
-from folding.utils.opemm_simulation_config import SimulationConfig
-
 
 class PingSynapse(bt.Synapse):
     """Responsible for determining if a miner can accept a request"""
@@ -46,9 +44,9 @@ class JobSubmissionSynapse(bt.Synapse):
     - miner_state: A string value which is the state of the miner.
     """
     
-    job_id: str
     pdb_id: str
-
+    job_id: str
+      
     best_submitted_energy: typing.Optional[float] = None
 
     # Optional request output, filled by receiving axon.
@@ -82,18 +80,6 @@ class JobSubmissionSynapse(bt.Synapse):
 
             self.md_output = md_output
 
-        if not isinstance(self.md_inputs, dict):
-            self.md_inputs = {}
-        else:
-            md_inputs = {}
-            for k, v in self.md_inputs.items():
-                try:
-                    md_inputs[k] = base64.b64decode(v)
-                except Exception as e:
-                    logger.error(f"Error decoding {k} from md_inputs: {e}")
-                    md_inputs[k] = None
-
-            self.md_inputs = md_inputs
         return self
 
 

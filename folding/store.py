@@ -7,22 +7,25 @@ import requests
 from queue import Queue
 from typing import Dict, List
 
-from datetime import datetime, timezone, time
-from dataclasses import asdict, dataclass
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
 from dotenv import load_dotenv
-from pydantic import BaseModel, constr
-from folding.utils.opemm_simulation_config import SystemConfig
+from gjp_models.models import JobBase, SystemConfig, SystemKwargs
 
 load_dotenv()
 
 rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
+rqlite_ip = os.getenv("JOIN_ADDR").split(":")[0]
+local_db_addr = os.getenv("RQLITE_HTTP_ADDR")
+
 if rqlite_data_dir is None:
-    raise ValueError("RQLITE_DATA_DIR environment variable is not set")
+    raise ValueError(
+        "RQLITE_DATA_DIR environment variable is not set inside the .env file"
+    )
 DB_DIR = os.path.abspath(rqlite_data_dir)
 
 
@@ -64,59 +67,83 @@ class SQLiteJobStore:
 
         return Job(**data)
 
-    def _job_to_dict(self, job: "Job") -> dict:
-        """Convert a Job object to a dictionary for database storage."""
-        data = job.to_dict()
+    def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
+        """
+        Get active jobs as a queue that were submitted by the validator_hotkey
 
-        # Convert Python list or dict objects to JSON strings for sqlite
-        data_to_update = {}
-        for k, v in data.items():
-            if isinstance(v, (list, dict)):
-                data_to_update[k] = json.dumps(v)
+        validator_hotkey (str): hotkey of the validator
+        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter.
+        """
 
-        data.update(data_to_update)
+        if ready:
+            # Calculate the threshold time for ready jobs
+            now = datetime.utcnow().isoformat()
+            query = f"""
+                SELECT * FROM {self.table_name}
+                WHERE active = 1
+                AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime('{now}')
+                AND validator_hotkey = '{validator_hotkey}'
+            """
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={"q": query, "level": "strong"},
+            )
+        else:
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={
+                    "q": f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = '{validator_hotkey}'",
+                    "level": "strong",
+                },
+            )
 
-        # Convert timestamps to strings
-        for field in ["created_at", "updated_at", "best_loss_at"]:
-            if isinstance(data[field], pd.Timestamp):
-                data[field] = data[field].isoformat()
-            elif pd.isna(data[field]):
-                data[field] = None
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
 
-        # Convert intervals to seconds
-        data["update_interval"] = int(data["update_interval"].total_seconds())
-        data["max_time_no_improvement"] = int(
-            data["max_time_no_improvement"].total_seconds()
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
+        elif "values" not in response.keys():
+            return Queue()
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+
+        queue = Queue()
+        for row in rows:
+            job = self._row_to_job(row)
+            queue.put(job)
+
+        return queue
+
+    def get_inactive_queue(self, validator_hotkey: str) -> Queue:
+        """Get inactive jobs as a queue."""
+
+        # TODO: Implement a way to filter it based on time. We should keep track of the last time
+        # we read the db?
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": f"SELECT * FROM {self.table_name} WHERE active = 0 AND validator_hotkey != {validator_hotkey}",
+                "consistency": "strong",
+            },
         )
 
-        # Convert boolean to integer
-        data["active"] = int(data["active"])
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
 
-        return data
+        response = response.json()["results"][0]
 
-    def get_queue(self, hotkey: str, ready=True) -> Queue:
-        """Get active jobs as a queue."""
-        with sqlite3.connect(self.db_file) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
+        elif "values" not in response.keys():
+            return Queue()
 
-            if ready:
-                # Calculate the threshold time for ready jobs
-                now = datetime.utcnow().isoformat()
-                query = f"""
-                    SELECT * FROM {self.table_name}
-                    WHERE active = 1
-                    AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime(?)
-                    AND validator_hotkey = ?
-                """
-                cur.execute(query, (now, hotkey))
-            else:
-                cur.execute(
-                    f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = ?",
-                    (hotkey,),
-                )
-
-            rows = cur.fetchall()
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
 
         queue = Queue()
         for row in rows:
@@ -161,11 +188,39 @@ class SQLiteJobStore:
         Returns:
             list: List of PDB IDs as strings
         """
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
-            cur.execute(f"SELECT pdb_id FROM {self.table_name}")
-            # Flatten the list of tuples into a list of strings
-            return [row[0] for row in cur.fetchall()]
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": f"SELECT pdb_id FROM {self.table_name}",
+                "consistency": "strong",
+            },
+        )
+
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get all PDBs: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return []
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+
+        return [row["pdb_id"] for row in rows]
+
+    def check_for_available_hotkeys(
+        self, job: "Job", hotkeys: List[str]
+    ) -> (bool, "Job"):
+        """Checks the job's hotkeys to only include those that are still valid."""
+        job.hotkeys = list(set(job.hotkeys) & set(hotkeys))
+        if not job.hotkeys:
+            job.active = False
+            return False, job
+        return True, job
 
     def __repr__(self):
         """Show current state of the database."""
@@ -211,7 +266,7 @@ class SQLiteJobStore:
         job = Job(
             pdb_id=pdb,
             system_config=SystemConfig(
-                ff=ff, box=box, water=water, system_kwargs=system_kwargs
+                ff=ff, box=box, water=water, system_kwargs=SystemKwargs(**system_kwargs)
             ),
             hotkeys=hotkeys,
             job_type=job_type,
@@ -220,6 +275,8 @@ class SQLiteJobStore:
             epsilon=epsilon,
             s3_links=s3_links,
             priority=1,
+            update_interval=300,
+            max_time_no_improvement=1,
             **kwargs,
         )
 
@@ -233,36 +290,63 @@ class SQLiteJobStore:
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
-        return response.json()["job_id"]
+        job.job_id = response.json()["job_id"]
+        return job
+
+    async def confirm_upload(self, job_id: str):
+        """
+        Confirm the upload of a job to the global job pool by trying to read in the uploaded job.
+
+        Args:
+            job_id: the job id that you want to confirm is in the pool.
+
+        Returns:
+            str: The job ID of the confirmed job.
+        """
+
+        response = requests.get(
+            f"http://{rqlite_ip}:4001/db/query",
+            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job_id}'"},
+        )
+        if response.status_code != 200:
+            raise ValueError(f"Failed to confirm job: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return None
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+        return rows[0]["job_id"]
+
+    async def monitor_db(self):
+        """
+        Monitor the database for any changes.
+
+        Returns:
+            bool: True if the database has changed, False otherwise.
+        """
+        response = requests.get(f"http://{rqlite_ip}:4001/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+
+        last_log_leader = response.json()["store"]["raft"]["last_log_index"]
+
+        response = requests.get(f"http://{local_db_addr}/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+        last_log_read = response.json()["store"]["raft"]["last_log_index"]
+
+        return (last_log_leader - last_log_read) != 0
 
 
 # Keep the Job and MockJob classes as they are, they work well with both implementations
-class Job(BaseModel):
-    pdb_id: constr(min_length=4, max_length=10)
-    system_config: SystemConfig
-    s3_links: dict[str, str] | None
-    priority: int
-    hotkeys: list[str]
-    is_organic: bool = False
-    active: bool = True
-    update_interval: int = 2 * 3600
-    max_time_no_improvement: int = 1500
-    epsilon: int
-    min_updates: int = 1
-    updated_at: datetime = datetime.now(timezone.utc)
-    best_loss: float = np.inf
-    best_loss_at: datetime = datetime.min  # first possible datetime
-    best_hotkey: str = ""
-    updated_count: int = 0
-    created_at: datetime = datetime.now(timezone.utc)
-    best_cpt_links: list[str] | None = None
-    job_type: str
-    event: dict | None = None
-    validator_hotkey: str | None = None
-    job_id: str | None = None
-
-    def to_dict(self):
-        return self.model_dump()
+class Job(JobBase):
+    """Job class for storing job information."""
 
     async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
@@ -300,14 +384,6 @@ class Job(BaseModel):
             > self.max_time_no_improvement
         ):
             self.active = False
-
-    def check_for_available_hotkeys(self, hotkeys: List[str]) -> bool:
-        """Checks the job's hotkeys to only include those that are still valid."""
-        self.hotkeys = list(set(self.hotkeys) & set(hotkeys))
-        if not self.hotkeys:
-            self.active = False
-            return False
-        return True
 
 
 class MockJob(Job):

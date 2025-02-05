@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Literal
+from typing import Dict, List, Literal
 
 import numpy as np
 import pandas as pd
