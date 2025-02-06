@@ -345,7 +345,6 @@ class Protein(OpenMMSimulation):
             write_mode="wb",
         )
 
-
     def get_miner_data_directory(self, hotkey: str):
         self.miner_data_directory = os.path.join(self.validator_directory, hotkey[:8])
 
@@ -361,29 +360,6 @@ class Protein(OpenMMSimulation):
         return (
             mean_gradient <= GRADIENT_THRESHOLD
         )  # includes large negative gradients is passible
- 
-    def check_masses(self) -> bool:
-        """
-        Check if the masses reported in the miner file are identical to the masses given
-        in the initial pdb file. If not, they have modified the system in unintended ways.
-
-        Reference:
-        https://github.com/openmm/openmm/blob/53770948682c40bd460b39830d4e0f0fd3a4b868/platforms/common/src/kernels/langevinMiddle.cc#L11
-        """
-
-        validator_velm_data = load_pkl(self.velm_array_pkl, "rb")
-        miner_velm_data = create_velm(simulation=self.simulation)
-
-        validator_masses = validator_velm_data["pdb_masses"]
-        miner_masses = miner_velm_data["pdb_masses"]
-
-        for i, (v_mass, m_mass) in enumerate(zip(validator_masses, miner_masses)):
-            if v_mass != m_mass:
-                logger.error(
-                    f"Masses for atom {i} do not match. Validator: {v_mass}, Miner: {m_mass}"
-                )
-                return False
-        return True
 
     def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
         """TODO: Implement the RMSD calculation"""
