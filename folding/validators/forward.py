@@ -292,9 +292,6 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             }  # overwritten below if s3 logging is on.
 
             if "validator_search_status" not in event:
-                logger.success("✅✅ Simulation ran successfully! ✅✅")
-                event["validator_search_status"] = True  # simulation passed!
-
                 if not config.s3.off:
                     try:
                         logger.info(f"Uploading to {self.handler}")
@@ -307,9 +304,11 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                             VALIDATOR_ID=self.validator_hotkey_reference,
                         )
                         event["s3_links"] = s3_links
-                        logger.info("Input files uploaded to s3")
+                        event["validator_search_status"] = True  # simulation passed!
+                        logger.success("✅✅ Simulation ran successfully! ✅✅")
                     except Exception as e:
                         logger.warning(f"Error uploading files to s3: {e}")
+                        continue
 
                 # break out of the loop if the simulation was successful
                 break
