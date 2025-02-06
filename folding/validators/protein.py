@@ -361,10 +361,6 @@ class Protein(OpenMMSimulation):
             mean_gradient <= GRADIENT_THRESHOLD
         )  # includes large negative gradients is passible
 
-    def get_rmsd(self, output_path: str = None, xvg_command: str = "-xvg none"):
-        """TODO: Implement the RMSD calculation"""
-        return -1
-
     def _calculate_epsilon(self):
         # TODO: Make this a better relationship?
         return self.epsilon
