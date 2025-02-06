@@ -131,6 +131,7 @@ class SQLiteJobStore:
             SELECT * FROM {self.table_name}
             WHERE active = 0
             AND updated_at >= '{last_time_checked}'
+            ORDER BY updated_at ASC
         """
         response = requests.get(
             f"http://{local_db_addr}/db/query",
@@ -284,7 +285,7 @@ class SQLiteJobStore:
             epsilon=epsilon,
             s3_links=s3_links,
             priority=1,
-            update_interval=300,  # between 30 minutes and 2 hours in seconds
+            update_interval=60,  # between 30 minutes and 2 hours in seconds
             max_time_no_improvement=1,
             **kwargs,
         )
@@ -359,6 +360,7 @@ class Job(JobBase):
     async def update(self, loss: float, hotkey: str):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
 
+        self.active = False
         self.best_loss = loss
         self.best_loss_at = pd.Timestamp.now().floor("s")
         self.best_hotkey = hotkey
