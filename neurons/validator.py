@@ -522,6 +522,9 @@ class Validator(BaseValidatorNeuron):
             )
 
     async def read_and_update_rewards(self):
+        """Read the rewards from the inactive jobs and update the scores of the miners
+        using EMA.
+        """
         inactive_jobs_queue = self.store.get_inactive_queue(
             last_time_checked=self.last_time_checked
         )
