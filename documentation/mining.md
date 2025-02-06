@@ -11,12 +11,10 @@ The miner is responsible for running a `config.neuron.max_workers` number of pdb
 </div>
 
 
-The validator rewards miners by checking what each miner's intermediate results are for a specific pdb job. The faster you can find the best solution, the more likely you are to recieve rewards on each query step. 
-
-## Global Job Pool (GJP)
+## Using the Global Job Pool (GJP)
 The GJP allows miners to choose their own work rather than being delegated jobs from validator queries. The base miner (`folding/miners/folding_miner.py`) is designed to use the global job pool to fetch job information, prepare simulations, and execute them. 
 
-The GJP is built using RQLite and can be accessed by starting a read node, which is done automatically. The base miner is launched in a `pm2` process with the following command: `pm2 start pm2_configs/miner.config.js`. Please be sure to create a `.env` file (using `.env.example` as a reference) and fill it with your respective variables. Please note miners do not need to set any of the `S3` variables. Set `RQLITE_HTTP_ADV_ADDR` and `RQLITE_RAFT_ADV_ADDR` with the public IP of your machine. It is recommended to use the default rqlite ports `4001, 4002`, but not required; Just ensure that the ports you choose are open. Please set the `HOTKEY` variable to the hotkey of your miner. 
+The GJP is built using RQLite and can be accessed by starting a read node, which is done automatically in the `BaseNeuron`.  Please be sure to create a `.env` file (using `.env.example` as a reference) and fill it with your respective variables. Please note miners do not need to set any of the `S3` variables. Set `RQLITE_HTTP_ADV_ADDR` and `RQLITE_RAFT_ADV_ADDR` with the public IP of your machine. It is recommended to use the default rqlite ports `4001, 4002`, but not required; Just ensure that the ports you choose are open. Please set the `HOTKEY` variable to the hotkey ss58 address of your miner. 
 
 The following varibles can be copied from `.env.example` to your `.env` file without modification:
 - `RQLITE_HTTP_ADDR`
@@ -26,3 +24,7 @@ The following varibles can be copied from `.env.example` to your `.env` file wit
 Once the connection to rqlite is made through the read node, a local snapshot of the GJP will appear in `/db`. In this directory, navigate to `db.sqlite` to examine the table. There are some functions available in `/scripts/query_rqlite.py` that will allow you to pull data from the table for processing. 
 
 Currently, the base miner uses the read node API to fetch job information from the global job pool, rather than using the local snapshot. This is to ensure you have the most up-to-date information. 
+
+## Running the base miner `FoldingMiner`
+
+The base miner is launched in a `pm2` process with the following command: `pm2 start pm2_configs/miner.config.js`.
