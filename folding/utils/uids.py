@@ -60,3 +60,18 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
         k = len(available_uids)
     uids = torch.tensor(random.sample(available_uids, k))
     return uids
+
+def get_all_miner_uids(self):
+    """Returns all available miner uids from the metagraph.
+    Returns:
+        uids (List): All available miner uids.
+    """
+    candidate_uids = []
+    for uid in range(self.metagraph.n.item()):
+        uid_is_available = check_uid_availability(
+            self.metagraph, uid, self.config.neuron.vpermit_tao_limit
+        )
+        if uid_is_available:
+            candidate_uids.append(uid)
+
+    return candidate_uids

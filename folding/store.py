@@ -122,7 +122,7 @@ class SQLiteJobStore:
 
         return queue
 
-    def get_inactive_queue(self, last_time_checked: datetime) -> Queue:
+    def get_inactive_queue(self, last_time_checked: str) -> Queue:
         """Get inactive jobs as a queue."""
 
         # TODO: Implement a way to filter it based on time. We should keep track of the last time
