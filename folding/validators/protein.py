@@ -345,15 +345,6 @@ class Protein(OpenMMSimulation):
             write_mode="wb",
         )
 
-    def gen_seed(self):
-        """Generate a random seed"""
-        return random.randint(1000, 999999)
-
-    def delete_files(self, directory: str):
-        logger.info(f"Deleting files in {directory}")
-        for file in os.listdir(directory):
-            os.remove(os.path.join(directory, file))
-        # os.rmdir(output_directory)
 
     def get_miner_data_directory(self, hotkey: str):
         self.miner_data_directory = os.path.join(self.validator_directory, hotkey[:8])
