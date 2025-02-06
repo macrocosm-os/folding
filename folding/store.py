@@ -285,7 +285,9 @@ class SQLiteJobStore:
             epsilon=epsilon,
             s3_links=s3_links,
             priority=1,
-            update_interval=60,  # between 30 minutes and 2 hours in seconds
+            update_interval=random.randint(
+                1800, 7200
+            ),  # between 30 minutes and 2 hours in seconds
             max_time_no_improvement=1,
             **kwargs,
         )

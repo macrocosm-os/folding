@@ -26,7 +26,7 @@ from folding.rewards.md_rewards import REWARD_REGISTRY
 from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
-from folding.utils.uids import get_all_miner_uids
+from folding.utils.uids import get_random_uids
 from folding.utils.s3_utils import upload_output_to_s3
 from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
@@ -46,12 +46,14 @@ class Validator(BaseValidatorNeuron):
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
-        self.all_miner_uids: List = get_all_miner_uids(self)
-                
+        self.all_miner_uids: List = get_random_uids(
+            self, k=int(self.metagraph.n), exclude=None
+        ).tolist()
+
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
-            
+
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
@@ -287,7 +289,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event, uids=[76])
+            await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
     async def update_scores_wrapper(
@@ -524,7 +526,7 @@ class Validator(BaseValidatorNeuron):
         using EMA.
         """
         inactive_jobs_queue = self.store.get_inactive_queue(
-            last_time_checked=self.last_time_checked.strftime("%Y-%m-%dT%H:%M:%S")
+            last_time_checked=self.last_time_checked
         )
         self.last_time_checked = datetime.now()
 
@@ -535,10 +537,12 @@ class Validator(BaseValidatorNeuron):
         while (
             not inactive_jobs_queue.qsize() == 0
         ):  # recommended to use qsize() instead of empty()
+            logger.info(f"number of jobs to eval: {inactive_jobs_queue.qsize()}")
             inactive_job = inactive_jobs_queue.get()
             for hotkey, reward in zip(
                 inactive_job.hotkeys, inactive_job.computed_rewards
             ):
+                logger.info(inactive_job.pdb_id)
                 # ema is weird and you can't simply aggregate and update. To keep things consistent, you
                 # need to do it one by one.
                 await self.update_scores_wrapper(
