@@ -1528,15 +1528,15 @@ test = ["coverage[toml]", "ddt (>=1.1.1,!=1.4.3)", "mock", "mypy", "pre-commit",
 
 [[package]]
 name = "gjp-models"
-version = "0.1.7"
+version = "0.1.9"
 description = ""
 optional = false
 python-versions = "<3.14,>=3.11"
 groups = ["main"]
 markers = "python_version == \"3.11\" or python_version >= \"3.12\""
 files = [
-    {file = "gjp_models-0.1.7-py3-none-any.whl", hash = "sha256:4b494f464dfd53679b7b948df005555f872c032e06ee28969a040ca2a867205f"},
-    {file = "gjp_models-0.1.7.tar.gz", hash = "sha256:892bb463bcdcbef794f8aba74b2c62f8f1d4aca77db5dc427549a36b2b304304"},
+    {file = "gjp_models-0.1.9-py3-none-any.whl", hash = "sha256:90bde052b54b079559f8c9dd690fd3135b8979317480d3caba1c11735c3a4376"},
+    {file = "gjp_models-0.1.9.tar.gz", hash = "sha256:0c9a4f655d375c0a60c50665c7be897bf9caae4fb0fa94042a0dc2e73a2f5c76"},
 ]
 
 [package.dependencies]
@@ -5437,4 +5437,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "624782b5ef294fb373d60647a41f8b88c644a5551ce64d51c81dc1f97662e705"
+content-hash = "3996e43c3523398de4f4de69ba311f2fe06d47fb590ff8a7dd43f32b2ae26ecd"
