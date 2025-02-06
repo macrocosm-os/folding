@@ -6,63 +6,37 @@ import sqlite3
 import requests
 from queue import Queue
 from typing import Dict, List
+from dotenv import load_dotenv
 
-from datetime import datetime, timezone
-from dataclasses import asdict, dataclass
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
-from folding.utils.epistula_utils import get_epistula_body
+from gjp_models.models import JobBase, SystemConfig, SystemKwargs
 
-DB_DIR = os.path.join(os.path.dirname(__file__), "db")
+load_dotenv()
+
+rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
+rqlite_ip = os.getenv("JOIN_ADDR").split(":")[0]
+local_db_addr = os.getenv("RQLITE_HTTP_ADDR")
+
+if rqlite_data_dir is None:
+    raise ValueError(
+        "RQLITE_DATA_DIR environment variable is not set inside the .env file"
+    )
+DB_DIR = os.path.abspath(rqlite_data_dir)
 
 
 class SQLiteJobStore:
     """SQLite-based job store replacing the CSV-based implementation."""
 
-    def __init__(self, db_path=DB_DIR, table_name="protein_jobs"):
+    def __init__(self, db_path=DB_DIR, table_name="jobs"):
         self.db_path = db_path
         self.table_name = table_name
-        os.makedirs(self.db_path, exist_ok=True)
-        self.db_file = os.path.join(self.db_path, "jobs.db")
+        self.db_file = os.path.join(self.db_path, "db.sqlite")
         self.epistula = Epistula()
-
-        self.init_db()
-
-    def init_db(self):
-        """Initialize the SQLite database with the required schema."""
-        with sqlite3.connect(self.db_file) as conn:
-            conn.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {self.table_name} (
-                    pdb TEXT PRIMARY KEY,
-                    active INTEGER,
-                    hotkeys TEXT,
-                    created_at TIMESTAMP,
-                    updated_at TIMESTAMP,
-                    best_loss REAL,
-                    best_loss_at TIMESTAMP,
-                    best_hotkey TEXT,
-                    commit_hash TEXT,
-                    gro_hash TEXT,
-                    update_interval INTEGER,
-                    updated_count INTEGER,
-                    max_time_no_improvement INTEGER,
-                    event TEXT,
-                    ff TEXT,
-                    box TEXT,
-                    water TEXT,
-                    epsilon REAL,
-                    system_kwargs TEXT,
-                    min_updates INTEGER,
-                    job_id TEXT,
-                    s3_links TEXT,
-                    best_cpt_links TEXT
-                )
-            """
-            )
 
     def _row_to_job(self, row) -> "Job":
         """Convert a database row to a Job object."""
@@ -72,9 +46,16 @@ class SQLiteJobStore:
         data = dict(row)
         # Convert stored JSON strings back to Python objects
         data["hotkeys"] = json.loads(data["hotkeys"])
+        data["system_config"] = (
+            json.loads(data["system_config"]) if data["system_config"] else None
+        )
+        data["s3_links"] = json.loads(data["s3_links"]) if data["s3_links"] else None
+        data["best_cpt_links"] = (
+            json.loads(data["best_cpt_links"]) if data["best_cpt_links"] else None
+        )
         data["event"] = json.loads(data["event"]) if data["event"] else None
-        data["system_kwargs"] = (
-            json.loads(data["system_kwargs"]) if data["system_kwargs"] else None
+        data["computed_rewards"] = (
+            json.loads(data["computed_rewards"]) if data["computed_rewards"] else None
         )
 
         # Convert timestamps
@@ -84,66 +65,55 @@ class SQLiteJobStore:
             else:
                 data[field] = pd.NaT
 
-        # Convert intervals
-        data["update_interval"] = pd.Timedelta(seconds=data["update_interval"])
-        data["max_time_no_improvement"] = pd.Timedelta(
-            seconds=data["max_time_no_improvement"]
-        )
-
         # Convert boolean
         data["active"] = bool(data["active"])
 
         return Job(**data)
 
-    def _job_to_dict(self, job: "Job") -> dict:
-        """Convert a Job object to a dictionary for database storage."""
-        data = job.to_dict()
+    def get_queue(self, validator_hotkey: str, ready=True) -> Queue:
+        """
+        Get active jobs as a queue that were submitted by the validator_hotkey
 
-        # Convert Python list or dict objects to JSON strings for sqlite
-        data_to_update = {}
-        for k, v in data.items():
-            if isinstance(v, (list, dict)):
-                data_to_update[k] = json.dumps(v)
+        validator_hotkey (str): hotkey of the validator
+        ready (bool): pull the data from the pool that are ready for updating based on a datetime filter.
+        """
 
-        data.update(data_to_update)
+        if ready:
+            # Calculate the threshold time for ready jobs
+            now = datetime.utcnow().isoformat()
+            query = f"""
+                SELECT * FROM {self.table_name}
+                WHERE active = 1
+                AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime('{now}')
+                AND validator_hotkey = '{validator_hotkey}'
+            """
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={"q": query, "level": "strong"},
+            )
+        else:
+            response = requests.get(
+                f"http://{local_db_addr}/db/query",
+                params={
+                    "q": f"SELECT * FROM {self.table_name} WHERE active = 1 AND validator_hotkey = '{validator_hotkey}'",
+                    "level": "strong",
+                },
+            )
 
-        # Convert timestamps to strings
-        for field in ["created_at", "updated_at", "best_loss_at"]:
-            if isinstance(data[field], pd.Timestamp):
-                data[field] = data[field].isoformat()
-            elif pd.isna(data[field]):
-                data[field] = None
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
+        response = response.json()
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
 
-        # Convert intervals to seconds
-        data["update_interval"] = int(data["update_interval"].total_seconds())
-        data["max_time_no_improvement"] = int(
-            data["max_time_no_improvement"].total_seconds()
-        )
+        response = response["results"][0]
 
-        # Convert boolean to integer
-        data["active"] = int(data["active"])
+        if "values" not in response.keys():
+            return Queue()
 
-        return data
-
-    def get_queue(self, ready=True) -> Queue:
-        """Get active jobs as a queue."""
-        with sqlite3.connect(self.db_file) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-
-            if ready:
-                # Calculate the threshold time for ready jobs
-                now = datetime.utcnow().isoformat()
-                query = f"""
-                    SELECT * FROM {self.table_name}
-                    WHERE active = 1
-                    AND datetime(updated_at, '+' || update_interval || ' seconds') <= datetime(?)
-                """
-                cur.execute(query, (now,))
-            else:
-                cur.execute(f"SELECT * FROM {self.table_name} WHERE active = 1")
-
-            rows = cur.fetchall()
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
 
         queue = Queue()
         for row in rows:
@@ -152,64 +122,45 @@ class SQLiteJobStore:
 
         return queue
 
-    def insert(
-        self,
-        pdb: str,
-        ff: str,
-        box: str,
-        water: str,
-        hotkeys: List[str],
-        epsilon: float,
-        system_kwargs: dict,
-        job_id: str,
-        **kwargs,
-    ):
-        """Insert a new job into the database."""
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
+    def get_inactive_queue(self, last_time_checked: str) -> Queue:
+        """Get inactive jobs as a queue."""
 
-            # Check if job already exists
-            cur.execute(f"SELECT 1 FROM {self.table_name} WHERE pdb = ?", (pdb,))
-            if cur.fetchone():
-                raise ValueError(f"pdb {pdb!r} is already in the store")
+        # TODO: Implement a way to filter it based on time. We should keep track of the last time
+        # we read the db?
+        query = f"""
+            SELECT * FROM {self.table_name}
+            WHERE active = 0
+            AND updated_at >= '{last_time_checked}'
+            ORDER BY updated_at ASC
+        """
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": query,
+                "consistency": "strong",
+            },
+        )
 
-            # Create and convert job
-            job = Job(
-                pdb=pdb,
-                ff=ff,
-                box=box,
-                water=water,
-                hotkeys=hotkeys,
-                created_at=pd.Timestamp.now().floor("s"),
-                updated_at=pd.Timestamp.now().floor("s"),
-                epsilon=epsilon,
-                system_kwargs=system_kwargs,
-                job_id=job_id,
-                **kwargs,
-            )
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get jobs: {response.text}")
 
-            data = self._job_to_dict(job)
+        response = response.json()["results"][0]
 
-            # Build the insert query
-            columns = ", ".join(data.keys())
-            placeholders = ", ".join(["?" for _ in data])
-            query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get jobs: {response['error']}")
+        elif "values" not in response.keys():
+            return Queue()
 
-            cur.execute(query, list(data.values()))
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
 
-    def update(self, job: "Job"):
-        """Update an existing job in the database."""
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
+        queue = Queue()
+        for row in rows:
+            job = self._row_to_job(row)
+            queue.put(job)
 
-            data = self._job_to_dict(job)
-            pdb = data.pop("pdb")  # Remove pdb from update data as it's the primary key
-
-            # Build the update query
-            set_clause = ", ".join([f"{k} = ?" for k in data.keys()])
-            query = f"UPDATE {self.table_name} SET {set_clause} WHERE pdb = ?"
-
-            cur.execute(query, list(data.values()) + [pdb])
+        return queue
 
     def update_gjp_job(self, job: "Job", gjp_address: str, keypair, job_id: str):
         """
@@ -225,7 +176,7 @@ class SQLiteJobStore:
             str: The ID of the updated job.
         """
 
-        body = get_epistula_body(job=job)
+        body = job.model_dump()
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
@@ -239,6 +190,7 @@ class SQLiteJobStore:
             raise ValueError(f"Failed to upload job: {response.text}")
         return response.json()["job_id"]
 
+    # TODO: Find a different way to implement this method
     def get_all_pdbs(self) -> list:
         """
         Retrieve all PDB IDs from the job store.
@@ -246,11 +198,39 @@ class SQLiteJobStore:
         Returns:
             list: List of PDB IDs as strings
         """
-        with sqlite3.connect(self.db_file) as conn:
-            cur = conn.cursor()
-            cur.execute(f"SELECT pdb FROM {self.table_name}")
-            # Flatten the list of tuples into a list of strings
-            return [row[0] for row in cur.fetchall()]
+        response = requests.get(
+            f"http://{local_db_addr}/db/query",
+            params={
+                "q": f"SELECT pdb_id FROM {self.table_name}",
+                "consistency": "strong",
+            },
+        )
+
+        if response.status_code != 200:
+            raise ValueError(f"Failed to get all PDBs: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return []
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+
+        return [row["pdb_id"] for row in rows]
+
+    def check_for_available_hotkeys(
+        self, job: "Job", hotkeys: List[str]
+    ) -> (bool, "Job"):
+        """Checks the job's hotkeys to only include those that are still valid."""
+        job.hotkeys = list(set(job.hotkeys) & set(hotkeys))
+        if not job.hotkeys:
+            job.active = False
+            return False, job
+        return True, job
 
     def __repr__(self):
         """Show current state of the database."""
@@ -265,10 +245,11 @@ class SQLiteJobStore:
         box: str,
         water: str,
         hotkeys: list,
+        job_type: str,
         system_kwargs: dict,
         keypair,
         gjp_address: str,
-        epsilon: float,
+        epsilon: int,
         s3_links: Dict[str, str],
         **kwargs,
     ):
@@ -293,20 +274,25 @@ class SQLiteJobStore:
             ValueError: If the job upload fails.
         """
         job = Job(
-            pdb=pdb,
-            ff=ff,
-            box=box,
-            water=water,
+            pdb_id=pdb,
+            system_config=SystemConfig(
+                ff=ff, box=box, water=water, system_kwargs=SystemKwargs(**system_kwargs)
+            ),
             hotkeys=hotkeys,
+            job_type=job_type,
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
             epsilon=epsilon,
-            system_kwargs=system_kwargs,
             s3_links=s3_links,
+            priority=1,
+            update_interval=random.randint(
+                1800, 7200
+            ),  # between 30 minutes and 2 hours in seconds
+            max_time_no_improvement=1,
             **kwargs,
         )
 
-        body = get_epistula_body(job=job)
+        body = job.model_dump()
 
         body_bytes = self.epistula.create_message_body(body)
         headers = self.epistula.generate_header(hotkey=keypair, body=body_bytes)
@@ -316,85 +302,70 @@ class SQLiteJobStore:
         )
         if response.status_code != 200:
             raise ValueError(f"Failed to upload job: {response.text}")
-        return response.json()["job_id"]
+        job.job_id = response.json()["job_id"]
+        return job
+
+    async def confirm_upload(self, job_id: str):
+        """
+        Confirm the upload of a job to the global job pool by trying to read in the uploaded job.
+
+        Args:
+            job_id: the job id that you want to confirm is in the pool.
+
+        Returns:
+            str: The job ID of the confirmed job.
+        """
+
+        response = requests.get(
+            f"http://{rqlite_ip}:4001/db/query",
+            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job_id}'"},
+        )
+        if response.status_code != 200:
+            raise ValueError(f"Failed to confirm job: {response.text}")
+
+        response = response.json()["results"][0]
+
+        if "error" in response.keys():
+            raise ValueError(f"Failed to get all PDBs: {response['error']}")
+        elif "values" not in response.keys():
+            return None
+
+        columns = response["columns"]
+        values = response["values"]
+        rows = [dict(zip(columns, row)) for row in values]
+        return rows[0]["job_id"]
+
+    async def monitor_db(self):
+        """
+        Monitor the database for any changes.
+
+        Returns:
+            bool: True if the database has changed, False otherwise.
+        """
+        response = requests.get(f"http://{rqlite_ip}:4001/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+
+        last_log_leader = response.json()["store"]["raft"]["last_log_index"]
+
+        response = requests.get(f"http://{local_db_addr}/status?pretty ")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to monitor db: {response.text}")
+        last_log_read = response.json()["store"]["raft"]["last_log_index"]
+
+        return (last_log_leader - last_log_read) != 0
 
 
-# Keep the Job and MockJob classes as they are, they work well with both implementations
-@dataclass
-class Job:
-    pdb: str
-    ff: str
-    box: str
-    water: str
-    hotkeys: list
-    created_at: pd.Timestamp
-    updated_at: pd.Timestamp
-    active: bool = True
-    best_loss: float = np.inf
-    best_loss_at: pd.Timestamp = pd.NaT
-    best_hotkey: str = None
-    commit_hash: str = None
-    gro_hash: str = None
-    update_interval: pd.Timedelta = pd.Timedelta(minutes=10)
-    updated_count: int = 0
-    min_updates: int = 5
-    max_time_no_improvement: pd.Timedelta = pd.Timedelta(minutes=25)
-    epsilon: float = 5  # percentage.
-    event: dict = None
-    system_kwargs: dict = None
-    job_id: str = None
-    s3_links: Dict[str, str] = None
-    best_cpt_links: list = None
+class Job(JobBase):
+    """Job class for storing job information."""
 
-    def to_dict(self):
-        return asdict(self)
-
-    async def update(self, loss: float, hotkey: str, hotkeys: List[str] = None):
+    async def update(self, loss: float, hotkey: str):
         """Updates the status of a job in the database. If the loss improves, the best loss, hotkey and hashes are updated."""
-        if hotkeys is not None:
-            assert len(hotkeys) > 0, "hotkeys must be a non-empty list"
-            self.hotkeys = hotkeys
 
-        if hotkey not in self.hotkeys:
-            raise ValueError(f"Hotkey {hotkey!r} is not a valid choice")
-
-        percent_improvement = (
-            100 * (loss - self.best_loss) / self.best_loss
-            if not np.isinf(self.best_loss) and not self.best_loss == 0
-            else np.nan
-        )
-        self.updated_at = pd.Timestamp.now().floor("s")
-        self.updated_count += 1
-
-        never_updated_better_loss = (
-            np.isnan(percent_improvement) and loss < self.best_loss
-        )
-        better_loss = percent_improvement >= self.epsilon
-
-        if never_updated_better_loss or better_loss:
-            self.best_loss = loss
-            self.best_loss_at = pd.Timestamp.now().floor("s")
-            self.best_hotkey = hotkey
-        elif (
-            pd.Timestamp.now().floor("s") - self.best_loss_at
-            > self.max_time_no_improvement
-            and self.updated_count >= self.min_updates
-        ):
-            self.active = False
-        elif (
-            isinstance(self.best_loss_at, pd._libs.tslibs.nattype.NaTType)
-            and pd.Timestamp.now().floor("s") - self.created_at
-            > self.max_time_no_improvement
-        ):
-            self.active = False
-
-    def check_for_available_hotkeys(self, hotkeys: List[str]) -> bool:
-        """Checks the job's hotkeys to only include those that are still valid."""
-        self.hotkeys = list(set(self.hotkeys) & set(hotkeys))
-        if not self.hotkeys:
-            self.active = False
-            return False
-        return True
+        self.active = False
+        self.best_loss = loss
+        self.best_loss_at = pd.Timestamp.now().floor("s")
+        self.best_hotkey = hotkey
 
 
 class MockJob(Job):

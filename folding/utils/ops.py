@@ -1,7 +1,5 @@
-import re
 import os
 import sys
-import tqdm
 import signal
 import random
 import shutil
@@ -10,11 +8,12 @@ import functools
 import traceback
 import subprocess
 import pickle as pkl
-from typing import Dict, List
+from typing import Dict, List, Any
 
 import numpy as np
 import pandas as pd
 import parmed as pmd
+from openmm import app, unit
 import plotly.express as px
 
 from folding.protocol import JobSubmissionSynapse
@@ -354,3 +353,75 @@ def plot_miner_validator_curves(
         width=1400,
     )
     fig.write_image(os.path.join(miner_data_directory, filename + "_percent_diff.png"))
+
+
+def load_pdb_file(pdb_file: str) -> app.PDBFile:
+    """Method to take in the pdb file and load it into an OpenMM PDBFile object."""
+    return app.PDBFile(pdb_file)
+
+
+def save_files(files: Dict, output_directory: str, write_mode: str = "wb") -> Dict:
+    """Save files generated on the validator side to a desired output directory.
+
+    Args:
+        files (Dict): Dictionary mapping between filename and content
+        output_directory (str)
+        write_mode (str, optional): How the file should be written. Defaults to "wb".
+
+    Returns:
+        _type_: _description_
+    """
+    logger.info(f"⏰ Saving files to {output_directory}...")
+    check_if_directory_exists(output_directory=output_directory)
+
+    filetypes = {}
+    for filename, content in files.items():
+        filetypes[filename.split(".")[-1]] = filename
+
+        logger.info(f"Saving file {filename} to {output_directory}")
+        if "em.cpt" in filename:
+            filename = "em_binary.cpt"
+
+        # loop over all of the output files and save to local disk
+        with open(os.path.join(output_directory, filename), write_mode) as f:
+            f.write(content)
+
+    return filetypes
+
+
+def save_pdb(positions, topology, output_path: str):
+    """Save the pdb file to the output path."""
+    with open(output_path, "w") as f:
+        app.PDBFile.writeFile(topology, positions, f)
+
+
+def create_velm(simulation: app.Simulation) -> Dict[str, Any]:
+    """Alters the initial state of the simulation using initial velocities
+    at the beginning and the end of the protein chain to use as a lookup in memory.
+
+    Args:
+        simulation (app.Simulation): The simulation object.
+
+    Returns:
+        simulation: original simulation object.
+    """
+
+    mass_index = 0
+    mass_indicies = []
+    atom_masses: List[unit.quantity.Quantity] = []
+
+    while True:
+        try:
+            atom_masses.append(simulation.system.getParticleMass(mass_index))
+            mass_indicies.append(mass_index)
+            mass_index += 1
+        except:
+            # When there are no more atoms.
+            break
+
+    velm = {
+        "mass_indicies": mass_indicies,
+        "pdb_masses": atom_masses,
+    }
+
+    return velm

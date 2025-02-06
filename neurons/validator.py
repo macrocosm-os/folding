@@ -2,14 +2,13 @@
 # Copyright © 2024 Macrocosmos
 
 import os
-import re
 import time
 import random
 import asyncio
 import traceback
 
-from pathlib import Path
 from itertools import chain
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 import torch
@@ -17,17 +16,22 @@ import numpy as np
 import pandas as pd
 from async_timeout import timeout
 
+import folding.utils.constants as c
+from folding.base.reward import BatchRewardInput
+from folding.base.reward import BaseReward, RewardEvent
 from folding.base.validator import BaseValidatorNeuron
-from folding.rewards.reward_pipeline import reward_pipeline
+from folding.rewards.md_rewards import REWARD_REGISTRY
 
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_random_uids
+from folding.utils.s3_utils import upload_output_to_s3
+from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
-from folding.utils.s3_utils import upload_output_to_s3
+from folding.registries.miner_registry import MinerRegistry
 
 
 class Validator(BaseValidatorNeuron):
@@ -40,39 +44,35 @@ class Validator(BaseValidatorNeuron):
 
         self.load_state()
 
-        # Init sync with the network. Updates the metagraph.
-        self.sync()
-
-        # TODO: Change the store to SQLiteJobStore if you want to use SQLite
-        self.store = SQLiteJobStore()
-        self.mdrun_args = self.parse_mdrun_args()
-
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
         self.all_miner_uids: List = get_random_uids(
             self, k=int(self.metagraph.n), exclude=None
         ).tolist()
 
+        # If we do not have any miner registry saved to the machine, create.
+        if not hasattr(self, "miner_registry"):
+            self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
+
+        # Init sync with the network. Updates the metagraph.
+        self.sync()
+
+        self.store = SQLiteJobStore()
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
 
-    def parse_mdrun_args(self) -> str:
-        mdrun_args = ""
+        # The last time that we checked the global job pool.
+        self.last_time_checked = datetime.now()
 
-        # There are unwanted keys in mdrun_args, like __is_set. Remove all of these
-        filtered_args = {
-            key: value
-            for key, value in self.config.mdrun_args.items()
-            if not re.match(r"^[^a-zA-Z0-9]", key)
-        }
-
-        for arg, value in filtered_args.items():
-            if value is not None:
-                mdrun_args += f"-{arg} {value} "
-
-        return mdrun_args
+        if not self.config.s3.off:
+            try:
+                self.handler = DigitalOceanS3Handler(
+                    bucket_name=self.config.s3.bucket_name,
+                )
+            except ValueError as e:
+                raise f"Failed to create S3 handler, check your .env file: {e}"
 
     def get_uids(self, hotkeys: List[str]) -> List[int]:
         """Returns the uids corresponding to the hotkeys.
@@ -116,8 +116,9 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             uids=uids,
             timeout=self.config.neuron.timeout,
-            mdrun_args=self.mdrun_args,
+            job_id=job.job_id,
             best_submitted_energy=job.best_loss,
+            job_type=job.job_type,
         )
 
     async def ping_all_miners(
@@ -177,7 +178,9 @@ class Validator(BaseValidatorNeuron):
         Returns:
             valid_uids: List of uids
         """
-        active_jobs = self.store.get_queue(ready=False).queue
+        active_jobs = self.store.get_queue(
+            ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
+        ).queue
         active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
         active_hotkeys = list(chain.from_iterable(active_hotkeys))
         exclude_uids = self.get_uids(hotkeys=active_hotkeys)
@@ -234,12 +237,13 @@ class Validator(BaseValidatorNeuron):
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
             try:
-                job_id = self.store.upload_job(
+                job = self.store.upload_job(
                     pdb=job_event["pdb_id"],
                     ff=job_event["ff"],
                     water=job_event["water"],
                     box=job_event["box"],
                     hotkeys=selected_hotkeys,
+                    job_type=job_event["job_type"],
                     system_kwargs=job_event["system_kwargs"],
                     keypair=self.wallet.hotkey,
                     gjp_address=self.config.neuron.gjp_address,
@@ -247,24 +251,22 @@ class Validator(BaseValidatorNeuron):
                     event=job_event,
                     s3_links=job_event["s3_links"],
                 )
-                job_event["job_id"] = job_id
+
+                job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
+
+                if job_event["job_id"] is None:
+                    raise ValueError("job_id is None")
+
+                logger.success("Job was uploaded successfully!")
+
+                await self.forward(job=job)
+                return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
                 job_event["job_id"] = None
 
-            self.store.insert(
-                pdb=job_event["pdb_id"],
-                ff=job_event["ff"],
-                water=job_event["water"],
-                box=job_event["box"],
-                hotkeys=selected_hotkeys,
-                epsilon=job_event["epsilon"],
-                system_kwargs=job_event["system_kwargs"],
-                job_id=job_event["job_id"],
-                event=job_event,
-            )
+                return False
 
-            return True
         else:
             logger.warning(
                 f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
@@ -290,33 +292,43 @@ class Validator(BaseValidatorNeuron):
             await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
+    async def update_scores_wrapper(
+        self, rewards: torch.FloatTensor, hotkeys: List[str]
+    ):
+        """Wrapper function to update the scores of the miners based on the rewards they received."""
+        uids = self.get_uids(hotkeys=hotkeys)
+        await self.update_scores(
+            rewards=rewards,
+            uids=uids,
+        )
+
     async def update_job(self, job: Job):
         """Updates the job status based on the event information
 
         TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
         """
 
-        top_reward = 0.80
         apply_pipeline = False
-
         energies = torch.Tensor(job.event["energies"])
-        rewards = torch.zeros(len(energies))  # one-hot per update step
 
-        # If there is an exploit on the cpt file detected via the state-checkpoint reason, we will reset the score to 0.
-        logger.info(f"event information: {job.event['reason']},  {job.event['uids']}")
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
+            # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
                 logger.warning(
                     f"Setting uid {uid} score to zero, State-checkpoint check failed."
                 )
                 self.scores[uid] = 0.5 * self.scores[uid]
 
+            credibility = [0.0] if reason != "" else [1.0]
+            self.miner_registry.add_credibilities(
+                miner_uid=uid, task=job.job_type, credibilities=credibility
+            )
+
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
         best_hotkey = job.hotkeys[best_index]
 
         await job.update(
-            hotkeys=job.hotkeys,
             loss=best_loss,
             hotkey=best_hotkey,
         )
@@ -327,28 +339,28 @@ class Validator(BaseValidatorNeuron):
             if job.best_loss < 0:
                 apply_pipeline = True
                 logger.warning(
-                    f"Received all zero energies for {job.pdb} but stored best_loss < 0... Applying reward pipeline."
+                    f"Received all zero energies for {job.pdb_id} but stored best_loss < 0... Applying reward pipeline."
                 )
         else:
             apply_pipeline = True
             logger.success("Non-zero energies received. Applying reward pipeline.")
 
         if apply_pipeline:
-            rewards: torch.Tensor = await reward_pipeline(
-                energies=energies,
-                rewards=rewards,
-                top_reward=top_reward,
-                job=job,
+            model: BaseReward = REWARD_REGISTRY[job.job_type](priority=job.priority)
+            reward_event: RewardEvent = await model.forward(
+                data=BatchRewardInput(
+                    energies=energies,
+                    top_reward=c.TOP_SYNTHETIC_MD_REWARD,
+                    job=job,
+                ),
             )
 
-            uids = self.get_uids(hotkeys=job.hotkeys)
-            await self.update_scores(
-                rewards=rewards,
-                uids=uids,  # pretty confident these are in the correct order.
-            )
+            job.computed_rewards = reward_event.rewards.numpy().tolist()
+
         else:
+            job.computed_rewards = [0.0] * len(job.hotkeys)
             logger.warning(
-                f"All energies zero for job {job.pdb} and job has never been updated... Skipping"
+                f"All energies zero for job {job.pdb_id} and job has never been updated... Skipping"
             )
 
         async def prepare_event_for_logging(event: Dict):
@@ -357,13 +369,9 @@ class Validator(BaseValidatorNeuron):
                     event[key] = value.total_seconds()
             return event
 
-        event = job.to_dict()
+        event = job.model_dump()
         simulation_event = event.pop("event")  # contains information from hp search
         merged_events = simulation_event | event  # careful: this overwrites.
-
-        merged_events["rewards"] = list(
-            rewards.numpy()
-        )  # add the rewards to the logging event.
 
         event = await prepare_event_for_logging(merged_events)
 
@@ -383,7 +391,7 @@ class Validator(BaseValidatorNeuron):
                 )
 
         else:
-            logger.error(f"Protein.from_job returns NONE for protein {job.pdb}")
+            logger.error(f"Protein.from_job returns NONE for protein {job.pdb_id}")
 
         # Remove these keys from the log because they polute the terminal.
         log_event(
@@ -403,9 +411,9 @@ class Validator(BaseValidatorNeuron):
                     continue
 
                 output_link = await upload_output_to_s3(
-                    handler=protein.handler,
+                    handler=self.handler,
                     output_file=best_cpt_file,
-                    pdb_id=job.pdb,
+                    pdb_id=job.pdb_id,
                     miner_hotkey=job.hotkeys[idx],
                     VALIDATOR_ID=self.validator_hotkey_reference,
                 )
@@ -415,7 +423,6 @@ class Validator(BaseValidatorNeuron):
             job.best_cpt_links = output_links
 
         # Finally, we update the job in the store regardless of what happened.
-        self.store.update(job=job)
         self.store.update_gjp_job(
             job=job,
             gjp_address=self.config.neuron.gjp_address,
@@ -430,13 +437,6 @@ class Validator(BaseValidatorNeuron):
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
 
-    async def sync_loop(self):
-        logger.info("Starting sync loop.")
-        while True:
-            seconds_per_block = 12
-            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
-            self.sync()
-
     async def create_synthetic_jobs(self):
         """
         Creates jobs and adds them to the queue.
@@ -445,7 +445,9 @@ class Validator(BaseValidatorNeuron):
         while True:
             try:
                 logger.info("Starting job creation loop.")
-                queue = self.store.get_queue(ready=False)
+                queue = self.store.get_queue(
+                    ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
+                )
                 if queue.qsize() < self.config.neuron.queue_size:
                     # Potential situation where (sample_size * queue_size) > available uids on the metagraph.
                     # Therefore, this product must be less than the number of uids on the metagraph.
@@ -486,25 +488,15 @@ class Validator(BaseValidatorNeuron):
                 logger.info("Updating jobs.")
                 logger.info(f"step({self.step}) block({self.block})")
 
-                for job in self.store.get_queue(ready=False).queue:
-                    # Remove any deregistered hotkeys from current job. This will update the store when the job is updated.
-                    if not job.check_for_available_hotkeys(self.metagraph.hotkeys):
-                        self.store.update(job=job)
-                        self.store.update_gjp_job(
-                            job=job,
-                            gjp_address=self.config.neuron.gjp_address,
-                            keypair=self.wallet.hotkey,
-                            job_id=job.job_id,
-                        )
-                        continue
-
+                for job in self.store.get_queue(
+                    ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
+                ).queue:
                     # Here we straightforwardly query the workers associated with each job and update the jobs accordingly
                     job_event = await self.forward(job=job)
 
                     # If we don't have any miners reply to the query, we will make it inactive.
                     if len(job_event["energies"]) == 0:
                         job.active = False
-                        self.store.update(job=job)
                         self.store.update_gjp_job(
                             job=job,
                             gjp_address=self.config.neuron.gjp_address,
@@ -521,7 +513,7 @@ class Validator(BaseValidatorNeuron):
                     # Update the DB with the current status
                     await self.update_job(job=job)
             except Exception as e:
-                logger.error(f"Error in update_jobs: {e}")
+                logger.error(f"Error in update_jobs: {traceback.format_exc()}")
 
             self.step += 1
 
@@ -529,10 +521,74 @@ class Validator(BaseValidatorNeuron):
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
 
+    async def read_and_update_rewards(self):
+        """Read the rewards from the inactive jobs and update the scores of the miners
+        using EMA.
+        """
+        inactive_jobs_queue = self.store.get_inactive_queue(
+            last_time_checked=self.last_time_checked
+        )
+        self.last_time_checked = datetime.now()
+
+        if inactive_jobs_queue.qsize() == 0:
+            logger.info("No inactive jobs to update.")
+            return
+
+        while (
+            not inactive_jobs_queue.qsize() == 0
+        ):  # recommended to use qsize() instead of empty()
+            logger.info(f"number of jobs to eval: {inactive_jobs_queue.qsize()}")
+            inactive_job = inactive_jobs_queue.get()
+            for hotkey, reward in zip(
+                inactive_job.hotkeys, inactive_job.computed_rewards
+            ):
+                logger.info(inactive_job.pdb_id)
+                # ema is weird and you can't simply aggregate and update. To keep things consistent, you
+                # need to do it one by one.
+                await self.update_scores_wrapper(
+                    rewards=torch.Tensor([reward]),
+                    hotkeys=[hotkey],
+                )
+                await asyncio.sleep(0.01)
+
+    async def reward_loop(self):
+        logger.info("Starting reward loop.")
+        while True:
+            await asyncio.sleep(60)
+            await self.read_and_update_rewards()
+
+    async def sync_loop(self):
+        logger.info("Starting sync loop.")
+        while True:
+            seconds_per_block = 12
+            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+            self.sync()
+
+    async def monitor_db(self):
+        """
+        Monitors the database for any changes.
+        """
+        while True:
+            try:
+                await asyncio.sleep(60)
+                outdated = await self.store.monitor_db()
+                if outdated:
+                    logger.error("Database is outdated. Restarting rqlite.")
+                    await self.start_rqlite()
+                else:
+                    logger.debug("Database is up-to-date.")
+            except Exception as e:
+                logger.error(f"Error in monitor_db: {traceback.format_exc()}")
+
     async def __aenter__(self):
+        await self.start_rqlite()
+        await asyncio.sleep(10)  # Wait for rqlite to start
+
         self.loop.create_task(self.sync_loop())
-        self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.update_jobs())
+        self.loop.create_task(self.create_synthetic_jobs())
+        self.loop.create_task(self.reward_loop())
+        self.loop.create_task(self.monitor_db())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self

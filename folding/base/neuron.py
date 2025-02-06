@@ -1,23 +1,9 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
 import os
 import copy
 import bittensor as bt
 from abc import ABC, abstractmethod
+from dotenv import load_dotenv
+import subprocess
 
 import openmm
 from tenacity import RetryError
@@ -32,6 +18,7 @@ from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 from folding.mock import MockSubtensor, MockMetagraph
 from folding.utils.logger import logger
 
+load_dotenv()
 
 class BaseNeuron(ABC):
     """
@@ -69,7 +56,9 @@ class BaseNeuron(ABC):
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
-
+        
+        self.rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
+        
         # Log the configuration for reference.
         logger.info(self.config)
 
@@ -104,6 +93,11 @@ class BaseNeuron(ABC):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
+
+        # Get the path of the project folder
+        self.project_path: str = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
 
         logger.info(f"Running spec version: {spec_version} --> Version: {version}")
 
@@ -163,7 +157,6 @@ class BaseNeuron(ABC):
     def weight_setter(self):
         """method to set weights for the validator."""
         try:
-            logger.info("Attempting to set weights...")
             weights_are_set = self.set_weights()
             if weights_are_set:
                 logger.success("Weight setting successful!")
@@ -217,3 +210,23 @@ class BaseNeuron(ABC):
         logger.warning(
             "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
         )
+
+    async def start_rqlite(self):
+        """
+        Starts the rqlite service.
+        """
+        logger.info("Starting rqlite service...")
+
+        # stops the rqlite service if it is running
+        os.system("pkill rqlited")
+
+        # checks if db exists and if yes deletes it
+        if os.path.exists(os.path.join(self.project_path, self.rqlite_data_dir)):
+            logger.info("Deleting existing db")
+            os.system(f"sudo rm -rf {os.path.join(self.project_path, self.rqlite_data_dir)}")
+
+        # starts the rqlite read node
+        subprocess.Popen(
+            ["bash", os.path.join(self.project_path, "scripts", "start_read_node.sh")]
+        )
+        logger.info("rqlite service started.")

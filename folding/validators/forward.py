@@ -54,7 +54,8 @@ async def run_step(
     protein: Protein,
     uids: List[int],
     timeout: float,
-    mdrun_args="",  # TODO: Remove this
+    job_type: str,
+    job_id: str,
     best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()
@@ -76,9 +77,7 @@ async def run_step(
 
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
-        md_inputs=protein.md_inputs,
-        pdb_contents=protein.pdb_contents,
-        system_config=system_config,
+        job_id=job_id,
         best_submitted_energy=0
         if np.isinf(best_submitted_energy)
         else best_submitted_energy,
@@ -104,7 +103,7 @@ async def run_step(
     }
 
     energies, energy_event = get_energies(
-        protein=protein, responses=responses, uids=uids
+        protein=protein, responses=responses, uids=uids, job_type=job_type
     )
 
     # Log the step event.
@@ -135,9 +134,10 @@ def parse_config(config) -> Dict[str, str]:
     return exclude_in_hp_search
 
 
+# TODO: We need to be able to create a bunch of different challenges.
 async def create_new_challenge(self, exclude: List) -> Dict:
     """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
-    using the try_prepare_challenge function.
+    using the try_prepare_md_challenge function.
 
     Args:
         exclude (List): list of pdb_ids to exclude from the search
@@ -164,7 +164,7 @@ async def create_new_challenge(self, exclude: List) -> Dict:
 
         # Perform a hyperparameter search until we find a valid configuration for the pdb
         logger.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = await try_prepare_challenge(self, config=self.config, pdb_id=pdb_id)
+        event = await try_prepare_md_challenge(self, config=self.config, pdb_id=pdb_id)
         event["input_source"] = self.config.protein.input_source
 
         if event.get("validator_search_status"):
@@ -199,7 +199,7 @@ def create_random_modifications_to_system_config(config) -> Dict:
     return system_kwargs
 
 
-async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
+async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
     """Attempts to setup a simulation environment for the specific pdb & config
     Uses a stochastic sampler to find hyperparameters that are compatible with the protein
     """
@@ -280,29 +280,36 @@ async def try_prepare_challenge(self, config, pdb_id: str) -> Dict:
 
         finally:
             event["pdb_id"] = pdb_id
+            event["job_type"] = "SyntheticMD"
             event.update(hps)  # add the dictionary of hyperparameters to the event
             event["hp_sample_time"] = time.time() - hp_sampler_time
             event["pdb_complexity"] = [dict(protein.pdb_complexity)]
             event["init_energy"] = protein.init_energy
             event["epsilon"] = protein.epsilon
             event["system_kwargs"] = system_kwargs
+            event["s3_links"] = {
+                "testing": "testing"
+            }  # overwritten below if s3 logging is on.
 
             if "validator_search_status" not in event:
-                logger.success("✅✅ Simulation ran successfully! ✅✅")
-                event["validator_search_status"] = True  # simulation passed!
-                try:
-                    s3_links = await upload_to_s3(
-                        handler=protein.handler,
-                        pdb_location=protein.pdb_location,
-                        simulation_cpt=protein.simulation_cpt,
-                        validator_directory=protein.validator_directory,
-                        pdb_id=pdb_id,
-                        VALIDATOR_ID=self.validator_hotkey_reference,
-                    )
-                    event["s3_links"] = s3_links
-                    logger.info("Input files uploaded to s3")
-                except Exception as e:
-                    logger.warning(f"Error uploading files to s3: {e}")
+                if not config.s3.off:
+                    try:
+                        logger.info(f"Uploading to {self.handler}")
+                        s3_links = await upload_to_s3(
+                            handler=self.handler,
+                            pdb_location=protein.pdb_location,
+                            simulation_cpt=protein.simulation_cpt,
+                            validator_directory=protein.validator_directory,
+                            pdb_id=pdb_id,
+                            VALIDATOR_ID=self.validator_hotkey_reference,
+                        )
+                        event["s3_links"] = s3_links
+                        event["validator_search_status"] = True  # simulation passed!
+                        logger.success("✅✅ Simulation ran successfully! ✅✅")
+                    except Exception as e:
+                        logger.warning(f"Error uploading files to s3: {e}")
+                        continue
+
                 # break out of the loop if the simulation was successful
                 break
 

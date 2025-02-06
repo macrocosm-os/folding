@@ -1,7 +1,4 @@
-from .protocol import JobSubmissionSynapse
-from .validators.protein import Protein
-
-__version__ = "1.4.6"
+__version__ = "2.0.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (10000 * int(version_split[0]))

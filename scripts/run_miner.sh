@@ -1,4 +1,4 @@
-#!/bin/bash
+
 
 # Execute the Python script
 python3 ./neurons/miner.py \
@@ -8,3 +8,4 @@ python3 ./neurons/miner.py \
     --wallet.hotkey <your_hotkey> \
     --neuron.max_workers <number of processes to run on your machine> \
     --axon.port <your_port>
+

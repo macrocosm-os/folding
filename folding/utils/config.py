@@ -17,10 +17,8 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
-import sys
 import argparse
 import bittensor as bt
-from folding.utils.logger import logger
 from folding.utils.logger import setup_file_logging, add_events_level
 
 
@@ -243,6 +241,20 @@ def add_args(cls, parser):
         type=str,
         help="Controls the number of processes that are used to run the simulation",
         default=1,
+    )
+
+    parser.add_argument(
+        "--s3.off",
+        action="store_true",
+        help="If set to True, then S3 logging is turned off.",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--s3.bucket_name",
+        type=str,
+        help="The name of the S3 bucket to log to.",
+        default="vali-s3-demo-do",
     )
 
 

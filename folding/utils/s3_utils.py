@@ -1,12 +1,13 @@
 import os
-from abc import ABC, abstractmethod
-from typing import Optional
-import mimetypes
-from folding.utils.logging import logger
 import boto3
-import os
 import asyncio
 import datetime
+import mimetypes
+
+from typing import Optional, Dict
+from abc import ABC, abstractmethod
+from folding.utils.logging import logger
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -65,7 +66,7 @@ async def upload_to_s3(
     validator_directory: str,
     pdb_id: str,
     VALIDATOR_ID: str,
-):
+) -> Dict[str, str]:
     """Asynchronously uploads PDB and CPT files to S3 using the specified handler.
 
     Args:
@@ -102,7 +103,6 @@ async def upload_to_s3(
                 file_path=file_path,
                 location=location,
                 public=True,
-                file_type=file_type,
             )
             s3_links[file_type] = os.path.join(
                 "https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key
@@ -180,7 +180,6 @@ class DigitalOceanS3Handler(BaseHandler):
         location: str,
         content_type: Optional[str] = None,
         public: bool = False,
-        file_type: str = None,
     ):
         """Uploads a file to a specified location in the S3 bucket, optionally setting its access permissions and MIME type.
 

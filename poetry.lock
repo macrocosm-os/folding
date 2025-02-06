@@ -1527,6 +1527,23 @@ doc = ["sphinx (>=7.1.2,<7.2)", "sphinx-autodoc-typehints", "sphinx_rtd_theme"]
 test = ["coverage[toml]", "ddt (>=1.1.1,!=1.4.3)", "mock", "mypy", "pre-commit", "pytest (>=7.3.1)", "pytest-cov", "pytest-instafail", "pytest-mock", "pytest-sugar", "typing-extensions"]
 
 [[package]]
+name = "gjp-models"
+version = "0.1.7"
+description = ""
+optional = false
+python-versions = "<3.14,>=3.11"
+groups = ["main"]
+markers = "python_version == \"3.11\" or python_version >= \"3.12\""
+files = [
+    {file = "gjp_models-0.1.7-py3-none-any.whl", hash = "sha256:4b494f464dfd53679b7b948df005555f872c032e06ee28969a040ca2a867205f"},
+    {file = "gjp_models-0.1.7.tar.gz", hash = "sha256:892bb463bcdcbef794f8aba74b2c62f8f1d4aca77db5dc427549a36b2b304304"},
+]
+
+[package.dependencies]
+numpy = ">=1.21.4,<3"
+pydantic = ">=2.3,<3"
+
+[[package]]
 name = "h11"
 version = "0.14.0"
 description = "A pure-Python, bring-your-own-I/O implementation of HTTP/1.1"
@@ -5420,4 +5437,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "02b9bc21262caddb44d16d3ba58d6b1ba1d116e06b054f392661af229fd1aaa0"
+content-hash = "624782b5ef294fb373d60647a41f8b88c644a5551ce64d51c81dc1f97662e705"
