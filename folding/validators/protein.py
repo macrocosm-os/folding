@@ -393,11 +393,6 @@ class Protein(OpenMMSimulation):
                 )
                 return False
         return True
-    
-    def get_ns_computed(self):
-        """Calculate the number of nanoseconds computed by the miner."""
-
-        return (self.cpt_step * self.system_config.time_step_size) / 1e3
 
     def get_energy(self):
         state = self.simulation.context.getState(getEnergy=True)
