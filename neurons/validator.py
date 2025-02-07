@@ -526,7 +526,7 @@ class Validator(BaseValidatorNeuron):
         using EMA.
         """
         inactive_jobs_queue = self.store.get_inactive_queue(
-            last_time_checked=self.last_time_checked
+            last_time_checked=self.last_time_checked.strftime("%Y-%m-%dT%H:%M:%S")
         )
         self.last_time_checked = datetime.now()
 
@@ -539,6 +539,8 @@ class Validator(BaseValidatorNeuron):
             not inactive_jobs_queue.qsize() == 0
         ):  # recommended to use qsize() instead of empty()
             inactive_job = inactive_jobs_queue.get()
+            logger.info(f"Updating scores for job: {inactive_job.pdb_id}")
+
 
             await self.update_scores_wrapper(
                 rewards=torch.Tensor(inactive_job.computed_rewards),
