@@ -233,7 +233,6 @@ class BaseValidatorNeuron(BaseNeuron):
         scattered_rewards: torch.FloatTensor = self.scores.scatter(
             0, uids_tensor, rewards
         ).to(self.device)
-        logger.debug(f"Scattered rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
@@ -242,7 +241,6 @@ class BaseValidatorNeuron(BaseNeuron):
             1 - alpha
         ) * self.scores.to(self.device)
 
-        logger.debug(f"Updated moving avg scores: {self.scores}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""

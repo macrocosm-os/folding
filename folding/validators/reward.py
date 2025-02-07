@@ -74,7 +74,7 @@ def evaluate(
                 state=resp.miner_state,
                 seed=resp.miner_seed,
                 md_output=resp.md_output,
-                basepath=protein.base_directory,
+                basepath=protein.pdb_directory,
                 system_config=protein.system_config,
                 velm_array_pkl_path=protein.velm_array_pkl,
             )
