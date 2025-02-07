@@ -541,7 +541,6 @@ class Validator(BaseValidatorNeuron):
             inactive_job = inactive_jobs_queue.get()
             logger.info(f"Updating scores for job: {inactive_job.pdb_id}")
 
-
             await self.update_scores_wrapper(
                 rewards=torch.Tensor(inactive_job.computed_rewards),
                 hotkeys=inactive_job.hotkeys,
