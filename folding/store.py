@@ -366,6 +366,7 @@ class Job(JobBase):
         self.best_loss = loss
         self.best_loss_at = pd.Timestamp.now().floor("s")
         self.best_hotkey = hotkey
+        self.updated_at = datetime.now()
 
 
 class MockJob(Job):
