@@ -534,22 +534,18 @@ class Validator(BaseValidatorNeuron):
             logger.info("No inactive jobs to update.")
             return
 
+        logger.info(f"number of jobs to eval: {inactive_jobs_queue.qsize()}")
         while (
             not inactive_jobs_queue.qsize() == 0
         ):  # recommended to use qsize() instead of empty()
-            logger.info(f"number of jobs to eval: {inactive_jobs_queue.qsize()}")
             inactive_job = inactive_jobs_queue.get()
-            for hotkey, reward in zip(
-                inactive_job.hotkeys, inactive_job.computed_rewards
-            ):
-                logger.info(inactive_job.pdb_id)
-                # ema is weird and you can't simply aggregate and update. To keep things consistent, you
-                # need to do it one by one.
-                await self.update_scores_wrapper(
-                    rewards=torch.Tensor([reward]),
-                    hotkeys=[hotkey],
-                )
-                await asyncio.sleep(0.01)
+
+            logger.info(f"Updating scores for job: {inactive_job.pdb_id}")
+            await self.update_scores_wrapper(
+                rewards=torch.Tensor(inactive_job.computed_rewards),
+                hotkeys=inactive_job.hotkeys,
+            )
+            await asyncio.sleep(0.01)
 
     async def reward_loop(self):
         logger.info("Starting reward loop.")
