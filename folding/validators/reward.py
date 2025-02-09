@@ -138,9 +138,9 @@ def get_energies(
         protein, responses, uids, job_type, event
     )
 
-    # Sort all lists by reported energy
+    # Sort all lists by reported energy but keep original indices
     sorted_data = sorted(
-        zip(
+        enumerate(zip(
             reported_energies,
             responses,
             uids,
@@ -148,9 +148,13 @@ def get_energies(
             seed,
             best_cpt,
             process_md_output_time,
-        ),
-        key=lambda x: x[0] if x[0] != 0 else float("inf"),  # Push zeros to the end
+        )),
+        key=lambda x: x[1][0] if x[1][0] != 0 else float("inf")  # Push zeros to the end
     )
+
+    # Extract sorted values and keep track of original indices
+    sorted_indices, sorted_tuples = zip(*sorted_data)
+    reported_energies_sorted, responses_sorted, uids_sorted, evaluators_sorted, seed_sorted, best_cpt_sorted, process_md_output_time_sorted = zip(*sorted_tuples)
 
     valid_unique_count = 0
     processed_indices = []
@@ -158,7 +162,15 @@ def get_energies(
 
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
     for i, (reported_energy, response, uid, evaluator, s, bc, pmt) in enumerate(
-        sorted_data
+        zip(
+            reported_energies_sorted,
+            responses_sorted,
+            uids_sorted,
+            evaluators_sorted,
+            seed_sorted,
+            best_cpt_sorted,
+            process_md_output_time_sorted,
+        )
     ):
         try:
             if reported_energy == 0:
@@ -174,27 +186,30 @@ def get_energies(
             else:
                 is_valid = False
 
-            # Update event dictionary for this index
-            event["is_run_valid_time"][i] = time.time() - start_time
-            event["reason"][i] = reason
-            event["checked_energy"][i] = checked_energy
-            event["miner_energy"][i] = miner_energy
-            event["is_valid"][i] = is_valid
-            event["ns_computed"][i] = float(ns_computed)
+            # Map back to original index
+            original_idx = sorted_indices[i]
 
-            processed_indices.append(i)
+            # Update event dictionary for this index using original index
+            event["is_run_valid_time"][original_idx] = time.time() - start_time
+            event["reason"][original_idx] = reason
+            event["checked_energy"][original_idx] = checked_energy
+            event["miner_energy"][original_idx] = miner_energy
+            event["is_valid"][original_idx] = is_valid
+            event["ns_computed"][original_idx] = float(ns_computed)
+
+            processed_indices.append(original_idx)
 
             if is_valid:
 
                 if not abs(median_energy - reported_energy) < c.DIFFERENCE_THRESHOLD:
-                    event["is_valid"][i] = False
+                    event["is_valid"][original_idx] = False
                     continue
 
                 is_duplicate = any(
                     abs(median_energy - energy) < c.DIFFERENCE_THRESHOLD
                     for energy in unique_energies
                 )
-                event["is_duplicate"][i] = is_duplicate
+                event["is_duplicate"][original_idx] = is_duplicate
 
                 if not is_duplicate:
                     unique_energies.add(median_energy)
@@ -206,36 +221,15 @@ def get_energies(
             logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
             continue
 
-    # Update event with only the processed entries
-    if processed_indices:
-        # Get the data for processed indices
-        processed_data = [sorted_data[i] for i in processed_indices]
-        # Unzip the processed data
-        (
-            reported_energies,
-            responses,
-            uids,
-            evaluators,
-            seed,
-            best_cpt,
-            process_md_output_time,
-        ) = zip(*processed_data)
+    # Now we restore the original ordering before updating event
+    event["reported_energy"] = [0] * len(uids)  # Reset to ensure original order
+    for idx in processed_indices:
+        event["reported_energy"][idx] = reported_energies[idx]
 
-    # Update event dictionary with processed data
-    event.update(
-        {
-            "seed": seed,
-            "best_cpt": best_cpt,
-            "process_md_output_time": process_md_output_time,
-            "reported_energy": reported_energies,
-        }
-    )
-
-    # Calculate final energies for valid and non-duplicate responses
-    for idx, (is_valid, is_duplicate) in enumerate(
-        zip(event["is_valid"], event["is_duplicate"])
-    ):
-        if is_valid and not is_duplicate:
+    # Calculate final energies in the original order
+    energies = np.zeros(len(uids))
+    for idx in range(len(uids)):
+        if event["is_valid"][idx] and not event["is_duplicate"][idx]:
             energies[idx] = np.median(
                 event["checked_energy"][idx][-c.ENERGY_WINDOW_SIZE :]
             )
