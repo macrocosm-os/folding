@@ -1,6 +1,5 @@
 import time
 from typing import List
-from collections import defaultdict
 
 import numpy as np
 
@@ -130,13 +129,10 @@ def get_energies(
         "is_duplicate": {uid: False for uid in uids},
     }
 
-    # Step 1: Evaluate all energies
     results = evaluate_energies(protein, responses, uids, job_type)
-
-    # Step 2: Process valid responses
     event = process_valid_energies(results, event)
 
-    # Step 3: Compute final energies in original UID order
+    # Compute final energies in original UID order
     energies = np.zeros(len(uids))
     for i, uid in enumerate(uids):
         if event["is_valid"][uid] and not event["is_duplicate"][uid]:
