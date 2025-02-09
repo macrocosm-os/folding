@@ -18,7 +18,9 @@ def evaluate_energies(protein, responses, uids, job_type):
     for uid, resp in zip(uids, responses):
         try:
             if resp.dendrite.status_code != 200:
-                logger.info(f"uid {uid} responded with status code {resp.dendrite.status_code}")
+                logger.info(
+                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
+                )
                 continue
 
             start_time = time.time()
@@ -40,14 +42,16 @@ def evaluate_energies(protein, responses, uids, job_type):
             reported_energy = evaluator.get_reported_energy()
             process_time = time.time() - start_time
 
-            results.append({
-                "uid": uid,
-                "reported_energy": reported_energy,
-                "evaluator": evaluator,
-                "seed": resp.miner_seed,
-                "best_cpt": getattr(evaluator, "checkpoint_path", ""),
-                "process_time": process_time,
-            })
+            results.append(
+                {
+                    "uid": uid,
+                    "reported_energy": reported_energy,
+                    "evaluator": evaluator,
+                    "seed": resp.miner_seed,
+                    "best_cpt": getattr(evaluator, "checkpoint_path", ""),
+                    "process_time": process_time,
+                }
+            )
 
         except Exception as e:
             logger.error(f"Failed to process uid {uid}: {e}")
@@ -58,7 +62,11 @@ def evaluate_energies(protein, responses, uids, job_type):
 def process_valid_energies(results, event, top_k=5):
     """Processes valid energies, filtering out invalid and duplicate values."""
     # Sort by reported energy, keeping original indices
-    results.sort(key=lambda x: x["reported_energy"] if x["reported_energy"] != 0 else float("inf"))
+    results.sort(
+        key=lambda x: (
+            x["reported_energy"] if x["reported_energy"] != 0 else float("inf")
+        )
+    )
 
     unique_energies = set()
     valid_count = 0
@@ -77,7 +85,9 @@ def process_valid_energies(results, event, top_k=5):
             median_energy, checked_energy, miner_energy, reason = evaluator.validate()
 
             is_valid = median_energy != 0.0
-            is_duplicate = any(abs(median_energy - e) < c.DIFFERENCE_THRESHOLD for e in unique_energies)
+            is_duplicate = any(
+                abs(median_energy - e) < c.DIFFERENCE_THRESHOLD for e in unique_energies
+            )
 
             # Update event
             event["reported_energy"][uid] = reported_energy
@@ -101,7 +111,12 @@ def process_valid_energies(results, event, top_k=5):
     return event
 
 
-def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: List[int], job_type: str):
+def get_energies(
+    protein: Protein,
+    responses: List[JobSubmissionSynapse],
+    uids: List[int],
+    job_type: str,
+):
     """Main function to process and return energies in original UID order."""
     event = {
         "is_valid": {uid: False for uid in uids},
@@ -125,6 +140,8 @@ def get_energies(protein: Protein, responses: List[JobSubmissionSynapse], uids: 
     energies = np.zeros(len(uids))
     for i, uid in enumerate(uids):
         if event["is_valid"][uid] and not event["is_duplicate"][uid]:
-            energies[i] = np.median(event["checked_energy"][uid][-c.ENERGY_WINDOW_SIZE:])
+            energies[i] = np.median(
+                event["checked_energy"][uid][-c.ENERGY_WINDOW_SIZE :]
+            )
 
     return energies, event
