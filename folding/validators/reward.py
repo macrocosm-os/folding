@@ -97,6 +97,7 @@ def process_valid_energies(results, event, top_k=5):
             event["is_duplicate"][uid] = is_duplicate
             event["is_run_valid_time"][uid] = time.time() - start_time
             event["ns_computed"][uid] = float(ns_computed)
+            event["best_cpt"][uid] = res["best_cpt"]
 
             if is_valid and not is_duplicate:
                 unique_energies.add(median_energy)
@@ -127,6 +128,7 @@ def get_energies(
         "ns_computed": {uid: 0 for uid in uids},
         "reason": {uid: "" for uid in uids},
         "is_duplicate": {uid: False for uid in uids},
+        "best_cpt": {uid: "" for uid in uids},
     }
 
     results = evaluate_energies(protein, responses, uids, job_type)
