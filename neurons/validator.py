@@ -550,8 +550,11 @@ class Validator(BaseValidatorNeuron):
     async def reward_loop(self):
         logger.info("Starting reward loop.")
         while True:
-            await asyncio.sleep(60)
-            await self.read_and_update_rewards()
+            try:
+                await asyncio.sleep(60)
+                await self.read_and_update_rewards()
+            except Exception as e:
+                logger.error(f"Error in reward_loop: {traceback.format_exc()}")
 
     async def sync_loop(self):
         logger.info("Starting sync loop.")
