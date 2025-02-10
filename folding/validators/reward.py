@@ -161,6 +161,7 @@ def get_energies(
         sorted_data
     ):
         try:
+            i = uids.index(uid)
             if reported_energy == 0:
                 continue
 
