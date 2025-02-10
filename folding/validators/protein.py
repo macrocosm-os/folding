@@ -72,7 +72,6 @@ class Protein(OpenMMSimulation):
         """
 
         self.base_directory = os.path.join(str(ROOT_DIR), "data")
-
         self.pdb_id: str = pdb_id.lower()
         self.simulation_cpt = "em.cpt"
         self.simulation_pkl = f"config_{self.pdb_id}.pkl"
@@ -199,17 +198,14 @@ class Protein(OpenMMSimulation):
             for file in glob.glob(os.path.join(self.validator_directory, filename)):
                 try:
                     # A bit of a hack to load in the data correctly depending on the file ext
-                    name = file.split("/")[-1]
+                    name = os.path.basename(file)
                     with open(file, "rb") as f:
                         if "cpt" in name:
                             files_to_return[name] = base64.b64encode(f.read()).decode(
                                 "utf-8"
                             )
                         else:
-                            files_to_return[
-                                name
-                            ] = f.read()  # This would be the pdb file.
-
+                            files_to_return[name] = f.read()
                 except Exception:
                     continue
         return files_to_return
@@ -300,17 +296,12 @@ class Protein(OpenMMSimulation):
         4. Save the system config to the validator directory.
         5. Move all files except the pdb file to the validator directory.
         """
+        logger.info(f"Loading PDB file from {self.pdb_location}")
 
-        logger.info(f"Changing path to {self.pdb_directory}")
-        os.chdir(self.pdb_directory)
-
-        logger.info(
-            f"pdb file is set to: {self.pdb_file}, and it is located at {self.pdb_location}"
-        )
-
+        # Create simulation using absolute paths
         self.simulation, self.system_config = await asyncio.to_thread(
             self.create_simulation,
-            load_pdb_file(pdb_file=self.pdb_file),
+            load_pdb_file(pdb_file=self.pdb_location),
             self.system_config.get_config(),
         )
 
@@ -319,26 +310,27 @@ class Protein(OpenMMSimulation):
 
         logger.info(f"Minimizing energy for pdb: {self.pdb_id} ...")
         start_time = time.time()
-        await asyncio.to_thread(
-            self.simulation.minimizeEnergy, maxIterations=100
-        )  # TODO: figure out the right number for this
+        await asyncio.to_thread(self.simulation.minimizeEnergy, maxIterations=100)
         logger.warning(f"Minimization took {time.time() - start_time:.4f} seconds")
         await asyncio.to_thread(self.simulation.step, 1000)
 
-        self.simulation.saveCheckpoint("em.cpt")
-
-        # This is only for the validators, as they need to open the right config later.
-        # Only save the config if the simulation was successful.
-        write_pkl(data=self.system_config, path=self.simulation_pkl, write_mode="wb")
-
-        # Here we are going to change the path to a validator folder, and move ALL the files except the pdb file
+        # Save checkpoint using absolute path
+        checkpoint_path = os.path.join(self.validator_directory, "em.cpt")
         check_if_directory_exists(output_directory=self.validator_directory)
-        # Move all files
-        cmd = f'find . -maxdepth 1 -type f ! -name "*.pdb" -exec mv {{}} {self.validator_directory}/ \;'
-        logger.debug(f"Moving all files except pdb to {self.validator_directory}")
-        os.system(cmd)
+        self.simulation.saveCheckpoint(checkpoint_path)
 
-        # We are writing the velm array to the pdb directory after we moved all the other files for simplicity.
+        # Save config using absolute path
+        write_pkl(
+            data=self.system_config, path=self.simulation_pkl_location, write_mode="wb"
+        )
+
+        # Move all non-PDB files to validator directory
+        for file in os.listdir(self.pdb_directory):
+            file_path = os.path.join(self.pdb_directory, file)
+            if os.path.isfile(file_path) and not file.endswith(".pdb"):
+                shutil.move(file_path, os.path.join(self.validator_directory, file))
+
+        # Write velm array using absolute path
         write_pkl(
             data=velm,
             path=self.velm_array_pkl,
