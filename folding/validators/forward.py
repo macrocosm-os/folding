@@ -57,6 +57,7 @@ async def run_step(
     job_type: str,
     job_id: str,
     best_submitted_energy: float = None,
+    first: bool = False,
 ) -> Dict:
     start_time = time.time()
 
@@ -78,9 +79,9 @@ async def run_step(
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
         job_id=job_id,
-        best_submitted_energy=0
-        if np.isinf(best_submitted_energy)
-        else best_submitted_energy,
+        best_submitted_energy=(
+            0 if np.isinf(best_submitted_energy) else best_submitted_energy
+        ),
     )
 
     # Make calls to the network with the prompt - this is synchronous.
@@ -101,6 +102,8 @@ async def run_step(
         "energies": [],
         **response_info,
     }
+    if first:
+        return event
 
     energies, energy_event = get_energies(
         protein=protein, responses=responses, uids=uids, job_type=job_type
