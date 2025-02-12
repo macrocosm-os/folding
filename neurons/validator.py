@@ -320,7 +320,7 @@ class Validator(BaseValidatorNeuron):
                 )
                 self.scores[uid] = 0.5 * self.scores[uid]
 
-            credibility = [0.0] if reason != "" else [1.0]
+            credibility = [0.0] if reason != "valid" else [1.0]
             self.miner_registry.add_credibilities(
                 miner_uid=uid, task=job.job_type, credibilities=credibility
             )
