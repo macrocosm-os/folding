@@ -112,6 +112,7 @@ def get_energies(
         protein (Protein): instance of the Protein class
         responses (List[JobSubmissionSynapse]): list of JobSubmissionSynapse objects
         uids (List[int]): list of uids
+        job_type (str): type of job ("SyntheticMD", "OrganicMD", "SyntheticML", "OrganicML")
 
     Returns:
         Tuple: Tuple containing the energies and the event dictionary
