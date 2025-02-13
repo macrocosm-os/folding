@@ -92,7 +92,7 @@ class Validator(BaseValidatorNeuron):
             and self.metagraph.axons[self.metagraph.hotkeys.index(hotkey)].is_serving
         ]
 
-    async def forward(self, job: Job) -> dict:
+    async def forward(self, job: Job, first: bool = False) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
         Validator forward pass. Consists of:
@@ -119,6 +119,7 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
             best_submitted_energy=job.best_loss,
             job_type=job.job_type,
+            first=first,
         )
 
     async def ping_all_miners(
@@ -259,7 +260,7 @@ class Validator(BaseValidatorNeuron):
 
                 logger.success("Job was uploaded successfully!")
 
-                await self.forward(job=job)
+                await self.forward(job=job, first=True)
                 return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
@@ -550,8 +551,11 @@ class Validator(BaseValidatorNeuron):
     async def reward_loop(self):
         logger.info("Starting reward loop.")
         while True:
-            await asyncio.sleep(60)
-            await self.read_and_update_rewards()
+            try:
+                await asyncio.sleep(60)
+                await self.read_and_update_rewards()
+            except Exception as e:
+                logger.error(f"Error in reward_loop: {traceback.format_exc()}")
 
     async def sync_loop(self):
         logger.info("Starting sync loop.")

@@ -4,15 +4,13 @@ from typing import List
 def divide_decreasing(
     amount_to_distribute: float, number_of_elements: int
 ) -> List[float]:
-    # Calculate the fixed decrease amount d
-    d = 2 * amount_to_distribute / ((number_of_elements - 1) * number_of_elements)
+    # Instead of going from n to 0, we go from n to 1
+    # This gives us weights that look like [n, n-1, n-2, ..., 1]
+    weights = [number_of_elements - i for i in range(number_of_elements)]
 
-    # Calculate the first value a1
-    a1 = (
-        amount_to_distribute + d * (number_of_elements - 1) * number_of_elements / 2
-    ) / number_of_elements
+    # Calculate scaling factor to make weights sum to amount_to_distribute
+    total_weight = sum(weights)
+    scaling_factor = amount_to_distribute / total_weight
 
-    # Calculate the n values
-    values = [a1 - i * d for i in range(number_of_elements)]
-
-    return values
+    # Scale all weights proportionally
+    return [w * scaling_factor for w in weights]
