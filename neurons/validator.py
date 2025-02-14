@@ -510,7 +510,7 @@ class Validator(BaseValidatorNeuron):
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
                     await self.update_job(job=job)
-                    logger.info(f"step({self.step}) block({self.block})")
+                logger.info(f"step({self.step}) block({self.block})")
 
             except Exception as e:
                 logger.error(f"Error in update_jobs: {traceback.format_exc()}")
