@@ -322,6 +322,7 @@ class Validator(BaseValidatorNeuron):
             self.miner_registry.add_credibilities(
                 miner_uid=uid, task=job.job_type, credibilities=credibility
             )
+            self.miner_registry.update_credibility(miner_uid=uid, task=job.job_type)
 
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
