@@ -314,7 +314,7 @@ class Validator(BaseValidatorNeuron):
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
                 logger.warning(
-                    f"Setting uid {uid} score to zero, State-checkpoint check failed."
+                    f"Reducing uid {uid} score, State-checkpoint check failed."
                 )
                 self.scores[uid] = 0.5 * self.scores[uid]
 
