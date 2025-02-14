@@ -26,7 +26,7 @@ from folding.rewards.md_rewards import REWARD_REGISTRY
 from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
-from folding.utils.uids import get_random_uids
+from folding.utils.uids import get_all_miner_uids
 from folding.utils.s3_utils import upload_output_to_s3
 from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
@@ -46,9 +46,7 @@ class Validator(BaseValidatorNeuron):
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
-        self.all_miner_uids: List = get_random_uids(
-            self, k=int(self.metagraph.n), exclude=None
-        ).tolist()
+        self.all_miner_uids: List = get_all_miner_uids(self)
 
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
@@ -487,7 +485,6 @@ class Validator(BaseValidatorNeuron):
                 await asyncio.sleep(self.config.neuron.update_interval)
 
                 logger.info("Updating jobs.")
-                logger.info(f"step({self.step}) block({self.block})")
 
                 for job in self.store.get_queue(
                     ready=True, validator_hotkey=self.wallet.hotkey.ss58_address
@@ -513,6 +510,8 @@ class Validator(BaseValidatorNeuron):
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
                     await self.update_job(job=job)
+                logger.info(f"step({self.step}) block({self.block})")
+
             except Exception as e:
                 logger.error(f"Error in update_jobs: {traceback.format_exc()}")
 
