@@ -105,7 +105,7 @@ async def upload_to_s3(
                 public=True,
             )
             s3_links[file_type] = os.path.join(
-                "https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key
+                "https://nyc3.digitaloceanspaces.com/sn25-folding-mainnet/", key
             )
             await asyncio.sleep(0.10)
 
@@ -149,7 +149,7 @@ async def upload_output_to_s3(
             location=location,
             public=True,
         )
-        return os.path.join("https://nyc3.digitaloceanspaces.com/vali-s3-demo-do/", key)
+        return os.path.join("https://nyc3.digitaloceanspaces.com/sn25-folding-mainnet/", key)
     except Exception as e:
         logger.error(f"Exception during output file upload: {str(e)}")
         raise
