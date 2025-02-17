@@ -51,6 +51,7 @@ Bash install will use poetry to build the environment correctly.
 SN25 uses DigitalOcean S3 data buckets for data transfer. Therefore, the following environment variables need to be set in your system or application environment (`.env` file):
 - `S3_REGION = "nyc3"`: The AWS region or S3-compatible region where the bucket is located.
 - `S3_ENDPOINT = "https://nyc3.digitaloceanspaces.com"`: The endpoint URL for your S3-compatible service.
+- `S3_BUCKET = sn25-folding-mainnet`: The name of the s3 bucket. 
 - `S3_KEY`: Your S3 access key ID.
 - `S3_SECRET`: Your S3 secret access key.
 
