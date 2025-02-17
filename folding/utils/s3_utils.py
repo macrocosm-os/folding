@@ -86,7 +86,8 @@ async def upload_to_s3(
     try:
         s3_links = {}
         input_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
+        s3_endpoint = os.getenv("S3_ENDPOINT")
+        s3_bucket = os.getenv("S3_BUCKET")
         for file_type in ["pdb", "cpt"]:
             if file_type == "cpt":
                 file_path = os.path.join(validator_directory, simulation_cpt)
@@ -104,9 +105,7 @@ async def upload_to_s3(
                 location=location,
                 public=True,
             )
-            s3_links[file_type] = os.path.join(
-                "https://nyc3.digitaloceanspaces.com/sn25-folding-mainnet/", key
-            )
+            s3_links[file_type] = os.path.join(f"{s3_endpoint}/{s3_bucket}/", key)
             await asyncio.sleep(0.10)
 
         return s3_links
@@ -138,6 +137,9 @@ async def upload_output_to_s3(
     Raises:
         Exception: If any error occurs during file upload.
     """
+    s3_endpoint = os.getenv("S3_ENDPOINT")
+    s3_bucket = os.getenv("S3_BUCKET")
+
     try:
         output_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         location = os.path.join(
@@ -149,7 +151,7 @@ async def upload_output_to_s3(
             location=location,
             public=True,
         )
-        return os.path.join("https://nyc3.digitaloceanspaces.com/sn25-folding-mainnet/", key)
+        return os.path.join(f"{s3_endpoint}/{s3_bucket}/", key)
     except Exception as e:
         logger.error(f"Exception during output file upload: {str(e)}")
         raise
