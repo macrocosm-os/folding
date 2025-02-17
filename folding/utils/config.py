@@ -254,7 +254,7 @@ def add_args(cls, parser):
         "--s3.bucket_name",
         type=str,
         help="The name of the S3 bucket to log to.",
-        default="vali-s3-demo-do",
+        default="sn25-folding-mainnet",
     )
 
 
