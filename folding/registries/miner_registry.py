@@ -56,12 +56,29 @@ class MinerRegistry:
 
     def update_credibility(self, miner_uid: int, task: str):
         """
-        Updates the credibility of a miner based:
-        1. The credibility of the miner's previous results. Intially set as STARTING_CREDIBILITY
+        Updates the credibility of a miner based on:
+        1. The credibility of the miner's previous results. Initially set as STARTING_CREDIBILITY
         2. The credibility of the miner's current results.
         3. The number of previous and current entries to act as a weighting factor
         4. The EMA with credibility_alpha as the smoothing factor
+
+        If the miner_uid doesn't exist in the registry, it will be instantiated first.
+
+        Args:
+            miner_uid (int): The unique identifier of the miner
+            task (str): The task name to update credibility for
         """
+        # Check if miner_uid exists, if not instantiate it
+        if miner_uid not in self.registry:
+            self.registry[miner_uid] = {}
+            self.registry[miner_uid]["overall_credibility"] = c.STARTING_CREDIBILITY
+            for task_name in self.tasks:
+                self.registry[miner_uid][task_name] = {
+                    "credibility": c.STARTING_CREDIBILITY,
+                    "credibilities": [],
+                    "score": 0.0,
+                    "results": [],
+                }
 
         task_credibilities = list(
             chain.from_iterable(self.registry[miner_uid][task]["credibilities"])
