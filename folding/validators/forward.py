@@ -297,7 +297,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             if "validator_search_status" not in event:
                 if not config.s3.off:
                     try:
-                        logger.info(f"Uploading to {self.handler}")
+                        logger.info(f"Uploading to {self.handler.bucket_name}")
                         s3_links = await upload_to_s3(
                             handler=self.handler,
                             pdb_location=protein.pdb_location,
