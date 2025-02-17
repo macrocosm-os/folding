@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import subprocess
 
 import openmm
+import asyncio
 from tenacity import RetryError
 
 # Sync calls set weights and also resyncs the metagraph.
@@ -19,6 +20,7 @@ from folding.mock import MockSubtensor, MockMetagraph
 from folding.utils.logger import logger
 
 load_dotenv()
+
 
 class BaseNeuron(ABC):
     """
@@ -56,9 +58,9 @@ class BaseNeuron(ABC):
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
-        
+
         self.rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
-        
+
         # Log the configuration for reference.
         logger.info(self.config)
 
@@ -135,8 +137,7 @@ class BaseNeuron(ABC):
         write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
-        ...
+    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
     def sync(self):
         """
@@ -223,7 +224,12 @@ class BaseNeuron(ABC):
         # checks if db exists and if yes deletes it
         if os.path.exists(os.path.join(self.project_path, self.rqlite_data_dir)):
             logger.info("Deleting existing db")
-            os.system(f"sudo rm -rf {os.path.join(self.project_path, self.rqlite_data_dir)}")
+            os.system(
+                f"sudo rm -rf {os.path.join(self.project_path, self.rqlite_data_dir)}"
+            )
+
+        # waits for rqlite to stop
+        await asyncio.sleep(10)
 
         # starts the rqlite read node
         subprocess.Popen(
