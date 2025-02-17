@@ -50,7 +50,6 @@ def evaluate(
     responses: List[JobSubmissionSynapse],
     uids: List[int],
     job_type: str,
-    event: dict,
 ):
     reported_energies = np.zeros(len(uids))
     evaluators = [None] * len(uids)
@@ -135,7 +134,7 @@ def get_energies(
 
     # Get initial evaluations
     reported_energies, evaluators, seed, best_cpt, process_md_output_time = evaluate(
-        protein, responses, uids, job_type, event
+        protein, responses, uids, job_type
     )
 
     # Sort all lists by reported energy
@@ -157,7 +156,7 @@ def get_energies(
     unique_energies = set()  # Track unique energy values
 
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
-    for i, (reported_energy, response, uid, evaluator, s, bc, pmt) in enumerate(
+    for i, (reported_energy, response, uid, evaluator, seed, best_cpt, process_md_output_time) in enumerate(
         sorted_data
     ):
         try:
