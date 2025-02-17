@@ -570,7 +570,12 @@ class Validator(BaseValidatorNeuron):
         while True:
             try:
                 await asyncio.sleep(60)
-                outdated = await self.store.monitor_db()
+                try:
+                    outdated = await self.store.monitor_db()
+                except Exception as e:
+                    logger.error(f"Error in monitor_db: {traceback.format_exc()}")
+                    await self.start_rqlite()
+
                 if outdated:
                     logger.error("Database is outdated. Restarting rqlite.")
                     await self.start_rqlite()
