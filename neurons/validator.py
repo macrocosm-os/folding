@@ -579,6 +579,7 @@ class Validator(BaseValidatorNeuron):
                     logger.debug("Database is up-to-date.")
             except Exception as e:
                 logger.error(f"Error in monitor_db: {traceback.format_exc()}")
+                await self.start_rqlite()
 
     async def __aenter__(self):
         await self.start_rqlite()
