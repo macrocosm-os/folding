@@ -20,9 +20,8 @@ def check_uid_availability(
     if not metagraph.axons[uid].is_serving:
         return False
     # Filter validator permit > 1024 stake.
-    if metagraph.validator_permit[uid]:
-        if metagraph.S[uid] > vpermit_tao_limit:
-            return False
+    if metagraph.S[uid] > vpermit_tao_limit:
+        return False
     # Available otherwise.
     return True
 
@@ -60,6 +59,7 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
         k = len(available_uids)
     uids = torch.tensor(random.sample(available_uids, k))
     return uids
+
 
 def get_all_miner_uids(self):
     """Returns all available miner uids from the metagraph.

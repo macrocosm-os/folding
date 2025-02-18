@@ -1,24 +1,27 @@
-import os
+import asyncio
 import copy
-import bittensor as bt
-from abc import ABC, abstractmethod
-from dotenv import load_dotenv
+import os
 import subprocess
+from abc import ABC, abstractmethod
 
+import bittensor as bt
 import openmm
-from tenacity import RetryError
+import tenacity
+from dotenv import load_dotenv
 
-# Sync calls set weights and also resyncs the metagraph.
-from folding.utils.config import check_config, add_args, config
-from folding.utils.misc import ttl_get_block
+from folding import __OPENMM_VERSION_TAG__
 from folding import __spec_version__ as spec_version
 from folding import __version__ as version
-from folding import __OPENMM_VERSION_TAG__
-from folding.utils.ops import OpenMMException, load_pkl, write_pkl
-from folding.mock import MockSubtensor, MockMetagraph
+from folding.mock import MockMetagraph, MockSubtensor
+
+# Sync calls set weights and also resyncs the metagraph.
+from folding.utils.config import add_args, check_config, config
 from folding.utils.logger import logger
+from folding.utils.misc import ttl_get_block
+from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 
 load_dotenv()
+
 
 class BaseNeuron(ABC):
     """
@@ -45,6 +48,10 @@ class BaseNeuron(ABC):
     spec_version: int = spec_version
 
     @property
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
+    )
     def block(self):
         return ttl_get_block(self)
 
@@ -56,9 +63,9 @@ class BaseNeuron(ABC):
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
-        
+
         self.rqlite_data_dir = os.getenv("RQLITE_DATA_DIR")
-        
+
         # Log the configuration for reference.
         logger.info(self.config)
 
@@ -135,8 +142,7 @@ class BaseNeuron(ABC):
         write_pkl(self.wandb_ids, f"{self.config.neuron.full_path}/wandb_ids.pkl", "wb")
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
-        ...
+    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
     def sync(self):
         """
@@ -160,7 +166,7 @@ class BaseNeuron(ABC):
             weights_are_set = self.set_weights()
             if weights_are_set:
                 logger.success("Weight setting successful!")
-        except RetryError as e:
+        except tenacity.RetryError as e:
             logger.error(
                 f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
             )
@@ -223,7 +229,12 @@ class BaseNeuron(ABC):
         # checks if db exists and if yes deletes it
         if os.path.exists(os.path.join(self.project_path, self.rqlite_data_dir)):
             logger.info("Deleting existing db")
-            os.system(f"sudo rm -rf {os.path.join(self.project_path, self.rqlite_data_dir)}")
+            os.system(
+                f"sudo rm -rf {os.path.join(self.project_path, self.rqlite_data_dir)}"
+            )
+
+        # waits for rqlite to stop
+        await asyncio.sleep(10)
 
         # starts the rqlite read node
         subprocess.Popen(
