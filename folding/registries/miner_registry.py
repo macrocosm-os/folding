@@ -79,18 +79,6 @@ class MinerRegistry:
             miner_uid (int): The unique identifier of the miner
             task (str): The task name to update credibility for
         """
-        # Check if miner_uid exists, if not instantiate it
-        if miner_uid not in self.registry:
-            self.registry[miner_uid] = {}
-            self.registry[miner_uid]["overall_credibility"] = c.STARTING_CREDIBILITY
-            for task_name in self.tasks:
-                self.registry[miner_uid][task_name] = {
-                    "credibility": c.STARTING_CREDIBILITY,
-                    "credibilities": [],
-                    "score": 0.0,
-                    "results": [],
-                }
-
         task_credibilities = list(
             chain.from_iterable(self.registry[miner_uid][task]["credibilities"])
         )
