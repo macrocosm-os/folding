@@ -63,6 +63,7 @@ class Validator(BaseValidatorNeuron):
 
         # The last time that we checked the global job pool.
         self.last_time_checked = datetime.now()
+        self.last_time_created_jobs = datetime.now()
 
         if not self.config.s3.off:
             try:
@@ -259,6 +260,10 @@ class Validator(BaseValidatorNeuron):
                 logger.success("Job was uploaded successfully!")
 
                 await self.forward(job=job, first=True)
+
+                self.last_time_created_jobs = datetime.now()
+
+                # TODO: return job_id
                 return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
@@ -570,7 +575,7 @@ class Validator(BaseValidatorNeuron):
         """
         while True:
             try:
-                await asyncio.sleep(60)
+                await asyncio.sleep(300)
                 try:
                     outdated = await self.store.monitor_db()
                 except Exception as e:
@@ -585,6 +590,16 @@ class Validator(BaseValidatorNeuron):
             except Exception as e:
                 logger.error(f"Error in monitor_db: {traceback.format_exc()}")
 
+    async def monitor_validator(self):
+        while True:
+            await asyncio.sleep(3600)
+            # if no jobs have been created in the last 12 hours, shutdown the validator
+            if (datetime.now() - self.last_time_created_jobs).seconds > 43200:
+                logger.error(
+                    "No jobs have been created in the last 12 hours. Restarting validator."
+                )
+                self.should_exit = True
+
     async def __aenter__(self):
         await self.start_rqlite()
         await asyncio.sleep(10)  # Wait for rqlite to start
@@ -594,6 +609,7 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
+        self.loop.create_task(self.monitor_validator())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self
