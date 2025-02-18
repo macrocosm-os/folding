@@ -263,8 +263,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
 
         Returns:
-            Tuple[bool, list, list]: True if the run is valid, False otherwise.
+            Tuple[bool, list, list, str]: True if the run is valid, False otherwise.
                 The two lists contain the potential energy values from the current simulation and the reference log file.
+                The string contains the reason for the run being invalid.
         """
 
         # This is where we are going to check the xml files for the state.
@@ -371,7 +372,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             return True, check_energies.tolist(), self.miner_energies.tolist(), "valid"
 
-        except Exception as E:
+        except ValidationError as E:
+            logger.warning(f"{E}")
             return False, [], [], E.message
 
     def evaluate(self) -> bool:
