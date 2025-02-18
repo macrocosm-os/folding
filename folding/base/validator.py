@@ -20,7 +20,6 @@ import os
 import json
 import copy
 import torch
-import pickle
 import asyncio
 import argparse
 import threading
@@ -71,7 +70,6 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = torch.zeros(
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
-        self.scores_list = []
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
@@ -246,9 +244,6 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores: torch.FloatTensor = alpha * scattered_rewards + (
             1 - alpha
         ) * self.scores.to(self.device)
-        self.scores_list.append(self.scores)
-        with open("scores.pkl", "wb") as f:
-            pickle.dump(self.scores_list, f)
 
     def save_state(self):
         """Saves the state of the validator to a file."""
