@@ -631,6 +631,7 @@ class Validator(BaseValidatorNeuron):
             logger.debug("Stopping validator in background thread.")
             self.should_exit = True
             self.is_running = False
+            self.loop.stop()
             logger.debug("Stopped")
 
 
