@@ -20,6 +20,7 @@ import os
 import json
 import copy
 import torch
+import pickle
 import asyncio
 import argparse
 import threading
@@ -37,7 +38,7 @@ from folding.utils.config import add_validator_args
 from folding.organic.validator import OrganicValidator
 from folding.registries.miner_registry import MinerRegistry
 
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_result
+import tenacity
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -70,6 +71,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = torch.zeros(
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
+        self.scores_list = []
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
@@ -107,16 +109,20 @@ class BaseValidatorNeuron(BaseNeuron):
 
         self.load_and_merge_configs()
 
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
+    )
     def _serve_axon(self):
         """Serve axon to enable external connections"""
         validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         logger.info(f"Serving validator IP of UID {validator_uid} to chain...")
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor).start()
 
-    @retry(
-        stop=stop_after_attempt(3),  # Retry up to 3 times
-        wait=wait_fixed(1),  # Wait 1 second between retries
-        retry=retry_if_result(
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),  # Retry up to 3 times
+        wait=tenacity.wait_fixed(1),  # Wait 1 second between retries
+        retry=tenacity.retry_if_result(
             lambda result: result is False
         ),  # Retry if the result is False
         after=print_on_retry,
@@ -240,7 +246,9 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores: torch.FloatTensor = alpha * scattered_rewards + (
             1 - alpha
         ) * self.scores.to(self.device)
-
+        self.scores_list.append(self.scores)
+        with open("scores.pkl", "wb") as f:
+            pickle.dump(self.scores_list, f)
 
     def save_state(self):
         """Saves the state of the validator to a file."""

@@ -7,7 +7,7 @@ import subprocess
 
 import openmm
 import asyncio
-from tenacity import RetryError
+import tenacity
 
 # Sync calls set weights and also resyncs the metagraph.
 from folding.utils.config import check_config, add_args, config
@@ -46,6 +46,10 @@ class BaseNeuron(ABC):
     metagraph: "bt.metagraph"
     spec_version: int = spec_version
 
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
+    )
     @property
     def block(self):
         return ttl_get_block(self)
@@ -161,7 +165,7 @@ class BaseNeuron(ABC):
             weights_are_set = self.set_weights()
             if weights_are_set:
                 logger.success("Weight setting successful!")
-        except RetryError as e:
+        except tenacity.RetryError as e:
             logger.error(
                 f"Failed to set weights after retry attempts. Skipping for {self.config.neuron.epoch_length} blocks."
             )
