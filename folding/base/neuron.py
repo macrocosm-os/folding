@@ -1,23 +1,24 @@
-import os
-import copy
-import bittensor as bt
-from abc import ABC, abstractmethod
-from dotenv import load_dotenv
-import subprocess
-
-import openmm
 import asyncio
-import tenacity
+import copy
+import os
+import subprocess
+from abc import ABC, abstractmethod
 
-# Sync calls set weights and also resyncs the metagraph.
-from folding.utils.config import check_config, add_args, config
-from folding.utils.misc import ttl_get_block
+import bittensor as bt
+import openmm
+import tenacity
+from dotenv import load_dotenv
+
+from folding import __OPENMM_VERSION_TAG__
 from folding import __spec_version__ as spec_version
 from folding import __version__ as version
-from folding import __OPENMM_VERSION_TAG__
-from folding.utils.ops import OpenMMException, load_pkl, write_pkl
-from folding.mock import MockSubtensor, MockMetagraph
+from folding.mock import MockMetagraph, MockSubtensor
+
+# Sync calls set weights and also resyncs the metagraph.
+from folding.utils.config import add_args, check_config, config
 from folding.utils.logger import logger
+from folding.utils.misc import ttl_get_block
+from folding.utils.ops import OpenMMException, load_pkl, write_pkl
 
 load_dotenv()
 
@@ -46,11 +47,11 @@ class BaseNeuron(ABC):
     metagraph: "bt.metagraph"
     spec_version: int = spec_version
 
+    @property
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(3),
         wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
     )
-    @property
     def block(self):
         return ttl_get_block(self)
 
