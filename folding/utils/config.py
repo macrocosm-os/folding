@@ -451,6 +451,13 @@ def add_validator_args(cls, parser):
         default="174.138.3.61:8030",
     )
 
+    parser.add_argument(
+        "--neuron.organic_api.port",
+        type=int,
+        help="The port of the organic API.",
+        default=8031,
+    )
+
 
 def config(cls):
     """

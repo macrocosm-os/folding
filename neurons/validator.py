@@ -11,10 +11,14 @@ from itertools import chain
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
+import netaddr
+import requests
 import torch
 import numpy as np
 import pandas as pd
 from async_timeout import timeout
+from bittensor.core.extrinsics.serving import serve_extrinsic
+
 
 import folding.utils.constants as c
 from folding.base.reward import BatchRewardInput
@@ -32,6 +36,7 @@ from folding.utils.s3_utils import DigitalOceanS3Handler
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
+from folding.organic.api import start_organic_api
 
 
 class Validator(BaseValidatorNeuron):
@@ -547,6 +552,26 @@ class Validator(BaseValidatorNeuron):
                 hotkeys=inactive_job.hotkeys,
             )
             await asyncio.sleep(0.01)
+
+    async def start_organic_api(self):
+        try:
+            external_ip = requests.get("https://checkip.amazonaws.com").text.strip()
+            netaddr.IPAddress(external_ip)
+
+            serve_success = serve_extrinsic(
+                subtensor=self.subtensor,
+                wallet=self.wallet,
+                ip=external_ip,
+                port=self.config.neuron.organic_api.port,
+                protocol=4,
+                netuid=self.config.neuron.netuid,
+            )
+
+            logger.debug(f"Serve success: {serve_success}")
+
+            await start_organic_api(self._organic_scoring, self.config)
+        except Exception as e:
+            logger.error(f"Error in start_organic_api: {traceback.format_exc()}")
 
     async def reward_loop(self):
         logger.info("Starting reward loop.")
