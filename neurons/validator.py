@@ -254,6 +254,7 @@ class Validator(BaseValidatorNeuron):
                     epsilon=job_event["epsilon"],
                     event=job_event,
                     s3_links=job_event["s3_links"],
+                    job_id=job_event.get("job_id", None),
                 )
 
                 job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)

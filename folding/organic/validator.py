@@ -2,6 +2,7 @@ import time
 import copy
 import random
 import asyncio
+import uuid
 import bittensor as bt
 from folding.utils.logger import logger
 
@@ -129,6 +130,7 @@ class OrganicValidator(OrganicScoringBase):
             "system_kwargs": {},
             "is_organic": True,
             "job_type": "OrganicMD",
+            "job_id": str(uuid.uuid4()),
         }
         for arg in self.simulation_args:
             if arg in sample:
