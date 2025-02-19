@@ -8,37 +8,41 @@ from folding_api.schemas import FoldingSchema, FoldingReturn
 from folding_api.vars import subtensor_service
 from folding.protocol import OrganicSynapse
 
+import bittensor as bt
+from typing import Any, Dict
 
-async def query_validators(schema: FoldingSchema) -> FoldingReturn:
+
+def is_validator(uid: int, metagraph: bt.metagraph, stake_needed=10_000) -> bool:
+    """Checks if a UID on the subnet is a validator."""
+    return metagraph.S[uid] >= stake_needed
+
+
+def get_validator_data(metagraph: bt.metagraph) -> Dict[str, Dict[str, Any]]:
+    """Retrieve validator data (hotkey, percent stake) from metagraph
+
+    Returns:
+        Dict[str, Dict[str, Any]]: Sorted dictionary of validator data based on stake.
     """
-    Query validators with the given parameters and return a streaming
-    """
 
-    metagraph = subtensor_service.metagraph
-
-    # Get the UIDs (and axons) to query by looking at the top validators
-    if schema.api_parameters["validator_uids"] is not None:
-        uids = schema.api_parameters["validator_uids"]
-        axons = [metagraph.axons[uid] for uid in uids]
-    else:
-        sorted_validators = get_validator_data(metagraph=metagraph)
-        validators = dict(
-            list(sorted_validators.items())[
-                : schema.api_parameters["num_validators_to_sample"]
-            ]
-        )
-        axons = [metagraph.axons[v["uid"]] for v in validators]
-
-    validator_responses: List[OrganicSynapse] = await subtensor_service.dendrite(
-        axons=axons,
-        synapse=OrganicSynapse(**schema.folding_params),
-        timeout=schema.timeout,
-        deserialize=False,
+    total_stake = sum(
+        stake for uid, stake in enumerate(metagraph.S) if is_validator(uid, metagraph)
     )
 
-    response_information = defaultdict(list)
-    for resp in validator_responses:
-        response_information["hotkeys"].append(resp.axon.hotkey)
-        response_information["status_codes"].append(resp.axon.status_code)
+    validator_data = {
+        hotkey: {
+            "percent_stake": float(stake / total_stake),
+            "stake": stake,
+            "uid": uid,
+        }
+        for uid, (hotkey, stake) in enumerate(zip(metagraph.hotkeys, metagraph.S))
+        if is_validator(uid, metagraph)
+    }
 
-    return FoldingReturn(**response_information)
+    sorted_data = dict(
+        sorted(
+            validator_data.items(),
+            key=lambda item: item[1]["percent_stake"],
+            reverse=True,
+        )
+    )
+    return sorted_data
