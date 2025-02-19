@@ -4,7 +4,7 @@ from collections import defaultdict
 from folding_api.schemas import FoldingSchema, FoldingReturn
 from folding_api.utils import get_validator_data
 from folding.protocol import OrganicSynapse
-from folding_api.chain import SubtensorService
+from folding_api.vars import subtensor_service
 
 
 async def query_validators(schema: FoldingSchema) -> FoldingReturn:
@@ -12,7 +12,6 @@ async def query_validators(schema: FoldingSchema) -> FoldingReturn:
     Query validators with the given parameters and return a streaming
     """
 
-    subtensor_service = SubtensorService()
     metagraph = subtensor_service.metagraph
 
     # Get the UIDs (and axons) to query by looking at the top validators
@@ -37,7 +36,11 @@ async def query_validators(schema: FoldingSchema) -> FoldingReturn:
 
     response_information = defaultdict(list)
     for resp in validator_responses:
-        response_information["hotkeys"].append(resp.axon.hotkey)
-        response_information["status_codes"].append(resp.axon.status_code)
+        if resp.axon is not None:
+            response_information["hotkeys"].append(resp.axon.hotkey)
+            response_information["status_codes"].append(resp.axon.status_code)
+        else:
+            response_information["hotkeys"].append(None)
+            response_information["status_codes"].append(None)
 
     return FoldingReturn(**response_information)

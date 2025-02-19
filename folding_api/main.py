@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from folding_api.chain import SubtensorService
 from folding_api.protein import router
-from folding_api.vars import bt_config, limiter, logger, settings, subtensor_service
+from folding_api.vars import bt_config, limiter, logger, subtensor_service
 
 app = FastAPI()
 
@@ -28,7 +28,7 @@ async def sync_metagraph_periodic(subtensor_service: SubtensorService):
         except Exception as e:
             logger.error(f"Error syncing metagraph: {e}")
 
-        await asyncio.sleep(settings.metagraph_sync_interval)
+        await asyncio.sleep(60)
 
 
 # Initialize API
@@ -57,12 +57,10 @@ async def lifespan(app: FastAPI):
             pass
 
 
-# Enable metrics if configured
-if settings.enable_metrics:
-    Instrumentator().instrument(app).expose(app)
+Instrumentator().instrument(app).expose(app)
 
 # Include routes
 app.include_router(router)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8030, reload=True)

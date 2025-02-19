@@ -3,6 +3,7 @@ from http import HTTPStatus
 from fastapi import APIRouter, HTTPException, Body
 from loguru import logger
 from folding_api.schemas import FoldingSchema, FoldingReturn
+from folding_api.queries import query_validators
 
 router = APIRouter()
 
@@ -17,7 +18,6 @@ async def fold(query: FoldingSchema = Body(...)) -> FoldingReturn:
     """
 
     try:
-        server_status.check_subnet_status(Subnet.SN25.value)
         return await query_validators(query)
 
     except HTTPException:

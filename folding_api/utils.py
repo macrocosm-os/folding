@@ -1,13 +1,3 @@
-from collections import defaultdict
-from typing import List
-
-from bittensor import OrganicSynapse
-from loguru import logger
-
-from folding_api.schemas import FoldingSchema, FoldingReturn
-from folding_api.vars import subtensor_service
-from folding.protocol import OrganicSynapse
-
 import bittensor as bt
 from typing import Any, Dict
 
