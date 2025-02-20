@@ -1,5 +1,12 @@
+import traceback
 from typing import Optional, Literal, List, Any
 from pydantic import BaseModel, Field
+from fastapi import Header
+import time
+from typing import Annotated
+from substrateinterface import Keypair
+from folding.utils.logger import logger
+from hashlib import sha256
 
 
 class FoldingParams(BaseModel):
@@ -85,4 +92,59 @@ class FoldingReturn(BaseModel):
     uids: List[int] = Field(..., description="The uids of the response.")
     hotkeys: List[str] = Field(..., description="The hotkeys of the response.")
     status_codes: List[Any] = Field(..., description="The status code of the response.")
-    job_id: Optional[str] = Field(None, description="The job id of the response.")
+    job_id: List[str] = Field(..., description="The job id of the response.")
+
+
+class EpistulaHeaders:
+    def __init__(
+        self,
+        version: str = Header(..., alias="Epistula-Version", pattern="^2$"),
+        timestamp: str = Header(default=str(time.time()), alias="Epistula-Timestamp"),
+        uuid: str = Header(..., alias="Epistula-Uuid"),
+        signed_by: str = Header(..., alias="Epistula-Signed-By"),
+        request_signature: str = Header(..., alias="Epistula-Request-Signature"),
+    ):
+        self.version = version
+        self.timestamp = timestamp
+        self.uuid = uuid
+        self.signed_by = signed_by
+        self.request_signature = request_signature
+
+    def verify_signature_v2(
+        self, body: bytes, now: float
+    ) -> Optional[Annotated[str, "Error Message"]]:
+        try:
+            if not isinstance(self.request_signature, str):
+                raise ValueError("Invalid Signature")
+
+            timestamp = int(float(self.timestamp))
+            if not isinstance(timestamp, int):
+                raise ValueError("Invalid Timestamp")
+
+            if not isinstance(self.signed_by, str):
+                raise ValueError("Invalid Sender key")
+
+            if not isinstance(self.uuid, str):
+                raise ValueError("Invalid uuid")
+
+            if not isinstance(body, bytes):
+                raise ValueError("Body is not of type bytes")
+
+            ALLOWED_DELTA_MS = 8000
+            keypair = Keypair(ss58_address=self.signed_by)
+
+            if timestamp + ALLOWED_DELTA_MS < now:
+                raise ValueError("Request is too stale")
+
+            message = f"{sha256(body).hexdigest()}.{self.uuid}.{self.timestamp}."
+            logger.debug("verifying_signature", message=message)
+
+            verified = keypair.verify(message, self.request_signature)
+            if not verified:
+                raise ValueError("Signature Mismatch")
+
+            return None
+
+        except Exception as e:
+            logger.error(f"signature_verification_failed: {traceback.format_exc()}")
+            return str(e)
