@@ -1,29 +1,40 @@
 import uuid
+import time
+import json
 from fastapi import APIRouter, Request, Depends, HTTPException
-from atom.epistula.epistula import Epistula, VerifySignatureRequest
+from folding_api.schemas import EpistulaHeaders
 from folding_api.schemas import FoldingParams
 from folding.utils.logging import logger
 
-epistula = Epistula()
 
 router = APIRouter()
 
 
-@router.get("/organic")
+@router.post("/organic")
 async def organic(
     request: Request,
     job: FoldingParams,
-    epistula_headers: VerifySignatureRequest = Depends(epistula.verify_signature),
+    epistula_headers: EpistulaHeaders = Depends(EpistulaHeaders),
 ):
     """
     This endpoint is used to receive organic requests. Returns success message with the job id.
     Args:
         request: Request
         job: FoldingParams
-        epistula_headers: VerifySignatureRequest
+        epistula_headers: EpistulaHeaders
     Returns:
         dict[str, str]: dict with the job id.
     """
+
+    body_bytes = json.dumps(job.model_dump(), default=str, sort_keys=True).encode(
+        "utf-8"
+    )
+    try:
+        error = epistula_headers.verify_signature_v2(body_bytes, float(time.time()))
+        if error:
+            raise HTTPException(status_code=403, detail=error)
+    except Exception as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
     sender_hotkey = epistula_headers.signed_by
 
