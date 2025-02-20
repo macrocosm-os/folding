@@ -90,7 +90,7 @@ class ValidatorRegistry(BaseModel):
         for uid, stake, address, hotkey in zip(
             validator_uids, validator_stakes, validator_addresses, validator_hotkeys
         ):
-            self.validators[uid].update_validator_info(stake, address, hotkey, uid)
+            self.validators[uid].update_validator_info(stake, address, hotkey)
 
     def get_available_validators(self) -> List[int]:
         """
@@ -102,7 +102,7 @@ class ValidatorRegistry(BaseModel):
             if validator.is_available()
         ]
 
-    def get_available_axons(self, k=1) -> Optional[List[Validator]]:
+    def get_available_axons(self, k=1) -> Optional[dict[int, Validator]]:
         """
         Returns a list of tuples (uid, axon, hotkey) for a randomly selected validator based on stake weighting,
         if spot checking conditions are met. Otherwise, returns None.
@@ -118,7 +118,7 @@ class ValidatorRegistry(BaseModel):
             return None
         weights = [self.validators[uid].stake for uid in validator_list]
         chosen = random.choices(validator_list, weights=weights, k=k)
-        return [self.validators[uid] for uid in chosen]
+        return {uid: self.validators[uid] for uid in chosen}
 
     def update_validators_failure(self, uid: int, response_code: int) -> None:
         """
