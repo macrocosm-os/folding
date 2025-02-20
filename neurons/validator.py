@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from async_timeout import timeout
 from bittensor.core.extrinsics.serving import serve_extrinsic
+import tenacity
 
 
 import folding.utils.constants as c
@@ -554,22 +555,24 @@ class Validator(BaseValidatorNeuron):
             )
             await asyncio.sleep(0.01)
 
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
+    )
     async def start_organic_api(self):
-        try:
-            external_ip = requests.get("https://checkip.amazonaws.com").text.strip()
-            netaddr.IPAddress(external_ip)
+        logger.info("Starting organic API")
+        external_ip = requests.get("https://checkip.amazonaws.com").text.strip()
+        netaddr.IPAddress(external_ip)
 
-            serve_success = self.subtensor.commit(
-                wallet=self.wallet,
-                netuid=self.config.neuron.netuid,
-                data=f"http://{external_ip}:{self.config.neuron.organic_api.port}",
-            )
+        serve_success = self.subtensor.commit(
+            wallet=self.wallet,
+            netuid=self.config.netuid,
+            data=f"http://{external_ip}:{self.config.neuron.organic_api.port}",
+        )
 
-            logger.debug(f"Serve success: {serve_success}")
+        logger.debug(f"Serve success: {serve_success}")
 
-            await start_organic_api(self._organic_scoring, self.config)
-        except Exception as e:
-            logger.error(f"Error in start_organic_api: {traceback.format_exc()}")
+        await start_organic_api(self._organic_scoring, self.config)
 
     async def reward_loop(self):
         logger.info("Starting reward loop.")
@@ -617,6 +620,7 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
+        self.loop.create_task(self.start_organic_api())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self
