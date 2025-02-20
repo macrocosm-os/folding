@@ -559,13 +559,10 @@ class Validator(BaseValidatorNeuron):
             external_ip = requests.get("https://checkip.amazonaws.com").text.strip()
             netaddr.IPAddress(external_ip)
 
-            serve_success = serve_extrinsic(
-                subtensor=self.subtensor,
+            serve_success = self.subtensor.commit(
                 wallet=self.wallet,
-                ip=external_ip,
-                port=self.config.neuron.organic_api.port,
-                protocol=4,
                 netuid=self.config.neuron.netuid,
+                data=f"http://{external_ip}:{self.config.neuron.organic_api.port}",
             )
 
             logger.debug(f"Serve success: {serve_success}")

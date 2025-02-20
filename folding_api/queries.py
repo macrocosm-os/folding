@@ -1,9 +1,10 @@
+from fastapi import HTTPException
 from typing import List
 from collections import defaultdict
 
 from folding_api.schemas import FoldingSchema, FoldingReturn
-from folding.protocol import OrganicSynapse
 from folding_api.vars import subtensor_service, validator_registry
+from folding_api.utils import make_request
 
 
 async def query_validators(schema: FoldingSchema) -> FoldingReturn:
@@ -17,30 +18,35 @@ async def query_validators(schema: FoldingSchema) -> FoldingReturn:
         for uid in schema.api_parameters["validator_uids"]
     ):
         uids = schema.api_parameters["validator_uids"]
-        addresses = [validator_registry.validators[uid].address for uid in uids]
+        validators = [validator_registry.validators[uid] for uid in uids]
     else:
-        available_uids = validator_registry.get_available_validators()
-        selected_uids = available_uids[
-            : schema.api_parameters["num_validators_to_sample"]
-        ]
-        addresses = [
-            validator_registry.validators[uid].address for uid in selected_uids
-        ]
+        validators = validator_registry.get_available_axons(
+            k=schema.api_parameters["num_validators_to_sample"]
+        )
 
-    validator_responses: List[OrganicSynapse] = await subtensor_service.dendrite(
-        addresses=addresses,
-        synapse=OrganicSynapse(**schema.folding_params),
-        timeout=schema.timeout,
-        deserialize=False,
-    )
+    if validators is None:
+        raise HTTPException(status_code=404, detail="No validators available")
+
+    validator_responses = []
+    validator_uids = []
+    for validator in validators:
+        validator_responses.append(
+            await make_request(validator.address, schema.folding_params)
+        )
+        validator_uids.append(validator.uid)
 
     response_information = defaultdict(list)
-    for resp in validator_responses:
-        if resp.axon is not None:
-            response_information["hotkeys"].append(resp.axon.hotkey)
-            response_information["status_codes"].append(resp.axon.status_code)
+    for resp, uid in zip(validator_responses, validator_uids):
+        response_information["hotkeys"].append(validators[uid].hotkey)
+        response_information["uids"].append(uid)
+        if resp is not None:
+            response_information["status_codes"].append(resp.status_code)
+            if "job_id" in resp.json():
+                response_information["job_id"].append(resp.json()["job_id"])
+            else:
+                response_information["job_id"].append(None)
         else:
-            response_information["hotkeys"].append(None)
             response_information["status_codes"].append(None)
+            response_information["job_id"].append(None)
 
     return FoldingReturn(**response_information)

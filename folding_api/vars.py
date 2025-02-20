@@ -7,6 +7,8 @@ from slowapi.util import get_remote_address
 # from folding_api.auth import APIKeyManager
 from folding_api.chain import SubtensorService
 from folding_api.validator_registry import ValidatorRegistry
+from atom.epistula.epistula import Epistula
+
 
 parser = argparse.ArgumentParser()
 
@@ -27,4 +29,5 @@ subtensor_service = SubtensorService(
     config=bt_config
 )  # Pass config to SubtensorService
 
-validator_registry = ValidatorRegistry(metagraph=subtensor_service.metagraph)
+validator_registry = ValidatorRegistry()
+epistula = Epistula()
