@@ -25,3 +25,10 @@ class SubtensorService:
     def resync_metagraph(self):
         self.metagraph.sync(subtensor=self.subtensor)
         logger.info("metagraph_reloaded")
+
+    def get_commitment(self, uid: int) -> str:
+        try:
+            return self.subtensor.get_commitment(self.config.netuid, uid)
+        except Exception as e:
+            logger.error(f"Error getting commitment for uid {uid}: {e}")
+            return ""
