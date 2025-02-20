@@ -2,6 +2,16 @@ from typing import Optional, Literal, List, Any
 from pydantic import BaseModel, Field
 
 
+class FoldingParams(BaseModel):
+    pdb_id: str
+    source: Literal["rcsb", "pdbe"]
+    ff: str
+    water: str
+    box: Literal["cube", "box"]
+    temperature: float
+    friction: float
+
+
 class FoldingSchema(BaseModel):
     """
     Represents a request to a validator.
@@ -45,18 +55,18 @@ class FoldingSchema(BaseModel):
     timeout: int = Field(5, description="The time in seconds to wait for a response.")
 
     @property
-    def folding_params(self):
+    def folding_params(self) -> FoldingParams:
         """Get the simulation parameters for SimulationConfig"""
-        return {
-            "pdb_id": self.pdb_id,
-            "source": self.source,
-            "ff": self.ff,
-            "water": self.water,
-            "box": self.box,
-            "temperature": self.temperature,
-            "friction": self.friction,
-            "epsilon": self.epsilon,
-        }
+        return FoldingParams(
+            pdb_id=self.pdb_id,
+            source=self.source,
+            ff=self.ff,
+            water=self.water,
+            box=self.box,
+            temperature=self.temperature,
+            friction=self.friction,
+            epsilon=self.epsilon,
+        )
 
     @property
     def api_parameters(self):
@@ -72,5 +82,7 @@ class FoldingReturn(BaseModel):
     Represents a response from a validator.
     """
 
+    uids: List[int] = Field(..., description="The uids of the response.")
     hotkeys: List[str] = Field(..., description="The hotkeys of the response.")
     status_codes: List[Any] = Field(..., description="The status code of the response.")
+    job_id: Optional[str] = Field(None, description="The job id of the response.")
