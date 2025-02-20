@@ -2,33 +2,33 @@ from typing import List
 from collections import defaultdict
 
 from folding_api.schemas import FoldingSchema, FoldingReturn
-from folding_api.utils import get_validator_data
 from folding.protocol import OrganicSynapse
-from folding_api.vars import subtensor_service
+from folding_api.vars import subtensor_service, validator_registry
 
 
 async def query_validators(schema: FoldingSchema) -> FoldingReturn:
     """
     Query validators with the given parameters and return a streaming
     """
-
-    metagraph = subtensor_service.metagraph
-
     # Get the UIDs (and axons) to query by looking at the top validators
-    if schema.api_parameters["validator_uids"] is not None:
+    # check if uids are in registry, if all of them are not default to random choice
+    if schema.api_parameters["validator_uids"] is not None and all(
+        uid in validator_registry.validators
+        for uid in schema.api_parameters["validator_uids"]
+    ):
         uids = schema.api_parameters["validator_uids"]
-        axons = [metagraph.axons[uid] for uid in uids]
+        addresses = [validator_registry.validators[uid].address for uid in uids]
     else:
-        sorted_validators = get_validator_data(metagraph=metagraph)
-        validators = dict(
-            list(sorted_validators.items())[
-                : schema.api_parameters["num_validators_to_sample"]
-            ]
-        )
-        axons = [metagraph.axons[v["uid"]] for v in validators]
+        available_uids = validator_registry.get_available_validators()
+        selected_uids = available_uids[
+            : schema.api_parameters["num_validators_to_sample"]
+        ]
+        addresses = [
+            validator_registry.validators[uid].address for uid in selected_uids
+        ]
 
     validator_responses: List[OrganicSynapse] = await subtensor_service.dendrite(
-        axons=axons,
+        addresses=addresses,
         synapse=OrganicSynapse(**schema.folding_params),
         timeout=schema.timeout,
         deserialize=False,

@@ -12,7 +12,7 @@ from folding_api.vars import subtensor_service
 class Validator(BaseModel):
     uid: int
     stake: float
-    axon: str
+    address: str
     hotkey: str
     timeout: int = (
         1  # starting cooldown in seconds; doubles on failure (capped at 86400)
@@ -62,15 +62,15 @@ class ValidatorRegistry(BaseModel):
         cls, v: "ValidatorRegistry", metagraph=subtensor_service.metagraph
     ) -> "ValidatorRegistry":
         validator_uids = np.where(metagraph.stake >= 10000)[0].tolist()
-        validator_axons = [
+        validator_addresses = [
             metagraph.axons[uid].ip_str().split("/")[2] for uid in validator_uids
         ]
         validator_stakes = [metagraph.stake[uid] for uid in validator_uids]
         validator_hotkeys = [metagraph.hotkeys[uid] for uid in validator_uids]
         v.validators = {
-            uid: Validator(uid=uid, stake=stake, axon=axon, hotkey=hotkey)
-            for uid, stake, axon, hotkey in zip(
-                validator_uids, validator_stakes, validator_axons, validator_hotkeys
+            uid: Validator(uid=uid, stake=stake, address=address, hotkey=hotkey)
+            for uid, stake, address, hotkey in zip(
+                validator_uids, validator_stakes, validator_addresses, validator_hotkeys
             )
         }
         return v
@@ -102,7 +102,7 @@ class ValidatorRegistry(BaseModel):
         weights = [self.validators[uid].stake for uid in validator_list]
         chosen = random.choices(validator_list, weights=weights, k=k)
         return [
-            (uid, self.validators[uid].axon, self.validators[uid].hotkey)
+            (uid, self.validators[uid].address, self.validators[uid].hotkey)
             for uid in chosen
         ]
 
