@@ -20,7 +20,7 @@ async def query_validators(
         for uid in schema.api_parameters["validator_uids"]
     ):
         uids = schema.api_parameters["validator_uids"]
-        validators = [validator_registry.validators[uid] for uid in uids]
+        validators = {uid: validator_registry.validators[uid] for uid in uids}
     else:
         validators = validator_registry.get_available_axons(
             k=schema.api_parameters["num_validators_to_sample"]
@@ -31,11 +31,11 @@ async def query_validators(
 
     validator_responses = []
     validator_uids = []
-    for validator in validators:
+    for uid, validator in validators.items():
         validator_responses.append(
             await make_request(validator.address, schema.folding_params)
         )
-        validator_uids.append(validator.uid)
+        validator_uids.append(uid)
 
     response_information = defaultdict(list)
     for resp, uid in zip(validator_responses, validator_uids):
@@ -43,7 +43,7 @@ async def query_validators(
         response_information["uids"].append(uid)
         if resp is not None:
             response_information["status_codes"].append(resp.status_code)
-            if "job_id" in resp.json():
+            if resp.status_code == 200:
                 response_information["job_id"].append(resp.json()["job_id"])
             else:
                 response_information["job_id"].append(None)
