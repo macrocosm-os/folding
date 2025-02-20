@@ -560,19 +560,30 @@ class Validator(BaseValidatorNeuron):
         wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
     )
     async def start_organic_api(self):
-        logger.info("Starting organic API")
-        external_ip = requests.get("https://checkip.amazonaws.com").text.strip()
-        netaddr.IPAddress(external_ip)
+        try:
+            logger.info("Starting organic API")
+            external_ip = requests.get("https://checkip.amazonaws.com").text.strip()
+            netaddr.IPAddress(external_ip)
+            previous_commit = self.subtensor.get_commitment(
+                self.config.netuid, self.uid
+            )
+            logger.info(f"Previous commitment: {previous_commit}")
+            commitment = f"http://{external_ip}:{self.config.neuron.organic_api.port}"
 
-        serve_success = self.subtensor.commit(
-            wallet=self.wallet,
-            netuid=self.config.netuid,
-            data=f"http://{external_ip}:{self.config.neuron.organic_api.port}",
-        )
+            if previous_commit != commitment:
+                serve_success = self.subtensor.commit(
+                    wallet=self.wallet,
+                    netuid=self.config.netuid,
+                    data=commitment,
+                )
+                logger.debug(f"Serve success: {serve_success}")
+            else:
+                logger.info("No need to commit again")
 
-        logger.debug(f"Serve success: {serve_success}")
-
-        await start_organic_api(self._organic_scoring, self.config)
+            await start_organic_api(self._organic_scoring, self.config)
+        except Exception as e:
+            logger.error(f"Error in start_organic_api: {traceback.format_exc()}")
+            raise e
 
     async def reward_loop(self):
         logger.info("Starting reward loop.")
