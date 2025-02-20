@@ -44,6 +44,11 @@ class Validator(BaseModel):
         """
         return time.time() >= self.available_at
 
+    def update_validator_info(self, stake: float, address: str, hotkey: str):
+        self.stake = stake
+        self.address = address
+        self.hotkey = hotkey
+
 
 class ValidatorRegistry(BaseModel):
     """
@@ -55,7 +60,6 @@ class ValidatorRegistry(BaseModel):
     validators: dict[int, Validator] = Field(default_factory=dict)
     spot_checking_rate: ClassVar[float] = 0.0
     max_retries: ClassVar[int] = 4
-    metagraph: bt.Metagraph
 
     @model_validator(mode="after")
     def create_validator_list(
@@ -63,7 +67,7 @@ class ValidatorRegistry(BaseModel):
     ) -> "ValidatorRegistry":
         validator_uids = np.where(metagraph.stake >= 10000)[0].tolist()
         validator_addresses = [
-            metagraph.axons[uid].ip_str().split("/")[2] for uid in validator_uids
+            subtensor_service.get_commitment(uid) for uid in validator_uids
         ]
         validator_stakes = [metagraph.stake[uid] for uid in validator_uids]
         validator_hotkeys = [metagraph.hotkeys[uid] for uid in validator_uids]
@@ -75,6 +79,19 @@ class ValidatorRegistry(BaseModel):
         }
         return v
 
+    def update_validators(self):
+        metagraph = subtensor_service.metagraph
+        validator_uids = np.where(metagraph.stake >= 10000)[0].tolist()
+        validator_addresses = [
+            subtensor_service.get_commitment(uid) for uid in validator_uids
+        ]
+        validator_stakes = [metagraph.stake[uid] for uid in validator_uids]
+        validator_hotkeys = [metagraph.hotkeys[uid] for uid in validator_uids]
+        for uid, stake, address, hotkey in zip(
+            validator_uids, validator_stakes, validator_addresses, validator_hotkeys
+        ):
+            self.validators[uid].update_validator_info(stake, address, hotkey, uid)
+
     def get_available_validators(self) -> List[int]:
         """
         Given a list of validators, return only those that are not in their cooldown period.
@@ -85,7 +102,7 @@ class ValidatorRegistry(BaseModel):
             if validator.is_available()
         ]
 
-    def get_available_axons(self, k=1) -> Optional[List[Tuple[int, str, str]]]:
+    def get_available_axons(self, k=1) -> Optional[List[Validator]]:
         """
         Returns a list of tuples (uid, axon, hotkey) for a randomly selected validator based on stake weighting,
         if spot checking conditions are met. Otherwise, returns None.
@@ -101,12 +118,9 @@ class ValidatorRegistry(BaseModel):
             return None
         weights = [self.validators[uid].stake for uid in validator_list]
         chosen = random.choices(validator_list, weights=weights, k=k)
-        return [
-            (uid, self.validators[uid].address, self.validators[uid].hotkey)
-            for uid in chosen
-        ]
+        return [self.validators[uid] for uid in chosen]
 
-    def update_validators(self, uid: int, response_code: int) -> None:
+    def update_validators_failure(self, uid: int, response_code: int) -> None:
         """
         Update a specific validator's failure count based on the response code.
         If the validator's failure count exceeds the maximum allowed failures,

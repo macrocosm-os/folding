@@ -9,7 +9,13 @@ from slowapi.errors import RateLimitExceeded
 
 from folding_api.chain import SubtensorService
 from folding_api.protein import router
-from folding_api.vars import bt_config, limiter, logger, subtensor_service
+from folding_api.vars import (
+    bt_config,
+    limiter,
+    logger,
+    subtensor_service,
+    validator_registry,
+)
 
 app = FastAPI()
 
@@ -24,11 +30,12 @@ async def sync_metagraph_periodic(subtensor_service: SubtensorService):
             logger.info("Syncing metagraph")
             # Run the synchronous function in a thread pool
             await asyncio.to_thread(subtensor_service.resync_metagraph)
+            await asyncio.to_thread(validator_registry.update_validators)
             logger.info("Metagraph sync completed")
         except Exception as e:
             logger.error(f"Error syncing metagraph: {e}")
 
-        await asyncio.sleep(60)
+        await asyncio.sleep(600)
 
 
 # Initialize API
