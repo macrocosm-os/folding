@@ -1,6 +1,6 @@
 from http import HTTPStatus
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Request
 from loguru import logger
 from folding_api.schemas import FoldingSchema, FoldingReturn
 from folding_api.queries import query_validators
@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.post("/fold")
-async def fold(query: FoldingSchema = Body(...)) -> FoldingReturn:
+async def fold(request: Request, query: FoldingSchema = Body(...)) -> FoldingReturn:
     """
     fold with the Bittensor network.
 
@@ -18,7 +18,7 @@ async def fold(query: FoldingSchema = Body(...)) -> FoldingReturn:
     """
 
     try:
-        return await query_validators(query)
+        return await query_validators(query, request.app.state.validator_registry)
 
     except HTTPException:
         raise

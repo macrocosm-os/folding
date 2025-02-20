@@ -3,11 +3,13 @@ from typing import List
 from collections import defaultdict
 
 from folding_api.schemas import FoldingSchema, FoldingReturn
-from folding_api.vars import subtensor_service, validator_registry
 from folding_api.utils import make_request
+from folding_api.validator_registry import ValidatorRegistry
 
 
-async def query_validators(schema: FoldingSchema) -> FoldingReturn:
+async def query_validators(
+    schema: FoldingSchema, validator_registry: ValidatorRegistry
+) -> FoldingReturn:
     """
     Query validators with the given parameters and return a streaming
     """

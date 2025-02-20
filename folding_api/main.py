@@ -9,13 +9,14 @@ from slowapi.errors import RateLimitExceeded
 
 from folding_api.chain import SubtensorService
 from folding_api.protein import router
+from folding_api.validator_registry import ValidatorRegistry
 from folding_api.vars import (
     bt_config,
     limiter,
     logger,
     subtensor_service,
-    validator_registry,
 )
+
 
 app = FastAPI()
 
@@ -23,7 +24,9 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-async def sync_metagraph_periodic(subtensor_service: SubtensorService):
+async def sync_metagraph_periodic(
+    subtensor_service: SubtensorService, validator_registry: ValidatorRegistry
+):
     """Background task to sync metagraph every hour"""
     while True:
         try:
@@ -45,9 +48,12 @@ async def lifespan(app: FastAPI):
     logger.info("initializing_services")
     logger.info(f"Using config: {bt_config}")
 
+    validator_registry = ValidatorRegistry()
+    app.state.validator_registry = validator_registry
+
     # Start background sync task
     app.state.sync_task = asyncio.create_task(
-        sync_metagraph_periodic(subtensor_service)
+        sync_metagraph_periodic(subtensor_service, validator_registry)
     )
     logger.info("Started background sync task")
 
