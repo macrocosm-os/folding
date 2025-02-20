@@ -1,5 +1,6 @@
 import bittensor as bt
 from loguru import logger
+import tenacity
 
 
 class SubtensorService:
@@ -17,6 +18,10 @@ class SubtensorService:
         )
         self.dendrite: bt.Dendrite = bt.dendrite(wallet=self.wallet)
 
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
+    )
     def resync_metagraph(self):
         self.metagraph.sync(subtensor=self.subtensor)
         logger.info("metagraph_reloaded")

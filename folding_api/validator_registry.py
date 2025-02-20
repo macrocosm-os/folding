@@ -75,7 +75,7 @@ class ValidatorRegistry(BaseModel):
         }
         return v
 
-    def get_available_validators(self) -> List[Validator]:
+    def get_available_validators(self) -> List[int]:
         """
         Given a list of validators, return only those that are not in their cooldown period.
         """
@@ -85,13 +85,11 @@ class ValidatorRegistry(BaseModel):
             if validator.is_available()
         ]
 
-    def get_available_axon(self) -> Optional[Tuple[int, List[str], str]]:
+    def get_available_axons(self, k=1) -> Optional[List[Tuple[int, str, str]]]:
         """
-        Returns a tuple (uid, axon, hotkey) for a randomly selected validator based on stake weighting,
+        Returns a list of tuples (uid, axon, hotkey) for a randomly selected validator based on stake weighting,
         if spot checking conditions are met. Otherwise, returns None.
         """
-        if random.random() < self.spot_checking_rate or not self.validators:
-            return None
         for _ in range(self.max_retries):
             validator_list = self.get_available_validators()
             if validator_list:
@@ -102,10 +100,11 @@ class ValidatorRegistry(BaseModel):
             logger.error(f"Could not find available validator after {self.max_retries}")
             return None
         weights = [self.validators[uid].stake for uid in validator_list]
-        chosen = self.validators[
-            random.choices(validator_list, weights=weights, k=1)[0]
+        chosen = random.choices(validator_list, weights=weights, k=k)
+        return [
+            (uid, self.validators[uid].axon, self.validators[uid].hotkey)
+            for uid in chosen
         ]
-        return chosen.uid, chosen.axon, chosen.hotkey
 
     def update_validators(self, uid: int, response_code: int) -> None:
         """

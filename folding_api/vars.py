@@ -6,6 +6,7 @@ from slowapi.util import get_remote_address
 
 # from folding_api.auth import APIKeyManager
 from folding_api.chain import SubtensorService
+from folding_api.validator_registry import ValidatorRegistry
 
 parser = argparse.ArgumentParser()
 
@@ -25,3 +26,5 @@ limiter = Limiter(key_func=get_remote_address)
 subtensor_service = SubtensorService(
     config=bt_config
 )  # Pass config to SubtensorService
+
+validator_registry = ValidatorRegistry(metagraph=subtensor_service.metagraph)
