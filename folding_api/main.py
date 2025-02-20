@@ -18,17 +18,12 @@ from folding_api.vars import (
 )
 
 
-app = FastAPI()
-
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
 async def sync_metagraph_periodic(
     subtensor_service: SubtensorService, validator_registry: ValidatorRegistry
 ):
     """Background task to sync metagraph every hour"""
     while True:
+        await asyncio.sleep(600)
         try:
             logger.info("Syncing metagraph")
             # Run the synchronous function in a thread pool
@@ -37,8 +32,6 @@ async def sync_metagraph_periodic(
             logger.info("Metagraph sync completed")
         except Exception as e:
             logger.error(f"Error syncing metagraph: {e}")
-
-        await asyncio.sleep(600)
 
 
 # Initialize API
@@ -70,10 +63,13 @@ async def lifespan(app: FastAPI):
             pass
 
 
+app = FastAPI(lifespan=lifespan, name="folding_api", version="0.1.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 Instrumentator().instrument(app).expose(app)
 
 # Include routes
 app.include_router(router)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8030, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8029, reload=True)
