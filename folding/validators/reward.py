@@ -56,6 +56,7 @@ def evaluate(
     seed = [-1] * len(uids)
     best_cpt = [""] * len(uids)
     process_md_output_time = [0.0] * len(uids)
+    rmsds = [0] * (len(uids))
 
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         try:
@@ -79,7 +80,7 @@ def evaluate(
                 velm_array_pkl_path=protein.velm_array_pkl,
             )
 
-            can_process = evaluator.evaluate()
+            can_process, rmsd = evaluator.evaluate()
             if not can_process:
                 continue
             best_cpt[i] = (
@@ -87,7 +88,7 @@ def evaluate(
                 if hasattr(evaluator, "checkpoint_path")
                 else ""
             )
-
+            rmsds[i] = rmsd
             reported_energies[i] = evaluator.get_reported_energy()
             process_md_output_time[i] = time.time() - start_time
             evaluators[i] = evaluator
