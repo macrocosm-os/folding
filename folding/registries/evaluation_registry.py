@@ -11,6 +11,7 @@ from folding.utils import constants as c
 from folding.utils.logger import logger
 from folding.utils.ops import (
     ValidationError,
+    EvaluationError,
     create_velm,
     load_pdb_file,
     load_pkl,
@@ -68,7 +69,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             pdb_location (str): The location of the pdb file.
 
         Raises:
-            ValidationError: Miner not running enough simulation steps
+            EvaluationError: Miner not running enough simulation steps
 
         Returns:
             bool: True if the simulation was successfully recreated, False otherwise.
@@ -124,7 +125,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Checks to see if we have enough steps in the log file to start validation
             if len(self.log_file) < c.MIN_LOGGING_ENTRIES:
-                raise ValidationError(
+                raise EvaluationError(
                     f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                 )
 
@@ -144,11 +145,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     if (
                         self.log_step - simulation.currentStep
                     ) < c.MIN_SIMULATION_STEPS:
-                        raise ValidationError(
+                        raise EvaluationError(
                             f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
                 else:
-                    raise ValidationError(
+                    raise EvaluationError(
                         f"Miner {self.hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
 
@@ -183,11 +184,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
             miner_velm_data = create_velm(simulation=simulation)
 
             if not self.check_masses(miner_velm_data):
-                raise ValidationError(
+                raise EvaluationError(
                     f"Miner {self.hotkey_alias} has modified the system in unintended ways... Skipping!"
                 )
 
-        except ValidationError as E:
+        except EvaluationError as E:
             logger.warning(f"{E}")
             return False
 
