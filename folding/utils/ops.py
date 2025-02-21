@@ -433,8 +433,9 @@ def create_velm(simulation: app.Simulation) -> Dict[str, Any]:
     return velm
 
 # Function to calculate RMSD
-def compute_rmsd(simulation, reference_positions):
+def calculate_rmsd(simulation, reference_simulation) -> float:
     positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
-    diff = positions - reference_positions
+    reference_simulation_positions = reference_simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+    diff = positions - reference_simulation_positions
     rmsd = np.sqrt(np.mean(diff**2))
     return rmsd
