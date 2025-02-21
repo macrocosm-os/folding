@@ -33,12 +33,18 @@ class OpenMMException(Exception):
 
 
 class ValidationError(Exception):
-    """Exception raised for errors in the versioning."""
+    """Exception raised for errors during validation."""
 
-    def __init__(self, message="Version error occurred"):
+    def __init__(self, message="Validation error occurred"):
         self.message = message
         super().__init__(self.message)
 
+class EvaluationError(Exception):
+    """Exception raised for errors during evaluation."""
+
+    def __init__(self, message="Evaluation error occurred"):
+        self.message = message
+        super().__init__(self.message)
 
 class RsyncException(Exception):
     def __init__(self, message="Rsync error occurred"):
