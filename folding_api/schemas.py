@@ -17,6 +17,7 @@ class FoldingParams(BaseModel):
     box: Literal["cube", "box"]
     temperature: float
     friction: float
+    epsilon: float
 
 
 class FoldingSchema(BaseModel):
