@@ -131,6 +131,7 @@ class OrganicValidator(OrganicScoringBase):
             "is_organic": True,
             "job_type": "OrganicMD",
             "job_id": str(uuid.uuid4()),
+            "epsilon": 0.5,
         }
         for arg in self.simulation_args:
             if arg in sample:

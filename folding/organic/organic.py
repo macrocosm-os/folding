@@ -38,7 +38,7 @@ async def organic(
 
     sender_hotkey = epistula_headers.signed_by
 
-    if sender_hotkey not in request.app.state.config.neuron.organic_whitelist:
+    if sender_hotkey not in request.app.state.config.organic_whitelist:
         logger.warning(
             f"Received organic request from {sender_hotkey}, but {sender_hotkey} is not in the whitelist."
         )
