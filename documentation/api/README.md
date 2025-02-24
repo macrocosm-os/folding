@@ -364,3 +364,7 @@ python folding_api/main.py \
 - `subtensor.network`: Network to connect to (`finney` for mainnet, `test` for testnet)
 - `wallet.name`: The name of your Bittensor wallet
 - `wallet.hotkey`: The hotkey to use for signing requests
+
+## API Diagram
+
+![API Diagram](../../assets/folding_api.svg)
