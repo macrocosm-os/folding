@@ -603,7 +603,7 @@ class Validator(BaseValidatorNeuron):
             block_difference = (
                 self.metagraph.block - self.metagraph.neurons[self.uid].last_update
             )
-            if block_difference > 2 * self.config.neuron.epoch_length:
+            if block_difference > 3 * self.config.neuron.epoch_length:
                 logger.error(
                     f"Haven't set blocks in {block_difference} blocks. Restarting validator."
                 )
