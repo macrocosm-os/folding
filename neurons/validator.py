@@ -566,8 +566,11 @@ class Validator(BaseValidatorNeuron):
         logger.info("Starting sync loop.")
         while True:
             seconds_per_block = 12
-            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
-            self.sync()
+            try:
+                await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+                self.sync()
+            except Exception as e:
+                logger.error(f"Error in sync_loop: {traceback.format_exc()}")
 
     async def monitor_db(self):
         """
