@@ -600,6 +600,15 @@ class Validator(BaseValidatorNeuron):
                 )
                 self.should_exit = True
 
+            block_difference = (
+                self.metagraph.block - self.metagraph.neurons[self.uid].last_update
+            )
+            if block_difference > 2 * self.config.neuron.epoch_length:
+                logger.error(
+                    f"Haven't set blocks in {block_difference} blocks. Restarting validator."
+                )
+                self.should_exit = True
+
     async def __aenter__(self):
         await self.start_rqlite()
         await asyncio.sleep(10)  # Wait for rqlite to start
