@@ -32,8 +32,11 @@ from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_all_miner_uids
-from folding.utils.s3_utils import upload_output_to_s3
-from folding.utils.s3_utils import DigitalOceanS3Handler
+from folding.utils.s3_utils import (
+    upload_output_to_s3,
+    upload_to_s3,
+    DigitalOceanS3Handler,
+)
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
@@ -237,25 +240,43 @@ class Validator(BaseValidatorNeuron):
                             f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                         )
 
+                    job_event["pdb_id"] = job_event["pdb_id"]
+                    job_event["job_type"] = "OrganicMD"
+                    job_event["pdb_complexity"] = [dict(protein.pdb_complexity)]
+                    job_event["init_energy"] = protein.init_energy
+                    job_event["epsilon"] = protein.epsilon
+                    job_event["s3_links"] = {
+                        "testing": "testing"
+                    }  # overwritten below if s3 logging is on.
+
+                    if not self.config.s3.off:
+                        try:
+                            logger.info(f"Uploading to {self.handler.bucket_name}")
+                            s3_links = await upload_to_s3(
+                                handler=self.handler,
+                                pdb_location=protein.pdb_location,
+                                simulation_cpt=protein.simulation_cpt,
+                                validator_directory=protein.validator_directory,
+                                pdb_id=job_event["pdb_id"],
+                                VALIDATOR_ID=self.validator_hotkey_reference,
+                            )
+                            job_event["s3_links"] = s3_links
+                            logger.success("✅✅ Simulation ran successfully! ✅✅")
+                        except Exception as e:
+                            logger.error(f"Error in uploading to S3: {e}")
+                            logger.error("❌❌ Simulation failed! ❌❌")
+
                 except Exception as e:
+                    # handle
                     logger.error(f"Error in setting up organic query: {e}")
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
             try:
                 job = self.store.upload_job(
-                    pdb=job_event["pdb_id"],
-                    ff=job_event["ff"],
-                    water=job_event["water"],
-                    box=job_event["box"],
+                    event=job_event,
                     hotkeys=selected_hotkeys,
-                    job_type=job_event["job_type"],
-                    system_kwargs=job_event["system_kwargs"],
                     keypair=self.wallet.hotkey,
                     gjp_address=self.config.neuron.gjp_address,
-                    epsilon=job_event["epsilon"],
-                    event=job_event,
-                    s3_links=job_event["s3_links"],
-                    job_id=job_event.get("job_id", None),
                 )
 
                 job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
