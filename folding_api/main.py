@@ -2,7 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from folding_api.chain import SubtensorService
 from folding_api.protein import router
 from folding_api.validator_registry import ValidatorRegistry
+from folding_api.auth import APIKeyManager, get_api_key, api_key_router
 from folding_api.vars import (
     bt_config,
     limiter,
@@ -44,6 +45,10 @@ async def lifespan(app: FastAPI):
     validator_registry = ValidatorRegistry()
     app.state.validator_registry = validator_registry
 
+    # Initialize API key manager
+    api_key_manager = APIKeyManager()
+    app.state.api_key_manager = api_key_manager
+
     # Start background sync task
     app.state.sync_task = asyncio.create_task(
         sync_metagraph_periodic(subtensor_service, validator_registry)
@@ -68,8 +73,12 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 Instrumentator().instrument(app).expose(app)
 
+# Add API key dependency to all routes
+app.dependency_overrides[get_api_key] = get_api_key
+
 # Include routes
-app.include_router(router)
+app.include_router(router, dependencies=[Depends(get_api_key)])
+app.include_router(api_key_router)  # API key management routes
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8029)

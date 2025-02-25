@@ -14,6 +14,9 @@ parser = argparse.ArgumentParser()
 bt.wallet.add_args(parser)
 bt.subtensor.add_args(parser)
 parser.add_argument("--netuid", type=int, help="Subnet netuid", default=25)
+parser.add_argument(
+    "--api-key-file", type=str, help="API key file", default="api_keys.json"
+)
 
 
 bt_config = bt.config(parser)

@@ -149,3 +149,22 @@ class EpistulaHeaders:
         except Exception as e:
             logger.error(f"signature_verification_failed: {traceback.format_exc()}")
             return str(e)
+
+
+class APIKeyBase(BaseModel):
+    owner: str
+    rate_limit: str
+    is_active: bool = True
+
+
+class APIKey(APIKeyBase):
+    key: str
+
+
+class APIKeyCreate(BaseModel):
+    owner: str
+    rate_limit: str = "100/hour"
+
+
+class APIKeyResponse(APIKeyBase):
+    key: str

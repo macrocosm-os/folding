@@ -1,15 +1,20 @@
 from http import HTTPStatus
 
-from fastapi import APIRouter, HTTPException, Body, Request
+from fastapi import APIRouter, HTTPException, Body, Request, Depends
 from loguru import logger
 from folding_api.schemas import FoldingSchema, FoldingReturn
 from folding_api.queries import query_validators
+from folding_api.auth import APIKey, get_api_key
 
 router = APIRouter()
 
 
 @router.post("/fold")
-async def fold(request: Request, query: FoldingSchema = Body(...)) -> FoldingReturn:
+async def fold(
+    request: Request,
+    query: FoldingSchema = Body(...),
+    api_key: APIKey = Depends(get_api_key),
+) -> FoldingReturn:
     """
     fold with the Bittensor network.
 
