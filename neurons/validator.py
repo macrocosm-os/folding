@@ -17,7 +17,6 @@ import torch
 import numpy as np
 import pandas as pd
 from async_timeout import timeout
-from bittensor.core.extrinsics.serving import serve_extrinsic
 import tenacity
 
 
@@ -658,7 +657,8 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
-        self.loop.create_task(self.start_organic_api())
+        if not self.config.neuron.organic_disabled:
+            self.loop.create_task(self.start_organic_api())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self
