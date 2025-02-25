@@ -92,8 +92,10 @@ class FoldingReturn(BaseModel):
 
     uids: List[int] = Field(..., description="The uids of the response.")
     hotkeys: List[str] = Field(..., description="The hotkeys of the response.")
-    status_codes: List[Any] = Field(..., description="The status code of the response.")
-    job_id: List[str] = Field(..., description="The job id of the response.")
+    status_codes: List[Any | None] = Field(
+        ..., description="The status code of the response."
+    )
+    job_id: List[str | None] = Field(..., description="The job id of the response.")
 
 
 class EpistulaHeaders:

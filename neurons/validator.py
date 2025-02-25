@@ -281,7 +281,7 @@ class Validator(BaseValidatorNeuron):
 
                 job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
 
-                if job_event["job_id"] is None:
+                if hasattr(job_event, "job_id") and job_event["job_id"] is None:
                     raise ValueError("job_id is None")
 
                 logger.success("Job was uploaded successfully!")
@@ -658,6 +658,7 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
         if not self.config.neuron.organic_disabled:
+            self.loop.create_task(self._organic_scoring.start_loop())
             self.loop.create_task(self.start_organic_api())
         self.is_running = True
         logger.debug("Starting validator in background thread.")

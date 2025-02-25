@@ -91,15 +91,11 @@ class BaseValidatorNeuron(BaseNeuron):
         self._organic_scoring: Optional[OrganicValidator] = None
         if not self.config.neuron.axon_off and not self.config.neuron.organic_disabled:
             self._organic_scoring = OrganicValidator(
-                axon=self.axon,
                 validator=self,
-                synth_dataset=None,
                 trigger=self.config.neuron.organic_trigger,
                 trigger_frequency=self.config.neuron.organic_trigger_frequency,
-                trigger_frequency_min=self.config.neuron.organic_trigger_frequency_min,
             )
 
-            self.loop.create_task(self._organic_scoring.start_loop())
         else:
             logger.warning(
                 "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_disabled'"
@@ -240,7 +236,6 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores: torch.FloatTensor = alpha * scattered_rewards + (
             1 - alpha
         ) * self.scores.to(self.device)
-
 
     def save_state(self):
         """Saves the state of the validator to a file."""
