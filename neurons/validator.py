@@ -226,6 +226,14 @@ class Validator(BaseValidatorNeuron):
                 protein = Protein(**job_event, config=self.config.protein)
 
                 try:
+                    job_event["pdb_id"] = job_event["pdb_id"]
+                    job_event["job_type"] = "OrganicMD"
+                    job_event["pdb_complexity"] = [dict(protein.pdb_complexity)]
+                    job_event["init_energy"] = protein.init_energy
+                    job_event["epsilon"] = protein.epsilon
+                    job_event["s3_links"] = {
+                        "testing": "testing"
+                    }  # overwritten below if s3 logging is on.
                     async with timeout(180):
                         logger.info(
                             f"setup_simulation for organic query: {job_event['pdb_id']}"
@@ -236,18 +244,10 @@ class Validator(BaseValidatorNeuron):
                         )
 
                     if protein.init_energy > 0:
-                        raise ValueError(
+                        logger.error(
                             f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                         )
-
-                    job_event["pdb_id"] = job_event["pdb_id"]
-                    job_event["job_type"] = "OrganicMD"
-                    job_event["pdb_complexity"] = [dict(protein.pdb_complexity)]
-                    job_event["init_energy"] = protein.init_energy
-                    job_event["epsilon"] = protein.epsilon
-                    job_event["s3_links"] = {
-                        "testing": "testing"
-                    }  # overwritten below if s3 logging is on.
+                        job_event["active"] = False
 
                     if not self.config.s3.off:
                         try:
@@ -265,10 +265,10 @@ class Validator(BaseValidatorNeuron):
                         except Exception as e:
                             logger.error(f"Error in uploading to S3: {e}")
                             logger.error("❌❌ Simulation failed! ❌❌")
-                            job_event["active"] = -1
+                            job_event["active"] = False
 
                 except Exception as e:
-                    # handle
+                    job_event["active"] = False
                     logger.error(f"Error in setting up organic query: {e}")
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
@@ -286,8 +286,8 @@ class Validator(BaseValidatorNeuron):
                     raise ValueError("job_id is None")
 
                 logger.success("Job was uploaded successfully!")
-
-                await self.forward(job=job, first=True)
+                if job_event["active"]:
+                    await self.forward(job=job, first=True)
                 return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
@@ -570,6 +570,11 @@ class Validator(BaseValidatorNeuron):
         ):  # recommended to use qsize() instead of empty()
             inactive_job = inactive_jobs_queue.get()
             logger.info(f"Updating scores for job: {inactive_job.pdb_id}")
+            if inactive_job.computed_rewards is None:
+                logger.warning(
+                    f"Computed rewards are None for job: {inactive_job.pdb_id}"
+                )
+                continue
 
             await self.update_scores_wrapper(
                 rewards=torch.Tensor(inactive_job.computed_rewards),
