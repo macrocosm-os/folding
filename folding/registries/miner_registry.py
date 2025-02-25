@@ -16,15 +16,24 @@ class MinerRegistry:
         self.registry = dict.fromkeys(miner_uids)
 
         for miner_uid in miner_uids:
-            self.registry[miner_uid] = {}
-            self.registry[miner_uid]["overall_credibility"] = c.STARTING_CREDIBILITY
-            for task in self.tasks:
-                self.registry[miner_uid][task] = {
-                    "credibility": c.STARTING_CREDIBILITY,
-                    "credibilities": [],
-                    "score": 0.0,
-                    "results": [],
-                }
+            self.add_miner_to_registry(miner_uid)
+
+    def add_miner_to_registry(self, miner_uid: int):
+        """Adds a miner to the registry
+
+        Args:
+            miner_uid (int): the unique identifier of the miner
+        """
+        self.registry[miner_uid] = {}
+        self.registry[miner_uid]["overall_credibility"] = c.STARTING_CREDIBILITY
+        for task in self.tasks:
+            self.registry[miner_uid][task] = {
+                "credibility": c.STARTING_CREDIBILITY,
+                "credibilities": [],
+                "credibility_over_time": [],
+                "score": 0.0,
+                "results": [],
+            }
 
     @classmethod
     def load_registry(cls, input_path: str):
@@ -53,15 +62,7 @@ class MinerRegistry:
         """
         # Check if miner_uid exists, if not instantiate it
         if miner_uid not in self.registry:
-            self.registry[miner_uid] = {}
-            self.registry[miner_uid]["overall_credibility"] = c.STARTING_CREDIBILITY
-            for task_name in self.tasks:
-                self.registry[miner_uid][task_name] = {
-                    "credibility": c.STARTING_CREDIBILITY,
-                    "credibilities": [],
-                    "score": 0.0,
-                    "results": [],
-                }
+            self.add_miner_to_registry(miner_uid=miner_uid)
 
         self.registry[miner_uid][task]["credibilities"].append(credibilities)
 
@@ -92,9 +93,17 @@ class MinerRegistry:
             )
 
             # Use EMA to update the miner's credibility.
-            self.registry[miner_uid][task]["credibility"] = round(
+            current_credibility = round(
                 (alpha * cred + (1 - alpha) * previous_credibility), 3
             )
+
+            self.registry[miner_uid][task]["credibility"] = current_credibility
+
+        # The credibility could change many times above depending on the number of jobs completed.
+        # Therefore, we should only track what the credibility is when we would read the registry.
+        self.registry[miner_uid][task]["credibility_over_time"].append(
+            current_credibility
+        )
 
         # Reset the credibilities.
         self.registry[miner_uid][task]["credibilities"] = []
