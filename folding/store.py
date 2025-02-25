@@ -282,6 +282,7 @@ class SQLiteJobStore:
             max_time_no_improvement=event.get("max_time_no_improvement", 1),
             is_organic=event.get("is_organic", False),
             job_id=event.get("job_id", None),
+            active=event.get("active", 1),
             event=event,
             **kwargs,
         )

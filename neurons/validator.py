@@ -265,6 +265,7 @@ class Validator(BaseValidatorNeuron):
                         except Exception as e:
                             logger.error(f"Error in uploading to S3: {e}")
                             logger.error("❌❌ Simulation failed! ❌❌")
+                            job_event["active"] = -1
 
                 except Exception as e:
                     # handle
