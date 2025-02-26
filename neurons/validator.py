@@ -286,7 +286,7 @@ class Validator(BaseValidatorNeuron):
                     raise ValueError("job_id is None")
 
                 logger.success("Job was uploaded successfully!")
-                if job_event["active"]:
+                if job.active:
                     await self.forward(job=job, first=True)
 
                 self.last_time_created_jobs = datetime.now()
@@ -321,7 +321,7 @@ class Validator(BaseValidatorNeuron):
             exclude_pdbs = self.store.get_all_pdbs()
             job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
 
-            await self.add_job(job_event=job_event)
+            await self.add_job(job_event=job_event, uids=[76])
             await asyncio.sleep(0.01)
 
     async def update_scores_wrapper(

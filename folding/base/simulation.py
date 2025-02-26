@@ -71,8 +71,8 @@ class OpenMMSimulation(GenericSimulation):
         start_time = time.time()
         modeller.addSolvent(
             forcefield,
-            padding=system_config.box_padding * unit.nanometer,
-            boxShape=system_config.box,
+            padding=system_config["box_padding"] * unit.nanometer,
+            boxShape=system_config["box"],
         )
         setup_times["add_solvent"] = time.time() - start_time
 
