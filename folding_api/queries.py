@@ -38,6 +38,8 @@ async def query_validators(
         validator_uids.append(uid)
 
     response_information = defaultdict(list)
+    if len(validator_responses) == 0:
+        raise HTTPException(status_code=404, detail="No validators available")
     for resp, uid in zip(validator_responses, validator_uids):
         response_information["hotkeys"].append(validators[uid].hotkey)
         response_information["uids"].append(uid)
