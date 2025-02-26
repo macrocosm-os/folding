@@ -1,6 +1,6 @@
 from itertools import chain
+from typing import List, Dict
 from dataclasses import dataclass, field
-from typing import List, Callable, Dict
 
 from statistics import mean
 
