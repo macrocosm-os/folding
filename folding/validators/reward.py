@@ -161,9 +161,9 @@ def get_energies(
                 ) = evaluator.validate()
             else:
                 median_energy, checked_energies, miner_energies, reason = (
-                    reported_energy,
-                    reported_energy,
-                    [-1.0],
+                    evaluator.get_reported_energy(),
+                    evaluator.miner_energies,
+                    evaluator.miner_energies,
                     "skip",
                 )
 
@@ -231,13 +231,9 @@ def get_energies(
         zip(event["is_valid"], event["is_duplicate"])
     ):
         if is_valid and not is_duplicate:
-            if reason == "skip":
-                energies[idx] = event["checked_energy"][
-                    idx
-                ]  # Use the self reported energy value from the miner.
-            else:
-                energies[idx] = np.median(
-                    event["checked_energy"][idx][-c.ENERGY_WINDOW_SIZE :]
-                )
+            # If the reason == skip, then "checked_energy" is the miner log file energy
+            energies[idx] = np.median(
+                event["checked_energy"][idx][-c.ENERGY_WINDOW_SIZE :]
+            )
 
     return energies, event
