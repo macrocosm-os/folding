@@ -1,6 +1,7 @@
-from dataclasses import dataclass, field
 from itertools import chain
-from typing import List, Callable, Dict, Optional
+from dataclasses import dataclass, field
+from typing import List, Callable, Dict
+
 from statistics import mean
 
 import folding.utils.constants as c
@@ -15,8 +16,6 @@ class TaskMetrics:
     credibility: float = c.STARTING_CREDIBILITY
     credibilities: List[List[float]] = field(default_factory=list)
     credibility_over_time: List[float] = field(default_factory=list)
-    score: float = 0.0
-    results: List[Callable] = field(default_factory=list)
 
 
 @dataclass
@@ -48,14 +47,6 @@ class MinerRegistry:
         if miner_uid not in self.registry:
             self.add_miner_to_registry(miner_uid)
         return self.registry[miner_uid]
-
-    def add_results(self, miner_uid: int, task: str, results: List[Callable]) -> None:
-        """Adds scores to the miner registry."""
-        if task not in self.tasks:
-            raise ValueError(f"Invalid task: {task}")
-
-        miner = self._get_or_create_miner(miner_uid)
-        miner.tasks[task].results.extend(results)
 
     def add_credibilities(
         self, miner_uid: int, task: str, credibilities: List[float]
