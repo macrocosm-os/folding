@@ -1,21 +1,3 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2023 Opentensor Foundation
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
 import os
 import argparse
 import bittensor as bt
@@ -254,7 +236,7 @@ def add_args(cls, parser):
         "--s3.bucket_name",
         type=str,
         help="The name of the S3 bucket to log to.",
-        default="sn25-folding-mainnet",
+        default="sn25-vali-testnet-bucket",
     )
 
 
@@ -394,9 +376,9 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.organic_disabled",
+        "--neuron.organic_enabled",
         action="store_true",
-        help="Set this flag to disable organic scoring.",
+        help="Set this flag to enable organic scoring.",
         default=False,
     )
 
@@ -437,11 +419,10 @@ def add_validator_args(cls, parser):
 
     parser.add_argument(
         "--organic_whitelist",
-        type=str,
         nargs="+",  # Accepts one or more values as a list
         help="The validator will only accept organic queries from a list of whitelisted hotkeys.",
         default=[
-            "5CQ9KNHy9qvRGhLWeV37agEpmLckSgMXzbZWEEXwbupSCTQy",
+            "5Cg5QgjMfRqBC6bh8X4PDbQi7UzVRn9eyWXsB8gkyfppFPPy",
         ],
     )
     parser.add_argument(
@@ -449,6 +430,13 @@ def add_validator_args(cls, parser):
         type=str,
         help="The IP address and port of the global job pool.",
         default="174.138.3.61:8030",
+    )
+
+    parser.add_argument(
+        "--neuron.organic_api.port",
+        type=int,
+        help="The port of the organic API.",
+        default=8031,
     )
 
 

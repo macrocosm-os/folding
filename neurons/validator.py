@@ -11,10 +11,14 @@ from itertools import chain
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
+import netaddr
+import requests
 import torch
 import numpy as np
 import pandas as pd
 from async_timeout import timeout
+import tenacity
+
 
 import folding.utils.constants as c
 from folding.base.reward import BatchRewardInput
@@ -27,11 +31,15 @@ from folding.store import Job, SQLiteJobStore
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_all_miner_uids
-from folding.utils.s3_utils import upload_output_to_s3
-from folding.utils.s3_utils import DigitalOceanS3Handler
+from folding.utils.s3_utils import (
+    upload_output_to_s3,
+    upload_to_s3,
+    DigitalOceanS3Handler,
+)
 from folding.validators.forward import create_new_challenge, run_ping_step, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
+from folding.organic.api import start_organic_api
 
 
 class Validator(BaseValidatorNeuron):
@@ -218,7 +226,15 @@ class Validator(BaseValidatorNeuron):
                 protein = Protein(**job_event, config=self.config.protein)
 
                 try:
-                    async with timeout(180):
+                    job_event["pdb_id"] = job_event["pdb_id"]
+                    job_event["job_type"] = "OrganicMD"
+                    job_event["pdb_complexity"] = [dict(protein.pdb_complexity)]
+                    job_event["init_energy"] = protein.init_energy
+                    job_event["epsilon"] = protein.epsilon
+                    job_event["s3_links"] = {
+                        "testing": "testing"
+                    }  # overwritten below if s3 logging is on.
+                    async with timeout(300):
                         logger.info(
                             f"setup_simulation for organic query: {job_event['pdb_id']}"
                         )
@@ -228,38 +244,50 @@ class Validator(BaseValidatorNeuron):
                         )
 
                     if protein.init_energy > 0:
-                        raise ValueError(
+                        logger.error(
                             f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                         )
+                        job_event["active"] = False
+
+                    if not self.config.s3.off:
+                        try:
+                            logger.info(f"Uploading to {self.handler.bucket_name}")
+                            s3_links = await upload_to_s3(
+                                handler=self.handler,
+                                pdb_location=protein.pdb_location,
+                                simulation_cpt=protein.simulation_cpt,
+                                validator_directory=protein.validator_directory,
+                                pdb_id=job_event["pdb_id"],
+                                VALIDATOR_ID=self.validator_hotkey_reference,
+                            )
+                            job_event["s3_links"] = s3_links
+                            logger.success("✅✅ Simulation ran successfully! ✅✅")
+                        except Exception as e:
+                            logger.error(f"Error in uploading to S3: {e}")
+                            logger.error("❌❌ Simulation failed! ❌❌")
+                            job_event["active"] = False
 
                 except Exception as e:
+                    job_event["active"] = False
                     logger.error(f"Error in setting up organic query: {e}")
 
             logger.info(f"Inserting job: {job_event['pdb_id']}")
             try:
                 job = self.store.upload_job(
-                    pdb=job_event["pdb_id"],
-                    ff=job_event["ff"],
-                    water=job_event["water"],
-                    box=job_event["box"],
+                    event=job_event,
                     hotkeys=selected_hotkeys,
-                    job_type=job_event["job_type"],
-                    system_kwargs=job_event["system_kwargs"],
                     keypair=self.wallet.hotkey,
                     gjp_address=self.config.neuron.gjp_address,
-                    epsilon=job_event["epsilon"],
-                    event=job_event,
-                    s3_links=job_event["s3_links"],
                 )
 
                 job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
 
-                if job_event["job_id"] is None:
+                if hasattr(job_event, "job_id") and job_event["job_id"] is None:
                     raise ValueError("job_id is None")
 
                 logger.success("Job was uploaded successfully!")
-
-                await self.forward(job=job, first=True)
+                if job.active:
+                    await self.forward(job=job, first=True)
 
                 self.last_time_created_jobs = datetime.now()
 
@@ -546,12 +574,47 @@ class Validator(BaseValidatorNeuron):
         ):  # recommended to use qsize() instead of empty()
             inactive_job = inactive_jobs_queue.get()
             logger.info(f"Updating scores for job: {inactive_job.pdb_id}")
+            if inactive_job.computed_rewards is None:
+                logger.warning(
+                    f"Computed rewards are None for job: {inactive_job.pdb_id}"
+                )
+                continue
 
             await self.update_scores_wrapper(
                 rewards=torch.Tensor(inactive_job.computed_rewards),
                 hotkeys=inactive_job.hotkeys,
             )
             await asyncio.sleep(0.01)
+
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=15),
+    )
+    async def start_organic_api(self):
+        try:
+            logger.info("Starting organic API")
+            external_ip = requests.get("https://checkip.amazonaws.com").text.strip()
+            netaddr.IPAddress(external_ip)
+            previous_commit = self.subtensor.get_commitment(
+                self.config.netuid, self.uid
+            )
+            logger.info(f"Previous commitment: {previous_commit}")
+            commitment = f"http://{external_ip}:{self.config.neuron.organic_api.port}"
+
+            if previous_commit != commitment:
+                serve_success = self.subtensor.commit(
+                    wallet=self.wallet,
+                    netuid=self.config.netuid,
+                    data=commitment,
+                )
+                logger.debug(f"Serve success: {serve_success}")
+            else:
+                logger.info("No need to commit again")
+
+            await start_organic_api(self._organic_scoring, self.config)
+        except Exception as e:
+            logger.error(f"Error in start_organic_api: {traceback.format_exc()}")
+            raise e
 
     async def reward_loop(self):
         logger.info("Starting reward loop.")
@@ -566,8 +629,11 @@ class Validator(BaseValidatorNeuron):
         logger.info("Starting sync loop.")
         while True:
             seconds_per_block = 12
-            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
-            self.sync()
+            try:
+                await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+                self.sync()
+            except Exception as e:
+                logger.error(f"Error in sync_loop: {traceback.format_exc()}")
 
     async def monitor_db(self):
         """
@@ -600,6 +666,15 @@ class Validator(BaseValidatorNeuron):
                 )
                 self.should_exit = True
 
+            block_difference = (
+                self.metagraph.block - self.metagraph.neurons[self.uid].last_update
+            )
+            if block_difference > 3 * self.config.neuron.epoch_length:
+                logger.error(
+                    f"Haven't set blocks in {block_difference} blocks. Restarting validator."
+                )
+                self.should_exit = True
+
     async def __aenter__(self):
         await self.start_rqlite()
         await asyncio.sleep(10)  # Wait for rqlite to start
@@ -609,6 +684,10 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
+        if self.config.neuron.organic_enabled:
+            logger.info("Starting organic scoring loop.")
+            self.loop.create_task(self._organic_scoring.start_loop())
+            self.loop.create_task(self.start_organic_api())
         self.loop.create_task(self.monitor_validator())
         self.is_running = True
         logger.debug("Starting validator in background thread.")

@@ -240,32 +240,20 @@ class SQLiteJobStore:
 
     def upload_job(
         self,
-        pdb: str,
-        ff: str,
-        box: str,
-        water: str,
+        event: dict,
         hotkeys: list,
-        job_type: str,
-        system_kwargs: dict,
         keypair,
         gjp_address: str,
-        epsilon: int,
-        s3_links: Dict[str, str],
         **kwargs,
     ):
         """
         Upload a job to the global job pool database.
 
         Args:
-            pdb (str): The PDB ID of the job.
-            ff (str): The force field configuration.
-            box (str): The box configuration.
-            water (str): The water configuration.
             hotkeys (list): A list of hotkeys.
-            system_kwargs (dict): Additional system configuration arguments.
             keypair (Keypair): The keypair for generating headers.
             gjp_address (str): The address of the api server.
-            event (dict): Additional event data.
+            event (dict): Event data.
 
         Returns:
             str: The job ID of the uploaded job.
@@ -274,21 +262,28 @@ class SQLiteJobStore:
             ValueError: If the job upload fails.
         """
         job = Job(
-            pdb_id=pdb,
+            pdb_id=event["pdb_id"],
             system_config=SystemConfig(
-                ff=ff, box=box, water=water, system_kwargs=SystemKwargs(**system_kwargs)
+                ff=event["ff"],
+                box=event["box"],
+                water=event["water"],
+                system_kwargs=SystemKwargs(**event["system_kwargs"]),
             ),
             hotkeys=hotkeys,
-            job_type=job_type,
+            job_type=event["job_type"],
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
-            epsilon=epsilon,
-            s3_links=s3_links,
-            priority=1,
-            update_interval=random.randint(
-                1800, 7200
+            epsilon=event["epsilon"],
+            s3_links=event["s3_links"],
+            priority=event.get("priority", 1),
+            update_interval=event.get(
+                "update_interval", random.randint(1800, 7200)
             ),  # between 30 minutes and 2 hours in seconds
-            max_time_no_improvement=1,
+            max_time_no_improvement=event.get("max_time_no_improvement", 1),
+            is_organic=event.get("is_organic", False),
+            job_id=event.get("job_id", None),
+            active=event.get("active", True),
+            event=event,
             **kwargs,
         )
 

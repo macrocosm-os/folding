@@ -69,11 +69,11 @@ class OpenMMSimulation(GenericSimulation):
         setup_times["add_hydrogens"] = time.time() - start_time
 
         start_time = time.time()
-        # modeller.addSolvent(
-        #     forcefield,
-        #     padding=system_config.box_padding * unit.nanometer,
-        #     boxShape=system_config.box,
-        # )
+        modeller.addSolvent(
+            forcefield,
+            padding=system_config["box_padding"] * unit.nanometer,
+            boxShape=system_config["box"],
+        )
         setup_times["add_solvent"] = time.time() - start_time
 
         # Create the system
