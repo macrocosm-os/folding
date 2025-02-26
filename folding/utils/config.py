@@ -379,7 +379,7 @@ def add_validator_args(cls, parser):
         "--neuron.organic_disabled",
         action="store_true",
         help="Set this flag to disable organic scoring.",
-        default=False,
+        default=True,
     )
 
     parser.add_argument(
