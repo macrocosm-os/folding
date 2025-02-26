@@ -71,6 +71,7 @@ class Validator(BaseValidatorNeuron):
 
         # The last time that we checked the global job pool.
         self.last_time_checked = datetime.now()
+        self.last_time_created_jobs = datetime.now()
 
         if not self.config.s3.off:
             try:
@@ -287,6 +288,10 @@ class Validator(BaseValidatorNeuron):
                 logger.success("Job was uploaded successfully!")
                 if job_event["active"]:
                     await self.forward(job=job, first=True)
+
+                self.last_time_created_jobs = datetime.now()
+
+                # TODO: return job_id
                 return True
             except Exception as e:
                 logger.warning(f"Error uploading job: {traceback.format_exc()}")
@@ -624,8 +629,11 @@ class Validator(BaseValidatorNeuron):
         logger.info("Starting sync loop.")
         while True:
             seconds_per_block = 12
-            await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
-            self.sync()
+            try:
+                await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
+                self.sync()
+            except Exception as e:
+                logger.error(f"Error in sync_loop: {traceback.format_exc()}")
 
     async def monitor_db(self):
         """
@@ -633,7 +641,7 @@ class Validator(BaseValidatorNeuron):
         """
         while True:
             try:
-                await asyncio.sleep(60)
+                await asyncio.sleep(300)
                 try:
                     outdated = await self.store.monitor_db()
                 except Exception as e:
@@ -648,6 +656,25 @@ class Validator(BaseValidatorNeuron):
             except Exception as e:
                 logger.error(f"Error in monitor_db: {traceback.format_exc()}")
 
+    async def monitor_validator(self):
+        while True:
+            await asyncio.sleep(3600)
+            # if no jobs have been created in the last 12 hours, shutdown the validator
+            if (datetime.now() - self.last_time_created_jobs).seconds > 43200:
+                logger.error(
+                    "No jobs have been created in the last 12 hours. Restarting validator."
+                )
+                self.should_exit = True
+
+            block_difference = (
+                self.metagraph.block - self.metagraph.neurons[self.uid].last_update
+            )
+            if block_difference > 3 * self.config.neuron.epoch_length:
+                logger.error(
+                    f"Haven't set blocks in {block_difference} blocks. Restarting validator."
+                )
+                self.should_exit = True
+
     async def __aenter__(self):
         await self.start_rqlite()
         await asyncio.sleep(10)  # Wait for rqlite to start
@@ -660,6 +687,7 @@ class Validator(BaseValidatorNeuron):
         if not self.config.neuron.organic_disabled:
             self.loop.create_task(self._organic_scoring.start_loop())
             self.loop.create_task(self.start_organic_api())
+        self.loop.create_task(self.monitor_validator())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self
@@ -681,6 +709,7 @@ class Validator(BaseValidatorNeuron):
             logger.debug("Stopping validator in background thread.")
             self.should_exit = True
             self.is_running = False
+            self.loop.stop()
             logger.debug("Stopped")
 
 
