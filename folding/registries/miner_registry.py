@@ -2,6 +2,7 @@ from itertools import chain
 from typing import List, Dict
 from dataclasses import dataclass, field
 
+import math
 from statistics import mean
 
 import folding.utils.constants as c
@@ -60,6 +61,17 @@ class MinerRegistry:
         miner = self._get_or_create_miner(miner_uid)
         miner.tasks[task].credibilities.append(credibilities)
 
+    def get_credibilities(self, miner_uid: int, task: str = None) -> List[float]:
+        """Returns the credibilities for a miner and task."""
+        if task not in self.tasks:
+            raise ValueError(f"Invalid task: {task}")
+
+        miner = self._get_or_create_miner(miner_uid)
+
+        if task is None:
+            return miner.overall_credibility
+        return miner.tasks[task].credibility
+
     def update_credibility(self, miner_uid: int, task: str) -> None:
         """Updates the credibility of a miner for a specific task."""
         if task not in self.tasks:
@@ -89,6 +101,16 @@ class MinerRegistry:
         # Update overall credibility
         all_credibilities = [t.credibility for t in miner.tasks.values()]
         miner.overall_credibility = round(mean(all_credibilities), 3)
+
+    def get_validation_probability(self, miner_uid: int, task: str) -> float:
+        """Returns the probability of validating a miner's work."""
+        miner_credibility = self.get_credibilities(miner_uid=miner_uid, task=task)
+        validation_probability = (
+            1
+            if miner_credibility <= 0.5
+            else math.exp(-4.605 * (miner_credibility - 0.5))
+        )
+        return validation_probability
 
     def reset(self, miner_uid: int) -> None:
         """Resets all metrics for a miner."""
