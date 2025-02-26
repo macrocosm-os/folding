@@ -208,7 +208,7 @@ validator_address = subtensor.get_commitment(netuid, validator_uid)
 The Organic API can be configured using the following command-line arguments:
 
 - `--neuron.axon_off`: Disables the axon and Organic API
-- `--neuron.organic_disabled`: Disables only organic scoring
+- `--neuron.organic_enabled`: enables only organic scoring
 - `--neuron.organic_api.port`: Sets the API port (default: 8031)
 - `--organic_whitelist`: List of hotkeys allowed to use the Organic API
 

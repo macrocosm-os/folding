@@ -89,7 +89,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.lock = asyncio.Lock()
 
         self._organic_scoring: Optional[OrganicValidator] = None
-        if not self.config.neuron.axon_off and not self.config.neuron.organic_disabled:
+        if self.config.neuron.organic_enabled:
             self._organic_scoring = OrganicValidator(
                 validator=self,
                 trigger=self.config.neuron.organic_trigger,
@@ -98,7 +98,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         else:
             logger.warning(
-                "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_disabled'"
+                "Organic scoring is not enabled. To enable, remove '--neuron.axon_off' and '--neuron.organic_enabled'"
             )
 
         self.load_and_merge_configs()
