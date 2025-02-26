@@ -10,7 +10,7 @@ from typing import Any, Literal, Union, Optional, cast
 from folding.base.neuron import BaseNeuron
 from folding.utils.opemm_simulation_config import SimulationConfig
 
-from atom.organic_scoring import OrganicScoringBase
+from folding.base.organic_scoring_base import OrganicScoringBase
 from atom.organic_scoring.organic_queue import OrganicQueue
 
 
