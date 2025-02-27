@@ -274,7 +274,7 @@ class Protein(OpenMMSimulation):
         fixer.addMissingHydrogens(pH=7.0)
 
         write_pdb_file(
-            pdb_file=self.pdb_location,
+            pdb_location_path=self.pdb_location,
             topology=fixer.topology,
             positions=fixer.positions,
             suffix="_original",
@@ -306,7 +306,7 @@ class Protein(OpenMMSimulation):
         state = self.simulation.context.getState(getPositions=True)
         positions = state.getPositions()
         write_pdb_file(
-            pdb_file=self.pdb_location,
+            pdb_location_path=self.pdb_location,
             topology=self.simulation.topology,
             positions=positions,
             suffix="_before_solvent",
