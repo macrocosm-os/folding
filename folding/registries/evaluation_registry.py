@@ -357,7 +357,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             if median_percent_diff > c.ANOMALY_THRESHOLD:
                 logger.warning(
-                    f"hotkey {self.hotkey_alias} failed anomaly check for {self.pdb_id}, ... Skipping!"
+                    f"hotkey {self.hotkey_alias} failed anomaly check for {self.pdb_id}, with median percent difference: {median_percent_diff} ... Skipping!"
                 )
                 raise ValidationError(message="anomaly")
 
