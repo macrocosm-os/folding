@@ -64,7 +64,7 @@ class OpenMMSimulation(GenericSimulation):
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
-        if use_solvent:
+        if initialize_with_solvent:
             start_time = time.time()
             modeller.deleteWater()
             setup_times["delete_water"] = time.time() - start_time
