@@ -1,13 +1,12 @@
-import asyncio
-import base64
-import glob
 import os
-import random
-import shutil
 import time
-from collections import defaultdict
-from dataclasses import dataclass
+import glob
+import base64
+import shutil
+import asyncio
 from pathlib import Path
+from dataclasses import dataclass
+from collections import defaultdict
 from typing import Dict, List, Literal
 
 import numpy as np
@@ -21,16 +20,13 @@ from folding.utils.logger import logger
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.utils.ops import (
     OpenMMException,
-    ValidationError,
     check_and_download_pdbs,
     check_if_directory_exists,
-    load_pkl,
-    plot_miner_validator_curves,
     write_pkl,
     load_pdb_file,
     save_files,
-    save_pdb,
     create_velm,
+    write_pdb_file,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -277,13 +273,11 @@ class Protein(OpenMMSimulation):
         fixer.addMissingAtoms()
         fixer.addMissingHydrogens(pH=7.0)
 
-        original_pdb = self.pdb_location.split(".")[0] + "_original.pdb"
-        os.rename(self.pdb_location, original_pdb)
-
-        app.PDBFile.writeFile(
+        write_pdb_file(
+            pdb_file=self.pdb_location,
             topology=fixer.topology,
             positions=fixer.positions,
-            file=open(self.pdb_location, "w"),
+            suffix="_original",
         )
 
     # Function to generate the OpenMM simulation state.
@@ -303,6 +297,19 @@ class Protein(OpenMMSimulation):
             self.create_simulation,
             load_pdb_file(pdb_file=self.pdb_location),
             self.system_config.get_config(),
+            None,  # seed
+            False,  # verbose
+            True,  # initialize_with_solvent
+        )
+
+        # Get the altered pdb and write.
+        state = self.simulation.context.getState(getPositions=True)
+        positions = state.getPositions()
+        write_pdb_file(
+            pdb_file=self.pdb_location,
+            topology=self.simulation.topology,
+            positions=positions,
+            suffix="_before_solvent",
         )
 
         # load in information from the velm memory

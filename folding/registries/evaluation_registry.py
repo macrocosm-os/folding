@@ -105,6 +105,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
+                initialize_with_solvent=False,
             )
 
             checkpoint_path = os.path.join(
@@ -276,6 +277,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
             seed=self.miner_seed,
+            initialize_with_solvent=False,
         )
         simulation.loadState(self.state_xml_path)
         state_energies = []
@@ -299,6 +301,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
+                initialize_with_solvent=False,
             )
             simulation.loadCheckpoint(self.checkpoint_path)
 

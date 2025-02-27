@@ -425,3 +425,21 @@ def create_velm(simulation: app.Simulation) -> Dict[str, Any]:
     }
 
     return velm
+
+
+def write_pdb_file(
+    pdb_location_path: str,
+    topology,
+    positions,
+    suffix: str = "_original",
+):
+    """Write the pdb file using the topology and positions."""
+
+    original_pdb = pdb_location_path.split(".")[0] + f"{suffix}.pdb"
+    os.rename(pdb_location_path, original_pdb)
+
+    app.PDBFile.writeFile(
+        topology=topology,
+        positions=positions,
+        file=open(pdb_location_path, "w"),
+    )
