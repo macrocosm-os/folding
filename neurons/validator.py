@@ -99,7 +99,7 @@ class Validator(BaseValidatorNeuron):
             and self.metagraph.axons[self.metagraph.hotkeys.index(hotkey)].is_serving
         ]
 
-    async def forward(self, job: Job, first: bool = False) -> dict:
+    async def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
         Validator forward pass. Consists of:
@@ -121,12 +121,10 @@ class Validator(BaseValidatorNeuron):
         return await run_step(
             self,
             protein=protein,
-            uids=uids,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,
             best_submitted_energy=job.best_loss,
             job_type=job.job_type,
-            first=first,
         )
 
     async def ping_all_miners(
@@ -287,7 +285,7 @@ class Validator(BaseValidatorNeuron):
 
                 logger.success("Job was uploaded successfully!")
                 if job.active:
-                    await self.forward(job=job, first=True)
+                    await self.forward(job=job)
 
                 self.last_time_created_jobs = datetime.now()
 

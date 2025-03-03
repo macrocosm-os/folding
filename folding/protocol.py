@@ -29,6 +29,13 @@ class PingSynapse(bt.Synapse):
     available_compute: typing.Optional[int] = None  # TODO: number of threads / gpus?
 
 
+class ParticipationSynapse(bt.Synapse):
+    """Responsible for determining if a miner is participating in a specific job"""
+
+    job_id: str
+    is_participating: bool = False
+
+
 class JobSubmissionSynapse(bt.Synapse):
     """
     A protocol representation which uses bt.Synapse as its base.

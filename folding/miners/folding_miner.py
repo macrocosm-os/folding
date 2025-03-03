@@ -20,7 +20,7 @@ import openmm.app as app
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
-from folding.protocol import JobSubmissionSynapse
+from folding.protocol import JobSubmissionSynapse, ParticipationSynapse
 from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -108,8 +108,6 @@ def check_synapse(
     if synapse.md_output is not None:
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
         event["md_output_filenames"] = list(synapse.md_output.keys())
-
-    event["query_forward_time"] = time.time() - self.query_start_time
 
     return synapse
 
@@ -231,7 +229,7 @@ class FoldingMiner(BaseMinerNeuron):
         columns = response["columns"]
         values = response["values"]
         data = [dict(zip(columns, row)) for row in values]
-        return data[0]
+        return data
 
     def fetch_sql_job_details(
         self, columns: List[str], job_id: str, local_db_address: str
@@ -324,6 +322,67 @@ class FoldingMiner(BaseMinerNeuron):
         write_pkl(system_config, system_config_filepath)
         return system_config
 
+    def check_if_job_was_worked_on(self, job_id: str) -> tuple[bool, str, dict]:
+        columns = ["pdb_id", "system_config"]
+
+        # query rqlite to get pdb_id
+        sql_job_details = self.fetch_sql_job_details(
+            columns=columns, job_id=job_id, local_db_address=self.local_db_address
+        )[0]
+
+        if len(sql_job_details) == 0:
+            logger.error(f"Job ID {job_id} not found in the database.")
+            return False, "job_not_found", {}
+
+        # str
+        pdb_id = sql_job_details["pdb_id"]
+
+        # If we are already running a process with the same identifier, return intermediate information
+        logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
+
+        event = self.create_default_dict()
+        event["pdb_id"] = pdb_id
+
+        gjp_config = json.loads(sql_job_details["system_config"])
+        event["gjp_config"] = gjp_config
+
+        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=gjp_config)
+        event["pdb_hash"] = pdb_hash
+        if pdb_hash in self.simulations:
+            return True, "running_simulation", event
+
+        output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
+        gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
+        event["output_dir"] = output_dir
+        event["gjp_config_filepath"] = gjp_config_filepath
+
+        # check if any of the simulations have finished
+        event = self.check_and_remove_simulations(event=event)
+
+        submitted_job_is_unique = self.is_unique_job(
+            system_config_filepath=gjp_config_filepath
+        )
+
+        if not submitted_job_is_unique:
+            return True, "found_existing_data", event
+
+        return False, "job_not_worked_on", event
+
+    def participation_forward(self, synapse: ParticipationSynapse):
+        """Respond to the validator with the necessary information about participating in a specified job
+        If the miner has worked on a job before, it should return True for is_participating.
+        If the miner has not worked on a job before, it should return False for is_participating.
+
+        Args:
+            self (ParticipationSynapse): must attach "is_participating"
+        """
+        job_id = synapse.job_id
+        has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
+            job_id=job_id
+        )
+        synapse.is_participating = has_worked_on_job
+        return synapse
+
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """
         The main async function that is called by the dendrite to run the simulation.
@@ -338,156 +397,91 @@ class FoldingMiner(BaseMinerNeuron):
         Returns:
             JobSubmissionSynapse: synapse with md_output attached
         """
-
-        # get the job id from the synapse
         job_id = synapse.job_id
-        columns = ["pdb_id", "system_config", "pdb_id, s3_links"]
 
-        # query rqlite to get pdb_id
-        sql_job_details = self.fetch_sql_job_details(
-            columns=columns, job_id=job_id, local_db_address=self.local_db_address
+        has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
+            job_id=job_id
         )
+        self.step+=1
+        if has_worked_on_job:
 
-        if len(sql_job_details) == 0:
-            logger.error(f"Job ID {job_id} not found in the database.")
-            return synapse
+            if condition == "found_existing_data":
+                if os.path.exists(event["output_dir"]) and f"{event['pdb_id']}.pdb" in os.listdir(event["output_dir"]):
+                    # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
+                    # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
 
-        # str
-        pdb_id = sql_job_details["pdb_id"]
+                    # We will attempt to read the state of the simulation from the state file
+                    state_file = os.path.join(
+                        event["output_dir"], f"{event['pdb_id']}_state.txt"
+                    )
+                    seed_file = os.path.join(
+                        event["output_dir"], f"{event['pdb_id']}_seed.txt"
+                    )
 
-        # If we are already running a process with the same identifier, return intermediate information
-        logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
+                    # Open the state file that should be generated during the simulation.
+                    try:
+                        with open(state_file, "r") as f:
+                            lines = f.readlines()
+                            state = lines[-1].strip()
+                            state = "md_0_1" if state == "finished" else state
 
-        # increment step counter everytime miner receives a query.
-        self.step += 1
-        self.query_start_time = time.time()
+                        # If the state is failed, we should not return the files.
+                        if state == "failed":
+                            synapse.miner_state = state
+                            event["condition"] = "failed_simulation"
+                            event["state"] = state
+                            logger.warning(
+                                f"❗Returning previous simulation data for failed simulation: {event['pdb_id']}❗"
+                            )
+                            return check_synapse(
+                                self=self, synapse=synapse, event=event
+                            )
 
-        event = self.create_default_dict()
-        event["pdb_id"] = pdb_id
+                        with open(seed_file, "r") as f:
+                            seed = f.readlines()[-1].strip()
 
-        gjp_config = json.loads(sql_job_details["system_config"])
-
-        pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=gjp_config)
-        output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
-        gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
-
-        # check if any of the simulations have finished
-        event = self.check_and_remove_simulations(event=event)
-
-        submitted_job_is_unique = self.is_unique_job(
-            system_config_filepath=gjp_config_filepath
-        )
-
-        if submitted_job_is_unique:
-            check_if_directory_exists(output_directory=output_dir)
-
-            success = self.download_gjp_input_files(
-                pdb_id=pdb_id,
-                output_dir=output_dir,
-                s3_links=json.loads(sql_job_details["s3_links"]),
-            )
-
-            if not success:
-                return synapse
-
-            if len(self.simulations) < self.max_workers:
-                system_config = self.get_simulation_config(
-                    gjp_config=gjp_config,
-                    system_config_filepath=gjp_config_filepath,
-                )
-                return self.create_simulation_from_job(
-                    synapse=synapse,
-                    output_dir=output_dir,
-                    pdb_id=pdb_id,
-                    pdb_hash=pdb_hash,
-                    system_config=system_config,
-                    event=event,
-                )
-
-            elif len(self.simulations) == self.max_workers:
-                logger.warning(
-                    f"❗ Cannot start new process: job limit reached. ({len(self.simulations)}/{self.max_workers}).❗"
-                )
-
-                logger.warning(f"❗ Removing miner from job pool ❗")
-                event["condition"] = "cpu_limit_reached"
-                return check_synapse(self=self, synapse=synapse, event=event)
-
-        # The set of RUNNING simulations.
-        elif pdb_hash in self.simulations:
-            self.simulations[pdb_hash]["queried_at"] = time.time()
-            simulation = self.simulations[pdb_hash]
-            current_executor_state = simulation["executor"].get_state()
-            current_seed = simulation["executor"].seed
-
-            synapse = attach_files_to_synapse(
-                synapse=synapse,
-                data_directory=simulation["output_dir"],
-                state=current_executor_state,
-                seed=current_seed,
-            )
-
-            event["condition"] = "running_simulation"
-            event["state"] = current_executor_state
-            event["queried_at"] = simulation["queried_at"]
-
-            return check_synapse(self=self, synapse=synapse, event=event)
-
-        else:
-            if os.path.exists(self.base_data_path) and pdb_id in os.listdir(
-                self.base_data_path
-            ):
-                # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
-                # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
-
-                # We will attempt to read the state of the simulation from the state file
-                state_file = os.path.join(output_dir, f"{pdb_id}_state.txt")
-                seed_file = os.path.join(output_dir, f"{pdb_id}_seed.txt")
-
-                # Open the state file that should be generated during the simulation.
-                try:
-                    with open(state_file, "r") as f:
-                        lines = f.readlines()
-                        state = lines[-1].strip()
-                        state = "md_0_1" if state == "finished" else state
-
-                    # If the state is failed, we should not return the files.
-                    if state == "failed":
-                        synapse.miner_state = state
-                        event["condition"] = "failed_simulation"
-                        event["state"] = state
                         logger.warning(
-                            f"❗Returning previous simulation data for failed simulation: {pdb_id}❗"
+                            f"❗ Found existing data for protein: {event['pdb_id']}... Sending previously computed, most advanced simulation state ❗"
                         )
+                        synapse = attach_files_to_synapse(
+                            synapse=synapse,
+                            data_directory=event["output_dir"],
+                            state=state,
+                            seed=seed,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to read state file for protein {event['pdb_id']} with error: {e}"
+                        )
+                        state = None
+
+                    finally:
+                        event["condition"] = "found_existing_data"
+                        event["state"] = state
+
                         return check_synapse(self=self, synapse=synapse, event=event)
+            # The set of RUNNING simulations.
+            elif condition == "running_simulation":
+                self.simulations[event["pdb_hash"]]["queried_at"] = time.time()
+                simulation = self.simulations[event["pdb_hash"]]
+                current_executor_state = simulation["executor"].get_state()
+                current_seed = simulation["executor"].seed
 
-                    with open(seed_file, "r") as f:
-                        seed = f.readlines()[-1].strip()
+                synapse = attach_files_to_synapse(
+                    synapse=synapse,
+                    data_directory=simulation["output_dir"],
+                    state=current_executor_state,
+                    seed=current_seed,
+                )
 
-                    logger.warning(
-                        f"❗ Found existing data for protein: {pdb_id}... Sending previously computed, most advanced simulation state ❗"
-                    )
-                    synapse = attach_files_to_synapse(
-                        synapse=synapse,
-                        data_directory=output_dir,
-                        state=state,
-                        seed=seed,
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to read state file for protein {pdb_id} with error: {e}"
-                    )
-                    state = None
+                event["condition"] = "running_simulation"
+                event["state"] = current_executor_state
+                event["queried_at"] = simulation["queried_at"]
 
-                finally:
-                    event["condition"] = "found_existing_data"
-                    event["state"] = state
-
-                    return check_synapse(self=self, synapse=synapse, event=event)
+                return check_synapse(self=self, synapse=synapse, event=event)
 
     def create_simulation_from_job(
         self,
-        synapse: JobSubmissionSynapse,
         output_dir: str,
         pdb_id: str,
         pdb_hash: str,
@@ -517,7 +511,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
-        return check_synapse(self=self, synapse=synapse, event=event)
 
     async def blacklist(self, synapse: JobSubmissionSynapse) -> Tuple[bool, str]:
         if (
@@ -551,6 +544,202 @@ class FoldingMiner(BaseMinerNeuron):
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
         return priority
+
+    def add_active_jobs_from_db(self, limit: int = None) -> int:
+        """
+        Fetch active jobs from the database and add them to the simulation executor.
+
+        Parameters:
+            limit (int, optional): Maximum number of new jobs to add. If None, add as many
+                                  as possible up to max_workers. Defaults to None.
+
+        Returns:
+            int: Number of jobs added to the executor
+        """
+        if not self.local_db_address:
+            logger.warning(
+                "No local database address configured, cannot add active jobs"
+            )
+            return 0
+
+        # Calculate how many slots are available
+        available_slots = self.max_workers - len(self.simulations)
+        if available_slots <= 0:
+            logger.info("No available worker slots for new jobs")
+            return 0
+
+        # Determine how many jobs to fetch
+        jobs_to_fetch = limit if limit is not None else available_slots
+
+        # Query the database for active jobs that are not already being processed
+        full_local_db_address = f"http://{self.local_db_address}/db/query"
+        # We need columns that identify the job and contain essential configuration
+        columns_to_select = "pdb_id, system_config, priority, s3_links"
+        query = f"""SELECT job_id, {columns_to_select} FROM jobs 
+                   WHERE active = 1 
+                   ORDER BY priority DESC LIMIT {jobs_to_fetch}"""
+
+        try:
+            response = requests.get(
+                full_local_db_address, params={"q": query, "level": "strong"}
+            )
+            response.raise_for_status()
+
+            data = self.response_to_dict(response=response)
+            if not data or len(data) == 0:
+                logger.info("No active jobs found in database")
+                return 0
+
+            # Keep track of how many jobs we've added
+            jobs_added = 0
+
+            # Add each job to the simulation executor if not already being processed
+            for job in data:
+                has_worked_on_job, condition, event = self.check_if_job_was_worked_on(job_id=job.get("job_id"))
+                if has_worked_on_job:
+                    logger.info(f"Job {job.get('job_id')} is already being worked on or has been worked on before")
+                    continue
+                job_id = job.get("job_id")
+                pdb_id = job.get("pdb_id")
+                system_config_json = job.get("system_config")
+                s3_links = job.get("s3_links")
+                if not job_id or not pdb_id or not system_config_json:
+                    logger.warning(f"Incomplete job data: {job}")
+                    continue
+
+                # Generate a unique hash for this job to check if it's already running
+                try:
+                    system_config = json.loads(system_config_json)
+                    pdb_hash = self.get_simulation_hash(pdb_id, system_config)
+
+                    # Skip if this simulation is already running
+                    if pdb_hash in self.simulations:
+                        logger.info(
+                            f"Simulation for PDB {pdb_id} (hash: {pdb_hash}) is already running"
+                        )
+                        continue
+
+                    # Create an output directory for this job
+                    output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
+                    os.makedirs(output_dir, exist_ok=True)
+
+                    success = self.download_gjp_input_files(
+                        pdb_id=pdb_id,
+                        output_dir=output_dir,
+                        s3_links=json.loads(s3_links),
+                    )
+                    if not success:
+                        logger.error(
+                            f"Failed to download GJP input files for job {job_id}"
+                        )
+                        continue
+
+                    # Create simulation config
+                    simulation_config = self.get_simulation_config(
+                        gjp_config=system_config,
+                        system_config_filepath=os.path.join(
+                            output_dir, f"config_{pdb_id}.pkl"
+                        ),
+                    )
+
+                    # Add the job to the simulation executor
+                    event = {"condition": "loading_from_db"}
+                    self.create_simulation_from_job(
+                        output_dir=output_dir,
+                        pdb_id=pdb_id,
+                        pdb_hash=pdb_hash,
+                        system_config=simulation_config,
+                        event=event,
+                    )
+
+                    jobs_added += 1
+                    logger.success(
+                        f"Added job {job_id} for PDB {pdb_id} from database to executor"
+                    )
+
+                    # Stop if we've reached our limit
+                    if jobs_added >= available_slots:
+                        break
+
+                except Exception as e:
+                    logger.error(
+                        f"Failed to add job {job_id} for PDB {pdb_id}: {traceback.format_exc()}"
+                    )
+                    continue
+
+            logger.info(f"Added {jobs_added} jobs from database to simulation executor")
+            return jobs_added
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch active jobs from database: {e}")
+            return 0
+
+    def run(self):
+        """
+        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
+
+        This function performs the following primary tasks:
+        1. Check for registration on the Bittensor network.
+        2. Starts the miner's axon, making it active on the network.
+        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
+        4. Periodically checks the database for new jobs and adds them to the simulation executor.
+        The miner continues its operations until `should_exit` is set to True or an external interruption occurs.
+        During each epoch of its operation, the miner waits for new blocks on the Bittensor network, updates its
+        knowledge of the network (metagraph), and sets its weights. This process ensures the miner remains active
+        and up-to-date with the network's latest state.
+
+        Note:
+            - The function leverages the global configurations set during the initialization of the miner.
+            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
+
+        Raises:
+            KeyboardInterrupt: If the miner is stopped by a manual interruption.
+            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
+        """
+        # Check that miner is registered on the network.
+        self.sync()
+
+        # Serve passes the axon information to the network + netuid we are hosting on.
+        logger.info(
+            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+        )
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        self.axon.start()
+        logger.info(f"Miner starting at block: {self.block}")
+
+        # Initialize the last job check time
+        jobs_added = self.add_active_jobs_from_db()
+        logger.success(f"Added {jobs_added} new jobs from database")
+        last_job_check_time = time.time()
+        job_check_interval = 300  # Check for new jobs every 300 seconds
+
+        # This loop maintains the miner's operations until intentionally stopped
+        try:
+            while not self.should_exit:
+                # Perform regular chain synchronization
+                self.sync()
+
+                # Check for available job slots and fill them if needed
+                current_time = time.time()
+                if current_time - last_job_check_time > job_check_interval:
+                    jobs_added = self.add_active_jobs_from_db()
+                    if jobs_added > 0:
+                        logger.success(f"Added {jobs_added} new jobs from database")
+                    last_job_check_time = current_time
+
+                logger.info(
+                    f"currently working on {len(self.simulations)} jobs: {[simulation['pdb_id'] for simulation in self.simulations.values()]}"
+                )
+
+                # Sleep to prevent CPU overuse
+                time.sleep(10)
+
+        except KeyboardInterrupt:
+            self.axon.stop()
+            logger.success("Miner killed by keyboard interrupt.")
+            exit()
+        except Exception as e:
+            logger.error(traceback.format_exc())
 
 
 class SimulationManager:
