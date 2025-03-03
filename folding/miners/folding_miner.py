@@ -121,10 +121,10 @@ class FoldingMiner(BaseMinerNeuron):
         # TODO: There needs to be a timeout manager. Right now, if
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
-        
+
         self.miner_data_path = os.path.join(self.project_path, "miner-data")
-        self.base_data_path = (
-            os.path.join(self.miner_data_path, self.wallet.hotkey.ss58_address[:8])
+        self.base_data_path = os.path.join(
+            self.miner_data_path, self.wallet.hotkey.ss58_address[:8]
         )
         self.local_db_address = os.getenv("RQLITE_HTTP_ADDR")
         self.simulations = self.create_default_dict()
@@ -232,7 +232,7 @@ class FoldingMiner(BaseMinerNeuron):
         values = response["values"]
         data = [dict(zip(columns, row)) for row in values]
         return data[0]
-            
+
     def fetch_sql_job_details(
         self, columns: List[str], job_id: str, local_db_address: str
     ) -> Dict:
@@ -275,8 +275,7 @@ class FoldingMiner(BaseMinerNeuron):
         pdb_id: str,
         s3_links: dict[str, str],
     ) -> bool:
-        
-        def stream_download(url:str, output_path:str):
+        def stream_download(url: str, output_path: str):
             if not os.path.exists(os.path.dirname(output_path)):
                 os.makedirs(os.path.dirname(output_path))
             with requests.get(url, stream=True) as r:
@@ -312,7 +311,12 @@ class FoldingMiner(BaseMinerNeuron):
         """
 
         # create SimualtionConfig and write it to system_config_filepath
-        system_config = SimulationConfig(ff=gjp_config["ff"], water=gjp_config["water"], box=gjp_config["box"], **gjp_config["system_kwargs"])
+        system_config = SimulationConfig(
+            ff=gjp_config["ff"],
+            water=gjp_config["water"],
+            box=gjp_config["box"],
+            **gjp_config["system_kwargs"],
+        )
 
         if system_config.seed is None:
             system_config.seed = self.generate_random_seed()

@@ -191,7 +191,6 @@ def get_energies(
             processed_indices.append(i)
 
             if is_valid:
-
                 if (
                     not abs((median_energy - reported_energy) / reported_energy) * 100
                     < c.ANOMALY_THRESHOLD
