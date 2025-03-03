@@ -29,6 +29,13 @@ class PingSynapse(bt.Synapse):
     available_compute: typing.Optional[int] = None  # TODO: number of threads / gpus?
 
 
+class ParticipationSynapse(bt.Synapse):
+    """Responsible for determining if a miner is participating in a specific job"""
+
+    job_id: str
+    is_participating: bool = False
+
+
 class JobSubmissionSynapse(bt.Synapse):
     """
     A protocol representation which uses bt.Synapse as its base.
@@ -43,10 +50,10 @@ class JobSubmissionSynapse(bt.Synapse):
     - miner_seed: An integer value which is the seed for the simulation.
     - miner_state: A string value which is the state of the miner.
     """
-    
+
     pdb_id: str
     job_id: str
-      
+
     best_submitted_energy: typing.Optional[float] = None
 
     # Optional request output, filled by receiving axon.
