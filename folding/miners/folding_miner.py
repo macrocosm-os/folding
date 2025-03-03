@@ -121,10 +121,10 @@ class FoldingMiner(BaseMinerNeuron):
         # TODO: There needs to be a timeout manager. Right now, if
         # the simulation times out, the only time the memory is freed is when the miner
         # is restarted, or sampled again.
-        
+
         self.miner_data_path = os.path.join(self.project_path, "miner-data")
-        self.base_data_path = (
-            os.path.join(self.miner_data_path, self.wallet.hotkey.ss58_address[:8])
+        self.base_data_path = os.path.join(
+            self.miner_data_path, self.wallet.hotkey.ss58_address[:8]
         )
         self.local_db_address = os.getenv("RQLITE_HTTP_ADDR")
         self.simulations = self.create_default_dict()
@@ -232,7 +232,7 @@ class FoldingMiner(BaseMinerNeuron):
         values = response["values"]
         data = [dict(zip(columns, row)) for row in values]
         return data[0]
-            
+
     def fetch_sql_job_details(
         self, columns: List[str], job_id: str, local_db_address: str
     ) -> Dict:
@@ -275,8 +275,7 @@ class FoldingMiner(BaseMinerNeuron):
         pdb_id: str,
         s3_links: dict[str, str],
     ) -> bool:
-        
-        def stream_download(url:str, output_path:str):
+        def stream_download(url: str, output_path: str):
             if not os.path.exists(os.path.dirname(output_path)):
                 os.makedirs(os.path.dirname(output_path))
             with requests.get(url, stream=True) as r:
@@ -312,7 +311,12 @@ class FoldingMiner(BaseMinerNeuron):
         """
 
         # create SimualtionConfig and write it to system_config_filepath
-        system_config = SimulationConfig(ff=gjp_config["ff"], water=gjp_config["water"], box=gjp_config["box"], **gjp_config["system_kwargs"])
+        system_config = SimulationConfig(
+            ff=gjp_config["ff"],
+            water=gjp_config["water"],
+            box=gjp_config["box"],
+            **gjp_config["system_kwargs"],
+        )
 
         if system_config.seed is None:
             system_config.seed = self.generate_random_seed()
@@ -547,6 +551,118 @@ class FoldingMiner(BaseMinerNeuron):
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
         return priority
+
+    def add_active_jobs_from_db(self, limit: int = None) -> int:
+        """
+        Fetch active jobs from the database and add them to the simulation executor.
+
+        Parameters:
+            limit (int, optional): Maximum number of new jobs to add. If None, add as many
+                                  as possible up to max_workers. Defaults to None.
+
+        Returns:
+            int: Number of jobs added to the executor
+        """
+        if not self.local_db_address:
+            logger.warning(
+                "No local database address configured, cannot add active jobs"
+            )
+            return 0
+
+        # Calculate how many slots are available
+        available_slots = self.max_workers - len(self.simulations)
+        if available_slots <= 0:
+            logger.info("No available worker slots for new jobs")
+            return 0
+
+        # Determine how many jobs to fetch
+        jobs_to_fetch = limit if limit is not None else available_slots
+
+        # Query the database for active jobs that are not already being processed
+        full_local_db_address = f"http://{self.local_db_address}/db/query"
+        # We need columns that identify the job and contain essential configuration
+        columns_to_select = "pdb_id, system_config, priority, created_at"
+        query = f"""SELECT job_id, {columns_to_select} FROM jobs 
+                   WHERE active = 1 
+                   ORDER BY priority DESC LIMIT {jobs_to_fetch}"""
+
+        try:
+            response = requests.get(
+                full_local_db_address, params={"q": query, "level": "strong"}
+            )
+            response.raise_for_status()
+
+            data = self.response_to_dict(response=response)
+            if not data or len(data) == 0:
+                logger.info("No active jobs found in database")
+                return 0
+
+            # Keep track of how many jobs we've added
+            jobs_added = 0
+
+            # Add each job to the simulation executor if not already being processed
+            for job in data:
+                job_id = job.get("job_id")
+                pdb_id = job.get("pdb_id")
+                system_config_json = job.get("system_config")
+
+                if not job_id or not pdb_id or not system_config_json:
+                    logger.warning(f"Incomplete job data: {job}")
+                    continue
+
+                # Generate a unique hash for this job to check if it's already running
+                try:
+                    system_config = json.loads(system_config_json)
+                    pdb_hash = self.get_simulation_hash(pdb_id, system_config)
+
+                    # Skip if this simulation is already running
+                    if pdb_hash in self.simulations:
+                        logger.info(
+                            f"Simulation for PDB {pdb_id} (hash: {pdb_hash}) is already running"
+                        )
+                        continue
+
+                    # Create an output directory for this job
+                    output_dir = os.path.join(self.base_data_path, pdb_hash)
+                    os.makedirs(output_dir, exist_ok=True)
+
+                    # Create a dummy synapse for this job (needed by create_simulation_from_job)
+                    dummy_synapse = JobSubmissionSynapse()
+                    dummy_synapse.job_id = job_id
+
+                    # Create simulation config
+                    simulation_config = self.get_simulation_config(system_config, None)
+
+                    # Add the job to the simulation executor
+                    event = {"condition": "loading_from_db"}
+                    self.create_simulation_from_job(
+                        synapse=dummy_synapse,
+                        output_dir=output_dir,
+                        pdb_id=pdb_id,
+                        pdb_hash=pdb_hash,
+                        system_config=simulation_config,
+                        event=event,
+                    )
+
+                    jobs_added += 1
+                    logger.success(
+                        f"Added job {job_id} for PDB {pdb_id} from database to executor"
+                    )
+
+                    # Stop if we've reached our limit
+                    if jobs_added >= available_slots:
+                        break
+
+                except Exception as e:
+                    logger.error(f"Failed to add job {job_id} for PDB {pdb_id}: {e}")
+                    continue
+
+            logger.info(f"Added {jobs_added} jobs from database to simulation executor")
+            return jobs_added
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch active jobs from database: {e}")
+            return 0
 
 
 class SimulationManager:
