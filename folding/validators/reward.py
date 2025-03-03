@@ -156,9 +156,15 @@ def get_energies(
     unique_energies = set()  # Track unique energy values
 
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
-    for i, (reported_energy, response, uid, evaluator, seed, best_cpt, process_md_output_time) in enumerate(
-        sorted_data
-    ):
+    for i, (
+        reported_energy,
+        response,
+        uid,
+        evaluator,
+        seed,
+        best_cpt,
+        process_md_output_time,
+    ) in enumerate(sorted_data):
         try:
             i = uids.index(uid)
             if reported_energy == 0:
@@ -186,8 +192,12 @@ def get_energies(
 
             if is_valid:
 
-                if not abs(median_energy - reported_energy) < c.DIFFERENCE_THRESHOLD:
+                if (
+                    not abs((median_energy - reported_energy) / reported_energy) * 100
+                    < c.ANOMALY_THRESHOLD
+                ):
                     event["is_valid"][i] = False
+                    event["reason"][i] = "Energy difference too large"
                     continue
 
                 is_duplicate = any(
