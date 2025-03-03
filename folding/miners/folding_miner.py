@@ -330,7 +330,7 @@ class FoldingMiner(BaseMinerNeuron):
         # query rqlite to get pdb_id
         sql_job_details = self.fetch_sql_job_details(
             columns=columns, job_id=job_id, local_db_address=self.local_db_address
-        )
+        )[0]
 
         if len(sql_job_details) == 0:
             logger.error(f"Job ID {job_id} not found in the database.")
@@ -404,6 +404,7 @@ class FoldingMiner(BaseMinerNeuron):
         has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
             job_id=job_id
         )
+        self.step+=1
         if has_worked_on_job:
 
             if condition == "found_existing_data":
@@ -598,6 +599,10 @@ class FoldingMiner(BaseMinerNeuron):
 
             # Add each job to the simulation executor if not already being processed
             for job in data:
+                has_worked_on_job, condition, event = self.check_if_job_was_worked_on(job_id=job.get("job_id"))
+                if has_worked_on_job:
+                    logger.info(f"Job {job.get('job_id')} is already being worked on or has been worked on before")
+                    continue
                 job_id = job.get("job_id")
                 pdb_id = job.get("pdb_id")
                 system_config_json = job.get("system_config")
