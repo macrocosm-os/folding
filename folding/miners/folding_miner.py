@@ -109,8 +109,6 @@ def check_synapse(
         event["md_output_sizes"] = list(map(len, synapse.md_output.values()))
         event["md_output_filenames"] = list(synapse.md_output.keys())
 
-    event["query_forward_time"] = time.time() - self.query_start_time
-
     return synapse
 
 
@@ -408,9 +406,7 @@ class FoldingMiner(BaseMinerNeuron):
         if has_worked_on_job:
 
             if condition == "found_existing_data":
-                if os.path.exists(event["output_dir"]) and event[
-                    "pdb_id"
-                ] in os.listdir(event["output_dir"]):
+                if os.path.exists(event["output_dir"]) and f"{event['pdb_id']}.pdb" in os.listdir(event["output_dir"]):
                     # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
                     # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
 
@@ -449,7 +445,7 @@ class FoldingMiner(BaseMinerNeuron):
                         )
                         synapse = attach_files_to_synapse(
                             synapse=synapse,
-                            data_directory=output_dir,
+                            data_directory=event["output_dir"],
                             state=state,
                             seed=seed,
                         )
