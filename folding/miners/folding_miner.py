@@ -9,7 +9,6 @@ import hashlib
 import requests
 import traceback
 import concurrent.futures
-import subprocess
 import asyncio
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any
@@ -248,13 +247,15 @@ class FoldingMiner(BaseMinerNeuron):
 
         logger.info("Fetching job details from the sqlite database")
 
-        full_local_db_address = f"http://{self.local_db_address}/db/query"
+        full_local_db_address = f"http://{local_db_address}/db/query"
         columns_to_select = ", ".join(columns)
         query = f"""SELECT job_id, {columns_to_select} FROM jobs WHERE job_id = '{job_id}'"""
 
         try:
             response = requests.get(
-                full_local_db_address, params={"q": query, "level": "strong"}
+                full_local_db_address,
+                params={"q": query, "level": "strong"},
+                timeout=10,
             )
             response.raise_for_status()
 
@@ -273,10 +274,26 @@ class FoldingMiner(BaseMinerNeuron):
         pdb_id: str,
         s3_links: dict[str, str],
     ) -> bool:
+        """Downloads input files required from the GJP (Global Job Pool) from S3 storage.
+
+        Args:
+            output_dir (str): Directory path where downloaded files will be saved
+            pdb_id (str): Identifier for the job
+            s3_links (dict[str, str]): Dictionary mapping file types to their S3 URLs
+
+        Returns:
+            bool: True if all files were downloaded successfully, False if any download failed
+
+        The function:
+        1. Creates the output directory if it doesn't exist
+        2. Downloads each file in chunks to conserve memory
+        3. Names downloaded files as {pdb_id}.{file_type}
+        """
+
         def stream_download(url: str, output_path: str):
             if not os.path.exists(os.path.dirname(output_path)):
                 os.makedirs(os.path.dirname(output_path))
-            with requests.get(url, stream=True) as r:
+            with requests.get(url, stream=True, timeout=30) as r:
                 r.raise_for_status()
                 with open(output_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
@@ -323,22 +340,34 @@ class FoldingMiner(BaseMinerNeuron):
         return system_config
 
     def check_if_job_was_worked_on(self, job_id: str) -> tuple[bool, str, dict]:
+        """Check if a job has been previously worked on or is currently being processed.
+
+        Parameters:
+            job_id (str): The unique identifier for the job to check.
+
+        Returns:
+            tuple[bool, str, dict]: A tuple containing:
+                - Whether the job has been worked on (bool)
+                - The condition of the job (str)
+                - Event dictionary with job details (dict)
+        """
+
         columns = ["pdb_id", "system_config"]
 
-        # query rqlite to get pdb_id
+        # query your LOCAL rqlite db to get pdb_id
         sql_job_details = self.fetch_sql_job_details(
             columns=columns, job_id=job_id, local_db_address=self.local_db_address
         )[0]
 
         if len(sql_job_details) == 0:
-            logger.error(f"Job ID {job_id} not found in the database.")
+            logger.warning(f"Job ID {job_id} not found in the database.")
             return False, "job_not_found", {}
 
         # str
         pdb_id = sql_job_details["pdb_id"]
 
         # If we are already running a process with the same identifier, return intermediate information
-        logger.warning(f"⌛ Query from validator for protein: {pdb_id} ⌛")
+        logger.info(f"⌛ Query from validator for protein: {pdb_id} ⌛")
 
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
@@ -348,9 +377,11 @@ class FoldingMiner(BaseMinerNeuron):
 
         pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=gjp_config)
         event["pdb_hash"] = pdb_hash
+
         if pdb_hash in self.simulations:
             return True, "running_simulation", event
 
+        # If you don't have in the list of simulations, check your local storage for the data.
         output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
         gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
         event["output_dir"] = output_dir
@@ -377,36 +408,47 @@ class FoldingMiner(BaseMinerNeuron):
             self (ParticipationSynapse): must attach "is_participating"
         """
         job_id = synapse.job_id
-        has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
-            job_id=job_id
-        )
+        has_worked_on_job, _, _ = self.check_if_job_was_worked_on(job_id=job_id)
         synapse.is_participating = has_worked_on_job
         return synapse
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
-        """
-        The main async function that is called by the dendrite to run the simulation.
-        There are a set of default behaviours the miner should carry out based on the form the synapse comes in as:
+        """Process an incoming job submission request and return appropriate simulation data.
 
-            1. Check to see if the pdb is in the set of simulations that are running
-            2. If the synapse md_inputs contains a ckpt file, then we are expected to either accept/reject a simulation rebase. (not implemented yet)
-            3. Check if simulation has been run before, and if so, return the files from the last simulation
-            4. If none of the above conditions are met, we start a new simulation.
-                - If the number of active processes is less than the number of CPUs and the pdb_id is unique, start a new process
+        This method handles three main scenarios:
+        1. Found existing data: Returns previously computed simulation state files
+        2. Running simulation: Returns current state of an active simulation
+
+        The validator will use the JobSubmissionSynapse to acquire the results of the work done.
+
+        Args:
+            synapse (JobSubmissionSynapse): The incoming request object containing:
+                - job_id: Unique identifier for the simulation job
+                - Additional metadata needed for job processing
 
         Returns:
-            JobSubmissionSynapse: synapse with md_output attached
+            JobSubmissionSynapse: The response object containing:
+                - md_output: Dictionary of base64 encoded simulation state files
+                - miner_state: Current state of simulation ("nvt", "npt", "md_0_1", "finished", or "failed")
+                - miner_seed: Random seed used for the simulation
+
+        Note:
+            The method checks the local database and running simulations before starting
+            new jobs to avoid duplicate work. State files are only attached if valid
+            simulation data is found.
         """
         job_id = synapse.job_id
 
         has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
             job_id=job_id
         )
-        self.step+=1
-        if has_worked_on_job:
+        self.step += 1
 
+        if has_worked_on_job:
             if condition == "found_existing_data":
-                if os.path.exists(event["output_dir"]) and f"{event['pdb_id']}.pdb" in os.listdir(event["output_dir"]):
+                if os.path.exists(
+                    event["output_dir"]
+                ) and f"{event['pdb_id']}.pdb" in os.listdir(event["output_dir"]):
                     # If we have a pdb_id in the data directory, we can assume that the simulation has been run before
                     # and we can return the COMPLETED files from the last simulation. This only works if you have kept the data.
 
@@ -420,7 +462,7 @@ class FoldingMiner(BaseMinerNeuron):
 
                     # Open the state file that should be generated during the simulation.
                     try:
-                        with open(state_file, "r") as f:
+                        with open(state_file, "r", encoding="utf-8") as f:
                             lines = f.readlines()
                             state = lines[-1].strip()
                             state = "md_0_1" if state == "finished" else state
@@ -437,7 +479,7 @@ class FoldingMiner(BaseMinerNeuron):
                                 self=self, synapse=synapse, event=event
                             )
 
-                        with open(seed_file, "r") as f:
+                        with open(seed_file, "r", encoding="utf-8") as f:
                             seed = f.readlines()[-1].strip()
 
                         logger.warning(
@@ -460,6 +502,7 @@ class FoldingMiner(BaseMinerNeuron):
                         event["state"] = state
 
                         return check_synapse(self=self, synapse=synapse, event=event)
+
             # The set of RUNNING simulations.
             elif condition == "running_simulation":
                 self.simulations[event["pdb_hash"]]["queried_at"] = time.time()
@@ -581,7 +624,9 @@ class FoldingMiner(BaseMinerNeuron):
 
         try:
             response = requests.get(
-                full_local_db_address, params={"q": query, "level": "strong"}
+                full_local_db_address,
+                params={"q": query, "level": "strong"},
+                timeout=10,
             )
             response.raise_for_status()
 
@@ -595,9 +640,13 @@ class FoldingMiner(BaseMinerNeuron):
 
             # Add each job to the simulation executor if not already being processed
             for job in data:
-                has_worked_on_job, condition, event = self.check_if_job_was_worked_on(job_id=job.get("job_id"))
+                has_worked_on_job, _, event = self.check_if_job_was_worked_on(
+                    job_id=job.get("job_id")
+                )
                 if has_worked_on_job:
-                    logger.info(f"Job {job.get('job_id')} is already being worked on or has been worked on before")
+                    logger.info(
+                        f"Job {job.get('job_id')} is already being worked on or has been worked on before"
+                    )
                     continue
                 job_id = job.get("job_id")
                 pdb_id = job.get("pdb_id")
@@ -661,7 +710,7 @@ class FoldingMiner(BaseMinerNeuron):
                     if jobs_added >= available_slots:
                         break
 
-                except Exception as e:
+                except Exception:
                     logger.error(
                         f"Failed to add job {job_id} for PDB {pdb_id}: {traceback.format_exc()}"
                     )
@@ -709,7 +758,12 @@ class FoldingMiner(BaseMinerNeuron):
 
         # Initialize the last job check time
         jobs_added = self.add_active_jobs_from_db()
-        logger.success(f"Added {jobs_added} new jobs from database")
+
+        if jobs_added == 0:
+            logger.warning("No jobs added during initialization")
+        else:
+            logger.success(f"Added {jobs_added} new jobs from database")
+
         last_job_check_time = time.time()
         job_check_interval = 300  # Check for new jobs every 300 seconds
 
@@ -722,9 +776,11 @@ class FoldingMiner(BaseMinerNeuron):
                 # Check for available job slots and fill them if needed
                 current_time = time.time()
                 if current_time - last_job_check_time > job_check_interval:
+                    logger.info("Checking for available job slots...")
                     jobs_added = self.add_active_jobs_from_db()
                     if jobs_added > 0:
                         logger.success(f"Added {jobs_added} new jobs from database")
+
                     last_job_check_time = current_time
 
                 logger.info(
