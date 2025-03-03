@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -7,16 +7,19 @@ from openmm import app
 
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
+from folding.utils.reporters import RMSDReporter
 from folding.utils import constants as c
 from folding.utils.logger import logger
 from folding.utils.ops import (
     ValidationError,
+    EvaluationError,
     create_velm,
     load_pdb_file,
     load_pkl,
     save_files,
     save_pdb,
     write_pkl,
+    calculate_rmsd,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
 
@@ -56,7 +59,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
     # TODO: Refactor this method to be more modular, seperate getting energy and setting up simulations and files
 
-    def process_md_output(self) -> bool:
+    def process_md_output(self) -> Tuple[bool, Optional[float]]:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
 
         Args:
@@ -68,7 +71,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             pdb_location (str): The location of the pdb file.
 
         Raises:
-            ValidationError: Miner not running enough simulation steps
+            EvaluationError: Miner not running enough simulation steps
 
         Returns:
             bool: True if the simulation was successfully recreated, False otherwise.
@@ -106,7 +109,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
             )
-
+            # Create a reference simulation for rmsd calcualtion
+            self.reference_simualtion, reference_config = self.md_simulator.create_simulation(
+                pdb=load_pdb_file(pdb_file=self.pdb_location),
+                system_config=self.system_config.get_config(),
+                seed=self.miner_seed,
+            )
             checkpoint_path = os.path.join(
                 self.miner_data_directory, f"{self.current_state}.cpt"
             )
@@ -124,7 +132,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Checks to see if we have enough steps in the log file to start validation
             if len(self.log_file) < c.MIN_LOGGING_ENTRIES:
-                raise ValidationError(
+                raise EvaluationError(
                     f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                 )
 
@@ -144,11 +152,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     if (
                         self.log_step - simulation.currentStep
                     ) < c.MIN_SIMULATION_STEPS:
-                        raise ValidationError(
+                        raise EvaluationError(
                             f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
                 else:
-                    raise ValidationError(
+                    raise EvaluationError(
                         f"Miner {self.hotkey_alias} did not run enough steps and no old checkpoint found... Skipping!"
                     )
 
@@ -183,11 +191,17 @@ class SyntheticMDEvaluator(BaseEvaluator):
             miner_velm_data = create_velm(simulation=simulation)
 
             if not self.check_masses(miner_velm_data):
-                raise ValidationError(
+                raise EvaluationError(
                     f"Miner {self.hotkey_alias} has modified the system in unintended ways... Skipping!"
                 )
+            
+            # calculate rmsd 
+            rmsd: float = calculate_rmsd(
+                simulation=simulation, 
+                reference_simulation=self.reference_simualtion
+                )
 
-        except ValidationError as E:
+        except EvaluationError as E:
             logger.warning(f"{E}")
             return False
 
@@ -195,7 +209,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             logger.error(f"Failed to recreate simulation: {e}")
             return False
 
-        return True
+        return True, rmsd
 
     def get_reported_energy(self) -> float:
         """Get the energy from the simulation"""
@@ -305,12 +319,20 @@ class SyntheticMDEvaluator(BaseEvaluator):
             current_state_logfile = os.path.join(
                 self.miner_data_directory, f"check_{self.current_state}.log"
             )
+            current_state_rmsds = os.path.join(
+                self.miner_data_directory, f"check_{self.current_state}_rmsd.csv"
+            )
+
             simulation.reporters.append(
                 app.StateDataReporter(
                     current_state_logfile,
                     10,
                     step=True,
                     potentialEnergy=True,
+                ), 
+                app.RMSDReporter(
+                    file=current_state_rmsds,
+                    report_interval=100,
                 )
             )
 
@@ -376,16 +398,18 @@ class SyntheticMDEvaluator(BaseEvaluator):
             logger.warning(f"{E}")
             return False, [], [], E.message
 
-    def evaluate(self) -> bool:
+    
+    def evaluate(self) -> Tuple[bool, float]:
         """Checks to see if the miner's data can be passed for validation"""
-        if not self.process_md_output():
+        can_process, rmsd= self.process_md_output()
+        if not can_process:
             return False
 
         # Check to see if we have a logging resolution of 10 or better, if not the run is not valid
         if (self.log_file['#"Step"'][1] - self.log_file['#"Step"'][0]) > 10:
             return False
 
-        return True
+        return True, rmsd
 
     def validate(self):
         is_valid, checked_energies, miner_energies, result = self.is_run_valid()

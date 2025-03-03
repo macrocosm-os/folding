@@ -1,6 +1,6 @@
 import os
 import openmm.app as app
-
+from folding.utils.ops import calculate_rmsd
 
 class LastTwoCheckpointsReporter(app.CheckpointReporter):
     def __init__(self, file_prefix, reportInterval):
@@ -38,3 +38,18 @@ class ExitFileReporter(object):
 
     def finalize(self):
         pass
+
+class RMSDReporter:
+    def __init__(self, file, reportInterval, reference_simulation):
+        self.reference_simulation = reference_simulation
+        self.file = open(file, 'w')
+        self.reportInterval = reportInterval
+        self.file.write("Step,RMSD\n")
+        
+    def __del__(self):
+        self.file.close()
+        
+    def report(self, simulation, state):
+        step = state.getStepCount()
+        rmsf = calculate_rmsd(simulation, self.reference_positions)
+        self.file.write(f"{step},{rmsf}\n")
