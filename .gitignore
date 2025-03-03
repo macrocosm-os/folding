@@ -192,3 +192,4 @@ tests/mock_data
 
 db
 local-gjp
+*.ipynb

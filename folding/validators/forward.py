@@ -105,7 +105,11 @@ async def run_step(
         return event
 
     energies, energy_event = get_energies(
-        protein=protein, responses=responses, uids=uids, job_type=job_type
+        protein=protein,
+        responses=responses,
+        uids=uids,
+        miner_registry=self.miner_registry,
+        job_type=job_type,
     )
 
     # Log the step event.
