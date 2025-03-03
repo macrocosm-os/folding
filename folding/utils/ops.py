@@ -374,15 +374,13 @@ def save_files(files: Dict, output_directory: str, write_mode: str = "wb") -> Di
     logger.info(f"⏰ Saving files to {output_directory}...")
     check_if_directory_exists(output_directory=output_directory)
 
+    # loop over all of the output files and save to local disk
     filetypes = {}
     for filename, content in files.items():
         filetypes[filename.split(".")[-1]] = filename
 
         logger.info(f"Saving file {filename} to {output_directory}")
-        if "em.cpt" in filename:
-            filename = "em_binary.cpt"
 
-        # loop over all of the output files and save to local disk
         with open(os.path.join(output_directory, filename), write_mode) as f:
             f.write(content)
 

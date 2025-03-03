@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import List, Callable
+from typing import List, Callable, Dict, Union
 
 import folding.utils.constants as c
 from folding.utils.ops import write_pkl, load_pkl
@@ -13,7 +13,7 @@ class MinerRegistry:
 
     def __init__(self, miner_uids: List[int]):
         self.tasks: List[str] = list(EVALUATION_REGISTRY.keys())
-        self.registry = dict.fromkeys(miner_uids)
+        self.registry: Dict[int, Dict[str: Union[int, float, List]]] = dict.fromkeys(miner_uids)
 
         for miner_uid in miner_uids:
             self.registry[miner_uid] = {}
