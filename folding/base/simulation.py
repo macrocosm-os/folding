@@ -37,7 +37,12 @@ class GenericSimulation(ABC):
 class OpenMMSimulation(GenericSimulation):
     @GenericSimulation.timeit
     def create_simulation(
-        self, pdb: app.PDBFile, system_config: dict, seed: int = None, verbose=False
+        self,
+        pdb: app.PDBFile,
+        system_config: dict,
+        seed: int = None,
+        verbose=False,
+        initialize_with_solvent=False,
     ) -> Tuple[app.Simulation, SimulationConfig]:
         """Recreates a simulation object based on the provided parameters.
 
@@ -46,6 +51,7 @@ class OpenMMSimulation(GenericSimulation):
             seed (str): The seed for the random number generator.
             system_config (dict): A dictionary containing the system configuration settings.
             pdb (app.PDBFile): The PDB file used to initialize the simulation
+            initialize_with_solvent (bool): A boolean flag to determine if the simulation should be initialized with solvent.
 
         Returns:
         Tuple[app.Simulation, SimulationConfig]: A tuple containing the recreated simulation object and the potentially altered system configuration in SystemConfig format.
@@ -58,23 +64,24 @@ class OpenMMSimulation(GenericSimulation):
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
-        start_time = time.time()
-        modeller.deleteWater()
-        setup_times["delete_water"] = time.time() - start_time
+        if initialize_with_solvent:
+            start_time = time.time()
+            modeller.deleteWater()
+            setup_times["delete_water"] = time.time() - start_time
 
-        # modeller.addExtraParticles(forcefield)
+            start_time = time.time()
+            modeller.addHydrogens(forcefield)
+            setup_times["add_hydrogens"] = time.time() - start_time
 
-        start_time = time.time()
-        modeller.addHydrogens(forcefield)
-        setup_times["add_hydrogens"] = time.time() - start_time
+            start_time = time.time()
+            modeller.addSolvent(
+                forcefield,
+                padding=system_config["box_padding"] * unit.nanometer,
+                boxShape=system_config["box"],
+            )
+            setup_times["add_solvent"] = time.time() - start_time
 
-        start_time = time.time()
-        # modeller.addSolvent(
-        #     forcefield,
-        #     padding=system_config.box_padding * unit.nanometer,
-        #     boxShape=system_config.box,
-        # )
-        setup_times["add_solvent"] = time.time() - start_time
+            modeller.addExtraParticles(forcefield)
 
         # Create the system
         start_time = time.time()

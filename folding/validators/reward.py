@@ -178,9 +178,12 @@ def get_energies(
             event["ns_computed"][i] = float(ns_computed)
 
             if is_valid:
-                # In the case of a credibility skip, the difference here will be 0.
-                if abs(median_energy - reported_energy) >= c.DIFFERENCE_THRESHOLD:
+                if (
+                    not abs((median_energy - reported_energy) / reported_energy) * 100
+                    < c.ANOMALY_THRESHOLD
+                ):
                     event["is_valid"][i] = False
+                    event["reason"][i] = "Energy difference too large"
                     continue
 
                 is_duplicate = any(

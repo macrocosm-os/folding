@@ -18,7 +18,6 @@ from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
     get_response_info,
-    TimeoutException,
     OpenMMException,
     RsyncException,
 )
@@ -259,7 +258,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
         )
 
         try:
-            async with timeout(180):
+            async with timeout(300):
                 await protein.setup_simulation()
 
             if protein.init_energy > 0:
@@ -267,8 +266,8 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                     f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                 )
 
-        except TimeoutException as e:
-            logger.info(e)
+        except asyncio.TimeoutError as e:
+            logger.info(f"Timeout occurred during simulation setup: {e}")
             event["validator_search_status"] = False
             tries = 10
 
