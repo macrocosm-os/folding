@@ -621,18 +621,25 @@ class FoldingMiner(BaseMinerNeuron):
                     # Create an output directory for this job
                     output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
                     os.makedirs(output_dir, exist_ok=True)
-                    
+
                     success = self.download_gjp_input_files(
                         pdb_id=pdb_id,
                         output_dir=output_dir,
                         s3_links=json.loads(s3_links),
                     )
                     if not success:
-                        logger.error(f"Failed to download GJP input files for job {job_id}")
+                        logger.error(
+                            f"Failed to download GJP input files for job {job_id}"
+                        )
                         continue
 
                     # Create simulation config
-                    simulation_config = self.get_simulation_config(gjp_config=system_config, system_config_filepath=os.path.join(output_dir, f"config_{pdb_id}.pkl"))
+                    simulation_config = self.get_simulation_config(
+                        gjp_config=system_config,
+                        system_config_filepath=os.path.join(
+                            output_dir, f"config_{pdb_id}.pkl"
+                        ),
+                    )
 
                     # Add the job to the simulation executor
                     event = {"condition": "loading_from_db"}
@@ -654,7 +661,9 @@ class FoldingMiner(BaseMinerNeuron):
                         break
 
                 except Exception as e:
-                    logger.error(f"Failed to add job {job_id} for PDB {pdb_id}: {traceback.format_exc()}")
+                    logger.error(
+                        f"Failed to add job {job_id} for PDB {pdb_id}: {traceback.format_exc()}"
+                    )
                     continue
 
             logger.info(f"Added {jobs_added} jobs from database to simulation executor")
@@ -716,8 +725,10 @@ class FoldingMiner(BaseMinerNeuron):
                     if jobs_added > 0:
                         logger.success(f"Added {jobs_added} new jobs from database")
                     last_job_check_time = current_time
-                    
-                logger.info(f"currently working on {len(self.simulations)} jobs: {[simulation['pdb_id'] for simulation in self.simulations.values()]}")
+
+                logger.info(
+                    f"currently working on {len(self.simulations)} jobs: {[simulation['pdb_id'] for simulation in self.simulations.values()]}"
+                )
 
                 # Sleep to prevent CPU overuse
                 time.sleep(10)
