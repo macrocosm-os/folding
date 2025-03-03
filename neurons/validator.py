@@ -121,7 +121,6 @@ class Validator(BaseValidatorNeuron):
         return await run_step(
             self,
             protein=protein,
-            uids=uids,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,
             best_submitted_energy=job.best_loss,
