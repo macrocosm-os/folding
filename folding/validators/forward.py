@@ -84,9 +84,7 @@ async def run_step(
         }
         return event
 
-    participating_uids = await run_participation_step(
-        self, job_id=job_id, timeout=timeout
-    )
+    participating_uids = await run_participation_step(self, job_id=job_id, timeout=5)
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in participating_uids]
