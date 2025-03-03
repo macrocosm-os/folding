@@ -231,7 +231,7 @@ class FoldingMiner(BaseMinerNeuron):
         columns = response["columns"]
         values = response["values"]
         data = [dict(zip(columns, row)) for row in values]
-        return data[0]
+        return data
 
     def fetch_sql_job_details(
         self, columns: List[str], job_id: str, local_db_address: str
@@ -485,7 +485,6 @@ class FoldingMiner(BaseMinerNeuron):
 
     def create_simulation_from_job(
         self,
-        synapse: JobSubmissionSynapse,
         output_dir: str,
         pdb_id: str,
         pdb_hash: str,
@@ -515,7 +514,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         event["condition"] = "new_simulation"
         event["start_time"] = time.time()
-        return check_synapse(self=self, synapse=synapse, event=event)
 
     async def blacklist(self, synapse: JobSubmissionSynapse) -> Tuple[bool, str]:
         if (
@@ -579,7 +577,7 @@ class FoldingMiner(BaseMinerNeuron):
         # Query the database for active jobs that are not already being processed
         full_local_db_address = f"http://{self.local_db_address}/db/query"
         # We need columns that identify the job and contain essential configuration
-        columns_to_select = "pdb_id, system_config, priority, created_at"
+        columns_to_select = "pdb_id, system_config, priority, s3_links"
         query = f"""SELECT job_id, {columns_to_select} FROM jobs 
                    WHERE active = 1 
                    ORDER BY priority DESC LIMIT {jobs_to_fetch}"""
@@ -603,7 +601,7 @@ class FoldingMiner(BaseMinerNeuron):
                 job_id = job.get("job_id")
                 pdb_id = job.get("pdb_id")
                 system_config_json = job.get("system_config")
-
+                s3_links = job.get("s3_links")
                 if not job_id or not pdb_id or not system_config_json:
                     logger.warning(f"Incomplete job data: {job}")
                     continue
@@ -621,20 +619,24 @@ class FoldingMiner(BaseMinerNeuron):
                         continue
 
                     # Create an output directory for this job
-                    output_dir = os.path.join(self.base_data_path, pdb_hash)
+                    output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
                     os.makedirs(output_dir, exist_ok=True)
-
-                    # Create a dummy synapse for this job (needed by create_simulation_from_job)
-                    dummy_synapse = JobSubmissionSynapse()
-                    dummy_synapse.job_id = job_id
+                    
+                    success = self.download_gjp_input_files(
+                        pdb_id=pdb_id,
+                        output_dir=output_dir,
+                        s3_links=json.loads(s3_links),
+                    )
+                    if not success:
+                        logger.error(f"Failed to download GJP input files for job {job_id}")
+                        continue
 
                     # Create simulation config
-                    simulation_config = self.get_simulation_config(system_config, None)
+                    simulation_config = self.get_simulation_config(gjp_config=system_config, system_config_filepath=os.path.join(output_dir, f"config_{pdb_id}.pkl"))
 
                     # Add the job to the simulation executor
                     event = {"condition": "loading_from_db"}
                     self.create_simulation_from_job(
-                        synapse=dummy_synapse,
                         output_dir=output_dir,
                         pdb_id=pdb_id,
                         pdb_hash=pdb_hash,
@@ -652,7 +654,7 @@ class FoldingMiner(BaseMinerNeuron):
                         break
 
                 except Exception as e:
-                    logger.error(f"Failed to add job {job_id} for PDB {pdb_id}: {e}")
+                    logger.error(f"Failed to add job {job_id} for PDB {pdb_id}: {traceback.format_exc()}")
                     continue
 
             logger.info(f"Added {jobs_added} jobs from database to simulation executor")
@@ -696,8 +698,10 @@ class FoldingMiner(BaseMinerNeuron):
         logger.info(f"Miner starting at block: {self.block}")
 
         # Initialize the last job check time
-        last_job_check_time = 0
-        job_check_interval = 60  # Check for new jobs every 60 seconds
+        jobs_added = self.add_active_jobs_from_db()
+        logger.success(f"Added {jobs_added} new jobs from database")
+        last_job_check_time = time.time()
+        job_check_interval = 300  # Check for new jobs every 300 seconds
 
         # This loop maintains the miner's operations until intentionally stopped
         try:
@@ -712,6 +716,8 @@ class FoldingMiner(BaseMinerNeuron):
                     if jobs_added > 0:
                         logger.success(f"Added {jobs_added} new jobs from database")
                     last_job_check_time = current_time
+                    
+                logger.info(f"currently working on {len(self.simulations)} jobs: {[simulation['pdb_id'] for simulation in self.simulations.values()]}")
 
                 # Sleep to prevent CPU overuse
                 time.sleep(10)

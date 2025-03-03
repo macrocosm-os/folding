@@ -119,10 +119,6 @@ class BaseMinerNeuron(BaseNeuron):
         """
         self.run_in_background_thread()
 
-        # Load existing jobs from database to utilize available workers
-        added_jobs = self.add_active_jobs_from_db()
-        if added_jobs > 0:
-            logger.success(f"Loaded {added_jobs} active jobs from database on startup")
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
