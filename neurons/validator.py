@@ -208,11 +208,7 @@ class Validator(BaseValidatorNeuron):
             uids (List[int], optional): List of uids that can be assigned to the job. Defaults to None.
         """
         start_time = time.time()
-
-        if uids is not None:
-            valid_uids = uids
-        else:
-            valid_uids = await self.get_valid_uids()
+        valid_uids = uids if uids is not None else await self.get_valid_uids()
 
         job_event["uid_search_time"] = time.time() - start_time
         selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
@@ -505,12 +501,23 @@ class Validator(BaseValidatorNeuron):
                         "Job queue is full. Sleeping 60 seconds before next job creation loop."
                     )
 
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in create_jobs: {traceback.format_exc()}")
 
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
+        """Continuously updates the status of active jobs in the queue.
+
+        This method runs in an infinite loop and:
+        1. Queries miners assigned to each active job for their progress
+        2. Updates job status and rewards based on miner responses
+        3. Marks jobs as inactive if no miners respond
+        4. Updates the global job pool database with latest status
+
+        The method sleeps for a configured interval between update cycles.
+        Jobs are marked inactive if no miners respond to queries.
+        """
         while True:
             try:
                 # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.
@@ -544,7 +551,7 @@ class Validator(BaseValidatorNeuron):
                     await self.update_job(job=job)
                 logger.info(f"step({self.step}) block({self.block})")
 
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in update_jobs: {traceback.format_exc()}")
 
             self.step += 1
@@ -620,7 +627,7 @@ class Validator(BaseValidatorNeuron):
             try:
                 await asyncio.sleep(60)
                 await self.read_and_update_rewards()
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in reward_loop: {traceback.format_exc()}")
 
     async def sync_loop(self):
@@ -630,7 +637,7 @@ class Validator(BaseValidatorNeuron):
             try:
                 await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
                 self.sync()
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in sync_loop: {traceback.format_exc()}")
 
     async def monitor_db(self):
@@ -642,7 +649,7 @@ class Validator(BaseValidatorNeuron):
                 await asyncio.sleep(300)
                 try:
                     outdated = await self.store.monitor_db()
-                except Exception as e:
+                except Exception:
                     logger.error(f"Error in monitor_db: {traceback.format_exc()}")
                     await self.start_rqlite()
 
@@ -682,11 +689,14 @@ class Validator(BaseValidatorNeuron):
         self.loop.create_task(self.create_synthetic_jobs())
         self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
+
         if self.config.neuron.organic_enabled:
             logger.info("Starting organic scoring loop.")
             self.loop.create_task(self._organic_scoring.start_loop())
             self.loop.create_task(self.start_organic_api())
+
         self.loop.create_task(self.monitor_validator())
+
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self
