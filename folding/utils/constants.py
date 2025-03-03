@@ -3,9 +3,6 @@ MIN_LOGGING_ENTRIES = 500
 MIN_SIMULATION_STEPS = 5000
 MAX_SIMULATION_STEPS_FOR_EVALUATION = 3000
 ANOMALY_THRESHOLD = 0.5  # The percentage that we allow the energy to differ from the miner to the validator.
-ENERGY_DIFFERENCE_THRESHOLD = (
-    1e-6  # The threshold for 2 energy values to be considered equal
-)
 
 # Evaluation constants
 XML_CHECKPOINT_THRESHOLD = 2  # Percent

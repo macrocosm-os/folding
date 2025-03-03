@@ -111,7 +111,7 @@ When the simulations finally converge (ΔE/t < threshold), they produce the form
 ## Requirements 
 Protein folding utilizes an open-source package called [OpenMM](https://openmm.org). To run, you will need:
 1. A Linux-based machine 
-2. At least 1 CUDA-compatible GPU. We recommend an RXT 4090. 
+2. At least 1 CUDA-compatible GPU. We recommend an RTX 4090. 
 3. Conda Distribution (we recommend [Miniconda](https://docs.anaconda.com/miniconda/)). Using conda is an [OpenMM requirement](http://docs.openmm.org/latest/userguide/application/01_getting_started.html#installing-openmm). 
 
 For more information regarding recommended hardware specifications, look at [min_compute.yml](./min_compute.yml)
