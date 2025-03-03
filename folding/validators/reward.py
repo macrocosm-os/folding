@@ -62,9 +62,9 @@ def evaluate(
             process_md_output_time[i] = time.time() - start_time
             evaluators[i] = evaluator
 
-        except Exception as E:
+        except Exception as e:
             # If any of the above methods have an error, we will catch here.
-            logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
+            logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
     return reported_energies, evaluators, seed, best_cpt, process_md_output_time
@@ -130,7 +130,7 @@ def get_energies(
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
     for i, (
         reported_energy,
-        response,
+        _,
         uid,
         evaluator,
         seed,
@@ -161,7 +161,7 @@ def get_energies(
                 ) = evaluator.validate()
             else:
                 median_energy, checked_energies, miner_energies, reason = (
-                    evaluator.get_reported_energy(),
+                    reported_energy,
                     evaluator.miner_energies,
                     evaluator.miner_energies,
                     "skip",
@@ -197,8 +197,8 @@ def get_energies(
 
             processed_indices.append(i)
 
-        except Exception as E:
-            logger.error(f"Failed to parse miner data for uid {uid} with error: {E}")
+        except Exception as e:
+            logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
     # Update event with only the processed entries
