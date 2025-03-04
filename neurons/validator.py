@@ -59,6 +59,16 @@ class Validator(BaseValidatorNeuron):
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
+        else:
+            REFERENCE_BLOCK = 5055585 + 7200
+            if REFERENCE_BLOCK < self.block:
+                registry_path = os.path.join(
+                    self.config.neuron.full_path, "miner_registry.pkl"
+                )
+                # Now, remove the miner_registry file from local disk
+                logger.info(f"Removing old miner registry at {registry_path}")
+                os.remove(registry_path)
+                self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -342,10 +352,9 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
 
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
-            
             # jobs are "skipped" when they are spot checked
             if reason == "skip":
-                continue 
+                continue
 
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
