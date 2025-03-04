@@ -342,6 +342,11 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
 
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
+            
+            # jobs are "skipped" when they are spot checked
+            if reason == "skip":
+                continue 
+
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
                 logger.warning(
