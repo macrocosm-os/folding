@@ -59,6 +59,16 @@ class Validator(BaseValidatorNeuron):
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
+        else:
+            REFERENCE_BLOCK = 5055585 + 7200
+            if REFERENCE_BLOCK > self.block:
+                registry_path = os.path.join(
+                    self.config.neuron.full_path, "miner_registry.pkl"
+                )
+                # Now, remove the miner_registry file from local disk
+                logger.info(f"Removing old miner registry at {registry_path}")
+                os.remove(registry_path)
+                self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -99,7 +109,7 @@ class Validator(BaseValidatorNeuron):
             and self.metagraph.axons[self.metagraph.hotkeys.index(hotkey)].is_serving
         ]
 
-    async def forward(self, job: Job, first: bool = False) -> dict:
+    async def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
         Validator forward pass. Consists of:
@@ -115,18 +125,14 @@ class Validator(BaseValidatorNeuron):
 
         protein = await Protein.from_job(job=job, config=self.config.protein)
 
-        uids = self.get_uids(hotkeys=job.hotkeys)
-
         logger.info("Running run_step...⏳")
         return await run_step(
             self,
             protein=protein,
-            uids=uids,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,
             best_submitted_energy=job.best_loss,
             job_type=job.job_type,
-            first=first,
         )
 
     async def ping_all_miners(
@@ -286,8 +292,6 @@ class Validator(BaseValidatorNeuron):
                     raise ValueError("job_id is None")
 
                 logger.success("Job was uploaded successfully!")
-                if job.active:
-                    await self.forward(job=job, first=True)
 
                 self.last_time_created_jobs = datetime.now()
 
@@ -344,6 +348,10 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
 
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
+            # jobs are "skipped" when they are spot checked
+            if reason == "skip":
+                continue
+
             # If there is an exploit on the cpt file detected via the state-checkpoint, reduce score.
             if reason == "state-checkpoint":
                 logger.warning(
