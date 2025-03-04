@@ -1,6 +1,7 @@
 from itertools import chain
 from typing import List, Dict
 from dataclasses import dataclass, field
+from pydantic import BaseModel
 
 import math
 from statistics import mean
@@ -10,8 +11,7 @@ from folding.utils.ops import write_pkl, load_pkl
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 
 
-@dataclass
-class TaskMetrics:
+class TaskMetrics(BaseModel):
     """Holds metrics for a specific task"""
 
     credibility: float = c.STARTING_CREDIBILITY
@@ -19,8 +19,7 @@ class TaskMetrics:
     credibility_over_time: List[float] = field(default_factory=list)
 
 
-@dataclass
-class MinerData:
+class MinerData(BaseModel):
     """Holds all data for a miner"""
 
     overall_credibility: float = c.STARTING_CREDIBILITY
