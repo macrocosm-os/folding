@@ -61,7 +61,7 @@ class Validator(BaseValidatorNeuron):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
         else:
             REFERENCE_BLOCK = 5055585 + 7200
-            if REFERENCE_BLOCK < self.block:
+            if REFERENCE_BLOCK > self.block:
                 registry_path = os.path.join(
                     self.config.neuron.full_path, "miner_registry.pkl"
                 )
@@ -124,8 +124,6 @@ class Validator(BaseValidatorNeuron):
         """
 
         protein = await Protein.from_job(job=job, config=self.config.protein)
-
-        uids = self.get_uids(hotkeys=job.hotkeys)
 
         logger.info("Running run_step...⏳")
         return await run_step(
@@ -294,8 +292,6 @@ class Validator(BaseValidatorNeuron):
                     raise ValueError("job_id is None")
 
                 logger.success("Job was uploaded successfully!")
-                if job.active:
-                    await self.forward(job=job)
 
                 self.last_time_created_jobs = datetime.now()
 
