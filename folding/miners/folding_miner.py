@@ -621,7 +621,8 @@ class FoldingMiner(BaseMinerNeuron):
         columns_to_select = "pdb_id, system_config, priority, s3_links"
         query = f"""SELECT job_id, {columns_to_select} FROM jobs 
                    WHERE active = 1 
-                   ORDER BY priority DESC LIMIT {jobs_to_fetch}"""
+                   ORDER BY priority DESC, created_at DESC
+                   """
 
         try:
             response = requests.get(
@@ -635,6 +636,8 @@ class FoldingMiner(BaseMinerNeuron):
             if not data or len(data) == 0:
                 logger.info("No active jobs found in database")
                 return 0
+
+            logger.info(f"Number of active jobs in gjp: {len(data)}")
 
             # Keep track of how many jobs we've added
             jobs_added = 0
