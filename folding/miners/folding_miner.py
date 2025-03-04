@@ -367,7 +367,7 @@ class FoldingMiner(BaseMinerNeuron):
         pdb_id = sql_job_details["pdb_id"]
 
         # If we are already running a process with the same identifier, return intermediate information
-        logger.info(f"⌛ Query from validator for protein: {pdb_id} ⌛")
+        logger.info(f"⌛ Checking for protein: {pdb_id} ⌛")
 
         event = self.create_default_dict()
         event["pdb_id"] = pdb_id
@@ -408,6 +408,7 @@ class FoldingMiner(BaseMinerNeuron):
             self (ParticipationSynapse): must attach "is_participating"
         """
         job_id = synapse.job_id
+        logger.info(f"⌛ Validator checking if miner has participated in job: {job_id} ⌛")
         has_worked_on_job, _, _ = self.check_if_job_was_worked_on(job_id=job_id)
         synapse.is_participating = has_worked_on_job
         return synapse
