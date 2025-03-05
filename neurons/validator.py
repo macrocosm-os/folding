@@ -217,96 +217,82 @@ class Validator(BaseValidatorNeuron):
         """
         start_time = time.time()
 
-        if uids is not None:
-            valid_uids = uids
-        else:
-            valid_uids = await self.get_valid_uids()
-
         job_event["uid_search_time"] = time.time() - start_time
-        selected_hotkeys = [self.metagraph.hotkeys[uid] for uid in valid_uids]
 
-        if len(valid_uids) >= self.config.neuron.sample_size:
-            # If the job is organic, we still need to run the setup simulation to create the files needed for the job.
-            if job_event.get("is_organic"):
-                self.config.protein.input_source = job_event["source"]
-                protein = Protein(**job_event, config=self.config.protein)
+        # If the job is organic, we still need to run the setup simulation to create the files needed for the job.
+        if job_event.get("is_organic"):
+            self.config.protein.input_source = job_event["source"]
+            protein = Protein(**job_event, config=self.config.protein)
 
-                try:
-                    job_event["pdb_id"] = job_event["pdb_id"]
-                    job_event["job_type"] = "OrganicMD"
-                    job_event["pdb_complexity"] = [dict(protein.pdb_complexity)]
-                    job_event["init_energy"] = protein.init_energy
-                    job_event["epsilon"] = protein.epsilon
-                    job_event["s3_links"] = {
-                        "testing": "testing"
-                    }  # overwritten below if s3 logging is on.
-                    async with timeout(300):
-                        logger.info(
-                            f"setup_simulation for organic query: {job_event['pdb_id']}"
-                        )
-                        await protein.setup_simulation()
-                        logger.success(
-                            f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
-                        )
+            try:
+                job_event["pdb_id"] = job_event["pdb_id"]
+                job_event["job_type"] = "OrganicMD"
+                job_event["pdb_complexity"] = [dict(protein.pdb_complexity)]
+                job_event["init_energy"] = protein.init_energy
+                job_event["epsilon"] = protein.epsilon
+                job_event["s3_links"] = {
+                    "testing": "testing"
+                }  # overwritten below if s3 logging is on.
+                async with timeout(300):
+                    logger.info(
+                        f"setup_simulation for organic query: {job_event['pdb_id']}"
+                    )
+                    await protein.setup_simulation()
+                    logger.success(
+                        f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
+                    )
 
-                    if protein.init_energy > 0:
-                        logger.error(
-                            f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                if protein.init_energy > 0:
+                    logger.error(
+                        f"Initial energy is positive: {protein.init_energy}. Simulation failed."
+                    )
+                    job_event["active"] = False
+
+                if not self.config.s3.off:
+                    try:
+                        logger.info(f"Uploading to {self.handler.bucket_name}")
+                        s3_links = await upload_to_s3(
+                            handler=self.handler,
+                            pdb_location=protein.pdb_location,
+                            simulation_cpt=protein.simulation_cpt,
+                            validator_directory=protein.validator_directory,
+                            pdb_id=job_event["pdb_id"],
+                            VALIDATOR_ID=self.validator_hotkey_reference,
                         )
+                        job_event["s3_links"] = s3_links
+                        logger.success("✅✅ Simulation ran successfully! ✅✅")
+                    except Exception as e:
+                        logger.error(f"Error in uploading to S3: {e}")
+                        logger.error("❌❌ Simulation failed! ❌❌")
                         job_event["active"] = False
 
-                    if not self.config.s3.off:
-                        try:
-                            logger.info(f"Uploading to {self.handler.bucket_name}")
-                            s3_links = await upload_to_s3(
-                                handler=self.handler,
-                                pdb_location=protein.pdb_location,
-                                simulation_cpt=protein.simulation_cpt,
-                                validator_directory=protein.validator_directory,
-                                pdb_id=job_event["pdb_id"],
-                                VALIDATOR_ID=self.validator_hotkey_reference,
-                            )
-                            job_event["s3_links"] = s3_links
-                            logger.success("✅✅ Simulation ran successfully! ✅✅")
-                        except Exception as e:
-                            logger.error(f"Error in uploading to S3: {e}")
-                            logger.error("❌❌ Simulation failed! ❌❌")
-                            job_event["active"] = False
-
-                except Exception as e:
-                    job_event["active"] = False
-                    logger.error(f"Error in setting up organic query: {e}")
-
-            logger.info(f"Inserting job: {job_event['pdb_id']}")
-            try:
-                job = self.store.upload_job(
-                    event=job_event,
-                    hotkeys=selected_hotkeys,
-                    keypair=self.wallet.hotkey,
-                    gjp_address=self.config.neuron.gjp_address,
-                )
-
-                job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
-
-                if hasattr(job_event, "job_id") and job_event["job_id"] is None:
-                    raise ValueError("job_id is None")
-
-                logger.success("Job was uploaded successfully!")
-
-                self.last_time_created_jobs = datetime.now()
-
-                # TODO: return job_id
-                return True
             except Exception as e:
-                logger.warning(f"Error uploading job: {traceback.format_exc()}")
-                job_event["job_id"] = None
+                job_event["active"] = False
+                logger.error(f"Error in setting up organic query: {e}")
 
-                return False
-
-        else:
-            logger.warning(
-                f"Not enough available uids to create a job. Requested {self.config.neuron.sample_size}, but number of valid uids is {len(valid_uids)}... Skipping until available"
+        logger.info(f"Inserting job: {job_event['pdb_id']}")
+        try:
+            job = self.store.upload_job(
+                event=job_event,
+                keypair=self.wallet.hotkey,
+                gjp_address=self.config.neuron.gjp_address,
             )
+
+            job_event["job_id"] = await self.store.confirm_upload(job_id=job.job_id)
+
+            if hasattr(job_event, "job_id") and job_event["job_id"] is None:
+                raise ValueError("job_id is None")
+
+            logger.success("Job was uploaded successfully!")
+
+            self.last_time_created_jobs = datetime.now()
+
+            # TODO: return job_id
+            return True
+        except Exception as e:
+            logger.warning(f"Error uploading job: {traceback.format_exc()}")
+            job_event["job_id"] = None
+
             return False
 
     async def add_k_synthetic_jobs(self, k: int):
@@ -549,6 +535,9 @@ class Validator(BaseValidatorNeuron):
                         job.event = eval(job.event)  # if str, convert to dict.
 
                     job.event.update(job_event)
+                    job.hotkeys = [
+                        self.metagraph.hotkeys[uid] for uid in job.event["uids"]
+                    ]
                     # Determine the status of the job based on the current energy and the previous values (early stopping)
                     # Update the DB with the current status
                     await self.update_job(job=job)
