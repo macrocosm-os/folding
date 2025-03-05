@@ -241,7 +241,6 @@ class SQLiteJobStore:
     def upload_job(
         self,
         event: dict,
-        hotkeys: list,
         keypair,
         gjp_address: str,
         **kwargs,
@@ -269,7 +268,7 @@ class SQLiteJobStore:
                 water=event["water"],
                 system_kwargs=SystemKwargs(**event["system_kwargs"]),
             ),
-            hotkeys=hotkeys,
+            hotkeys=[""],
             job_type=event["job_type"],
             created_at=pd.Timestamp.now().floor("s"),
             updated_at=pd.Timestamp.now().floor("s"),
