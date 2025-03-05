@@ -64,15 +64,15 @@ class OpenMMSimulation(GenericSimulation):
 
         modeller = app.Modeller(pdb.topology, pdb.positions)
 
+        start_time = time.time()
+        modeller.deleteWater()
+        setup_times["delete_water"] = time.time() - start_time
+
+        start_time = time.time()
+        modeller.addHydrogens(forcefield)
+        setup_times["add_hydrogens"] = time.time() - start_time
+
         if initialize_with_solvent:
-            start_time = time.time()
-            modeller.deleteWater()
-            setup_times["delete_water"] = time.time() - start_time
-
-            start_time = time.time()
-            modeller.addHydrogens(forcefield)
-            setup_times["add_hydrogens"] = time.time() - start_time
-
             start_time = time.time()
             modeller.addSolvent(
                 forcefield,
@@ -81,7 +81,7 @@ class OpenMMSimulation(GenericSimulation):
             )
             setup_times["add_solvent"] = time.time() - start_time
 
-            modeller.addExtraParticles(forcefield)
+        modeller.addExtraParticles(forcefield)
 
         # Create the system
         start_time = time.time()

@@ -272,9 +272,14 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             **hps,
         )
 
+        generation_kwargs = {
+            "verbose": False,
+            "initialize_with_solvent": np.random.rand() < 0.5,
+        }
+
         try:
             async with timeout(300):
-                await protein.setup_simulation()
+                await protein.setup_simulation(generation_kwargs=generation_kwargs)
 
             if protein.init_energy > 0:
                 raise ValueError(
@@ -311,6 +316,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             event["s3_links"] = {
                 "testing": "testing"
             }  # overwritten below if s3 logging is on.
+            event.update(generation_kwargs)
 
             if "validator_search_status" not in event:
                 if not config.s3.off:

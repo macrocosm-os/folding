@@ -206,8 +206,8 @@ class Protein(OpenMMSimulation):
                     continue
         return files_to_return
 
-    async def setup_simulation(self):
-        """forward method defines the following:
+    async def setup_simulation(self, generation_kwargs: Dict = None):
+        """setup_simulation method defines the following:
         1. gather the pdb_id and setup the namings.
         2. setup the pdb directory and download the pdb file if it doesn't exist.
         3. check for missing files and generate the input files if they are missing.
@@ -220,7 +220,7 @@ class Protein(OpenMMSimulation):
         )
 
         await self.setup_pdb_directory()
-        await self.generate_input_files()
+        await self.generate_input_files(generation_kwargs=generation_kwargs)
 
         # Create a validator directory to store the files
         check_if_directory_exists(output_directory=self.validator_directory)
@@ -282,7 +282,7 @@ class Protein(OpenMMSimulation):
 
     # Function to generate the OpenMM simulation state.
     @OpenMMSimulation.timeit
-    async def generate_input_files(self):
+    async def generate_input_files(self, generation_kwargs: Dict = None):
         """Generate_input_files method defines the following:
         1. Load the pdb file and create the simulation object.
         2. Minimize the energy of the system.
@@ -295,11 +295,13 @@ class Protein(OpenMMSimulation):
         # Create simulation using absolute paths
         self.simulation, self.system_config = await asyncio.to_thread(
             self.create_simulation,
-            load_pdb_file(pdb_file=self.pdb_location),
-            self.system_config.get_config(),
-            None,  # seed
-            False,  # verbose
-            True,  # initialize_with_solvent
+            pdb=load_pdb_file(pdb_file=self.pdb_location),
+            system_config=self.system_config.get_config(),
+            seed=None,
+            verbose=generation_kwargs.get("verbose", False),
+            initialize_with_solvent=generation_kwargs.get(
+                "initialize_with_solvent", True
+            ),
         )
 
         # Get the altered pdb and write.
