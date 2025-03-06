@@ -288,8 +288,8 @@ class OpenMMSimulation(GenericSimulation):
     def create_simulation(
         self,
         pdb: app.PDBFile,
-        with_solvent: bool,
         system_config: dict,
+        with_solvent: bool = False,
         seed: int = None,
     ) -> Tuple[app.Simulation, SimulationConfig]:
         """Creates a simulation object from the given parameters.
