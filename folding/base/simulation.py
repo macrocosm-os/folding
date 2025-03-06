@@ -35,126 +35,277 @@ class GenericSimulation(ABC):
 
 
 class OpenMMSimulation(GenericSimulation):
-    @GenericSimulation.timeit
-    def create_simulation(
-        self,
-        pdb: app.PDBFile,
-        system_config: dict,
-        seed: int = None,
-        verbose=False,
-        initialize_with_solvent=False,
-    ) -> Tuple[app.Simulation, SimulationConfig]:
-        """Recreates a simulation object based on the provided parameters.
+    def __init__(
+        self, default_simulation_properties: dict = None, verbose: bool = False
+    ):
+        """Initialize the OpenMMSimulation object.
 
-        This method takes in a seed, state, and checkpoint file path to recreate a simulation object.
         Args:
-            seed (str): The seed for the random number generator.
-            system_config (dict): A dictionary containing the system configuration settings.
-            pdb (app.PDBFile): The PDB file used to initialize the simulation
-            initialize_with_solvent (bool): A boolean flag to determine if the simulation should be initialized with solvent.
-
-        Returns:
-        Tuple[app.Simulation, SimulationConfig]: A tuple containing the recreated simulation object and the potentially altered system configuration in SystemConfig format.
+            default_simulation_properties (dict, optional): A dictionary of default simulation properties. Defaults to None.
+            verbose (bool, optional): A boolean flag to determine if the simulation should be verbose. Defaults to False.
         """
-        setup_times = {}
-
-        start_time = time.time()
-        forcefield = app.ForceField(system_config["ff"], system_config["water"])
-        setup_times["add_ff"] = time.time() - start_time
-
-        modeller = app.Modeller(pdb.topology, pdb.positions)
-
-        start_time = time.time()
-        modeller.deleteWater()
-        setup_times["delete_water"] = time.time() - start_time
-
-        start_time = time.time()
-        modeller.addHydrogens(forcefield)
-        setup_times["add_hydrogens"] = time.time() - start_time
-
-        if initialize_with_solvent:
-            start_time = time.time()
-            modeller.addSolvent(
-                forcefield,
-                padding=system_config["box_padding"] * unit.nanometer,
-                boxShape=system_config["box"],
-            )
-            setup_times["add_solvent"] = time.time() - start_time
-
-        modeller.addExtraParticles(forcefield)
-
-        # Create the system
-        start_time = time.time()
-        # The assumption here is that the system_config cutoff MUST be given in nanometers
-        threshold = (
-            pdb.topology.getUnitCellDimensions().min().value_in_unit(mm.unit.nanometers)
-        ) / 2
-        if system_config["cutoff"] > threshold:
-            nonbondedCutoff = threshold * mm.unit.nanometers
-            # set the attribute in the config for the pipeline.
-            system_config["cutoff"] = threshold
-            logger.debug(
-                f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm"
-            )
-        else:
-            nonbondedCutoff = system_config["cutoff"] * mm.unit.nanometers
-
-        system = forcefield.createSystem(
-            modeller.topology,
-            nonbondedMethod=mm.app.NoCutoff,
-            nonbondedCutoff=nonbondedCutoff,
-            constraints=system_config["constraints"],
-        )
-        setup_times["create_system"] = time.time() - start_time
-
-        # Integrator settings
-        integrator = mm.LangevinIntegrator(
-            system_config["temperature"] * unit.kelvin,
-            system_config["friction"] / unit.picosecond,
-            system_config["time_step_size"] * unit.picoseconds,
-        )
-
-        seed = seed if seed is not None else system_config["seed"]
-        integrator.setRandomNumberSeed(seed)
-
-        # Periodic boundary conditions
-        # pdb.topology.setPeriodicBoxVectors(system.getDefaultPeriodicBoxVectors())
-
-        # if state != "nvt":
-        #     system.addForce(
-        #         mm.MonteCarloBarostat(
-        #             system_config["pressure"] * unit.bar,
-        #             system_config["temperature"] * unit.kelvin,
-        #         )
-        #     )
-
-        platform = mm.Platform.getPlatformByName("CUDA")
+        self.setup_times = {}
 
         # Reference for DisablePmeStream: https://github.com/openmm/openmm/issues/3589
-        properties = {
+        self.default_simulation_properties = default_simulation_properties or {
             "DeterministicForces": "true",
             "Precision": "double",
             "DisablePmeStream": "true",
         }
 
-        start_time = time.time()
+        self.verbose = verbose
+
+    @GenericSimulation.timeit
+    def _setup_forcefield(self, ff: str, water: str):
+        forcefield = app.ForceField(ff, water)
+        return forcefield
+
+    @GenericSimulation.timeit
+    def _setup_modeller(self, pdb: app.PDBFile):
+        modeller = app.Modeller(pdb.topology, pdb.positions)
+        return modeller
+
+    @GenericSimulation.timeit
+    def _initialize_fluid(
+        self, modeller: app.Modeller, forcefield: app.ForceField
+    ) -> app.Modeller:
+        modeller.deleteWater()
+        modeller.addHydrogens(forcefield)
+
+        return modeller
+
+    @GenericSimulation.timeit
+    def _use_solvent(
+        self,
+        modeller: app.Modeller,
+        forcefield: app.ForceField,
+        box_padding: float,
+        box_shape: str,
+    ) -> app.Modeller:
+        modeller.addSolvent(
+            forcefield,
+            padding=box_padding * unit.nanometer,
+            boxShape=box_shape,
+        )
+
+        return modeller
+
+    @GenericSimulation.timeit
+    def _add_extra_particles(
+        self, modeller: app.Modeller, forcefield: app.ForceField
+    ) -> app.Modeller:
+        modeller.addExtraParticles(forcefield)
+        return modeller
+
+    @GenericSimulation.timeit
+    def _create_system(
+        self,
+        modeller: app.Modeller,
+        forcefield: app.ForceField,
+        cutoff: float,
+        constraints: str,
+    ) -> Tuple[mm.System, float]:
+        threshold = (
+            modeller.topology.getUnitCellDimensions()
+            .min()
+            .value_in_unit(mm.unit.nanometers)
+        ) / 2
+
+        nonbondedCutoff = min(cutoff, threshold) * mm.unit.nanometers
+        if cutoff > threshold:
+            logger.debug(
+                f"Nonbonded cutoff is greater than half the minimum box dimension. Setting nonbonded cutoff to {threshold} nm"
+            )
+
+        system = forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=mm.app.NoCutoff,
+            nonbondedCutoff=nonbondedCutoff,
+            constraints=constraints,
+        )
+        return system, cutoff
+
+    @GenericSimulation.timeit
+    def _setup_integrator(
+        self, temperature: float, friction: float, time_step_size: float, seed: int
+    ) -> mm.LangevinIntegrator:
+        integrator = mm.LangevinIntegrator(
+            temperature * unit.kelvin,
+            friction / unit.picosecond,
+            time_step_size * unit.picoseconds,
+        )
+
+        integrator.setRandomNumberSeed(seed)
+        return integrator
+
+    @GenericSimulation.timeit
+    def _setup_simulation(
+        self,
+        modeller: app.Modeller,
+        system: mm.System,
+        integrator: mm.LangevinIntegrator,
+        properties: dict,
+    ) -> app.Simulation:
+        platform = mm.Platform.getPlatformByName("CUDA")
+
         simulation = mm.app.Simulation(
             modeller.topology, system, integrator, platform, properties
         )
-        setup_times["create_simulation"] = time.time() - start_time
-        # Set initial positions
 
-        start_time = time.time()
+        # Set initial positions
         simulation.context.setPositions(modeller.positions)
-        setup_times["set_positions"] = time.time() - start_time
+        return simulation
+
+    @GenericSimulation.timeit
+    def pipeline(
+        self,
+        pdb: app.PDBFile,
+        use_solvent: bool,
+        include_fluid: bool,
+        system_config: dict,
+        simulation_properties: dict,
+        seed: int,
+    ) -> Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+        """Creates a simulation object with the given parameters.
+
+        Args:
+            pdb (app.PDBFile): The PDB file to use for the simulation.
+            use_solvent (bool): Whether to use solvent for the simulation.
+            system_config (dict): The system configuration to use for the simulation.
+            simulation_properties (dict): The simulation properties to use for the simulation.
+            seed (int): The seed to use for the simulation.
+
+        Returns:
+            Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+                A tuple containing the simulation object, the modeller object, the integrator object, and the system configuration.
+        """
+        forcefield = self._setup_forcefield(
+            ff=system_config["ff"], water=system_config["water"]
+        )
+        modeller = self._setup_modeller(pdb=pdb)
+
+        if use_solvent or include_fluid:
+            modeller = self._initialize_fluid(modeller=modeller, forcefield=forcefield)
+
+        if use_solvent:
+            modeller = self._use_solvent(
+                modeller=modeller,
+                forcefield=forcefield,
+                box_padding=system_config["box_padding"],
+                box_shape=system_config["box"],
+            )
+
+            modeller = self._add_extra_particles(
+                modeller=modeller, forcefield=forcefield
+            )
+
+        system, cutoff = self._create_system(
+            modeller=modeller,
+            forcefield=forcefield,
+            cutoff=system_config["cutoff"],
+            constraints=system_config["constraints"],
+        )
+        # could change in the process of creating the system
+        system_config["cutoff"] = cutoff
+
+        integrator = self._setup_integrator(
+            temperature=system_config["temperature"],
+            friction=system_config["friction"],
+            time_step_size=system_config["time_step_size"],
+            seed=seed,
+        )
+
+        simulation = self._setup_simulation(
+            modeller=modeller,
+            system=system,
+            integrator=integrator,
+            properties=simulation_properties,
+        )
+
+        return simulation, system_config
+
+    @GenericSimulation.timeit
+    def from_pipeline(
+        self,
+        pdb: app.PDBFile,
+        system_config: dict,
+        simulation_properties: dict,
+        seed: int,
+    ) -> Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+        """Creates a simulation object from the given parameters.
+
+        Args:
+            pdb (app.PDBFile): The PDB file to use for the simulation.
+            system_config (dict): The system configuration to use for the simulation.
+            simulation_properties (dict): The simulation properties to use for the simulation.
+            seed (int): The seed to use for the simulation.
+        """
+        return self.pipeline(
+            pdb=pdb,
+            include_fluid=True,
+            use_solvent=False,
+            system_config=system_config,
+            simulation_properties=simulation_properties,
+            seed=seed,
+        )
+
+    @GenericSimulation.timeit
+    def from_solvent_pipeline(
+        self,
+        pdb: app.PDBFile,
+        system_config: dict,
+        simulation_properties: dict,
+        seed: int,
+    ) -> Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+        """Creates a simulation object from the given parameters.
+
+        Importantly, when the validator creates a simulation with solvent involved,
+        the miner instantiation pipeline becomes more complicated due to the presence of fluids.
+
+        Therefore, if a pdb has been initialized with solvent from the validator, we must
+        skip all the steps that contain fluid, and NOT initialize the simulation with solvent information.
+
+        Args:
+            pdb (app.PDBFile): The PDB file to use for the simulation.
+            system_config (dict): The system configuration to use for the simulation.
+            simulation_properties (dict): The simulation properties to use for the simulation.
+            seed (int): The seed to use for the simulation.
+
+        Returns:
+            Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+                A tuple containing the simulation object, the modeller object, the integrator object, and the system configuration.
+        """
+        return self.pipeline(
+            pdb=pdb,
+            include_fluid=False,
+            use_solvent=False,
+            system_config=system_config,
+            simulation_properties=simulation_properties,
+            seed=seed,
+        )
+
+    @GenericSimulation.timeit
+    def create_simulation(
+        self,
+        pdb: app.PDBFile,
+        with_solvent: bool,
+        system_config: dict,
+        seed: int = None,
+    ) -> Tuple[app.Simulation, SimulationConfig]:
+        seed = seed if seed is not None else system_config["seed"]
+
+        simulation, system_config = self.pipeline(
+            pdb=pdb,
+            include_fluid=True,
+            use_solvent=with_solvent,
+            system_config=system_config,
+            simulation_properties=self.default_simulation_properties,
+            seed=seed,
+        )
 
         # Converting the system config into a Dict[str,str] and ensure all values in system_config are of the correct type
         for k, v in system_config.items():
             if not isinstance(v, (str, int, float, dict)):
                 system_config[k] = str(v)
-
-        if verbose:
-            for key, t in setup_times:
-                logger.debug(f"Took {round(t, 3)} to {key}")
 
         return simulation, SimulationConfig(**system_config)
