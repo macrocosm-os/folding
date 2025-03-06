@@ -292,6 +292,21 @@ class OpenMMSimulation(GenericSimulation):
         system_config: dict,
         seed: int = None,
     ) -> Tuple[app.Simulation, SimulationConfig]:
+        """Creates a simulation object from the given parameters.
+
+        This method is meant to be only called by the validator.
+        As a miner, you should use the `from_pipeline` or `from_solvent_pipeline` methods.
+
+        Args:
+            pdb (app.PDBFile): The PDB file to use for the simulation.
+            with_solvent (bool): Whether to use solvent for the simulation.
+            system_config (dict): The system configuration to use for the simulation.
+            seed (int, optional): The seed to use for the simulation. Defaults to None.
+
+        Returns:
+            Tuple[app.Simulation, SimulationConfig]:
+                A tuple containing the simulation object and the system configuration.
+        """
         seed = seed if seed is not None else system_config["seed"]
 
         simulation, system_config = self.pipeline(
