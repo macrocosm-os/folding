@@ -1,19 +1,19 @@
 import time
-import traceback
+import asyncio
 import numpy as np
 from tqdm import tqdm
-import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
 
 from async_timeout import timeout
+
+from folding.store import Job
 from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
 from folding.protocol import PingSynapse, JobSubmissionSynapse, ParticipationSynapse
-import asyncio
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
@@ -72,10 +72,13 @@ async def run_step(
     job_type: str,
     job_id: str,
     best_submitted_energy: float = None,
+    job: Job = None,
 ) -> Dict:
-    start_time = time.time()
+    """Run the step for a given job."""
 
+    start_time = time.time()
     if protein is None:
+        logger.warning("No protein found for job_id: {job_id}")
         event = {
             "block": self.block,
             "step_length": time.time() - start_time,
@@ -88,9 +91,6 @@ async def run_step(
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in participating_uids]
-
-    system_config = protein.system_config.to_dict()
-    system_config["seed"] = None  # We don't want to pass the seed to miners.
 
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
@@ -120,6 +120,7 @@ async def run_step(
     }
 
     energies, energy_event = get_energies(
+        job=job,
         protein=protein,
         responses=responses,
         uids=participating_uids,
@@ -274,7 +275,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
 
         generation_kwargs = {
             "verbose": False,
-            "initialize_with_solvent": np.random.rand() < 0.5,
+            "with_solvent": np.random.rand() < 0.5,
         }
 
         try:

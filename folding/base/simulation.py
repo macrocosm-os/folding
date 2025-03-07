@@ -165,7 +165,7 @@ class OpenMMSimulation(GenericSimulation):
         system_config: dict,
         simulation_properties: dict,
         seed: int,
-    ) -> Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+    ) -> Tuple[app.Simulation, dict]:
         """Creates a simulation object with the given parameters.
 
         Args:
@@ -176,8 +176,8 @@ class OpenMMSimulation(GenericSimulation):
             seed (int): The seed to use for the simulation.
 
         Returns:
-            Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
-                A tuple containing the simulation object, the modeller object, the integrator object, and the system configuration.
+            Tuple[app.Simulation, dict]:
+                A tuple containing the simulation object and the system configuration.
         """
         forcefield = self._setup_forcefield(
             ff=system_config["ff"], water=system_config["water"]
@@ -222,7 +222,7 @@ class OpenMMSimulation(GenericSimulation):
             properties=simulation_properties,
         )
 
-        return simulation, system_config
+        return self.process_return(simulation, system_config)
 
     @GenericSimulation.timeit
     def from_pipeline(
@@ -231,7 +231,7 @@ class OpenMMSimulation(GenericSimulation):
         system_config: dict,
         simulation_properties: dict,
         seed: int,
-    ) -> Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+    ) -> Tuple[app.Simulation, dict]:
         """Creates a simulation object from the given parameters.
 
         Args:
@@ -256,7 +256,7 @@ class OpenMMSimulation(GenericSimulation):
         system_config: dict,
         simulation_properties: dict,
         seed: int,
-    ) -> Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
+    ) -> Tuple[app.Simulation, dict]:
         """Creates a simulation object from the given parameters.
 
         Importantly, when the validator creates a simulation with solvent involved,
@@ -272,8 +272,8 @@ class OpenMMSimulation(GenericSimulation):
             seed (int): The seed to use for the simulation.
 
         Returns:
-            Tuple[app.Simulation, app.Modeller, mm.LangevinIntegrator, dict]:
-                A tuple containing the simulation object, the modeller object, the integrator object, and the system configuration.
+            Tuple[app.Simulation, dict]:
+                A tuple containing the simulation object and the system configuration.
         """
         return self.pipeline(
             pdb=pdb,
@@ -289,8 +289,8 @@ class OpenMMSimulation(GenericSimulation):
         self,
         pdb: app.PDBFile,
         system_config: dict,
+        seed: int,
         with_solvent: bool = False,
-        seed: int = None,
     ) -> Tuple[app.Simulation, SimulationConfig]:
         """Creates a simulation object from the given parameters.
 
@@ -301,13 +301,12 @@ class OpenMMSimulation(GenericSimulation):
             pdb (app.PDBFile): The PDB file to use for the simulation.
             with_solvent (bool): Whether to use solvent for the simulation.
             system_config (dict): The system configuration to use for the simulation.
-            seed (int, optional): The seed to use for the simulation. Defaults to None.
+            seed (int): The seed to use for the simulation.
 
         Returns:
             Tuple[app.Simulation, SimulationConfig]:
                 A tuple containing the simulation object and the system configuration.
         """
-        seed = seed if seed is not None else system_config["seed"]
 
         simulation, system_config = self.pipeline(
             pdb=pdb,
@@ -317,6 +316,19 @@ class OpenMMSimulation(GenericSimulation):
             simulation_properties=self.default_simulation_properties,
             seed=seed,
         )
+
+        return self.process_return(simulation, system_config)
+
+    def process_return(
+        self, simulation: app.Simulation, system_config: dict
+    ) -> Tuple[app.Simulation, SimulationConfig]:
+        """Process the return values from the pipeline method.
+
+        I hate that we need to do this, but it's a necessary evil. It's because
+        I actually don't know when and where the below logic is needed, so I can't remove the filter.
+
+        TODO: Remove this
+        """
 
         # Converting the system config into a Dict[str,str] and ensure all values in system_config are of the correct type
         for k, v in system_config.items():

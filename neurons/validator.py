@@ -133,6 +133,7 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
             best_submitted_energy=job.best_loss,
             job_type=job.job_type,
+            job=job,
         )
 
     async def ping_all_miners(
@@ -232,9 +233,7 @@ class Validator(BaseValidatorNeuron):
                 }  # overwritten below if s3 logging is on.
                 generation_kwargs = {
                     "verbose": job_event.get("verbose", False),
-                    "initialize_with_solvent": job_event.get(
-                        "initialize_with_solvent", True
-                    ),
+                    "with_solvent": job_event.get("with_solvent", False),
                 }
                 async with timeout(300):
                     logger.info(

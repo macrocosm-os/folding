@@ -293,26 +293,25 @@ class Protein(OpenMMSimulation):
         logger.info(f"Loading PDB file from {self.pdb_location}")
 
         # Create simulation using absolute paths
+        system_config = self.system_config.get_config()
         self.simulation, self.system_config = await asyncio.to_thread(
             self.create_simulation,
             pdb=load_pdb_file(pdb_file=self.pdb_location),
-            system_config=self.system_config.get_config(),
-            seed=None,
-            verbose=generation_kwargs.get("verbose", False),
-            initialize_with_solvent=generation_kwargs.get(
-                "initialize_with_solvent", True
-            ),
+            system_config=system_config,
+            with_solvent=generation_kwargs["with_solvent"],
+            seed=system_config["seed"],
         )
 
         # Get the altered pdb and write.
-        state = self.simulation.context.getState(getPositions=True)
-        positions = state.getPositions()
-        write_pdb_file(
-            pdb_location_path=self.pdb_location,
-            topology=self.simulation.topology,
-            positions=positions,
-            suffix="_before_solvent",
-        )
+        if generation_kwargs["with_solvent"]:
+            state = self.simulation.context.getState(getPositions=True)
+            positions = state.getPositions()
+            write_pdb_file(
+                pdb_location_path=self.pdb_location,
+                topology=self.simulation.topology,
+                positions=positions,
+                suffix="_before_solvent",
+            )
 
         # load in information from the velm memory
         velm = create_velm(simulation=self.simulation)
