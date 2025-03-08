@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Callable
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         self,
         pdb_id: str,
         pdb_location: str,
+        with_solvent: bool,
         hotkey: str,
         state: str,
         seed: int,
@@ -36,6 +37,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         **kwargs,
     ):
         self.pdb_id = pdb_id
+        self.with_solvent = with_solvent
         self.kwargs = kwargs
         self.md_simulator = OpenMMSimulation()
         self.pdb_location = pdb_location
@@ -55,6 +57,14 @@ class SyntheticMDEvaluator(BaseEvaluator):
         self.velm_array_pkl_path = velm_array_pkl_path
 
     # TODO: Refactor this method to be more modular, seperate getting energy and setting up simulations and files
+
+    def load_pipeline(self, with_solvent: bool) -> Callable:
+        """Load the appropriate pipeline based on the with_solvent flag."""
+        return (
+            self.md_simulator.from_solvent_pipeline
+            if with_solvent
+            else self.md_simulator.from_pipeline
+        )
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
@@ -101,11 +111,14 @@ class SyntheticMDEvaluator(BaseEvaluator):
             logger.info(
                 f"Recreating miner {self.hotkey_alias} simulation in state: {self.current_state}"
             )
-            simulation, self.system_config = self.md_simulator.create_simulation(
+
+            pipeline: Callable = self.load_pipeline(with_solvent=self.with_solvent)
+
+            simulation, self.system_config = pipeline(
                 pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
-                initialize_with_solvent=False,
+                simulation_properties=self.md_simulator.default_simulation_properties,
             )
 
             checkpoint_path = os.path.join(
@@ -273,12 +286,16 @@ class SyntheticMDEvaluator(BaseEvaluator):
         logger.info(
             f"Recreating simulation for {self.pdb_id} for state-based analysis..."
         )
-        simulation, system_config = self.md_simulator.create_simulation(
+
+        pipeline: Callable = self.load_pipeline(with_solvent=self.with_solvent)
+
+        simulation, _ = pipeline(
             pdb=load_pdb_file(pdb_file=self.pdb_location),
             system_config=self.system_config.get_config(),
             seed=self.miner_seed,
-            initialize_with_solvent=False,
+            simulation_properties=self.md_simulator.default_simulation_properties,
         )
+
         simulation.loadState(self.state_xml_path)
         state_energies = []
         for _ in range(self.steps_to_run // 10):
@@ -297,12 +314,13 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 raise ValidationError(message="state-gradient")
 
             # Reload in the checkpoint file and run the simulation for the same number of steps as the miner.
-            simulation, system_config = self.md_simulator.create_simulation(
+            simulation, _ = pipeline(
                 pdb=load_pdb_file(pdb_file=self.pdb_location),
                 system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
-                initialize_with_solvent=False,
+                simulation_properties=self.md_simulator.default_simulation_properties,
             )
+
             simulation.loadCheckpoint(self.checkpoint_path)
 
             current_state_logfile = os.path.join(
@@ -375,9 +393,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             return True, check_energies.tolist(), self.miner_energies.tolist(), "valid"
 
-        except ValidationError as E:
-            logger.warning(f"{E}")
-            return False, [], [], E.message
+        except ValidationError as e:
+            logger.warning(f"{e}")
+            return False, [], [], e.message
 
     def evaluate(self) -> bool:
         """Checks to see if the miner's data can be passed for validation"""

@@ -3,6 +3,7 @@ from typing import List
 
 import numpy as np
 
+from folding.store import Job
 from folding.utils.logger import logger
 from folding.utils import constants as c
 from folding.validators.protein import Protein
@@ -17,6 +18,7 @@ def evaluate(
     responses: List[JobSubmissionSynapse],
     uids: List[int],
     job_type: str,
+    job: Job,
 ):
     reported_energies = np.zeros(len(uids))
     evaluators = [None] * len(uids)
@@ -37,6 +39,7 @@ def evaluate(
             evaluator: BaseEvaluator = EVALUATION_REGISTRY[job_type](
                 pdb_id=protein.pdb_id,
                 pdb_location=protein.pdb_location,
+                with_solvent=job.event["with_solvent"],
                 hotkey=resp.axon.hotkey,
                 state=resp.miner_state,
                 seed=resp.miner_seed,
@@ -69,6 +72,7 @@ def evaluate(
 
 
 def get_energies(
+    job: Job,
     protein: Protein,
     responses: List[JobSubmissionSynapse],
     uids: List[int],
@@ -104,7 +108,7 @@ def get_energies(
 
     # Get initial evaluations
     reported_energies, evaluators, seed, best_cpt, process_md_output_time = evaluate(
-        protein, responses, uids, job_type
+        protein=protein, responses=responses, uids=uids, job_type=job_type, job=job
     )
 
     # Sort all lists by reported energy

@@ -5,12 +5,11 @@ import random
 import sqlite3
 import requests
 from queue import Queue
-from typing import Dict, List
+from typing import List
 from dotenv import load_dotenv
 
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 
 from atom.epistula.epistula import Epistula
