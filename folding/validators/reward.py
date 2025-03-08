@@ -10,6 +10,7 @@ from folding.base.evaluation import BaseEvaluator
 from folding.protocol import JobSubmissionSynapse
 from folding.registries.miner_registry import MinerRegistry
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
+from neurons.validator import Validator
 
 
 def evaluate(
@@ -69,6 +70,7 @@ def evaluate(
 
 
 def get_energies(
+    validator: Validator,
     protein: Protein,
     responses: List[JobSubmissionSynapse],
     uids: List[int],

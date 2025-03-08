@@ -131,7 +131,6 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,
-            best_submitted_energy=job.best_loss,
             job_type=job.job_type,
         )
 
