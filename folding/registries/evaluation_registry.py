@@ -417,12 +417,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
         return "SyntheticMD"
 
 
-class OrganicMDEvaluator(BaseEvaluator):
+class OrganicMDEvaluator(SyntheticMDEvaluator):
     def __init__(self, **kwargs):
-        self.kwargs = kwargs
-
-    def _evaluate(self, data: Dict[str, Any]) -> float:
-        return 0.0
+        super().__init__(**kwargs)
 
     def name(self) -> str:
         return "OrganicMD"
