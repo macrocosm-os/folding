@@ -120,6 +120,8 @@ async def run_step(
         protein=protein,
         responses=responses,
         uids=participating_uids,
+        axons=axons,
+        job_id=job_id,
         miner_registry=self.miner_registry,
         job_type=job_type,
     )
