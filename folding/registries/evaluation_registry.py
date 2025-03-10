@@ -1,9 +1,10 @@
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List, Union
 
 import numpy as np
 import pandas as pd
 from openmm import app
+import bittensor as bt
 
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
@@ -19,6 +20,8 @@ from folding.utils.ops import (
     write_pkl,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
+from neurons.validator import Validator
+from folding.protocol import IntermediateSubmissionSynapse
 
 
 class SyntheticMDEvaluator(BaseEvaluator):
@@ -224,7 +227,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 return False
         return True
 
-    def check_gradient(self, check_energies: np.ndarray) -> True:
+    def check_gradient(self, check_energies: np.ndarray) -> bool:
         """This method checks the gradient of the potential energy within the first
         WINDOW size of the check_energies array. Miners that return gradients that are too high,
         there is a *high* probability that they have not run the simulation as the validator specified.
@@ -254,14 +257,19 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return False
         return True
 
-    def is_run_valid(self):
+    def is_run_valid(self, validator=None, job_id=None, axon=None):
         """
         Checks if the run is valid by evaluating a set of logical conditions:
 
         1. comparing the potential energy values between the current simulation and a reference log file.
         2. ensuring that the gradient of the minimization is within a certain threshold to prevent exploits.
         3. ensuring that the masses of the atoms in the simulation are the same as the masses in the original pdb file.
+        4. If validator, job_id, and axon are provided, it also validates intermediate checkpoints from the miner.
 
+        Args:
+            validator: Optional validator instance to query for intermediate checkpoints
+            job_id: Optional job ID to pass to get_intermediate_checkpoints
+            axon: Optional axon to query for intermediate checkpoints
 
         Returns:
             Tuple[bool, list, list, str]: True if the run is valid, False otherwise.
@@ -361,6 +369,17 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 )
                 raise ValidationError(message="anomaly")
 
+            # Validate intermediate checkpoints if the required parameters are provided
+            if validator is not None and job_id is not None and axon is not None:
+                (
+                    intermediate_valid,
+                    intermediate_result,
+                ) = self.validate_intermediate_checkpoints(
+                    validator=validator, job_id=job_id, axon=axon
+                )
+                if not intermediate_valid:
+                    raise ValidationError(message=intermediate_result)
+
             # Save the folded pdb file if the run is valid
             positions = simulation.context.getState(getPositions=True).getPositions()
             topology = simulation.topology
@@ -390,8 +409,21 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return True
 
-    def validate(self):
-        is_valid, checked_energies, miner_energies, result = self.is_run_valid()
+    def validate(self, validator=None, job_id=None, axon=None):
+        """
+        Validate the run by checking if it's valid and returning the appropriate metrics.
+
+        Args:
+            validator: Optional validator instance to query for intermediate checkpoints
+            job_id: Optional job ID to pass to get_intermediate_checkpoints
+            axon: Optional axon to query for intermediate checkpoints
+
+        Returns:
+            Tuple containing the median energy, checked energies, miner energies, and result message
+        """
+        is_valid, checked_energies, miner_energies, result = self.is_run_valid(
+            validator=validator, job_id=job_id, axon=axon
+        )
         if not is_valid:
             return 0.0, checked_energies, miner_energies, result
 
@@ -413,8 +445,210 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return (self.cpt_step * self.system_config.time_step_size) / 1e3
 
+    def get_intermediate_checkpoints(
+        self, validator: Validator, job_id: str, axon: bt.Axon
+    ):
+        """Get the intermediate checkpoints from the miner."""
+        # 3 random numbers indicating which checkpoints we want
+        random_checkpoint_numbers = np.random.randint(
+            0, int(len(self.log_file) / 10000), size=c.MAX_CHECKPOINTS_TO_VALIDATE
+        ).tolist()
+
+        synapse = IntermediateSubmissionSynapse(
+            job_id=job_id,
+            checkpoint_numbers=random_checkpoint_numbers,
+            pdb_id=self.pdb_id,
+        )
+        responses = validator.dendrite.query(
+            synapse=synapse, axons=[axon], deserialize=True
+        )
+        return responses[0].cpt_files
+
     def name(self) -> str:
         return "SyntheticMD"
+
+    def validate_intermediate_checkpoints(self, validator, job_id, axon):
+        """
+        Validate intermediate checkpoints from the miner.
+
+        Args:
+            validator: Validator instance to query for intermediate checkpoints
+            job_id: Job ID to pass to get_intermediate_checkpoints
+            axon: Axon to query for intermediate checkpoints
+
+        Returns:
+            bool: True if validation passes, False if it fails
+            str: Reason for failure or "valid"
+        """
+        logger.info(f"Validating intermediate checkpoints for {self.pdb_id}...")
+        try:
+            # Get intermediate checkpoints from the miner
+            intermediate_checkpoints = self.get_intermediate_checkpoints(
+                validator=validator, job_id=job_id, axon=axon
+            )
+
+            # If we have intermediate checkpoints, validate them
+            if intermediate_checkpoints and len(intermediate_checkpoints) > 0:
+                # Track if any intermediate checkpoint fails
+                failed_checkpoints = []
+
+                for checkpoint_num, checkpoint_data in intermediate_checkpoints.items():
+                    if checkpoint_data is None:
+                        logger.warning(
+                            f"Checkpoint {checkpoint_num} is None. Skipping!"
+                        )
+                        failed_checkpoints.append(checkpoint_num)
+                        continue
+
+                    # Save the checkpoint data to a temporary file
+                    temp_checkpoint_path = os.path.join(
+                        self.miner_data_directory, f"intermediate_{checkpoint_num}.cpt"
+                    )
+                    with open(temp_checkpoint_path, "wb") as f:
+                        f.write(checkpoint_data)
+
+                    # Create a simulation with the checkpoint
+                    intermediate_simulation, _ = self.md_simulator.create_simulation(
+                        pdb=load_pdb_file(pdb_file=self.pdb_location),
+                        system_config=self.system_config.get_config(),
+                        seed=self.miner_seed,
+                        initialize_with_solvent=False,
+                    )
+
+                    # Load the checkpoint and run a short simulation
+                    try:
+                        intermediate_simulation.loadCheckpoint(temp_checkpoint_path)
+
+                        # Create a log file for the intermediate checkpoint
+                        intermediate_logfile = os.path.join(
+                            self.miner_data_directory,
+                            f"intermediate_{checkpoint_num}.log",
+                        )
+                        intermediate_simulation.reporters.append(
+                            app.StateDataReporter(
+                                intermediate_logfile,
+                                10,
+                                step=True,
+                                potentialEnergy=True,
+                            )
+                        )
+
+                        # Run a short simulation from the intermediate checkpoint
+                        steps_to_run = c.INTERMEDIATE_CHECKPOINT_STEPS
+                        intermediate_simulation.step(steps_to_run)
+
+                        # Read the log file and check the energies
+                        intermediate_log = pd.read_csv(intermediate_logfile)
+                        intermediate_energies = np.array(
+                            intermediate_log["Potential Energy (kJ/mole)"].values
+                        )
+
+                        # Check that there's some variation in the energies
+                        if len(np.unique(intermediate_energies)) == 1:
+                            logger.warning(
+                                f"All energy values in intermediate checkpoint {checkpoint_num} simulation are the same. Skipping!"
+                            )
+                            failed_checkpoints.append(checkpoint_num)
+                            continue
+
+                        # Check gradient on intermediate checkpoint energies
+                        if not self.check_gradient(
+                            check_energies=intermediate_energies
+                        ):
+                            logger.warning(
+                                f"intermediate_energies: {intermediate_energies}"
+                            )
+                            logger.warning(
+                                f"hotkey {self.hotkey_alias} failed gradient check for intermediate checkpoint {checkpoint_num}, ... Skipping!"
+                            )
+                            failed_checkpoints.append(checkpoint_num)
+                            continue
+
+                        # Get corresponding energy values from the original log file for this checkpoint
+                        # The checkpoint number corresponds to the index in the log file divided by 10000
+                        checkpoint_step = int(checkpoint_num) * 10000
+
+                        # Find entries in the log file that are close to the checkpoint step
+                        relevant_log_entries = self.log_file[
+                            (self.log_file['#"Step"'] >= checkpoint_step - steps_to_run)
+                            & (
+                                self.log_file['#"Step"']
+                                <= checkpoint_step + steps_to_run
+                            )
+                        ]
+
+                        # Extract the original reported energies for this checkpoint range
+                        original_energies = np.array(
+                            relevant_log_entries["Potential Energy (kJ/mole)"].values
+                        )
+
+                        if len(original_energies) == 0:
+                            logger.warning(
+                                f"No original energies found for checkpoint {checkpoint_num}. Skipping percent diff check."
+                            )
+                        else:
+                            # Calculate the percent difference between simulated and reported energies
+                            # Trim to the shortest length to ensure we're comparing corresponding steps
+                            min_length = min(
+                                len(intermediate_energies), len(original_energies)
+                            )
+                            intermediate_energies_trimmed = intermediate_energies[
+                                :min_length
+                            ]
+                            original_energies_trimmed = original_energies[:min_length]
+
+                            # Calculate absolute percent difference
+                            percent_diff = abs(
+                                (
+                                    (
+                                        intermediate_energies_trimmed
+                                        - original_energies_trimmed
+                                    )
+                                    / original_energies_trimmed
+                                )
+                                * 100
+                            )
+                            median_percent_diff = np.median(percent_diff)
+
+                            # Check if the percent difference is within acceptable limits
+                            if median_percent_diff > c.ANOMALY_THRESHOLD:
+                                logger.warning(
+                                    f"hotkey {self.hotkey_alias} failed anomaly check for intermediate checkpoint {checkpoint_num}, "
+                                    f"with median percent difference: {median_percent_diff} ... Skipping!"
+                                )
+                                failed_checkpoints.append(checkpoint_num)
+                                continue
+
+                            logger.info(
+                                f"Intermediate checkpoint {checkpoint_num} percent diff check passed with median diff: {median_percent_diff}%"
+                            )
+
+                        logger.info(
+                            f"Intermediate checkpoint {checkpoint_num} validation passed."
+                        )
+
+                    except Exception as e:
+                        logger.warning(
+                            f"Error validating intermediate checkpoint {checkpoint_num}: {e}"
+                        )
+                        failed_checkpoints.append(checkpoint_num)
+
+                # If more than half of the checkpoints failed, consider the miner's work invalid
+                if len(failed_checkpoints) > len(intermediate_checkpoints) / 2:
+                    logger.warning(
+                        f"More than half of intermediate checkpoints failed validation: {failed_checkpoints}"
+                    )
+                    return False, "intermediate-checkpoints-majority-failed"
+
+                logger.info("All intermediate checkpoints passed validation.")
+                return True, "valid"
+            else:
+                logger.warning("No intermediate checkpoints received from miner.")
+                return False, "no-intermediate-checkpoints"
+
+        except Exception as e:
+            logger.warning(f"Error during intermediate checkpoint validation: {e}")
+            return False, "intermediate-checkpoints-error"
 
 
 class OrganicMDEvaluator(BaseEvaluator):
