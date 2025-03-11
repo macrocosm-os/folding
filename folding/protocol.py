@@ -20,7 +20,6 @@ import typing
 import base64
 import bittensor as bt
 from folding.utils.logger import logger
-from pydantic import BaseModel
 
 
 class PingSynapse(bt.Synapse):
@@ -35,12 +34,6 @@ class ParticipationSynapse(bt.Synapse):
 
     job_id: str
     is_participating: bool = False
-
-
-class MDOutput(BaseModel):
-    latest_cpt: typing.Optional[str] = None
-    old_cpt: typing.Optional[str] = None
-    log_file: typing.Optional[str] = None
 
 
 class JobSubmissionSynapse(bt.Synapse):
@@ -62,7 +55,7 @@ class JobSubmissionSynapse(bt.Synapse):
     job_id: str
 
     # Optional request output, filled by receiving axon.
-    md_output: typing.Optional[MDOutput] = None
+    md_output: typing.Optional[dict] = None
     miner_seed: typing.Optional[int] = None
     miner_state: typing.Optional[str] = None
 
@@ -79,13 +72,13 @@ class JobSubmissionSynapse(bt.Synapse):
             f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
         )
         # Right here we perform validation that the response has expected hash
-        if not isinstance(self.md_output, MDOutput):
-            self.md_output = MDOutput()
+        if not isinstance(self.md_output, dict):
+            self.md_output = {}
         else:
             md_output = {}
             # Access fields directly from the MDOutput model
-            for field in self.md_output.model_fields:
-                value = getattr(self.md_output, field)
+            for field in self.md_output.keys():
+                value = self.md_output[field]
                 if value is not None:
                     try:
                         md_output[field] = base64.b64decode(value)
@@ -95,11 +88,7 @@ class JobSubmissionSynapse(bt.Synapse):
                 else:
                     md_output[field] = None
 
-            self.md_output = MDOutput(
-                latest_cpt=md_output["latest_cpt"],
-                old_cpt=md_output["old_cpt"],
-                log_file=md_output["log_file"],
-            )
+            self.md_output = md_output
 
         return self
 
