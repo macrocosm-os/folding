@@ -20,7 +20,6 @@ from folding.utils.ops import (
     write_pkl,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
-from neurons.validator import Validator
 from folding.protocol import IntermediateSubmissionSynapse
 
 
@@ -446,7 +445,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         return (self.cpt_step * self.system_config.time_step_size) / 1e3
 
     def get_intermediate_checkpoints(
-        self, validator: Validator, job_id: str, axon: bt.Axon
+        self, validator: "Validator", job_id: str, axon: bt.Axon
     ):
         """Get the intermediate checkpoints from the miner."""
         # 3 random numbers indicating which checkpoints we want
