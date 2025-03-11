@@ -19,8 +19,16 @@ import openmm.app as app
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
-from folding.protocol import JobSubmissionSynapse, ParticipationSynapse
-from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
+from folding.protocol import (
+    JobSubmissionSynapse,
+    ParticipationSynapse,
+    IntermediateSubmissionSynapse,
+)
+from folding.utils.reporters import (
+    ExitFileReporter,
+    LastTwoCheckpointsReporter,
+    SequentialCheckpointReporter,
+)
 from folding.utils.ops import (
     check_if_directory_exists,
     get_tracebacks,
@@ -408,9 +416,42 @@ class FoldingMiner(BaseMinerNeuron):
             self (ParticipationSynapse): must attach "is_participating"
         """
         job_id = synapse.job_id
-        logger.info(f"⌛ Validator checking if miner has participated in job: {job_id} ⌛")
+        logger.info(
+            f"⌛ Validator checking if miner has participated in job: {job_id} ⌛"
+        )
         has_worked_on_job, _, _ = self.check_if_job_was_worked_on(job_id=job_id)
         synapse.is_participating = has_worked_on_job
+        return synapse
+
+    def intermediate_submission_forward(self, synapse: IntermediateSubmissionSynapse):
+        """Respond to the validator with the necessary information about submitting intermediate checkpoints.
+
+        Args:
+            self (IntermediateSubmissionSynapse): must attach "cpt_files"
+        """
+        job_id = synapse.job_id
+        pdb_id = synapse.pdb_id
+        checkpoint_numbers = synapse.checkpoint_numbers
+        has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
+            job_id=job_id
+        )
+
+        if not has_worked_on_job:
+            logger.warning(f"Job ID {job_id} not found in the database.")
+            return synapse
+
+        # Check if the checkpoint files exist in the output directory
+        output_dir = event["output_dir"]
+        cpt_files = {}
+        for checkpoint_number in checkpoint_numbers:
+            cpt_file = os.path.join(
+                output_dir, f"{pdb_id}_state_{checkpoint_number}.cpt"
+            )
+            if os.path.exists(cpt_file):
+                cpt_files[checkpoint_number] = open(cpt_file, "rb").read()
+
+        synapse.cpt_files = cpt_files
+
         return synapse
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
@@ -945,7 +986,7 @@ class SimulationManager:
     ) -> Dict[str, List[str]]:
         state_commands = {}
 
-        for state in self.STATES:
+        for state, simulation_steps in self.simulation_steps.items():
             simulation, _ = OpenMMSimulation().create_simulation(
                 pdb=self.pdb_obj,
                 system_config=system_config.get_config(),
@@ -970,6 +1011,28 @@ class SimulationManager:
                     filename=f"{self.output_dir}/{state}",
                     reportInterval=self.EXIT_REPORTER_INTERVAL,
                     file_prefix=state,
+                )
+            )
+
+            # Calculate the starting checkpoint counter based on previous states
+            starting_counter = 0
+            if state in self.simulation_steps:
+                state_index = list(self.simulation_steps.keys()).index(state)
+                previous_states = list(self.simulation_steps.keys())[:state_index]
+
+                # Sum the number of checkpoints for all previous states
+                for prev_state in previous_states:
+                    # Calculate how many checkpoints were created in the previous state
+                    prev_checkpoints = int(
+                        self.simulation_steps[prev_state] / self.CHECKPOINT_INTERVAL
+                    )
+                    starting_counter += prev_checkpoints
+
+            simulation.reporters.append(
+                SequentialCheckpointReporter(
+                    file_prefix=f"{self.output_dir}/",
+                    reportInterval=self.CHECKPOINT_INTERVAL,
+                    checkpoint_counter=starting_counter,
                 )
             )
             state_commands[state] = simulation
