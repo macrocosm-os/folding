@@ -10,6 +10,7 @@ import requests
 import traceback
 import concurrent.futures
 import asyncio
+import pandas as pd
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any
 
@@ -94,59 +95,46 @@ def attach_files_to_synapse(
         if not state_files:
             raise FileNotFoundError(f"No state files found for {state} in {data_directory}")
 
-        # Get and combine log files if they exist
+        # Get log files if they exist
         log_files = sorted(glob.glob(os.path.join(data_directory, "*.log")))
         files_to_attach = state_files.copy()
         
         if log_files:
-            # First verify we have non-empty log files and get the header
-            header = None
-            valid_log_files = []
+            # Read and combine log files using pandas
+            dfs = []
             
             for log_file in log_files:
                 try:
-                    with open(log_file, "r") as f:
-                        first_line = f.readline().strip()
-                        if first_line:  # If file has content
-                            if header is None:
-                                header = first_line
-                            valid_log_files.append((log_file, first_line == header))
+                    # Try reading the file with pandas
+                    df = pd.read_csv(log_file)
+                    if not df.empty:
+                        dfs.append(df)
                 except Exception as e:
                     logger.warning(f"Could not read log file {log_file}: {e}")
                     continue
-
-            if valid_log_files and header is not None:
+            
+            if dfs:
+                # Combine all dataframes and sort by step
+                combined_df = pd.concat(dfs, ignore_index=True)  
+                combined_df = combined_df.sort_values('#"Step"')
+                
+                # Write combined log file
                 combined_log_path = os.path.join(data_directory, f"{state}_combined.log")
                 try:
-                    with open(combined_log_path, "w") as outfile:
-                        # Write header once
-                        outfile.write(f"{header}\n")
-                        
-                        # Write data from all files
-                        for log_file, has_matching_header in valid_log_files:
-                            try:
-                                with open(log_file, "r") as infile:
-                                    # Skip first line if it matches header
-                                    if has_matching_header:
-                                        next(infile, None)
-                                    for line in infile:
-                                        outfile.write(line)
-                            except Exception as e:
-                                logger.warning(f"Error processing log file {log_file}: {e}")
-                                continue
-                    
+                    combined_df.to_csv(combined_log_path, index=False)
                     files_to_attach.append(combined_log_path)
+                except Exception as e:
+                    logger.error(f"Failed to write combined log file: {e}")
                 
-                finally:
-                    # Attach all files
-                    for filename in files_to_attach:
-                        try:
-                            with open(filename, "rb") as f:
-                                base_filename = os.path.basename(filename)
-                                synapse.md_output[base_filename] = base64.b64encode(f.read())
-                        except Exception as e:
-                            logger.error(f"Failed to read file {filename!r}: {e}")
-                            get_tracebacks()
+                # Attach all files
+                for filename in files_to_attach:
+                    try:
+                        with open(filename, "rb") as f:
+                            base_filename = os.path.basename(filename)
+                            synapse.md_output[base_filename] = base64.b64encode(f.read())
+                    except Exception as e:
+                        logger.error(f"Failed to read file {filename!r}: {e}")
+                        get_tracebacks()
         else:
             # Just attach state files if no logs exist
             for filename in files_to_attach:
@@ -493,6 +481,7 @@ class FoldingMiner(BaseMinerNeuron):
         Args:
             self (IntermediateSubmissionSynapse): must attach "cpt_files"
         """
+        logger.info(f"Intermediate submission forward for job: {synapse.job_id}")
         job_id = synapse.job_id
         pdb_id = synapse.pdb_id
         checkpoint_numbers = synapse.checkpoint_numbers
