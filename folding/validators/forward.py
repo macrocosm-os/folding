@@ -52,6 +52,7 @@ async def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
 
 async def run_participation_step(self, job_id: str, timeout: float) -> List[int]:
     """Report a list of uids that are participating in a specific job"""
+    logger.info(f"Running participation step for job {job_id}")
     all_miner_uids = get_all_miner_uids(self)
     axons = [self.metagraph.axons[uid] for uid in all_miner_uids]
     synapse = ParticipationSynapse(job_id=job_id)
@@ -87,6 +88,7 @@ async def run_step(
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in participating_uids]
+    logger.info(f"Running step with {len(axons)} miners")
 
     system_config = protein.system_config.to_dict()
     system_config["seed"] = None  # We don't want to pass the seed to miners.
