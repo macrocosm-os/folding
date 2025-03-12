@@ -220,6 +220,7 @@ def get_energies(
             seed,
             best_cpt,
             process_md_output_time,
+            axons,
         ) = zip(*processed_data)
 
     # Update event dictionary with processed data

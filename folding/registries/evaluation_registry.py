@@ -1,5 +1,6 @@
 import os
 from typing import Any, Dict, List, Union
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -450,7 +451,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
         """Get the intermediate checkpoints from the miner."""
         # 3 random numbers indicating which checkpoints we want
         random_checkpoint_numbers = np.random.randint(
-            0, int(len(self.log_file) / 10000), size=c.MAX_CHECKPOINTS_TO_VALIDATE
+            0,
+            int(self.log_file['#"Step"'].iloc[-1] / 10000),
+            size=c.MAX_CHECKPOINTS_TO_VALIDATE,
         ).tolist()
 
         synapse = IntermediateSubmissionSynapse(
@@ -646,7 +649,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 return False, "no-intermediate-checkpoints"
 
         except Exception as e:
-            logger.warning(f"Error during intermediate checkpoint validation: {e}")
+            logger.warning(
+                f"Error during intermediate checkpoint validation: {traceback.format_exc()}"
+            )
             return False, "intermediate-checkpoints-error"
 
 
