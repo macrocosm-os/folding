@@ -452,7 +452,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         # 3 random numbers indicating which checkpoints we want
         random_checkpoint_numbers = np.random.randint(
             0,
-            int(self.log_file['#"Step"'].iloc[-1] / 10000),
+            int(self.log_file['#"Step"'].iloc[-1] / 10000) - 1,
             size=c.MAX_CHECKPOINTS_TO_VALIDATE,
         ).tolist()
 
