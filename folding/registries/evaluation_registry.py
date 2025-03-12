@@ -257,7 +257,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return False
         return True
 
-    def is_run_valid(self, validator=None, job_id=None, axon=None):
+    async def is_run_valid(self, validator=None, job_id=None, axon=None):
         """
         Checks if the run is valid by evaluating a set of logical conditions:
 
@@ -374,7 +374,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 (
                     intermediate_valid,
                     intermediate_result,
-                ) = self.validate_intermediate_checkpoints(
+                ) = await self.validate_intermediate_checkpoints(
                     validator=validator, job_id=job_id, axon=axon
                 )
                 if not intermediate_valid:
@@ -409,7 +409,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return True
 
-    def validate(self, validator=None, job_id=None, axon=None):
+    async def validate(self, validator=None, job_id=None, axon=None):
         """
         Validate the run by checking if it's valid and returning the appropriate metrics.
 
@@ -421,7 +421,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         Returns:
             Tuple containing the median energy, checked energies, miner energies, and result message
         """
-        is_valid, checked_energies, miner_energies, result = self.is_run_valid(
+        is_valid, checked_energies, miner_energies, result = await self.is_run_valid(
             validator=validator, job_id=job_id, axon=axon
         )
         if not is_valid:
@@ -445,7 +445,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return (self.cpt_step * self.system_config.time_step_size) / 1e3
 
-    def get_intermediate_checkpoints(
+    async def get_intermediate_checkpoints(
         self, validator: "Validator", job_id: str, axon: bt.Axon
     ):
         """Get the intermediate checkpoints from the miner."""
@@ -461,7 +461,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             checkpoint_numbers=random_checkpoint_numbers,
             pdb_id=self.pdb_id,
         )
-        responses = validator.dendrite.query(
+        responses = await validator.dendrite.forward(
             synapse=synapse, axons=[axon], deserialize=True
         )
         return responses[0].cpt_files
@@ -469,7 +469,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
     def name(self) -> str:
         return "SyntheticMD"
 
-    def validate_intermediate_checkpoints(self, validator, job_id, axon):
+    async def validate_intermediate_checkpoints(self, validator, job_id, axon):
         """
         Validate intermediate checkpoints from the miner.
 
@@ -485,12 +485,15 @@ class SyntheticMDEvaluator(BaseEvaluator):
         logger.info(f"Validating intermediate checkpoints for {self.pdb_id}...")
         try:
             # Get intermediate checkpoints from the miner
-            intermediate_checkpoints = self.get_intermediate_checkpoints(
+            intermediate_checkpoints = await self.get_intermediate_checkpoints(
                 validator=validator, job_id=job_id, axon=axon
             )
 
             # If we have intermediate checkpoints, validate them
-            if intermediate_checkpoints and len(intermediate_checkpoints) > 0:
+            if (
+                intermediate_checkpoints
+                and len(intermediate_checkpoints) == c.MAX_CHECKPOINTS_TO_VALIDATE
+            ):
                 # Track if any intermediate checkpoint fails
                 failed_checkpoints = []
 
@@ -645,8 +648,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 logger.info("All intermediate checkpoints passed validation.")
                 return True, "valid"
             else:
-                logger.warning("No intermediate checkpoints received from miner.")
-                return False, "no-intermediate-checkpoints"
+                logger.warning(
+                    "Not enough intermediate checkpoints received from miner."
+                )
+                return False, "not-enough-intermediate-checkpoints"
 
         except Exception as e:
             logger.warning(

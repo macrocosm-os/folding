@@ -117,7 +117,7 @@ async def run_step(
         **response_info,
     }
 
-    energies, energy_event = get_energies(
+    energies, energy_event = await get_energies(
         validator=self,
         protein=protein,
         responses=responses,

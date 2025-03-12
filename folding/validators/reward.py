@@ -68,7 +68,7 @@ def evaluate(
     return reported_energies, evaluators, seed, best_cpt, process_md_output_time
 
 
-def get_energies(
+async def get_energies(
     validator: "Validator",
     protein: Protein,
     responses: List[JobSubmissionSynapse],
@@ -161,7 +161,9 @@ def get_energies(
                     checked_energies,
                     miner_energies,
                     reason,
-                ) = evaluator.validate(validator=validator, job_id=job_id, axon=axon)
+                ) = await evaluator.validate(
+                    validator=validator, job_id=job_id, axon=axon
+                )
             else:
                 median_energy, checked_energies, miner_energies, reason = (
                     reported_energy,
