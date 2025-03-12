@@ -444,18 +444,17 @@ class FoldingMiner(BaseMinerNeuron):
 
         pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=gjp_config)
         event["pdb_hash"] = pdb_hash
-
-        if pdb_hash in self.simulations:
-            return True, "running_simulation", event
-
         # If you don't have in the list of simulations, check your local storage for the data.
         output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
         gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
         event["output_dir"] = output_dir
         event["gjp_config_filepath"] = gjp_config_filepath
 
-        # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
+        if pdb_hash in self.simulations:
+            return True, "running_simulation", event
+
+        # check if any of the simulations have finished
 
         submitted_job_is_unique = self.is_unique_job(
             system_config_filepath=gjp_config_filepath
