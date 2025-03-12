@@ -55,7 +55,7 @@ class SequentialCheckpointReporter(app.CheckpointReporter):
         state : State
             The current state of the simulation
         """
-        checkpoint_path = f"{self.file_prefix}_{self.checkpoint_counter}.cpt"
+        checkpoint_path = f"{self.file_prefix}{self.checkpoint_counter}.cpt"
         simulation.saveCheckpoint(checkpoint_path)
         self.checkpoint_counter += 1
 
