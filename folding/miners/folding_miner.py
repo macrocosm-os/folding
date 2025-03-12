@@ -145,6 +145,13 @@ def attach_files_to_synapse(
                 except Exception as e:
                     logger.error(f"Failed to read file {filename!r}: {e}")
                     get_tracebacks()
+                    
+        try:
+            # Clean up combined log file
+            if os.path.exists(combined_log_path):
+                os.remove(combined_log_path)
+        except Exception as e:
+            logger.warning(f"Failed to remove temporary combined log: {e}")
 
         # Set synapse metadata
         synapse.miner_seed = seed
@@ -498,10 +505,11 @@ class FoldingMiner(BaseMinerNeuron):
         cpt_files = {}
         for checkpoint_number in checkpoint_numbers:
             cpt_file = os.path.join(
-                output_dir, f"{pdb_id}_state_{checkpoint_number}.cpt"
+                output_dir, f"{checkpoint_number}.cpt"
             )
             if os.path.exists(cpt_file):
-                cpt_files[checkpoint_number] = open(cpt_file, "rb").read()
+                with open(cpt_file, "rb") as f:
+                    cpt_files[checkpoint_number] = base64.b64encode(f.read())
 
         synapse.cpt_files = cpt_files
 

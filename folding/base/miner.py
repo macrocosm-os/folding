@@ -7,7 +7,7 @@ import traceback
 import bittensor as bt
 
 from folding.base.neuron import BaseNeuron
-from folding.protocol import PingSynapse, ParticipationSynapse
+from folding.protocol import PingSynapse, ParticipationSynapse, IntermediateSubmissionSynapse
 from folding.utils.config import add_miner_args
 from folding.utils.logger import logger
 
@@ -51,6 +51,8 @@ class BaseMinerNeuron(BaseNeuron):
             forward_fn=self.ping_forward,  # not sure if we need blacklist on this.
         ).attach(
             forward_fn=self.participation_forward,
+        ).attach(
+            forward_fn=self.intermediate_submission_forward,
         )
         logger.info(f"Axon created: {self.axon}")
 
@@ -82,6 +84,14 @@ class BaseMinerNeuron(BaseNeuron):
 
         Args:
             self (ParticipationSynapse): must attach "is_participating"
+        """
+        pass
+    
+    def intermediate_submission_forward(self, synapse: IntermediateSubmissionSynapse):
+        """Respond to the validator with the necessary information about submitting intermediate checkpoints.
+
+        Args:
+            self (IntermediateSubmissionSynapse): must attach "cpt_files"
         """
         pass
 
