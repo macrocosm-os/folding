@@ -28,6 +28,7 @@ from folding.rewards.md_rewards import REWARD_REGISTRY
 
 # import base validator class which takes care of most of the boilerplate
 from folding.store import Job, SQLiteJobStore
+from folding.utils.ops import write_pkl
 from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_all_miner_uids
@@ -693,6 +694,7 @@ class Validator(BaseValidatorNeuron):
             self.loop.create_task(self._organic_scoring.start_loop())
             self.loop.create_task(self.start_organic_api())
         self.loop.create_task(self.monitor_validator())
+        self.loop.create_task(self.save_async_timings())
         self.is_running = True
         logger.debug("Starting validator in background thread.")
         return self
@@ -717,6 +719,17 @@ class Validator(BaseValidatorNeuron):
             os.system("pkill rqlited")
             self.loop.stop()
             logger.debug("Stopped")
+
+    async def save_async_timings(self):
+        while True:
+            await asyncio.sleep(60)
+            try:
+                write_pkl(
+                    self.ASYNC_TIMINGS,
+                    os.path.join(self.config.neuron.full_path, "async_timings.pkl"),
+                )
+            except Exception:
+                logger.error(f"Error in save_async_timings: {traceback.format_exc()}")
 
 
 async def main():
