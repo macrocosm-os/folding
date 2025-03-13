@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from openmm import app
 import bittensor as bt
+import plotly.graph_objects as go
 
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
@@ -446,19 +447,17 @@ class SyntheticMDEvaluator(BaseEvaluator):
         return (self.cpt_step * self.system_config.time_step_size) / 1e3
 
     async def get_intermediate_checkpoints(
-        self, validator: "Validator", job_id: str, axon: bt.Axon
+        self,
+        validator: "Validator",
+        job_id: str,
+        axon: bt.Axon,
+        checkpoint_numbers: list[int],
     ):
         """Get the intermediate checkpoints from the miner."""
-        # 3 random numbers indicating which checkpoints we want
-        random_checkpoint_numbers = np.random.randint(
-            0,
-            int(self.log_file['#"Step"'].iloc[-1] / 10000) - 1,
-            size=c.MAX_CHECKPOINTS_TO_VALIDATE,
-        ).tolist()
 
         synapse = IntermediateSubmissionSynapse(
             job_id=job_id,
-            checkpoint_numbers=random_checkpoint_numbers,
+            checkpoint_numbers=checkpoint_numbers,
             pdb_id=self.pdb_id,
         )
         responses = await validator.dendrite.forward(
@@ -484,9 +483,19 @@ class SyntheticMDEvaluator(BaseEvaluator):
         """
         logger.info(f"Validating intermediate checkpoints for {self.pdb_id}...")
         try:
+            # k random numbers indicating which checkpoints we want
+            checkpoint_numbers = np.random.randint(
+                0,
+                int(self.log_file['#"Step"'].iloc[-1] / 10000) - 1,
+                size=c.MAX_CHECKPOINTS_TO_VALIDATE,
+            ).tolist()
+
             # Get intermediate checkpoints from the miner
             intermediate_checkpoints = await self.get_intermediate_checkpoints(
-                validator=validator, job_id=job_id, axon=axon
+                validator=validator,
+                job_id=job_id,
+                axon=axon,
+                checkpoint_numbers=checkpoint_numbers,
             )
 
             # If we have intermediate checkpoints, validate them
@@ -544,8 +553,20 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
                         # Read the log file and check the energies
                         intermediate_log = pd.read_csv(intermediate_logfile)
+
+                        # Find entries in the log file where intermediate_log['#"Step"'] is equal to self.log_file['#"Step"']
+                        relevant_log_entries = pd.merge(
+                            self.log_file,
+                            intermediate_log,
+                            on='#"Step"',
+                            how="inner",
+                            suffixes=("_original", "_intermediate"),
+                        )
+
                         intermediate_energies = np.array(
-                            intermediate_log["Potential Energy (kJ/mole)"].values
+                            relevant_log_entries[
+                                "Potential Energy (kJ/mole)_intermediate"
+                            ].values
                         )
 
                         # Check that there's some variation in the energies
@@ -569,22 +590,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
                             failed_checkpoints.append(checkpoint_num)
                             continue
 
-                        # Get corresponding energy values from the original log file for this checkpoint
-                        # The checkpoint number corresponds to the index in the log file divided by 10000
-                        checkpoint_step = int(checkpoint_num) * 10000
-
-                        # Find entries in the log file that are close to the checkpoint step
-                        relevant_log_entries = self.log_file[
-                            (self.log_file['#"Step"'] >= checkpoint_step - steps_to_run)
-                            & (
-                                self.log_file['#"Step"']
-                                <= checkpoint_step + steps_to_run
-                            )
-                        ]
-
                         # Extract the original reported energies for this checkpoint range
                         original_energies = np.array(
-                            relevant_log_entries["Potential Energy (kJ/mole)"].values
+                            relevant_log_entries[
+                                "Potential Energy (kJ/mole)_original"
+                            ].values
                         )
 
                         if len(original_energies) == 0:
@@ -592,6 +602,48 @@ class SyntheticMDEvaluator(BaseEvaluator):
                                 f"No original energies found for checkpoint {checkpoint_num}. Skipping percent diff check."
                             )
                         else:
+
+                            # plotting intermediate log and original log in the same plot and save it as an image
+                            fig = go.Figure()
+
+                            # Add first trace with name for legend
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=relevant_log_entries['#"Step"'],
+                                    y=relevant_log_entries[
+                                        "Potential Energy (kJ/mole)_original"
+                                    ],
+                                    name="Original",  # This will appear in the legend
+                                    line=dict(color="red"),
+                                )
+                            )
+
+                            # Add second trace with name for legend
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=relevant_log_entries['#"Step"'],
+                                    y=relevant_log_entries[
+                                        "Potential Energy (kJ/mole)_intermediate"
+                                    ],
+                                    name="Intermediate",  # This will appear in the legend
+                                    line=dict(color="blue"),
+                                )
+                            )
+
+                            # Update layout
+                            fig.update_layout(
+                                title=f"Intermediate Checkpoint {checkpoint_num}",
+                                xaxis_title="Step",
+                                yaxis_title="Energy (kJ/mole)",
+                                legend_title="Data Source",
+                            )
+
+                            fig.write_image(
+                                os.path.join(
+                                    self.miner_data_directory,
+                                    f"checkpoint_{checkpoint_num}.png",
+                                )
+                            )
                             # Calculate the percent difference between simulated and reported energies
                             # Trim to the shortest length to ensure we're comparing corresponding steps
                             min_length = min(
@@ -623,7 +675,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
                                 )
                                 failed_checkpoints.append(checkpoint_num)
                                 continue
-
                             logger.info(
                                 f"Intermediate checkpoint {checkpoint_num} percent diff check passed with median diff: {median_percent_diff}%"
                             )
@@ -649,7 +700,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 return True, "valid"
             else:
                 logger.warning(
-                    "Not enough intermediate checkpoints received from miner."
+                    f"Not enough intermediate checkpoints received from miner. Asked for cpts {checkpoint_numbers} but got {intermediate_checkpoints.keys()}"
                 )
                 return False, "not-enough-intermediate-checkpoints"
 
