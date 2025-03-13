@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from async_timeout import timeout
 import tenacity
-
+from collections import defaultdict
 
 import folding.utils.constants as c
 from folding.base.reward import BatchRewardInput
@@ -59,16 +59,6 @@ class Validator(BaseValidatorNeuron):
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
-        else:
-            REFERENCE_BLOCK = 5055585 + 7200
-            if REFERENCE_BLOCK > self.block:
-                registry_path = os.path.join(
-                    self.config.neuron.full_path, "miner_registry.pkl"
-                )
-                # Now, remove the miner_registry file from local disk
-                logger.info(f"Removing old miner registry at {registry_path}")
-                os.remove(registry_path)
-                self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -76,6 +66,8 @@ class Validator(BaseValidatorNeuron):
         self.store = SQLiteJobStore()
         self.wandb_run_start = None
         self.RSYNC_EXCEPTION_COUNT = 0
+
+        self.ASYNC_TIMINGS = defaultdict(list)
 
         self.validator_hotkey_reference = self.wallet.hotkey.ss58_address[:8]
 
@@ -504,6 +496,9 @@ class Validator(BaseValidatorNeuron):
             except Exception as e:
                 logger.error(f"Error in create_jobs: {traceback.format_exc()}")
 
+            self.ASYNC_TIMINGS["create_synthetic_jobs"].append(
+                datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            )
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
@@ -547,6 +542,9 @@ class Validator(BaseValidatorNeuron):
                 logger.error(f"Error in update_jobs: {traceback.format_exc()}")
 
             self.step += 1
+            self.ASYNC_TIMINGS["update_jobs"].append(
+                datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            )
 
             logger.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
@@ -618,6 +616,9 @@ class Validator(BaseValidatorNeuron):
         while True:
             try:
                 await asyncio.sleep(60)
+                self.ASYNC_TIMINGS["reward_loop"].append(
+                    datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                )
                 await self.read_and_update_rewards()
             except Exception as e:
                 logger.error(f"Error in reward_loop: {traceback.format_exc()}")
@@ -629,6 +630,9 @@ class Validator(BaseValidatorNeuron):
             try:
                 await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
                 self.sync()
+                self.ASYNC_TIMINGS["sync_loop"].append(
+                    datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                )
             except Exception as e:
                 logger.error(f"Error in sync_loop: {traceback.format_exc()}")
 
@@ -641,6 +645,9 @@ class Validator(BaseValidatorNeuron):
                 await asyncio.sleep(300)
                 try:
                     outdated = await self.store.monitor_db()
+                    self.ASYNC_TIMINGS["monitor_db"].append(
+                        datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                    )
                 except Exception as e:
                     logger.error(f"Error in monitor_db: {traceback.format_exc()}")
                     await self.start_rqlite()
