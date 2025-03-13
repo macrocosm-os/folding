@@ -463,6 +463,10 @@ class Validator(BaseValidatorNeuron):
         """
 
         while True:
+            self.ASYNC_TIMINGS["create_synthetic_jobs"].append(
+                datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            )
+
             try:
                 logger.info("Starting job creation loop.")
                 queue = self.store.get_queue(
@@ -494,12 +498,9 @@ class Validator(BaseValidatorNeuron):
                         "Job queue is full. Sleeping 60 seconds before next job creation loop."
                     )
 
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in create_jobs: {traceback.format_exc()}")
 
-            self.ASYNC_TIMINGS["create_synthetic_jobs"].append(
-                datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-            )
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
@@ -507,6 +508,10 @@ class Validator(BaseValidatorNeuron):
             try:
                 # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.
                 await asyncio.sleep(self.config.neuron.update_interval)
+
+                self.ASYNC_TIMINGS["update_jobs"].append(
+                    datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                )
 
                 logger.info("Updating jobs.")
 
@@ -539,14 +544,10 @@ class Validator(BaseValidatorNeuron):
                     await self.update_job(job=job)
                 logger.info(f"step({self.step}) block({self.block})")
 
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in update_jobs: {traceback.format_exc()}")
 
             self.step += 1
-            self.ASYNC_TIMINGS["update_jobs"].append(
-                datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-            )
-
             logger.info(
                 f"Sleeping {self.config.neuron.update_interval} seconds before next job update loop."
             )
@@ -621,7 +622,7 @@ class Validator(BaseValidatorNeuron):
                     datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
                 )
                 await self.read_and_update_rewards()
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in reward_loop: {traceback.format_exc()}")
 
     async def sync_loop(self):
@@ -630,11 +631,11 @@ class Validator(BaseValidatorNeuron):
             seconds_per_block = 12
             try:
                 await asyncio.sleep(self.config.neuron.epoch_length * seconds_per_block)
-                self.sync()
                 self.ASYNC_TIMINGS["sync_loop"].append(
                     datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
                 )
-            except Exception as e:
+                self.sync()
+            except Exception:
                 logger.error(f"Error in sync_loop: {traceback.format_exc()}")
 
     async def monitor_db(self):
@@ -649,7 +650,7 @@ class Validator(BaseValidatorNeuron):
                     self.ASYNC_TIMINGS["monitor_db"].append(
                         datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
                     )
-                except Exception as e:
+                except Exception:
                     logger.error(f"Error in monitor_db: {traceback.format_exc()}")
                     await self.start_rqlite()
 
@@ -658,7 +659,7 @@ class Validator(BaseValidatorNeuron):
                     await self.start_rqlite()
                 else:
                     logger.debug("Database is up-to-date.")
-            except Exception as e:
+            except Exception:
                 logger.error(f"Error in monitor_db: {traceback.format_exc()}")
 
     async def monitor_validator(self):
@@ -679,6 +680,17 @@ class Validator(BaseValidatorNeuron):
                     f"Haven't set blocks in {block_difference} blocks. Restarting validator."
                 )
                 self.should_exit = True
+
+    async def save_async_timings(self):
+        while True:
+            await asyncio.sleep(60)
+            try:
+                write_pkl(
+                    self.ASYNC_TIMINGS,
+                    os.path.join(self.config.neuron.full_path, "async_timings.pkl"),
+                )
+            except Exception:
+                logger.error(f"Error in save_async_timings: {traceback.format_exc()}")
 
     async def __aenter__(self):
         await self.start_rqlite()
@@ -719,17 +731,6 @@ class Validator(BaseValidatorNeuron):
             os.system("pkill rqlited")
             self.loop.stop()
             logger.debug("Stopped")
-
-    async def save_async_timings(self):
-        while True:
-            await asyncio.sleep(60)
-            try:
-                write_pkl(
-                    self.ASYNC_TIMINGS,
-                    os.path.join(self.config.neuron.full_path, "async_timings.pkl"),
-                )
-            except Exception:
-                logger.error(f"Error in save_async_timings: {traceback.format_exc()}")
 
 
 async def main():
