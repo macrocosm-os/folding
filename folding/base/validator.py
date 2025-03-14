@@ -295,6 +295,10 @@ class BaseValidatorNeuron(BaseNeuron):
         normalized_stakes = valid_stakes / np.sum(valid_stakes)
 
         weights = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(self.device)
+
+        # normalize weights to be between 0 and 1
+        weights = (weights - weights.min()) / (weights.max() - weights.min())
+
         return weights
 
     def load_config_json(self):
