@@ -3,11 +3,9 @@
 
 import os
 import time
-import random
 import asyncio
 import traceback
 
-from itertools import chain
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
@@ -59,16 +57,6 @@ class Validator(BaseValidatorNeuron):
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
-        else:
-            REFERENCE_BLOCK = 5055585 + 7200
-            if REFERENCE_BLOCK > self.block:
-                registry_path = os.path.join(
-                    self.config.neuron.full_path, "miner_registry.pkl"
-                )
-                # Now, remove the miner_registry file from local disk
-                logger.info(f"Removing old miner registry at {registry_path}")
-                os.remove(registry_path)
-                self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -161,59 +149,12 @@ class Validator(BaseValidatorNeuron):
         active_uids = np.array(current_miner_uids)[can_serve].tolist()
         return active_uids
 
-    async def sample_random_uids(
-        self,
-        num_uids_to_sample: int,
-        exclude_uids: List[int] = None,
-    ) -> List[int]:
-        """Helper function to sample a batch of uids on the network, determine their serving status,
-        and sample more until a desired number of uids is found.
-
-        Args:
-            num_uids_to_sample (int): The number of uids to sample.
-            exclude_uids (List[int], optional): List of uids to exclude from the sampling. Defaults to None.
-
-        Returns:
-            List[int]: A list of random uids.
-        """
-
-        if exclude_uids is not None:
-            all_miner_uids = list(
-                set(self.all_miner_uids).difference(set(exclude_uids))
-            )
-        else:
-            all_miner_uids = self.all_miner_uids
-
-        return random.sample(all_miner_uids, num_uids_to_sample)
-
-    async def get_valid_uids(self) -> List[int]:
-        """get valid uids to work on a job by sampling random uids and excluding active jobs.
-
-        Returns:
-            valid_uids: List of uids
-        """
-        active_jobs = self.store.get_queue(
-            ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
-        ).queue
-        active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
-        active_hotkeys = list(chain.from_iterable(active_hotkeys))
-        exclude_uids = self.get_uids(hotkeys=active_hotkeys)
-
-        valid_uids = await self.sample_random_uids(
-            num_uids_to_sample=self.config.neuron.sample_size, exclude_uids=exclude_uids
-        )
-
-        return valid_uids
-
-    async def add_job(
-        self, job_event: dict[str, Any], uids: List[int] = None, protein: Protein = None
-    ) -> bool:
+    async def add_job(self, job_event: dict[str, Any], protein: Protein = None) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
         If uids are not provided, then the function will sample random uids from the network.
 
         Args:
             job_event (dict[str, Any]): parameters that are needed to make the job.
-            uids (List[int], optional): List of uids that can be assigned to the job. Defaults to None.
         """
         start_time = time.time()
 
@@ -327,12 +268,14 @@ class Validator(BaseValidatorNeuron):
     async def update_job(self, job: Job):
         """Updates the job status based on the event information
 
-        TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
+        Args:
+            job (Job): Job object containing the job information
         """
 
         apply_pipeline = False
         energies = torch.Tensor(job.event["energies"])
 
+        # The length of job.event["uids"] should be all miner uids in the network
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             # jobs are "skipped" when they are spot checked
             if reason == "skip":
@@ -507,6 +450,9 @@ class Validator(BaseValidatorNeuron):
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
+        """
+        Updates the jobs in the queue.
+        """
         while True:
             try:
                 # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.

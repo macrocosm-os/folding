@@ -19,7 +19,7 @@ import openmm.app as app
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
-from folding.protocol import JobSubmissionSynapse, ParticipationSynapse
+from folding.protocol import JobSubmissionSynapse
 from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -100,7 +100,7 @@ def attach_files_to_synapse(
 
 
 def check_synapse(
-    self, synapse: JobSubmissionSynapse, event: Dict = None
+    synapse: JobSubmissionSynapse, event: Dict = None
 ) -> JobSubmissionSynapse:
     """Utility function to remove md_inputs if they exist"""
 
@@ -399,20 +399,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         return False, "job_not_worked_on", event
 
-    def participation_forward(self, synapse: ParticipationSynapse):
-        """Respond to the validator with the necessary information about participating in a specified job
-        If the miner has worked on a job before, it should return True for is_participating.
-        If the miner has not worked on a job before, it should return False for is_participating.
-
-        Args:
-            self (ParticipationSynapse): must attach "is_participating"
-        """
-        job_id = synapse.job_id
-        logger.info(f"⌛ Validator checking if miner has participated in job: {job_id} ⌛")
-        has_worked_on_job, _, _ = self.check_if_job_was_worked_on(job_id=job_id)
-        synapse.is_participating = has_worked_on_job
-        return synapse
-
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """Process an incoming job submission request and return appropriate simulation data.
 
@@ -476,9 +462,7 @@ class FoldingMiner(BaseMinerNeuron):
                             logger.warning(
                                 f"❗Returning previous simulation data for failed simulation: {event['pdb_id']}❗"
                             )
-                            return check_synapse(
-                                self=self, synapse=synapse, event=event
-                            )
+                            return check_synapse(synapse=synapse, event=event)
 
                         with open(seed_file, "r", encoding="utf-8") as f:
                             seed = f.readlines()[-1].strip()
@@ -502,7 +486,7 @@ class FoldingMiner(BaseMinerNeuron):
                         event["condition"] = "found_existing_data"
                         event["state"] = state
 
-                        return check_synapse(self=self, synapse=synapse, event=event)
+                        return check_synapse(synapse=synapse, event=event)
 
             # The set of RUNNING simulations.
             elif condition == "running_simulation":
@@ -522,7 +506,7 @@ class FoldingMiner(BaseMinerNeuron):
                 event["state"] = current_executor_state
                 event["queried_at"] = simulation["queried_at"]
 
-                return check_synapse(self=self, synapse=synapse, event=event)
+                return check_synapse(synapse=synapse, event=event)
 
     def create_simulation_from_job(
         self,

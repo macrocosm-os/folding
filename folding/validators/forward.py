@@ -1,8 +1,6 @@
 import time
-import traceback
 import numpy as np
 from tqdm import tqdm
-import bittensor as bt
 from pathlib import Path
 from typing import List, Dict
 from collections import defaultdict
@@ -12,7 +10,7 @@ from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
-from folding.protocol import PingSynapse, JobSubmissionSynapse, ParticipationSynapse
+from folding.protocol import PingSynapse, JobSubmissionSynapse
 import asyncio
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
@@ -50,21 +48,6 @@ async def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
     return ping_report
 
 
-async def run_participation_step(self, job_id: str, timeout: float) -> List[int]:
-    """Report a list of uids that are participating in a specific job"""
-    all_miner_uids = get_all_miner_uids(self)
-    axons = [self.metagraph.axons[uid] for uid in all_miner_uids]
-    synapse = ParticipationSynapse(job_id=job_id)
-    responses: List[ParticipationSynapse] = await self.dendrite.forward(
-        axons=axons,
-        synapse=synapse,
-        timeout=timeout,
-    )
-    is_participating = [resp.is_participating for resp in responses]
-    participating_uids = np.array(all_miner_uids)[is_participating].tolist()
-    return participating_uids
-
-
 async def run_step(
     self,
     protein: Protein,
@@ -84,10 +67,12 @@ async def run_step(
         }
         return event
 
-    participating_uids = await run_participation_step(self, job_id=job_id, timeout=45)
+    # Get all uids on the network that are NOT validators.
+    # the .is_serving flag means that the uid does not have an axon address.
+    uids = get_all_miner_uids(self, include_serving_in_check=False)
 
     # Get the list of uids to query for this step.
-    axons = [self.metagraph.axons[uid] for uid in participating_uids]
+    axons = [self.metagraph.axons[uid] for uid in uids]
 
     system_config = protein.system_config.to_dict()
     system_config["seed"] = None  # We don't want to pass the seed to miners.
@@ -114,7 +99,7 @@ async def run_step(
     event = {
         "block": self.block,
         "step_length": time.time() - start_time,
-        "uids": participating_uids,
+        "uids": uids,
         "energies": [],
         **response_info,
     }
@@ -122,7 +107,7 @@ async def run_step(
     energies, energy_event = get_energies(
         protein=protein,
         responses=responses,
-        uids=participating_uids,
+        uids=uids,
         miner_registry=self.miner_registry,
         job_type=job_type,
     )
