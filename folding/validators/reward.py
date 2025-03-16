@@ -2,7 +2,7 @@ import time
 from typing import List
 
 import numpy as np
-
+import bittensor as bt
 from folding.utils.logger import logger
 from folding.utils import constants as c
 from folding.validators.protein import Protein
@@ -68,12 +68,15 @@ def evaluate(
     return reported_energies, evaluators, seed, best_cpt, process_md_output_time
 
 
-def get_energies(
+async def get_energies(
+    validator: "Validator",
     protein: Protein,
     responses: List[JobSubmissionSynapse],
     uids: List[int],
     miner_registry: MinerRegistry,
     job_type: str,
+    job_id: str,
+    axons: List[bt.Axon],
 ):
     """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
 
@@ -117,6 +120,7 @@ def get_energies(
             seed,
             best_cpt,
             process_md_output_time,
+            axons,
         ),
         key=lambda x: x[0] if x[0] != 0 else float("inf"),  # Push zeros to the end
     )
@@ -134,6 +138,7 @@ def get_energies(
         seed,
         best_cpt,
         process_md_output_time,
+        axon,
     ) in enumerate(sorted_data):
         try:
             i = uids.index(uid)
@@ -156,7 +161,9 @@ def get_energies(
                     checked_energies,
                     miner_energies,
                     reason,
-                ) = evaluator.validate()
+                ) = await evaluator.validate(
+                    validator=validator, job_id=job_id, axon=axon
+                )
             else:
                 median_energy, checked_energies, miner_energies, reason = (
                     reported_energy,
@@ -215,6 +222,7 @@ def get_energies(
             seed,
             best_cpt,
             process_md_output_time,
+            axons,
         ) = zip(*processed_data)
 
     # Update event dictionary with processed data

@@ -52,6 +52,7 @@ async def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
 
 async def run_participation_step(self, job_id: str, timeout: float) -> List[int]:
     """Report a list of uids that are participating in a specific job"""
+    logger.info(f"Running participation step for job {job_id}")
     all_miner_uids = get_all_miner_uids(self)
     axons = [self.metagraph.axons[uid] for uid in all_miner_uids]
     synapse = ParticipationSynapse(job_id=job_id)
@@ -71,7 +72,6 @@ async def run_step(
     timeout: float,
     job_type: str,
     job_id: str,
-    best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()
 
@@ -88,6 +88,7 @@ async def run_step(
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in participating_uids]
+    logger.info(f"Running step with {len(axons)} miners")
 
     system_config = protein.system_config.to_dict()
     system_config["seed"] = None  # We don't want to pass the seed to miners.
@@ -95,9 +96,6 @@ async def run_step(
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
         job_id=job_id,
-        best_submitted_energy=(
-            0 if np.isinf(best_submitted_energy) else best_submitted_energy
-        ),
     )
 
     # Make calls to the network with the prompt - this is synchronous.
@@ -119,10 +117,13 @@ async def run_step(
         **response_info,
     }
 
-    energies, energy_event = get_energies(
+    energies, energy_event = await get_energies(
+        validator=self,
         protein=protein,
         responses=responses,
         uids=participating_uids,
+        axons=axons,
+        job_id=job_id,
         miner_registry=self.miner_registry,
         job_type=job_type,
     )
