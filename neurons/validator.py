@@ -52,7 +52,7 @@ class Validator(BaseValidatorNeuron):
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
-        self.all_miner_uids: List = get_all_miner_uids(self)
+        self.all_miner_uids: List = get_all_miner_uids(metagraph=self.metagraph, vpermit_tao_limit=self.config.neuron.vpermit_tao_limit)
 
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
@@ -402,7 +402,7 @@ class Validator(BaseValidatorNeuron):
 
         merged_events.pop("checked_energy")
         merged_events.pop("miner_energy")
-        logger.success(f"Event information: {merged_events}")
+        logger.debug(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
