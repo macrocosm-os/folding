@@ -65,19 +65,19 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
     return uids
 
 
-def get_all_miner_uids(self, include_serving_in_check: bool = True):
+def get_all_miner_uids(metagraph, vpermit_tao_limit, include_serving_in_check: bool = True) -> List[int]:
     """Returns all available miner uids from the metagraph.
     Returns:
         uids (List): All available miner uids.
         include_serving_in_check (bool): To only include miners that are actually serving in the check.
     """
     candidate_uids = []
-    for uid in range(self.metagraph.n.item()):
+    for uid in range(metagraph.n.item()):
         uid_is_available = check_uid_availability(
-            self.metagraph,
-            uid,
-            self.config.neuron.vpermit_tao_limit,
-            include_serving_in_check=include_serving_in_check,
+            metagraph = metagraph,
+            uid = uid,
+            vpermit_tao_limit = vpermit_tao_limit,
+            include_serving_in_check = include_serving_in_check,
         )
         if uid_is_available:
             candidate_uids.append(uid)

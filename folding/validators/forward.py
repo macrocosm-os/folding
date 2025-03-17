@@ -69,7 +69,7 @@ async def run_step(
 
     # Get all uids on the network that are NOT validators.
     # the .is_serving flag means that the uid does not have an axon address.
-    uids = get_all_miner_uids(self, include_serving_in_check=False)
+    uids = get_all_miner_uids(self.metagraph, self.config.neuron.vpermit_tao_limit, include_serving_in_check=False)
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
