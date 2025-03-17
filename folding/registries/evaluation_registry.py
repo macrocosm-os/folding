@@ -172,6 +172,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 (self.log_file['#"Step"'] > self.cpt_step)
                 & (self.log_file['#"Step"'] <= max_step)
             ]["Potential Energy (kJ/mole)"].values
+
             if not os.path.exists(system_config_path):
                 write_pkl(
                     data=self.system_config,
@@ -205,12 +206,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
     def get_reported_energy(self) -> float:
         """Get the energy from the simulation"""
-        max_step = self.cpt_step + c.MIN_SIMULATION_STEPS
-        miner_energies: np.ndarray = self.log_file[
-            (self.log_file['#"Step"'] > self.cpt_step)
-            & (self.log_file['#"Step"'] <= max_step)
-        ]["Potential Energy (kJ/mole)"].values
-        return float(np.median(miner_energies[-c.ENERGY_WINDOW_SIZE :]))
+
+        return float(np.median(self.final_miner_energies[-c.ENERGY_WINDOW_SIZE :]))
 
     def check_masses(self, miner_velm_data) -> bool:
         """
