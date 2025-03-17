@@ -133,6 +133,7 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
             best_submitted_energy=job.best_loss,
             job_type=job.job_type,
+            job=job,
         )
 
     async def ping_all_miners(
@@ -205,15 +206,12 @@ class Validator(BaseValidatorNeuron):
 
         return valid_uids
 
-    async def add_job(
-        self, job_event: dict[str, Any], uids: List[int] = None, protein: Protein = None
-    ) -> bool:
+    async def add_job(self, job_event: dict[str, Any], protein: Protein = None) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
         If uids are not provided, then the function will sample random uids from the network.
 
         Args:
             job_event (dict[str, Any]): parameters that are needed to make the job.
-            uids (List[int], optional): List of uids that can be assigned to the job. Defaults to None.
         """
         start_time = time.time()
 
@@ -233,11 +231,15 @@ class Validator(BaseValidatorNeuron):
                 job_event["s3_links"] = {
                     "testing": "testing"
                 }  # overwritten below if s3 logging is on.
+                generation_kwargs = {
+                    "verbose": job_event.get("verbose", False),
+                    "with_solvent": job_event.get("with_solvent", False),
+                }
                 async with timeout(300):
                     logger.info(
                         f"setup_simulation for organic query: {job_event['pdb_id']}"
                     )
-                    await protein.setup_simulation()
+                    await protein.setup_simulation(generation_kwargs=generation_kwargs)
                     logger.success(
                         f"✅✅ organic {job_event['pdb_id']} simulation ran successfully! ✅✅"
                     )
@@ -284,7 +286,6 @@ class Validator(BaseValidatorNeuron):
                 raise ValueError("job_id is None")
 
             logger.success("Job was uploaded successfully!")
-
             self.last_time_created_jobs = datetime.now()
 
             # TODO: return job_id
