@@ -1,13 +1,11 @@
-import time
 import asyncio
 import threading
 import argparse
-import traceback
 
 import bittensor as bt
 
 from folding.base.neuron import BaseNeuron
-from folding.protocol import PingSynapse, ParticipationSynapse
+from folding.protocol import PingSynapse
 from folding.utils.config import add_miner_args
 from folding.utils.logger import logger
 
@@ -49,8 +47,6 @@ class BaseMinerNeuron(BaseNeuron):
             priority_fn=self.priority,
         ).attach(
             forward_fn=self.ping_forward,  # not sure if we need blacklist on this.
-        ).attach(
-            forward_fn=self.participation_forward,
         )
         logger.info(f"Axon created: {self.axon}")
 
@@ -76,14 +72,6 @@ class BaseMinerNeuron(BaseNeuron):
             synapse.can_serve = True
             logger.success("Telling validator you can serve ✅")
         return synapse
-
-    def participation_forward(self, synapse: ParticipationSynapse):
-        """Respond to the validator with the necessary information about participating in a specified job
-
-        Args:
-            self (ParticipationSynapse): must attach "is_participating"
-        """
-        pass
 
     def run(self):
         pass
