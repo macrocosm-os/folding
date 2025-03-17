@@ -48,6 +48,7 @@ def evaluate(
 
             can_process = evaluator.evaluate()
             if not can_process:
+                logger.info(f"uid {uid} failed to process")
                 continue
 
             best_cpt[i] = (
@@ -94,9 +95,11 @@ async def get_energies(
     # Initialize event dictionary with lists matching uids length
     event = {
         "is_valid": [False] * len(uids),
-        "checked_energy": [0] * len(uids),
+        "checked_energy_final": [{}] * len(uids),
+        "miner_energy_final": [{}] * len(uids),
+        "checked_energy_intermediate": [{}] * len(uids),
+        "miner_energy_intermediate": [{}] * len(uids),
         "reported_energy": [0] * len(uids),
-        "miner_energy": [0] * len(uids),
         "rmsds": [0] * len(uids),
         "is_run_valid_time": [0] * len(uids),
         "ns_computed": [0] * len(uids),
@@ -232,7 +235,7 @@ async def get_energies(
             best_cpt,
             process_md_output_time,
             axons,
-        ) = zip(*processed_data)
+        ) = map(list, zip(*processed_data))
 
     # Update event dictionary with processed data
     event.update(

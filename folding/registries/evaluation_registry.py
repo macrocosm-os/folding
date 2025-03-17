@@ -285,6 +285,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
             checked_energies_dict = {}
             miner_energies_dict = {}
 
+            logger.info(f"Checking if run is valid for {self.hotkey_alias}...")
+            logger.info(f"Checking final checkpoint...")
             # Check the final checkpoint
             (
                 is_valid,
@@ -293,7 +295,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 result,
             ) = self.is_checkpoint_valid(
                 checkpoint_path=self.checkpoint_path,
-                steps_to_run=c.MIN_SIMULATION_STEPS,
+                steps_to_run=3000,
+                checkpoint_num="final",
             )
             checked_energies_dict["final"] = checked_energies
             miner_energies_dict["final"] = miner_energies
@@ -327,6 +330,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
                 # Validate each checkpoint
                 for checkpoint_num, checkpoint_data in intermediate_checkpoints.items():
+                    logger.info(f"Checking intermediate checkpoint {checkpoint_num}...")
                     if checkpoint_data is None:
                         return (
                             False,
@@ -339,6 +343,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     temp_checkpoint_path = os.path.join(
                         self.miner_data_directory, f"intermediate_{checkpoint_num}.cpt"
                     )
+                    with open(temp_checkpoint_path, "wb") as f:
+                        f.write(checkpoint_data)
                     (
                         is_valid,
                         checked_energies,
@@ -347,6 +353,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     ) = self.is_checkpoint_valid(
                         checkpoint_path=temp_checkpoint_path,
                         steps_to_run=c.INTERMEDIATE_CHECKPOINT_STEPS,
+                        checkpoint_num=checkpoint_num,
                     )
 
                     checked_energies_dict[checkpoint_num] = checked_energies
@@ -452,7 +459,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
         return "SyntheticMD"
 
     def is_checkpoint_valid(
-        self, checkpoint_path: str, steps_to_run: int = c.MIN_SIMULATION_STEPS
+        self,
+        checkpoint_path: str,
+        steps_to_run: int = c.MIN_SIMULATION_STEPS,
+        checkpoint_num: str = "final",
     ):
         """Validate a checkpoint by comparing energy values from simulation to reported values.
 
@@ -468,7 +478,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         """
         # Create simulation once
         logger.info(
-            f"Recreating simulation for {self.pdb_id} for state-based analysis..."
+            f"Recreating simulation for {self.pdb_id}, checkpoint_num: {checkpoint_num} for state-based analysis..."
         )
 
         # Load PDB file once
@@ -497,22 +507,20 @@ class SyntheticMDEvaluator(BaseEvaluator):
         # Create a copy of the simulation for state-based analysis
         # We need a separate simulation instance here because we'll be running
         # them in parallel with different starting points
-        state_simulation, _ = self.md_simulator.create_simulation(
+        simulation, _ = self.md_simulator.create_simulation(
             pdb=pdb,
             system_config=system_config_dict,
             seed=self.miner_seed,
             initialize_with_solvent=False,
         )
-        state_simulation.loadState(self.state_xml_path)
+        simulation.loadState(self.state_xml_path)
 
         # Run state simulation and collect energies
         state_energies = []
         for _ in range(steps_to_run // 10):
-            state_simulation.step(10)
+            simulation.step(10)
             energy = (
-                state_simulation.context.getState(getEnergy=True)
-                .getPotentialEnergy()
-                ._value
+                simulation.context.getState(getEnergy=True).getPotentialEnergy()._value
             )
             state_energies.append(energy)
 
@@ -520,7 +528,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             if not self.check_gradient(check_energies=np.array(state_energies)):
                 logger.warning(f"state energies: {state_energies}")
                 logger.warning(
-                    f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, ... Skipping!"
+                    f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
                 )
                 raise ValidationError(message="state-gradient")
 
@@ -528,6 +536,16 @@ class SyntheticMDEvaluator(BaseEvaluator):
             current_state_logfile = os.path.join(
                 self.miner_data_directory, f"check_{self.current_state}.log"
             )
+
+            simulation, _ = self.md_simulator.create_simulation(
+                pdb=pdb,
+                system_config=system_config_dict,
+                seed=self.miner_seed,
+                initialize_with_solvent=False,
+            )
+
+            # Load checkpoint
+            simulation.loadCheckpoint(checkpoint_path)
 
             # Clear any existing reporters to avoid duplicates
             simulation.reporters.clear()
@@ -569,7 +587,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             if not self.check_gradient(check_energies=np.array(check_energies)):
                 logger.warning(f"check_energies: {check_energies}")
                 logger.warning(
-                    f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, ... Skipping!"
+                    f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
                 )
                 raise ValidationError(message="cpt-gradient")
 
@@ -577,7 +595,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 state_energies=state_energies, checkpoint_energies=check_energies
             ):
                 logger.warning(
-                    f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, ... Skipping!"
+                    f"hotkey {self.hotkey_alias} failed state-checkpoint comparison for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
                 )
                 raise ValidationError(message="state-checkpoint")
 
@@ -589,7 +607,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             if median_percent_diff > c.ANOMALY_THRESHOLD:
                 logger.warning(
-                    f"hotkey {self.hotkey_alias} failed anomaly check for {self.pdb_id}, with median percent difference: {median_percent_diff} ... Skipping!"
+                    f"hotkey {self.hotkey_alias} failed anomaly check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, with median percent difference: {median_percent_diff} ... Skipping!"
                 )
                 raise ValidationError(message="anomaly")
 
