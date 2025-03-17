@@ -29,13 +29,6 @@ class PingSynapse(bt.Synapse):
     available_compute: typing.Optional[int] = None  # TODO: number of threads / gpus?
 
 
-class ParticipationSynapse(bt.Synapse):
-    """Responsible for determining if a miner is participating in a specific job"""
-
-    job_id: str
-    is_participating: bool = False
-
-
 class JobSubmissionSynapse(bt.Synapse):
     """
     A protocol representation which uses bt.Synapse as its base.
@@ -70,9 +63,6 @@ class JobSubmissionSynapse(bt.Synapse):
         Returns:
         - dict: The serialized response, which in this case is the value of md_output.
         """
-        logger.info(
-            f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
-        )
         # Right here we perform validation that the response has expected hash
         if not isinstance(self.md_output, dict):
             self.md_output = {}
