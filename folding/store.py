@@ -277,7 +277,7 @@ class SQLiteJobStore:
             priority=event.get("priority", 1),
             update_interval=event.get(
                 "update_interval", random.randint(7200, 14400)
-            ),  # between 30 minutes and 2 hours in seconds
+            ),  # between 2 hours and 4 hours in seconds
             max_time_no_improvement=event.get("max_time_no_improvement", 1),
             is_organic=event.get("is_organic", False),
             job_id=event.get("job_id", None),
