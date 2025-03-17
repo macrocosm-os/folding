@@ -63,9 +63,6 @@ class JobSubmissionSynapse(bt.Synapse):
         Returns:
         - dict: The serialized response, which in this case is the value of md_output.
         """
-        logger.info(
-            f"Deserializing response from miner, I am: {self.pdb_id}, hotkey: {self.axon.hotkey[:8]}"
-        )
         # Right here we perform validation that the response has expected hash
         if not isinstance(self.md_output, dict):
             self.md_output = {}
