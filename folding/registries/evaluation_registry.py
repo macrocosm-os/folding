@@ -123,7 +123,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             simulation.loadCheckpoint(checkpoint_path)
 
             self.log_file = pd.read_csv(log_file_path)
-            log_step = self.log_file['#"Step"'].iloc[-1]
+            self.log_step = self.log_file['#"Step"'].iloc[-1]
 
             # Checks to see if we have enough steps in the log file to start validation
             if len(self.log_file) < c.MIN_LOGGING_ENTRIES:
@@ -133,7 +133,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
             # Checks if log_file is MIN_STEPS steps ahead of checkpoint
-            if (log_step - simulation.currentStep) < c.MIN_SIMULATION_STEPS:
+            if (self.log_step - simulation.currentStep) < c.MIN_SIMULATION_STEPS:
                 # If the miner did not run enough steps, we will load the old checkpoint
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
@@ -144,7 +144,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     )
                     simulation.loadCheckpoint(checkpoint_path)
                     # Checking to see if the old checkpoint has enough steps to validate
-                    if (log_step - simulation.currentStep) < c.MIN_SIMULATION_STEPS:
+                    if (
+                        self.log_step - simulation.currentStep
+                    ) < c.MIN_SIMULATION_STEPS:
                         raise ValidationError(
                             f"Miner {self.hotkey_alias} did not run enough steps in the simulation... Skipping!"
                         )
@@ -497,16 +499,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
         simulation.loadCheckpoint(checkpoint_path)
         current_cpt_step = simulation.currentStep
 
-        log_step = self.log_file['#"Step"'].iloc[-1]
-        if current_cpt_step + steps_to_run > log_step:
+        if current_cpt_step + steps_to_run > self.log_step:
             raise ValidationError(message="simulation-step-out-of-range")
 
         # Save state to XML file
         simulation.saveState(self.state_xml_path)
 
-        # Create a copy of the simulation for state-based analysis
-        # We need a separate simulation instance here because we'll be running
-        # them in parallel with different starting points
         simulation, _ = self.md_simulator.create_simulation(
             pdb=pdb,
             system_config=system_config_dict,
@@ -559,7 +557,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             )
 
             logger.info(
-                f"Running {steps_to_run} steps. log_step: {log_step}, cpt_step: {current_cpt_step}"
+                f"Running {steps_to_run} steps. log_step: {self.log_step}, cpt_step: {current_cpt_step}"
             )
 
             # Run the checkpoint simulation
