@@ -255,16 +255,6 @@ class Validator(BaseValidatorNeuron):
             await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
-    async def update_scores_wrapper(
-        self, rewards: torch.FloatTensor, hotkeys: List[str]
-    ):
-        """Wrapper function to update the scores of the miners based on the rewards they received."""
-        uids = self.get_uids(hotkeys=hotkeys)
-        await self.update_scores(
-            rewards=rewards,
-            uids=uids,
-        )
-
     async def update_job(self, job: Job):
         """Updates the job status based on the event information
 
@@ -523,9 +513,9 @@ class Validator(BaseValidatorNeuron):
                 )
                 continue
 
-            await self.update_scores_wrapper(
+            await self.update_scores(
                 rewards=torch.Tensor(inactive_job.computed_rewards),
-                hotkeys=inactive_job.hotkeys,
+                uids=inactive_job.event["uids"],
             )
             await asyncio.sleep(0.01)
 
