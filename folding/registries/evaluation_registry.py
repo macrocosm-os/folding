@@ -159,9 +159,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
             self.checkpoint_path = checkpoint_path
             self.state_xml_path = state_xml_path
 
-            # Create the state file here because it could have been loaded after MIN_SIMULATION_STEPS check
-            simulation.saveState(self.state_xml_path)
-
             # Save the system config to the miner data directory
             system_config_path = os.path.join(
                 self.miner_data_directory, f"miner_system_config_{self.miner_seed}.pkl"
@@ -479,6 +476,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
         logger.info(
             f"Recreating simulation for {self.pdb_id}, checkpoint_num: {checkpoint_num} for state-based analysis..."
         )
+        state_xml_path = os.path.join(
+            self.miner_data_directory, f"{checkpoint_num}.xml"
+        )
 
         # Load PDB file once
         pdb = load_pdb_file(pdb_file=self.pdb_location)
@@ -500,7 +500,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             raise ValidationError(message="simulation-step-out-of-range")
 
         # Save state to XML file
-        simulation.saveState(self.state_xml_path)
+        simulation.saveState(state_xml_path)
 
         simulation, _ = self.md_simulator.create_simulation(
             pdb=pdb,
@@ -508,7 +508,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             seed=self.miner_seed,
             initialize_with_solvent=False,
         )
-        simulation.loadState(self.state_xml_path)
+        simulation.loadState(state_xml_path)
 
         # Run state simulation and collect energies
         state_energies = []
@@ -542,8 +542,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
             # Load checkpoint
             simulation.loadCheckpoint(checkpoint_path)
 
-            # Clear any existing reporters to avoid duplicates
-            simulation.reporters.clear()
             simulation.reporters.append(
                 app.StateDataReporter(
                     current_state_logfile,
