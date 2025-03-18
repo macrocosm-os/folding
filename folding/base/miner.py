@@ -5,7 +5,6 @@ import argparse
 import bittensor as bt
 
 from folding.base.neuron import BaseNeuron
-from folding.protocol import PingSynapse
 from folding.utils.config import add_miner_args
 from folding.utils.logger import logger
 
@@ -45,8 +44,6 @@ class BaseMinerNeuron(BaseNeuron):
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
-        ).attach(
-            forward_fn=self.ping_forward,  # not sure if we need blacklist on this.
         )
         logger.info(f"Axon created: {self.axon}")
 
@@ -55,23 +52,6 @@ class BaseMinerNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
-
-    def ping_forward(self, synapse: PingSynapse):
-        """Respond to the validator with the necessary information about serving
-
-        Args:
-            self (PingSynapse): must attach "can_serve" and "available_compute"
-        """
-
-        logger.info(f"Received ping request from {synapse.dendrite.hotkey[:8]}")
-
-        synapse.available_compute = self.max_workers - len(self.simulations)
-
-        # TODO: add more conditions.
-        if synapse.available_compute > 0:
-            synapse.can_serve = True
-            logger.success("Telling validator you can serve ✅")
-        return synapse
 
     def run(self):
         pass
