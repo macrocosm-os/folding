@@ -309,12 +309,6 @@ def add_validator_args(cls, parser):
         help="The timeout for each forward call. (seconds)",
         default=45,
     )
-    parser.add_argument(
-        "--neuron.ping_timeout",
-        type=float,
-        help="Controls the timeout for the PingSynapse call",
-        default=45,
-    )
 
     parser.add_argument(
         "--neuron.update_interval",
