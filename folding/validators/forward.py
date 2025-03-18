@@ -10,7 +10,7 @@ from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
-from folding.protocol import PingSynapse, JobSubmissionSynapse
+from folding.protocol import JobSubmissionSynapse
 import asyncio
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
@@ -24,28 +24,6 @@ from folding.utils.logger import logger
 from folding.utils.uids import get_all_miner_uids
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-
-
-async def run_ping_step(self, uids: List[int], timeout: float) -> Dict:
-    """Report a dictionary of ping information from all miners that were
-    randomly sampled for this batch.
-    """
-    axons = [self.metagraph.axons[uid] for uid in uids]
-    synapse = PingSynapse()
-
-    logger.info(f"Pinging {len(axons)} uids")
-    responses: List[PingSynapse] = await self.dendrite.forward(
-        axons=axons,
-        synapse=synapse,
-        timeout=timeout,
-    )
-
-    ping_report = defaultdict(list)
-    for resp in responses:
-        ping_report["miner_status"].append(resp.can_serve)
-        ping_report["reported_compute"].append(resp.available_compute)
-
-    return ping_report
 
 
 async def run_step(
@@ -69,7 +47,11 @@ async def run_step(
 
     # Get all uids on the network that are NOT validators.
     # the .is_serving flag means that the uid does not have an axon address.
-    uids = get_all_miner_uids(self.metagraph, self.config.neuron.vpermit_tao_limit, include_serving_in_check=False)
+    uids = get_all_miner_uids(
+        self.metagraph,
+        self.config.neuron.vpermit_tao_limit,
+        include_serving_in_check=False,
+    )
 
     # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]

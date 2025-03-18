@@ -34,7 +34,7 @@ from folding.utils.s3_utils import (
     upload_to_s3,
     DigitalOceanS3Handler,
 )
-from folding.validators.forward import create_new_challenge, run_ping_step, run_step
+from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
@@ -52,7 +52,11 @@ class Validator(BaseValidatorNeuron):
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
-        self.all_miner_uids: List = get_all_miner_uids(metagraph=self.metagraph, vpermit_tao_limit=self.config.neuron.vpermit_tao_limit)
+        self.all_miner_uids: List = get_all_miner_uids(
+            metagraph=self.metagraph,
+            vpermit_tao_limit=self.config.neuron.vpermit_tao_limit,
+            include_serving_in_check=False,
+        )
 
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
@@ -79,24 +83,6 @@ class Validator(BaseValidatorNeuron):
             except ValueError as e:
                 raise f"Failed to create S3 handler, check your .env file: {e}"
 
-    def get_uids(self, hotkeys: List[str]) -> List[int]:
-        """Returns the uids corresponding to the hotkeys.
-        It is possible that some hotkeys have been dereg'd,
-        so we need to check for them in the metagraph.
-
-        Args:
-            hotkeys (List[str]): List of hotkeys
-
-        Returns:
-            List[int]: List of uids
-        """
-        return [
-            self.metagraph.hotkeys.index(hotkey)
-            for hotkey in hotkeys
-            if hotkey in self.metagraph.hotkeys
-            and self.metagraph.axons[self.metagraph.hotkeys.index(hotkey)].is_serving
-        ]
-
     async def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
@@ -122,32 +108,6 @@ class Validator(BaseValidatorNeuron):
             best_submitted_energy=job.best_loss,
             job_type=job.job_type,
         )
-
-    async def ping_all_miners(
-        self,
-        exclude_uids: List[int],
-    ) -> Tuple[List[int], List[int]]:
-        """Sample ALL (non-excluded) miner uids and return the list of uids
-        that can serve jobs.
-
-        Args:
-            exclude_uids (List[int]): uids to exclude from the uids search
-
-        Returns:
-           Tuple(List,List): Lists of active and inactive uids
-        """
-
-        current_miner_uids = list(
-            set(self.all_miner_uids).difference(set(exclude_uids))
-        )
-
-        ping_report = await run_ping_step(
-            self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout
-        )
-        can_serve = ping_report["miner_status"]  # list of booleans
-
-        active_uids = np.array(current_miner_uids)[can_serve].tolist()
-        return active_uids
 
     async def add_job(self, job_event: dict[str, Any], protein: Protein = None) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
