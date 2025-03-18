@@ -34,7 +34,7 @@ from folding.utils.s3_utils import (
     upload_to_s3,
     DigitalOceanS3Handler,
 )
-from folding.validators.forward import create_new_challenge, run_ping_step, run_step
+from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
