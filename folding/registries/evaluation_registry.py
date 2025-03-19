@@ -478,14 +478,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
             self.miner_data_directory, f"{checkpoint_num}.xml"
         )
 
-        # Load PDB file once
-        pdb = load_pdb_file(pdb_file=self.pdb_location)
-        system_config_dict = self.system_config.get_config()
-
         # Create initial simulation
         simulation, _ = self.md_simulator.create_simulation(
-            pdb=pdb,
-            system_config=system_config_dict,
+            pdb=load_pdb_file(pdb_file=self.pdb_location),
+            system_config=self.system_config.get_config(),
             seed=self.miner_seed,
             initialize_with_solvent=False,
         )
@@ -501,8 +497,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
         simulation.saveState(state_xml_path)
 
         simulation, _ = self.md_simulator.create_simulation(
-            pdb=pdb,
-            system_config=system_config_dict,
+            pdb=load_pdb_file(pdb_file=self.pdb_location),
+            system_config=self.system_config.get_config(),
             seed=self.miner_seed,
             initialize_with_solvent=False,
         )
@@ -531,8 +527,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
             )
 
             simulation, _ = self.md_simulator.create_simulation(
-                pdb=pdb,
-                system_config=system_config_dict,
+                pdb=load_pdb_file(pdb_file=self.pdb_location),
+                system_config=self.system_config.get_config(),
                 seed=self.miner_seed,
                 initialize_with_solvent=False,
             )
