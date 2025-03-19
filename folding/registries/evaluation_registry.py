@@ -164,10 +164,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 self.miner_data_directory, f"miner_system_config_{self.miner_seed}.pkl"
             )
 
-            max_step = self.cpt_step + c.MIN_SIMULATION_STEPS
             self.final_miner_energies = self.log_file[
                 (self.log_file['#"Step"'] > self.cpt_step)
-                & (self.log_file['#"Step"'] <= max_step)
             ]["Potential Energy (kJ/mole)"].values
 
             if not os.path.exists(system_config_path):
@@ -529,7 +527,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Create a reporter for the checkpoint simulation
             current_state_logfile = os.path.join(
-                self.miner_data_directory, f"check_{self.current_state}.log"
+                self.miner_data_directory, f"check_{checkpoint_num}.log"
             )
 
             simulation, _ = self.md_simulator.create_simulation(
