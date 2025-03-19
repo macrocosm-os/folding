@@ -48,6 +48,7 @@ def evaluate(
 
             can_process = evaluator.evaluate()
             if not can_process:
+                logger.info(f"uid {uid} failed to process")
                 continue
 
             best_cpt[i] = (
@@ -94,9 +95,11 @@ async def get_energies(
     # Initialize event dictionary with lists matching uids length
     event = {
         "is_valid": [False] * len(uids),
-        "checked_energy": [0] * len(uids),
+        "checked_energy_final": [{}] * len(uids),
+        "miner_energy_final": [{}] * len(uids),
+        "checked_energy_intermediate": [{}] * len(uids),
+        "miner_energy_intermediate": [{}] * len(uids),
         "reported_energy": [0] * len(uids),
-        "miner_energy": [0] * len(uids),
         "rmsds": [0] * len(uids),
         "is_run_valid_time": [0] * len(uids),
         "ns_computed": [0] * len(uids),
@@ -154,6 +157,8 @@ async def get_energies(
 
             # Calculate the probability of validation based on the miner's credibility
             start_time = time.time()
+            checked_energies = {}
+            miner_energies = {}
 
             if np.random.rand() < validation_probability:
                 (
@@ -165,10 +170,15 @@ async def get_energies(
                     validator=validator, job_id=job_id, axon=axon
                 )
             else:
-                median_energy, checked_energies, miner_energies, reason = (
+                (
+                    median_energy,
+                    checked_energies["final"],
+                    miner_energies["final"],
+                    reason,
+                ) = (
                     reported_energy,
-                    evaluator.miner_energies,
-                    evaluator.miner_energies,
+                    evaluator.final_miner_energies,
+                    evaluator.final_miner_energies,
                     "skip",
                 )
 
@@ -177,10 +187,12 @@ async def get_energies(
             # Update event dictionary for this index
             event["is_run_valid_time"][i] = time.time() - start_time
             event["reason"][i] = reason
-            event["checked_energy"][i] = checked_energies
-            event["miner_energy"][i] = miner_energies
+            event["checked_energy_final"][i] = checked_energies.pop("final", None)
+            event["miner_energy_final"][i] = miner_energies.pop("final", None)
             event["is_valid"][i] = is_valid
             event["ns_computed"][i] = float(ns_computed)
+            event["checked_energy_intermediate"][i] = checked_energies
+            event["miner_energy_intermediate"][i] = miner_energies
 
             if is_valid:
                 if (
@@ -223,7 +235,7 @@ async def get_energies(
             best_cpt,
             process_md_output_time,
             axons,
-        ) = zip(*processed_data)
+        ) = map(list, zip(*processed_data))
 
     # Update event dictionary with processed data
     event.update(
@@ -242,7 +254,7 @@ async def get_energies(
         if is_valid and not is_duplicate:
             # If the reason == skip, then "checked_energy" is the miner log file energy
             energies[idx] = np.median(
-                event["checked_energy"][idx][-c.ENERGY_WINDOW_SIZE :]
+                event["checked_energy_final"][idx][-c.ENERGY_WINDOW_SIZE :]
             )
 
     return energies, event

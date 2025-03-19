@@ -434,7 +434,6 @@ class Validator(BaseValidatorNeuron):
                 # If the best_cpt_file is empty, we will append an empty string to the output_links list.
                 if best_cpt_file == "":
                     output_links.append("")
-                    continue
 
                 output_link = await upload_output_to_s3(
                     handler=self.handler,
@@ -456,8 +455,10 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
         )
 
-        merged_events.pop("checked_energy")
-        merged_events.pop("miner_energy")
+        merged_events.pop("checked_energy_final")
+        merged_events.pop("miner_energy_final")
+        merged_events.pop("checked_energy_intermediate")
+        merged_events.pop("miner_energy_intermediate")
         logger.success(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
