@@ -181,7 +181,7 @@ def get_energies(
                     < c.ANOMALY_THRESHOLD
                 ):
                     event["is_valid"][i] = False
-                    event["reason"][i] = "Energy difference too large"
+                    event["reason"][i] = "energy_difference_too_large"
                     continue
 
                 is_duplicate = any(
