@@ -24,7 +24,7 @@ def check_uid_availability(
     if include_serving_in_check and not metagraph.axons[uid].is_serving:
         return False
     # Filter validator permit > 1024 stake.
-    if metagraph.S[uid] > vpermit_tao_limit:
+    if metagraph.TS[uid] > vpermit_tao_limit:
         return False
     # Available otherwise.
     return True
@@ -65,7 +65,9 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
     return uids
 
 
-def get_all_miner_uids(metagraph, vpermit_tao_limit, include_serving_in_check: bool = True) -> List[int]:
+def get_all_miner_uids(
+    metagraph, vpermit_tao_limit, include_serving_in_check: bool = True
+) -> List[int]:
     """Returns all available miner uids from the metagraph.
     Returns:
         uids (List): All available miner uids.
@@ -74,10 +76,10 @@ def get_all_miner_uids(metagraph, vpermit_tao_limit, include_serving_in_check: b
     candidate_uids = []
     for uid in range(metagraph.n.item()):
         uid_is_available = check_uid_availability(
-            metagraph = metagraph,
-            uid = uid,
-            vpermit_tao_limit = vpermit_tao_limit,
-            include_serving_in_check = include_serving_in_check,
+            metagraph=metagraph,
+            uid=uid,
+            vpermit_tao_limit=vpermit_tao_limit,
+            include_serving_in_check=include_serving_in_check,
         )
         if uid_is_available:
             candidate_uids.append(uid)
