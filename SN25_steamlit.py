@@ -23,6 +23,102 @@ if "simulation_history" not in st.session_state:
 if "selected_option" not in st.session_state:
     st.session_state.selected_option = None
 
+# Initialize session state for pagination
+if "page_number" not in st.session_state:
+    st.session_state.page_number = 0
+
+
+# Function to handle option selection
+def select_option(option):
+    st.session_state.selected_option = option
+
+
+# Function to display search results with pagination
+def display_results(options, search_query, items_per_page=5):
+    # Calculate total pages
+    total_pages = (len(options) - 1) // items_per_page + 1
+
+    # Ensure page_number is valid
+    if st.session_state.page_number >= total_pages:
+        st.session_state.page_number = 0
+
+    # Calculate start and end indices for current page
+    start_idx = st.session_state.page_number * items_per_page
+    end_idx = min(start_idx + items_per_page, len(options))
+
+    # Display only the options for the current page
+    current_page_options = options[start_idx:end_idx]
+
+    # Display each option in the current page
+    for option in current_page_options:
+        # Create a unique key for this option
+        option_key = f"opt_{option.replace(' ', '_')}"
+
+        # Create the HTML for this search result
+        is_selected = st.session_state.selected_option == option
+        selected_badge = (
+            "<span class='selected-badge'>Selected</span>" if is_selected else ""
+        )
+
+        # Highlight matching part of the text
+        if search_query and search_query.lower() in option.lower():
+            start_idx_text = option.lower().find(search_query.lower())
+            end_idx_text = start_idx_text + len(search_query)
+            highlighted_option = f"{option[:start_idx_text]}<strong>{option[start_idx_text:end_idx_text]}</strong>{option[end_idx_text:]}"
+        else:
+            highlighted_option = option
+
+        # Render the search result
+        st.markdown(
+            f"""
+        <div class="search-result" id="{option_key}">
+            <div class="search-result-title">{highlighted_option} {selected_badge}</div>
+            <div class="search-result-description">
+                Simulation configuration with predefined parameters.
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # We need a way to select options since HTML clicks don't work directly with Streamlit
+        cols = st.columns([0.85, 0.15])
+        with cols[1]:
+            if not is_selected:
+                if st.button("Select", key=f"btn_{option}", use_container_width=True):
+                    select_option(option)
+                    st.session_state.update_page = True
+            else:
+                st.button(
+                    "Selected ✓",
+                    key=f"btn_{option}",
+                    disabled=True,
+                    use_container_width=True,
+                )
+
+    # Display pagination controls if there are multiple pages
+    if total_pages > 1:
+        col1, col2, col3 = st.columns([1, 3, 1])
+
+        with col1:
+            if st.button("◀ Previous", disabled=st.session_state.page_number <= 0):
+                st.session_state.page_number -= 1
+                st.rerun()
+
+        with col2:
+            st.markdown(
+                f"<p align='center'>Page {st.session_state.page_number + 1} of {total_pages}</p>",
+                unsafe_allow_html=True,
+            )
+
+        with col3:
+            if st.button(
+                "Next ▶", disabled=st.session_state.page_number >= total_pages - 1
+            ):
+                st.session_state.page_number += 1
+                st.rerun()
+
+
 # Set page title
 st.title("Molecular Simulation Dashboard")
 
@@ -90,6 +186,53 @@ with main_cols[0]:
         border-color: #4285f4;
         box-shadow: 0 1px 6px rgba(32, 33, 36, 0.28);
     }
+    
+    /* Scrollable results container */
+    .scrollable-results {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #f0f0f0;
+        border-radius: 8px;
+        padding: 0 10px;
+        margin-top: 10px;
+    }
+    
+    /* Limit height of specific containers */
+    [data-testid="stVerticalBlock"] .element-container:has(.search-results-container) {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #f0f0f0;
+        border-radius: 8px;
+        padding: 0 10px;
+        margin-top: 10px;
+    }
+    
+    /* Parameter Summary Styling */
+    .parameter-value {
+        font-size: 1.2rem;
+        font-weight: 500;
+        background-color: rgba(25, 135, 84, 0.15);
+        border-radius: 5px;
+        padding: 6px 10px;
+        margin: 3px 0 12px 0;
+        display: block;
+        color: #4caf50;
+    }
+    
+    .parameter-label {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #9a9a9a;
+        margin-bottom: 4px;
+    }
+    
+    .summary-box {
+        padding: 15px;
+        border-radius: 10px;
+        background-color: rgba(49, 51, 63, 0.1);
+        margin-top: 10px;
+        border-left: 3px solid #4caf50;
+    }
     </style>
     """,
         unsafe_allow_html=True,
@@ -111,10 +254,8 @@ with main_cols[0]:
         ]
     else:
         filtered_options = []  # Don't show options until user starts typing
-
-    # Function to handle option selection
-    def select_option(option):
-        st.session_state.selected_option = option
+        # Reset pagination when search query changes
+        st.session_state.page_number = 0
 
     # Show filtered results below search bar in Google-like format
     if search_query and not filtered_options:
@@ -131,54 +272,8 @@ with main_cols[0]:
                 unsafe_allow_html=True,
             )
 
-        # Display each result in a Google-like format
-        for option in filtered_options:
-            # Create a unique key for this option
-            option_key = f"opt_{option.replace(' ', '_')}"
-
-            # Create the HTML for this search result
-            is_selected = st.session_state.selected_option == option
-            selected_badge = (
-                "<span class='selected-badge'>Selected</span>" if is_selected else ""
-            )
-
-            # Highlight matching part of the text
-            if search_query and search_query.lower() in option.lower():
-                start_idx = option.lower().find(search_query.lower())
-                end_idx = start_idx + len(search_query)
-                highlighted_option = f"{option[:start_idx]}<strong>{option[start_idx:end_idx]}</strong>{option[end_idx:]}"
-            else:
-                highlighted_option = option
-
-            # Render the search result
-            st.markdown(
-                f"""
-            <div class="search-result" id="{option_key}">
-                <div class="search-result-title">{highlighted_option} {selected_badge}</div>
-                <div class="search-result-description">
-                    Simulation configuration with predefined parameters.
-                </div>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
-
-            # We need a way to select options since HTML clicks don't work directly with Streamlit
-            cols = st.columns([0.85, 0.15])
-            with cols[1]:
-                if not is_selected:
-                    if st.button(
-                        "Select", key=f"btn_{option}", use_container_width=True
-                    ):
-                        select_option(option)
-                        st.session_state.update_page = True
-                else:
-                    st.button(
-                        "Selected ✓",
-                        key=f"btn_{option}",
-                        disabled=True,
-                        use_container_width=True,
-                    )
+        # Display results with pagination (5 items per page)
+        display_results(filtered_options, search_query, items_per_page=5)
 
     # Display currently selected option
     selected_option = st.session_state.selected_option
@@ -255,25 +350,51 @@ with main_cols[2]:
     summary_container = st.container()
     with summary_container:
         # Display parameters in a clean format with background
-        st.markdown('<div class="summary-box">', unsafe_allow_html=True)
+        # st.markdown('<div class="summary-box">', unsafe_allow_html=True)
 
-        st.markdown("**Selected Option:**")
-        st.markdown(f"```{selected_option if selected_option else 'None'}```")
+        st.markdown(
+            '<div class="parameter-label">Selected Option</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{selected_option if selected_option else "None"}</div>',
+            unsafe_allow_html=True,
+        )
 
-        st.markdown("**Temperature:**")
-        st.markdown(f"```{temperature} K```")
+        st.markdown(
+            '<div class="parameter-label">Temperature</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{temperature} K</div>',
+            unsafe_allow_html=True,
+        )
 
-        st.markdown("**Friction:**")
-        st.markdown(f"```{friction}```")
+        st.markdown(
+            '<div class="parameter-label">Friction</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{friction}</div>', unsafe_allow_html=True
+        )
 
-        st.markdown("**Pressure:**")
-        st.markdown(f"```{pressure} atm```")
+        st.markdown(
+            '<div class="parameter-label">Pressure</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{pressure} atm</div>', unsafe_allow_html=True
+        )
 
-        st.markdown("**Forcefield:**")
-        st.markdown(f"```{forcefield}```")
+        st.markdown(
+            '<div class="parameter-label">Forcefield</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{forcefield}</div>', unsafe_allow_html=True
+        )
 
-        st.markdown("**Water Model:**")
-        st.markdown(f"```{water_model}```")
+        st.markdown(
+            '<div class="parameter-label">Water Model</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{water_model}</div>', unsafe_allow_html=True
+        )
 
         st.markdown("</div>", unsafe_allow_html=True)
 
