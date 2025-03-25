@@ -1,9 +1,10 @@
 import datetime
 import pickle as pkl
 import streamlit as st
+import bittensor as bt
 
 # load data from a pkl file
-DATA_PATH = "/Users/mccrinbc/Macrocosmos/folding/pdb_ids.pkl"
+DATA_PATH = "pdb_ids.pkl"
 PDB_IDS = pkl.load(open(DATA_PATH, "rb"))
 
 # Set page configuration for wider layout
@@ -24,6 +25,30 @@ if "selected_option" not in st.session_state:
 # Initialize session state for pagination
 if "page_number" not in st.session_state:
     st.session_state.page_number = 0
+
+# Initialize session state for wallet
+if "wallet" not in st.session_state:
+    st.session_state.wallet = None
+
+# Initialize session state for wallet configuration
+if "wallet_name" not in st.session_state:
+    st.session_state.wallet_name = ""
+if "wallet_hotkey" not in st.session_state:
+    st.session_state.wallet_hotkey = ""
+
+
+def create_wallet():
+    if st.session_state.wallet_name and st.session_state.wallet_hotkey:
+        try:
+            st.session_state.wallet = bt.wallet(
+                name=st.session_state.wallet_name, hotkey=st.session_state.wallet_hotkey
+            )
+            st.success(
+                f"Wallet configured successfully: {st.session_state.wallet.hotkey.ss58_address}"
+            )
+        except Exception as e:
+            st.error(f"Error configuring wallet: {str(e)}")
+            st.session_state.wallet = None
 
 
 # Function to handle option selection
@@ -349,6 +374,34 @@ with main_cols[0]:
 
     # Add a run button
     is_prod = st.checkbox("Production Mode", value=False, help="Run in production mode")
+
+    # Add wallet configuration fields
+    st.subheader("Wallet Configuration")
+    wallet_name = st.text_input(
+        "Wallet Name",
+        value=st.session_state.wallet_name,
+        placeholder="e.g. folding_testnet",
+        key="wallet_name_input",
+    )
+    wallet_hotkey = st.text_input(
+        "Wallet Hotkey",
+        value=st.session_state.wallet_hotkey,
+        placeholder="e.g. v2",
+        key="wallet_hotkey_input",
+    )
+
+    # Update session state with new values
+    st.session_state.wallet_name = wallet_name
+    st.session_state.wallet_hotkey = wallet_hotkey
+
+    # Create wallet button
+    if st.button("Configure Wallet"):
+        create_wallet()
+
+    # Show wallet status if configured
+    if st.session_state.wallet:
+        st.info(f"Current wallet: {st.session_state.wallet.hotkey.ss58_address}")
+
     run_simulation: bool = st.button("Run Simulation")
 
     if run_simulation and is_prod:
@@ -356,14 +409,17 @@ with main_cols[0]:
             from folding.store import SQLiteJobStore
             from atom.epistula.epistula import Epistula  # For keypair authentication
 
+            if not st.session_state.wallet:
+                raise ValueError(
+                    "Please configure your wallet before running the simulation"
+                )
+
             store = SQLiteJobStore()
-            # Create a mock keypair for testing (replace with actual keypair in production)
-            mock_keypair = None  # Replace with actual keypair in production
 
             # Upload job with required parameters
             job = store.upload_job(
-                keypair=mock_keypair,
-                gjp_address="174.138.3.61:8030",
+                keypair=st.session_state.wallet.hotkey,
+                gjp_address="167.99.209.27:8030",
                 event=dict(
                     pdb_id=selected_option,
                     ff=forcefield,
@@ -375,7 +431,7 @@ with main_cols[0]:
                         friction=friction,
                     ),
                     epsilon=1,
-                    s3_links=[],
+                    s3_links={},
                     update_interval=update_interval_seconds,
                     max_time_no_improvement=1,
                     job_type="simulation",
