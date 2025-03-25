@@ -3,9 +3,6 @@ import datetime
 import pickle as pkl
 import streamlit as st
 
-from folding.store import SQLiteJobStore
-from atom.epistula.epistula import Epistula  # For keypair authentication
-
 # load data from a pkl file
 DATA_PATH = "/Users/mccrinbc/Macrocosmos/folding/pdb_ids.pkl"
 PDB_IDS = pkl.load(open(DATA_PATH, "rb"))
@@ -331,7 +328,7 @@ with main_cols[0]:
 
         # 8. Update interval input (manual entry instead of slider)
         update_interval_hours = st.number_input(
-            "Update Interval (hours)",
+            "Time to Live (hours)",
             min_value=0.5,
             max_value=24.0,
             value=2.0,
@@ -357,6 +354,9 @@ with main_cols[0]:
 
     if run_simulation and is_prod:
         try:
+            from folding.store import SQLiteJobStore
+            from atom.epistula.epistula import Epistula  # For keypair authentication
+
             store = SQLiteJobStore()
             # Create a mock keypair for testing (replace with actual keypair in production)
             mock_keypair = None  # Replace with actual keypair in production
