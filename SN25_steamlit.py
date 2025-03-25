@@ -2,6 +2,7 @@ import datetime
 import pickle as pkl
 import streamlit as st
 import bittensor as bt
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 
 # load data from a pkl file
 DATA_PATH = "pdb_ids.pkl"
@@ -35,6 +36,12 @@ if "wallet_name" not in st.session_state:
     st.session_state.wallet_name = ""
 if "wallet_hotkey" not in st.session_state:
     st.session_state.wallet_hotkey = ""
+
+# Initialize session state for forcefield and water model
+if "selected_forcefield" not in st.session_state:
+    st.session_state.selected_forcefield = None
+if "selected_water" not in st.session_state:
+    st.session_state.selected_water = None
 
 
 def create_wallet():
@@ -336,17 +343,69 @@ with main_cols[0]:
         st.write(f"Selected pressure: {pressure} atm")
 
         # 5. Forcefield dropdown
-        forcefield_options = ["CHARMM", "AMBER", "OPLS"]
-        forcefield = st.selectbox("Select Forcefield", forcefield_options)
+        forcefield_options = []
+        for field in FORCEFIELD_REGISTRY.values():
+            field_instance = field()
+            # Add recommended configuration first
+            if hasattr(field_instance, "recommended_configuration"):
+                forcefield_options.append(
+                    field_instance.recommended_configuration["FF"]
+                )
+            # Then add all other forcefields
+            forcefield_options.extend(field_instance.forcefields)
+
+        # Remove duplicates while preserving order
+        forcefield_options = list(dict.fromkeys(forcefield_options))
+
+        # Set default to first forcefield if not already selected
+        if not st.session_state.selected_forcefield:
+            st.session_state.selected_forcefield = forcefield_options[0]
+
+        forcefield = st.selectbox(
+            "Select Forcefield",
+            options=forcefield_options,
+            index=forcefield_options.index(st.session_state.selected_forcefield),
+        )
+        st.session_state.selected_forcefield = forcefield
         st.write(f"Selected forcefield: {forcefield}")
 
-        # 6. Water dropdown
-        water_options = ["TIP3P", "SPC/E", "TIP4P"]
-        water_model = st.selectbox("Select Water Model", water_options)
+        # 6. Water dropdown - filtered based on selected forcefield
+        water_options = []
+        for field in FORCEFIELD_REGISTRY.values():
+            field_instance = field()
+            if (
+                forcefield in field_instance.forcefields
+                or forcefield == field_instance.recommended_configuration["FF"]
+            ):
+                # Add recommended water model first
+                if hasattr(field_instance, "recommended_configuration"):
+                    water_options.append(
+                        field_instance.recommended_configuration["WATER"]
+                    )
+                # Then add all other water models
+                water_options.extend(field_instance.waters)
+                break
+
+        # Remove duplicates while preserving order
+        water_options = list(dict.fromkeys(water_options))
+
+        # Set default to first water model if not already selected
+        if (
+            not st.session_state.selected_water
+            or st.session_state.selected_water not in water_options
+        ):
+            st.session_state.selected_water = water_options[0]
+
+        water_model = st.selectbox(
+            "Select Water Model",
+            options=water_options,
+            index=water_options.index(st.session_state.selected_water),
+        )
+        st.session_state.selected_water = water_model
         st.write(f"Selected water model: {water_model}")
 
         # 7. Box shape dropdown
-        box_shape_options = ["cubic", "rectangular"]
+        box_shape_options = ["cube", "dodecahedron", "octahedron"]
         box_shape = st.selectbox("Select Box Shape", box_shape_options)
         st.write(f"Selected box shape: {box_shape}")
 
