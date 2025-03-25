@@ -3,10 +3,13 @@ import pickle as pkl
 import streamlit as st
 import bittensor as bt
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
+import os
+import json
 
 # load data from a pkl file
 DATA_PATH = "pdb_ids.pkl"
 PDB_IDS = pkl.load(open(DATA_PATH, "rb"))
+API_ADDRESS = "184.105.5.57:8031"
 
 # Set page configuration for wider layout
 st.set_page_config(
@@ -42,6 +45,28 @@ if "selected_forcefield" not in st.session_state:
     st.session_state.selected_forcefield = None
 if "selected_water" not in st.session_state:
     st.session_state.selected_water = None
+
+
+def get_wallet_names():
+    """Get list of wallet names from ~/.bittensor/wallets/"""
+    wallet_dir = os.path.expanduser("~/.bittensor/wallets/")
+    if not os.path.exists(wallet_dir):
+        return []
+    return [
+        d for d in os.listdir(wallet_dir) if os.path.isdir(os.path.join(wallet_dir, d))
+    ]
+
+
+def get_hotkeys(wallet_name):
+    """Get list of hotkeys for a given wallet name"""
+    wallet_dir = os.path.expanduser(f"~/.bittensor/wallets/{wallet_name}/hotkeys")
+    if not os.path.exists(wallet_dir):
+        return []
+
+    # return all non directories
+    return [
+        f for f in os.listdir(wallet_dir) if os.path.isfile(os.path.join(wallet_dir, f))
+    ]
 
 
 def create_wallet():
@@ -325,20 +350,35 @@ with main_cols[0]:
     with col1:
         # 2. Temperature slider
         temperature = st.slider(
-            "Temperature (K)", min_value=200, max_value=400, value=300, step=1
+            "Temperature (K)",
+            min_value=200,
+            max_value=400,
+            value=300,
+            step=1,
+            help="Temperature in Kelvin. Higher temperatures increase molecular motion and energy.",
         )
         st.write(f"Selected temperature: {temperature} K")
 
         # 3. Friction slider
         friction = st.slider(
-            "Friction", min_value=0.0, max_value=1.0, value=0.5, step=0.01
+            "Friction",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.5,
+            step=0.01,
+            help="Friction coefficient for the Langevin integrator. Higher values increase damping.",
         )
         st.write(f"Selected friction: {friction}")
 
     with col2:
         # 4. Pressure slider
         pressure = st.slider(
-            "Pressure (atm)", min_value=1.0, max_value=2.0, value=1.5, step=0.1
+            "Pressure (atm)",
+            min_value=1.0,
+            max_value=2.0,
+            value=1.5,
+            step=0.1,
+            help="Pressure in atmospheres. Affects the volume of the simulation box.",
         )
         st.write(f"Selected pressure: {pressure} atm")
 
@@ -365,6 +405,7 @@ with main_cols[0]:
             "Select Forcefield",
             options=forcefield_options,
             index=forcefield_options.index(st.session_state.selected_forcefield),
+            help="Force field for molecular dynamics simulation. Determines how atoms interact.",
         )
         st.session_state.selected_forcefield = forcefield
         st.write(f"Selected forcefield: {forcefield}")
@@ -400,6 +441,7 @@ with main_cols[0]:
             "Select Water Model",
             options=water_options,
             index=water_options.index(st.session_state.selected_water),
+            help="Water model for solvation. Affects how water molecules interact with the protein.",
         )
         st.session_state.selected_water = water_model
         st.write(f"Selected water model: {water_model}")
@@ -436,18 +478,54 @@ with main_cols[0]:
 
     # Add wallet configuration fields
     st.subheader("Wallet Configuration")
-    wallet_name = st.text_input(
-        "Wallet Name",
-        value=st.session_state.wallet_name,
-        placeholder="e.g. folding_testnet",
-        key="wallet_name_input",
-    )
-    wallet_hotkey = st.text_input(
-        "Wallet Hotkey",
-        value=st.session_state.wallet_hotkey,
-        placeholder="e.g. v2",
-        key="wallet_hotkey_input",
-    )
+
+    # Get available wallet names
+    wallet_names = get_wallet_names()
+    if not wallet_names:
+        st.warning("No wallets found in ~/.bittensor/wallets/")
+        wallet_name = st.text_input(
+            "Wallet Name",
+            value=st.session_state.wallet_name,
+            placeholder="e.g. folding_testnet",
+            key="wallet_name_input",
+        )
+        wallet_hotkey = st.text_input(
+            "Wallet Hotkey",
+            value=st.session_state.wallet_hotkey,
+            placeholder="e.g. v2",
+            key="wallet_hotkey_input",
+        )
+    else:
+        # Wallet name dropdown
+        wallet_name = st.selectbox(
+            "Wallet Name",
+            options=wallet_names,
+            index=wallet_names.index(st.session_state.wallet_name)
+            if st.session_state.wallet_name in wallet_names
+            else 0,
+            key="wallet_name_input",
+        )
+
+        # Get hotkeys for selected wallet
+        hotkeys = get_hotkeys(wallet_name)
+        if not hotkeys:
+            st.warning(f"No hotkeys found for wallet {wallet_name}")
+            wallet_hotkey = st.text_input(
+                "Wallet Hotkey",
+                value=st.session_state.wallet_hotkey,
+                placeholder="e.g. v2",
+                key="wallet_hotkey_input",
+            )
+        else:
+            # Hotkey dropdown
+            wallet_hotkey = st.selectbox(
+                "Wallet Hotkey",
+                options=hotkeys,
+                index=hotkeys.index(st.session_state.wallet_hotkey)
+                if st.session_state.wallet_hotkey in hotkeys
+                else 0,
+                key="wallet_hotkey_input",
+            )
 
     # Update session state with new values
     st.session_state.wallet_name = wallet_name
@@ -465,43 +543,83 @@ with main_cols[0]:
 
     if run_simulation and is_prod:
         try:
-            from folding.store import SQLiteJobStore
-            from atom.epistula.epistula import Epistula  # For keypair authentication
+            from folding_api.schemas import FoldingParams
+            import requests
+            import json
+            from atom.epistula.epistula import Epistula
 
             if not st.session_state.wallet:
                 raise ValueError(
                     "Please configure your wallet before running the simulation"
                 )
 
-            store = SQLiteJobStore()
+            if not selected_option:
+                raise ValueError("Please select a PDB ID first")
 
-            # Upload job with required parameters
-            job = store.upload_job(
-                keypair=st.session_state.wallet.hotkey,
-                gjp_address="167.99.209.27:8030",
-                event=dict(
-                    pdb_id=selected_option,
+            # Show loading state
+            with st.spinner("Submitting simulation job..."):
+                # Create FoldingParams object
+                folding_params = FoldingParams(
+                    pdb_id=str(selected_option),  # Ensure it's a string
+                    source="rcsb",  # Default to RCSB source
                     ff=forcefield,
-                    box=box_shape,
                     water=water_model,
-                    system_kwargs=dict(
-                        temperature=temperature,
-                        pressure=pressure,
-                        friction=friction,
-                    ),
-                    epsilon=1,
-                    s3_links={},
-                    update_interval=update_interval_seconds,
-                    max_time_no_improvement=1,
-                    job_type="simulation",
-                    priority=1,
-                ),
-            )
-            st.success(
-                f"Job submitted successfully with ID: {job.job_id if hasattr(job, 'job_id') else 'unknown'}"
-            )
+                    box=box_shape,
+                    temperature=temperature,
+                    friction=friction,
+                    epsilon=1.0,  # Default epsilon value
+                )
+
+                # Create new synchronous make_request function
+                def make_request(
+                    address: str, folding_params: FoldingParams
+                ) -> requests.Response:
+                    try:
+                        # Convert params to JSON and encode
+                        body_bytes = json.dumps(
+                            folding_params.model_dump(), default=str, sort_keys=True
+                        ).encode("utf-8")
+
+                        # Generate headers using Epistula
+                        epistula = Epistula()
+                        headers = epistula.generate_header(
+                            st.session_state.wallet.hotkey, body_bytes
+                        )
+
+                        # Make the request with timeout
+                        response = requests.post(
+                            f"http://{address}/organic",
+                            data=body_bytes,
+                            headers=headers,
+                            timeout=30,  # Add timeout
+                        )
+                        response.raise_for_status()  # Raise exception for bad status codes
+                        return response
+                    except requests.exceptions.Timeout:
+                        raise TimeoutError("Request timed out. Please try again.")
+                    except requests.exceptions.RequestException as e:
+                        raise ConnectionError(f"Failed to connect to server: {str(e)}")
+
+                # Make the request
+                response = make_request(
+                    address=API_ADDRESS, folding_params=folding_params
+                )
+
+                if response.status_code == 200:
+                    job_id = response.json()["job_id"]
+                    st.success(f"Job submitted successfully with ID: {job_id}")
+                else:
+                    error_msg = response.text
+                    try:
+                        error_json = response.json()
+                        error_msg = error_json.get("detail", error_msg)
+                    except:
+                        pass
+                    st.error(f"Failed to submit job: {error_msg}")
+
         except Exception as e:
-            st.error(f"Error submitting job: {str(e)}")
+            st.error(f"An unexpected error occurred: {str(e)}")
+            st.exception(e)  # Show full traceback for unexpected errors
 
 # Vertical divider (middle column)
 with main_cols[1]:
