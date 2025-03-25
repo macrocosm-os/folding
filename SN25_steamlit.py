@@ -1,4 +1,3 @@
-import os
 import datetime
 import pickle as pkl
 import streamlit as st
@@ -240,7 +239,7 @@ with main_cols[0]:
     # Create a search bar that looks more like Google
     st.write("### Search")
     search_query = st.text_input(
-        "",
+        "Search query",
         key="search_query",
         placeholder="Search for a simulation configuration...",
         label_visibility="collapsed",
