@@ -329,6 +329,21 @@ with main_cols[0]:
         box_shape = st.selectbox("Select Box Shape", box_shape_options)
         st.write(f"Selected box shape: {box_shape}")
 
+        # 8. Update interval input (manual entry instead of slider)
+        update_interval_hours = st.number_input(
+            "Update Interval (hours)",
+            min_value=0.5,
+            max_value=24.0,
+            value=2.0,
+            step=0.5,
+            help="How frequently the simulation should update (in hours)",
+        )
+        # Convert hours to seconds for backend
+        update_interval_seconds = int(update_interval_hours * 3600)
+        st.write(
+            f"Selected update interval: {update_interval_hours} hours ({update_interval_seconds} seconds)"
+        )
+
     # Simulation name input - with the default set to selected_option if available
     simulation_name = st.text_input(
         "Simulation Name",
@@ -342,11 +357,6 @@ with main_cols[0]:
 
     if run_simulation and is_prod:
         try:
-            # Load environment variables
-            from dotenv import load_dotenv
-
-            load_dotenv()
-
             store = SQLiteJobStore()
             # Create a mock keypair for testing (replace with actual keypair in production)
             mock_keypair = None  # Replace with actual keypair in production
@@ -354,7 +364,7 @@ with main_cols[0]:
             # Upload job with required parameters
             job = store.upload_job(
                 keypair=mock_keypair,
-                gjp_address=os.getenv("GJP_ADDRESS"),
+                gjp_address="174.138.3.61:8030",
                 event=dict(
                     pdb_id=selected_option,
                     ff=forcefield,
@@ -367,7 +377,7 @@ with main_cols[0]:
                     ),
                     epsilon=1,
                     s3_links=[],
-                    update_interval=7200,
+                    update_interval=update_interval_seconds,
                     max_time_no_improvement=1,
                     job_type="simulation",
                     priority=1,
@@ -450,6 +460,14 @@ with main_cols[2]:
             f'<div class="parameter-value">{box_shape}</div>', unsafe_allow_html=True
         )
 
+        st.markdown(
+            '<div class="parameter-label">Update Interval</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{update_interval_hours} hours</div>',
+            unsafe_allow_html=True,
+        )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 # Process the simulation run if button was clicked
@@ -471,6 +489,7 @@ if run_simulation:
         "Forcefield": forcefield,
         "Water Model": water_model,
         "Box Shape": box_shape,
+        "Update Interval": f"{update_interval_hours} hours",
         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
@@ -532,5 +551,10 @@ with history_container:
 
                         st.markdown("**Box Shape:**")
                         st.markdown(f"```{params.get('Box Shape', 'cubic')}```")
+
+                        st.markdown("**Update Interval:**")
+                        st.markdown(
+                            f"```{params.get('Update Interval', '2.0 hours')}```"
+                        )
 
                     st.caption(f"Run on: {params.get('Timestamp', 'Unknown time')}")
