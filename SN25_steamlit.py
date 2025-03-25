@@ -1,8 +1,10 @@
-import bittensor as bt
-import streamlit as st
+import os
 import datetime
-
 import pickle as pkl
+import streamlit as st
+
+from folding.store import SQLiteJobStore
+from atom.epistula.epistula import Epistula  # For keypair authentication
 
 # load data from a pkl file
 DATA_PATH = "/Users/mccrinbc/Macrocosmos/folding/pdb_ids.pkl"
@@ -322,6 +324,11 @@ with main_cols[0]:
         water_model = st.selectbox("Select Water Model", water_options)
         st.write(f"Selected water model: {water_model}")
 
+        # 7. Box shape dropdown
+        box_shape_options = ["cubic", "rectangular"]
+        box_shape = st.selectbox("Select Box Shape", box_shape_options)
+        st.write(f"Selected box shape: {box_shape}")
+
     # Simulation name input - with the default set to selected_option if available
     simulation_name = st.text_input(
         "Simulation Name",
@@ -330,7 +337,47 @@ with main_cols[0]:
     )
 
     # Add a run button
-    run_simulation = st.button("Run Simulation")
+    is_prod = st.checkbox("Production Mode", value=False, help="Run in production mode")
+    run_simulation: bool = st.button("Run Simulation")
+
+    if run_simulation and is_prod:
+        try:
+            # Load environment variables
+            from dotenv import load_dotenv
+
+            load_dotenv()
+
+            store = SQLiteJobStore()
+            # Create a mock keypair for testing (replace with actual keypair in production)
+            mock_keypair = None  # Replace with actual keypair in production
+
+            # Upload job with required parameters
+            job = store.upload_job(
+                keypair=mock_keypair,
+                gjp_address=os.getenv("GJP_ADDRESS"),
+                event=dict(
+                    pdb_id=selected_option,
+                    ff=forcefield,
+                    box=box_shape,
+                    water=water_model,
+                    system_kwargs=dict(
+                        temperature=temperature,
+                        pressure=pressure,
+                        friction=friction,
+                    ),
+                    epsilon=1,
+                    s3_links=[],
+                    update_interval=7200,
+                    max_time_no_improvement=1,
+                    job_type="simulation",
+                    priority=1,
+                ),
+            )
+            st.success(
+                f"Job submitted successfully with ID: {job.job_id if hasattr(job, 'job_id') else 'unknown'}"
+            )
+        except Exception as e:
+            st.error(f"Error submitting job: {str(e)}")
 
 # Vertical divider (middle column)
 with main_cols[1]:
@@ -396,6 +443,13 @@ with main_cols[2]:
             f'<div class="parameter-value">{water_model}</div>', unsafe_allow_html=True
         )
 
+        st.markdown(
+            '<div class="parameter-label">Box Shape</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{box_shape}</div>', unsafe_allow_html=True
+        )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 # Process the simulation run if button was clicked
@@ -416,6 +470,7 @@ if run_simulation:
         "Pressure": f"{pressure} atm",
         "Forcefield": forcefield,
         "Water Model": water_model,
+        "Box Shape": box_shape,
         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
@@ -474,5 +529,8 @@ with history_container:
 
                         st.markdown("**Water Model:**")
                         st.markdown(f"```{params['Water Model']}```")
+
+                        st.markdown("**Box Shape:**")
+                        st.markdown(f"```{params.get('Box Shape', 'cubic')}```")
 
                     st.caption(f"Run on: {params.get('Timestamp', 'Unknown time')}")
