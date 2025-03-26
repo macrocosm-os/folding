@@ -3,7 +3,7 @@ import time
 import openmm.app as app
 import numpy as np
 from openmm import unit
-import pandas as pd
+
 
 
 class LastTwoCheckpointsReporter(app.CheckpointReporter):
@@ -95,31 +95,33 @@ class RMSDStateDataReporter(app.StateDataReporter):
     def _constructReportValues(self, simulation, state):
         values = super()._constructReportValues(simulation, state)
         rmsd = self._calculate_rmsd(
-            simulation.context.getState(getPositions=True).getPositions()
+            simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
         )
         values.append(rmsd)
         return values
 
     def _calculate_rmsd(self, positions):
-        """Calculate RMSD between current and reference positions.
-
-        Args:
-            positions (np.ndarray): Current positions
-
-        Returns:
-            float: RMSD value in nanometers
-        """
-        # Center the structures
-        ref_centered = self.reference_positions - np.mean(
-            self.reference_positions, axis=0
-        )
-        pos_centered = positions - np.mean(positions, axis=0)
-
-        # Calculate RMSD
-        diff = ref_centered - pos_centered
-        rmsd = np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
-
-        return rmsd
+         """Calculate RMSD between current and reference positions.
+ 
+         Args:
+             positions (np.ndarray): Current positions
+ 
+         Returns:
+             float: RMSD value in nanometers
+         """
+         #select positions of non-water atoms
+         positions = positions[self.protein_atoms]
+         # Center the structures
+         ref_centered = self.reference_positions - np.mean(
+             self.reference_positions, axis=0
+         )
+         pos_centered = positions - np.mean(positions, axis=0)
+ 
+         # Calculate RMSD
+         diff = ref_centered.astype(np.float32) - pos_centered.astype(np.float32)
+         rmsd = np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
+ 
+         return rmsd
 
     def _constructHeaders(self):
         headers = super()._constructHeaders()
@@ -128,7 +130,7 @@ class RMSDStateDataReporter(app.StateDataReporter):
 
     @staticmethod
     def from_pdb(pdb: app.PDBFile, file: str, reportInterval: int, **kwargs):
-        """Create an RMSDReporter from a PDB file.
+        """Create an RMSDStateDataReporter from a PDB file.
 
         This method extracts the reference positions and protein atom indices
         from a PDB file. It identifies protein atoms by looking for standard
@@ -136,8 +138,9 @@ class RMSDStateDataReporter(app.StateDataReporter):
 
         Args:
             pdb (app.PDBFile): PDB file
-            file (str): The file to write the RMSD data to
+            file (str): The file to write the data to
             reportInterval (int): The interval (in time steps) at which to write frames
+            **kwargs: Additional arguments to pass to StateDataReporter
 
         Returns:
             RMSDStateDataReporter: Configured reporter instance
@@ -168,7 +171,7 @@ class RMSDStateDataReporter(app.StateDataReporter):
             "TYR",
             "VAL",
         }
-
+ 
         # Get topology and positions
         topology = pdb.getTopology()
         positions = pdb.getPositions()
@@ -181,7 +184,7 @@ class RMSDStateDataReporter(app.StateDataReporter):
 
         # Get reference positions for protein atoms
         reference_positions = np.array(
-            [positions[i].value_in_unit(unit.nanometer) for i in protein_atoms]
+            [positions[i].value_in_unit(unit.nanometers) for i in protein_atoms]
         )
 
         return RMSDStateDataReporter(
