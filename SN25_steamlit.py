@@ -294,6 +294,7 @@ def get_job_count(active: bool = True):
             params={
                 "q": f"SELECT COUNT(*) as count FROM jobs WHERE active = {active_value}"
             },
+            timeout=10,
         )
         response.raise_for_status()
         result = response_to_dict(response)
@@ -370,16 +371,14 @@ def display_job_info(job: Dict, index: int):
                     <strong>Job ID:</strong> {job_id}<br>
                     <strong>Created:</strong> {time_str}<br>
                     <strong>PDB ID:</strong> {pdb_id}<br>
+                    <strong>Final Checkpoint Link:</strong> <a href="{cpt_link}">{pdb_id}.cpt</a><br>
+                    <strong>PDB Link:</strong> <a href="{pdb_link}">{pdb_id}.pdb</a><br>
                 </div>
                 <div>
                     <strong>Force Field:</strong> {ff}<br>
                     <strong>Water Model:</strong> {water}<br>
                     <strong>Temperature:</strong> {temperature} K<br>
                     {f"<strong>Error:</strong> {event_data.get('error', 'Unknown error')}" if event_data.get("failed", False) else ""}
-                </div>
-                <div>
-                    <strong>Final Checkpoint Link:</strong> {cpt_link}<br>
-                    <strong>PDB Link:</strong> {pdb_link}<br>
                 </div>
             </div>
         </div>
