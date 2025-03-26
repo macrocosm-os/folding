@@ -1,5 +1,7 @@
 import os
 import openmm.app as app
+import numpy as np
+from openmm import unit
 
 
 class LastTwoCheckpointsReporter(app.CheckpointReporter):
@@ -38,3 +40,142 @@ class ExitFileReporter(object):
 
     def finalize(self):
         pass
+
+
+class RMSDStateDataReporter(app.StateDataReporter):
+    """A reporter that extends StateDataReporter to include RMSD measurements.
+
+    This reporter inherits all functionality from StateDataReporter and adds RMSD
+    measurement against a reference structure. The RMSD is calculated for protein
+    atoms only, excluding solvent and ions.
+    """
+
+    def __init__(
+        self, file, reportInterval, reference_positions, protein_atoms, **kwargs
+    ):
+        """Initialize the reporter.
+
+        Args:
+            file (str): The file to write the data to
+            reportInterval (int): The interval (in time steps) at which to write frames
+            reference_positions (np.ndarray): Reference positions to calculate RMSD against
+            protein_atoms (list): List of atom indices that belong to the protein
+            **kwargs: Additional arguments to pass to StateDataReporter
+        """
+        super().__init__(file, reportInterval, **kwargs)
+        self.reference_positions = reference_positions
+        self.protein_atoms = protein_atoms
+
+    @staticmethod
+    def from_pdb(pdb: app.PDBFile, file: str, reportInterval: int, **kwargs):
+        """Create an RMSDStateDataReporter from a PDB file.
+
+        This method extracts the reference positions and protein atom indices
+        from a PDB file. It identifies protein atoms by looking for standard
+        protein residues (excluding water and ions).
+
+        Args:
+            pdb (app.PDBFile): PDB file
+            file (str): The file to write the data to
+            reportInterval (int): The interval (in time steps) at which to write frames
+            **kwargs: Additional arguments to pass to StateDataReporter
+
+        Returns:
+            RMSDStateDataReporter: Configured reporter instance
+        """
+        # Get protein atom indices and positions
+        protein_atoms = []
+
+        # Standard protein residues (excluding water and ions)
+        protein_residues = {
+            "ALA",
+            "ARG",
+            "ASN",
+            "ASP",
+            "CYS",
+            "GLN",
+            "GLU",
+            "GLY",
+            "HIS",
+            "ILE",
+            "LEU",
+            "LYS",
+            "MET",
+            "PHE",
+            "PRO",
+            "SER",
+            "THR",
+            "TRP",
+            "TYR",
+            "VAL",
+        }
+
+        # Get topology and positions
+        topology = pdb.getTopology()
+        positions = pdb.getPositions()
+
+        # Iterate through residues to identify protein atoms
+        for residue in topology.residues():
+            if residue.name in protein_residues:
+                for atom in residue.atoms():
+                    protein_atoms.append(atom.index)
+
+        # Get reference positions for protein atoms
+        reference_positions = np.array(
+            [positions[i].value_in_unit(unit.nanometers) for i in protein_atoms]
+        )
+
+        return RMSDStateDataReporter(
+            file=file,
+            reportInterval=reportInterval,
+            reference_positions=reference_positions,
+            protein_atoms=protein_atoms,
+            **kwargs,
+        )
+
+    def report(self, simulation, state):
+        """Generate a report.
+
+        Args:
+            simulation (Simulation): The Simulation to generate a report for
+            state (State): The current state of the simulation
+        """
+        # Get current positions
+        positions = state.getPositions()
+
+        # Extract protein positions
+        protein_positions = np.array(
+            [positions[i].value_in_unit(unit.nanometers) for i in self.protein_atoms]
+        )
+
+        # Calculate RMSD
+        rmsd = self._calculate_rmsd(protein_positions)
+
+        # Add RMSD to the report
+        if self._openedFile:
+            self._outstream.write(f"{rmsd}\n")
+            self._outstream.flush()
+
+        # Call parent class report method
+        super().report(simulation, state)
+
+    def _calculate_rmsd(self, positions):
+        """Calculate RMSD between current and reference positions.
+
+        Args:
+            positions (np.ndarray): Current positions
+
+        Returns:
+            float: RMSD value in nanometers
+        """
+        # Center the structures
+        ref_centered = self.reference_positions - np.mean(
+            self.reference_positions, axis=0
+        )
+        pos_centered = positions - np.mean(positions, axis=0)
+
+        # Calculate RMSD
+        diff = ref_centered - pos_centered
+        rmsd = np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
+
+        return rmsd

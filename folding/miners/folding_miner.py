@@ -20,7 +20,11 @@ import openmm.app as app
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
 from folding.protocol import JobSubmissionSynapse
-from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
+from folding.utils.reporters import (
+    ExitFileReporter,
+    LastTwoCheckpointsReporter,
+    RMSDStateDataReporter,
+)
 from folding.utils.ops import (
     check_if_directory_exists,
     get_tracebacks,
@@ -145,6 +149,7 @@ class FoldingMiner(BaseMinerNeuron):
         self.CHECKPOINT_INTERVAL = 10000
         self.STATE_DATA_REPORTER_INTERVAL = 10
         self.EXIT_REPORTER_INTERVAL = 10
+        self.RMSD_REPORTER_INTERVAL = 10
 
     def create_default_dict(self):
         def nested_dict():
@@ -813,6 +818,7 @@ class SimulationManager:
         self.CHECKPOINT_INTERVAL = 10000
         self.STATE_DATA_REPORTER_INTERVAL = 10
         self.EXIT_REPORTER_INTERVAL = 10
+        self.RMSD_REPORTER_INTERVAL = 10
 
     def create_empty_file(self, file_path: str):
         # For mocking
@@ -941,19 +947,21 @@ class SimulationManager:
                     reportInterval=self.CHECKPOINT_INTERVAL,
                 )
             )
-            simulation.reporters.append(
-                app.StateDataReporter(
-                    file=f"{self.output_dir}/{state}.log",
-                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
-                    step=True,
-                    potentialEnergy=True,
-                )
-            )
+
             simulation.reporters.append(
                 ExitFileReporter(
                     filename=f"{self.output_dir}/{state}",
                     reportInterval=self.EXIT_REPORTER_INTERVAL,
                     file_prefix=state,
+                )
+            )
+            simulation.reporters.append(
+                RMSDStateDataReporter.from_pdb(
+                    pdb=self.pdb_obj,
+                    file=f"{self.output_dir}/{state}.log",
+                    reportInterval=self.RMSD_REPORTER_INTERVAL,
+                    step=True,
+                    potentialEnergy=True,
                 )
             )
             state_commands[state] = simulation
