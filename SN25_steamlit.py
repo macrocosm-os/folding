@@ -3,7 +3,7 @@ import json
 import requests
 import datetime
 import pickle as pkl
-from typing import List
+from typing import List, Dict
 
 import streamlit as st
 import bittensor as bt
@@ -55,6 +55,14 @@ if "selected_water" not in st.session_state:
 # Initialize session state for last status update time
 if "last_status_update" not in st.session_state:
     st.session_state.last_status_update = {}
+
+# Initialize session state for global job pool pagination
+if "active_jobs_page" not in st.session_state:
+    st.session_state.active_jobs_page = 0
+if "inactive_jobs_page" not in st.session_state:
+    st.session_state.inactive_jobs_page = 0
+if "jobs_per_page" not in st.session_state:
+    st.session_state.jobs_per_page = 5
 
 
 def get_wallet_names():
@@ -243,6 +251,193 @@ def update_simulation_statuses():
         status = get_job_status(job_id)
         params["Status"] = status
         st.session_state.last_status_update[job_id] = current_time
+
+
+def get_active_jobs(limit: int = 10, offset: int = 0):
+    """Get active jobs from the global job pool."""
+    try:
+        response = requests.get(
+            f"http://{GJP_ADDRESS}/db/query",
+            params={
+                "q": f"SELECT * FROM jobs WHERE active = 1 LIMIT {limit} OFFSET {offset}"
+            },
+        )
+        response.raise_for_status()
+        return response_to_dict(response)
+    except Exception as e:
+        st.error(f"Failed to fetch active jobs: {str(e)}")
+        return []
+
+
+def get_inactive_jobs(limit: int = 10, offset: int = 0):
+    """Get inactive jobs from the global job pool."""
+    try:
+        response = requests.get(
+            f"http://{GJP_ADDRESS}/db/query",
+            params={
+                "q": f"SELECT * FROM jobs WHERE active = 0 LIMIT {limit} OFFSET {offset}"
+            },
+        )
+        response.raise_for_status()
+        return response_to_dict(response)
+    except Exception as e:
+        st.error(f"Failed to fetch inactive jobs: {str(e)}")
+        return []
+
+
+def get_job_count(active: bool = True):
+    """Get the count of jobs with the specified active status."""
+    try:
+        active_value = 1 if active else 0
+        response = requests.get(
+            f"http://{GJP_ADDRESS}/db/query",
+            params={
+                "q": f"SELECT COUNT(*) as count FROM jobs WHERE active = {active_value}"
+            },
+        )
+        response.raise_for_status()
+        result = response_to_dict(response)
+        return int(result[0].get("count", 0)) if result else 0
+    except Exception as e:
+        st.error(f"Failed to fetch job count: {str(e)}")
+        return 0
+
+
+def display_job_info(job: Dict, index: int):
+    """Display job information in an expander."""
+    try:
+        job_id = job.get("job_id", "Unknown ID")
+        pdb_id = job.get("pdb_id", "N/A")
+
+        # Parse event data
+        event_data = {}
+        event_str = job.get("event", "{}")
+        try:
+            event_data = json.loads(event_str)
+        except:
+            event_data = {"error": "Failed to parse event data"}
+
+        # Determine status
+        active = job.get("active")
+        if active == "1":
+            status = "Running"
+            status_color = "green"
+            card_class = "job-card"
+            status_class = "job-status running"
+        elif active == "0" and event_data.get("failed", False):
+            status = "Failed"
+            status_color = "red"
+            card_class = "job-card failed"
+            status_class = "job-status failed"
+        elif active == "0":
+            status = "Completed"
+            status_color = "blue"
+            card_class = "job-card inactive"
+            status_class = "job-status completed"
+        else:
+            status = "Unknown"
+            status_color = "gray"
+            card_class = "job-card"
+            status_class = "job-status"
+
+        # Format time
+        created_time = job.get("created_at", "Unknown")
+        try:
+            # Convert to datetime and format
+            created_dt = datetime.datetime.fromisoformat(
+                created_time.replace("Z", "+00:00")
+            )
+            time_str = created_dt.strftime("%Y-%m-%d %H:%M:%S")
+        except:
+            time_str = created_time
+
+        # Get PDB ID and other parameters from event data
+        ff = event_data.get("ff", "N/A")
+        water = event_data.get("water", "N/A")
+        temperature = json.loads(job["system_config"])["system_kwargs"]["temperature"]
+
+        s3_links = json.loads(job["s3_links"])
+        cpt_link = s3_links["cpt"]
+        pdb_link = s3_links["pdb"]
+
+        # Create content with styling
+        st.markdown(
+            f"""
+        <div class="{card_class}">
+            <h4>Job {index+1}: {pdb_id} <span class="{status_class}">{status}</span></h4>
+            <div class="job-details">
+                <div>
+                    <strong>Job ID:</strong> {job_id}<br>
+                    <strong>Created:</strong> {time_str}<br>
+                    <strong>PDB ID:</strong> {pdb_id}<br>
+                </div>
+                <div>
+                    <strong>Force Field:</strong> {ff}<br>
+                    <strong>Water Model:</strong> {water}<br>
+                    <strong>Temperature:</strong> {temperature} K<br>
+                    {f"<strong>Error:</strong> {event_data.get('error', 'Unknown error')}" if event_data.get("failed", False) else ""}
+                </div>
+                <div>
+                    <strong>Final Checkpoint Link:</strong> {cpt_link}<br>
+                    <strong>PDB Link:</strong> {pdb_link}<br>
+                </div>
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+    except Exception as e:
+        st.error(f"Error displaying job: {str(e)}")
+
+
+def filter_jobs(jobs, search_term):
+    """Filter jobs based on search term."""
+    if not search_term:
+        return jobs
+
+    filtered_jobs = []
+    search_term = search_term.lower()
+
+    for job in jobs:
+        # Check job_id
+        job_id = job.get("job_id", "").lower()
+        if search_term in job_id:
+            filtered_jobs.append(job)
+            continue
+
+        # Parse event data
+        event_data = {}
+        event_str = job.get("event", "{}")
+        try:
+            event_data = json.loads(event_str)
+        except:
+            continue
+
+        # Check PDB ID
+        pdb_id = str(event_data.get("PDB", {}).get("id", "")).lower()
+        if search_term in pdb_id:
+            filtered_jobs.append(job)
+            continue
+
+        # Check source
+        source = str(event_data.get("PDB", {}).get("source", "")).lower()
+        if search_term in source:
+            filtered_jobs.append(job)
+            continue
+
+        # Check forcefield
+        ff = str(event_data.get("ff", "")).lower()
+        if search_term in ff:
+            filtered_jobs.append(job)
+            continue
+
+        # Check water model
+        water = str(event_data.get("water", "")).lower()
+        if search_term in water:
+            filtered_jobs.append(job)
+            continue
+
+    return filtered_jobs
 
 
 # Set page title
@@ -936,3 +1131,258 @@ with history_container:
                         st.markdown(f"```{params.get('Job ID', 'N/A')}```")
 
                     st.caption(f"Run on: {params.get('Timestamp', 'Unknown time')}")
+
+# Horizontal divider before Global Job Pool section
+st.markdown("---")
+
+# Global Job Pool Section
+st.subheader("Global Job Pool")
+st.write("View all jobs currently in the global job pool")
+
+# Add settings for the job pool display
+settings_col1, settings_col2, settings_col3 = st.columns([1, 1, 2])
+
+with settings_col1:
+    # Add selector for jobs per page
+    jobs_per_page_options = [5, 10, 15, 20, 25]
+    selected_jobs_per_page = st.selectbox(
+        "Jobs per page:",
+        options=jobs_per_page_options,
+        index=jobs_per_page_options.index(st.session_state.jobs_per_page)
+        if st.session_state.jobs_per_page in jobs_per_page_options
+        else 0,
+        key="jobs_per_page_selector",
+    )
+
+    # Update jobs per page if changed
+    if selected_jobs_per_page != st.session_state.jobs_per_page:
+        st.session_state.jobs_per_page = selected_jobs_per_page
+        # Reset page numbers
+        st.session_state.active_jobs_page = 0
+        st.session_state.inactive_jobs_page = 0
+        st.rerun()
+
+with settings_col2:
+    # Add job pool refresh button
+    if st.button("🔄 Refresh All Jobs", key="refresh_all_jobs"):
+        st.rerun()
+
+with settings_col3:
+    # Add search box for filtering jobs
+    job_search = st.text_input(
+        "Search jobs (by PDB ID, Job ID, etc.)",
+        placeholder="Enter search terms...",
+        key="job_search",
+    )
+
+# Add some custom styling for the job pool
+st.markdown(
+    """
+<style>
+.job-card {
+    background-color: rgba(49, 51, 63, 0.1);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-left: 4px solid #4caf50;
+}
+.job-card.inactive {
+    border-left: 4px solid #ff9800;
+}
+.job-card.failed {
+    border-left: 4px solid #f44336;
+}
+.job-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-right: 10px;
+}
+.job-status.running {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+}
+.job-status.completed {
+    background-color: rgba(33, 150, 243, 0.2);
+    color: #2196f3;
+}
+.job-status.failed {
+    background-color: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+}
+.job-details {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-gap: 10px;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# Create tabs for active and inactive jobs
+job_tabs = st.tabs(["Active Jobs", "Inactive Jobs"])
+
+# Active Jobs Tab
+with job_tabs[0]:
+    # Fetch the count of active jobs
+    active_jobs_count = get_job_count(active=True)
+
+    # Calculate total pages for active jobs
+    jobs_per_page = st.session_state.jobs_per_page
+    active_total_pages = (
+        (active_jobs_count - 1) // jobs_per_page + 1 if active_jobs_count > 0 else 1
+    )
+
+    # Ensure active_jobs_page is valid
+    if st.session_state.active_jobs_page >= active_total_pages:
+        st.session_state.active_jobs_page = 0
+
+    # Fetch active jobs for current page
+    active_jobs = get_active_jobs(
+        limit=jobs_per_page, offset=st.session_state.active_jobs_page * jobs_per_page
+    )
+
+    # Apply search filter if search term exists
+    if job_search:
+        filtered_active_jobs = filter_jobs(active_jobs, job_search)
+        st.write(
+            f"Found {len(filtered_active_jobs)} active jobs matching '{job_search}'"
+        )
+
+        # Display filtered active jobs
+        if not filtered_active_jobs:
+            st.info(f"No active jobs found matching '{job_search}'.")
+        else:
+            for i, job in enumerate(filtered_active_jobs):
+                display_job_info(job, i)
+    else:
+        # Display count and refresh button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"Showing {len(active_jobs)} of {active_jobs_count} active jobs")
+        with col2:
+            if st.button("🔄 Refresh Active", key="refresh_active"):
+                st.rerun()
+
+        # Display active jobs
+        if not active_jobs:
+            st.info("No active jobs found.")
+        else:
+            for i, job in enumerate(active_jobs):
+                display_job_info(
+                    job, i + (st.session_state.active_jobs_page * jobs_per_page)
+                )
+
+        # Pagination controls
+        if active_total_pages > 1:
+            st.write("")  # Add some space
+            pagination_cols = st.columns([1, 3, 1])
+
+            with pagination_cols[0]:
+                if st.button(
+                    "◀ Previous",
+                    key="prev_active",
+                    disabled=st.session_state.active_jobs_page <= 0,
+                ):
+                    st.session_state.active_jobs_page -= 1
+                    st.rerun()
+
+            with pagination_cols[1]:
+                st.write(
+                    f"Page {st.session_state.active_jobs_page + 1} of {active_total_pages}"
+                )
+
+            with pagination_cols[2]:
+                if st.button(
+                    "Next ▶",
+                    key="next_active",
+                    disabled=st.session_state.active_jobs_page
+                    >= active_total_pages - 1,
+                ):
+                    st.session_state.active_jobs_page += 1
+                    st.rerun()
+
+# Inactive Jobs Tab
+with job_tabs[1]:
+    # Fetch the count of inactive jobs
+    inactive_jobs_count = get_job_count(active=False)
+
+    # Calculate total pages for inactive jobs
+    inactive_total_pages = (
+        (inactive_jobs_count - 1) // jobs_per_page + 1 if inactive_jobs_count > 0 else 1
+    )
+
+    # Ensure inactive_jobs_page is valid
+    if st.session_state.inactive_jobs_page >= inactive_total_pages:
+        st.session_state.inactive_jobs_page = 0
+
+    # Fetch inactive jobs for current page
+    inactive_jobs = get_inactive_jobs(
+        limit=jobs_per_page, offset=st.session_state.inactive_jobs_page * jobs_per_page
+    )
+
+    # Apply search filter if search term exists
+    if job_search:
+        filtered_inactive_jobs = filter_jobs(inactive_jobs, job_search)
+        st.write(
+            f"Found {len(filtered_inactive_jobs)} inactive jobs matching '{job_search}'"
+        )
+
+        # Display filtered inactive jobs
+        if not filtered_inactive_jobs:
+            st.info(f"No inactive jobs found matching '{job_search}'.")
+        else:
+            for i, job in enumerate(filtered_inactive_jobs):
+                display_job_info(job, i)
+    else:
+        # Display count and refresh button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(
+                f"Showing {len(inactive_jobs)} of {inactive_jobs_count} inactive jobs"
+            )
+        with col2:
+            if st.button("🔄 Refresh Inactive", key="refresh_inactive"):
+                st.rerun()
+
+        # Display inactive jobs
+        if not inactive_jobs:
+            st.info("No inactive jobs found.")
+        else:
+            for i, job in enumerate(inactive_jobs):
+                display_job_info(
+                    job, i + (st.session_state.inactive_jobs_page * jobs_per_page)
+                )
+
+        # Pagination controls
+        if inactive_total_pages > 1:
+            st.write("")  # Add some space
+            pagination_cols = st.columns([1, 3, 1])
+
+            with pagination_cols[0]:
+                if st.button(
+                    "◀ Previous",
+                    key="prev_inactive",
+                    disabled=st.session_state.inactive_jobs_page <= 0,
+                ):
+                    st.session_state.inactive_jobs_page -= 1
+                    st.rerun()
+
+            with pagination_cols[1]:
+                st.write(
+                    f"Page {st.session_state.inactive_jobs_page + 1} of {inactive_total_pages}"
+                )
+
+            with pagination_cols[2]:
+                if st.button(
+                    "Next ▶",
+                    key="next_inactive",
+                    disabled=st.session_state.inactive_jobs_page
+                    >= inactive_total_pages - 1,
+                ):
+                    st.session_state.inactive_jobs_page += 1
+                    st.rerun()
