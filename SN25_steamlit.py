@@ -1384,3 +1384,278 @@ with job_tabs[1]:
                 ):
                     st.session_state.inactive_jobs_page += 1
                     st.rerun()
+
+# Horizontal divider before Docking section
+st.markdown("---")
+
+# Docking Section
+st.subheader("Molecular Docking")
+st.write("Dock small molecules to protein structures")
+
+# Initialize session state for docking results if not exists
+if "docking_results" not in st.session_state:
+    st.session_state.docking_results = []
+
+# Create a form for docking parameters
+with st.container():
+    st.markdown('<div class="docking-form">', unsafe_allow_html=True)
+
+    # Create two columns for input parameters
+    dock_col1, dock_col2 = st.columns(2)
+
+    with dock_col1:
+        # Option to use a PDB from simulation history or enter a PDB link
+        pdb_source = st.radio(
+            "PDB Source",
+            ["From Simulation History", "Custom PDB Link"],
+            key="pdb_source",
+        )
+
+        if pdb_source == "From Simulation History":
+            # Get PDB IDs from simulation history
+            history_pdb_ids = []
+            for params in st.session_state.simulation_history:
+                selected_option = params.get("Selected Option")
+                job_id = params.get("Job ID")
+                if selected_option and job_id:
+                    history_pdb_ids.append(f"{selected_option} (Job: {job_id})")
+
+            if not history_pdb_ids:
+                st.warning(
+                    "No PDB structures found in simulation history. Run a simulation first or use a custom PDB link."
+                )
+                pdb_id = None
+                pdb_link = None
+            else:
+                selected_history_pdb = st.selectbox(
+                    "Select PDB from history",
+                    options=history_pdb_ids,
+                    key="history_pdb_select",
+                )
+
+                # Extract job ID and find the corresponding simulation parameters
+                selected_job_id = selected_history_pdb.split("(Job: ")[1].rstrip(")")
+                for params in st.session_state.simulation_history:
+                    if params.get("Job ID") == selected_job_id:
+                        # Get PDB link from job status
+                        try:
+                            response = requests.get(
+                                f"http://{GJP_ADDRESS}/db/query",
+                                params={
+                                    "q": f"SELECT * FROM jobs WHERE job_id = '{selected_job_id}'"
+                                },
+                            )
+                            job_data = response_to_dict(response)
+                            if job_data:
+                                s3_links = json.loads(job_data[0]["s3_links"])
+                                pdb_link = s3_links["pdb"]
+                                pdb_id = params.get("Selected Option")
+                                st.success(f"Found PDB link: {pdb_link}")
+                        except Exception as e:
+                            st.error(f"Error retrieving PDB link: {str(e)}")
+                            pdb_link = None
+                            pdb_id = None
+        else:
+            # Custom PDB link input
+            pdb_link = st.text_input(
+                "Enter PDB Link",
+                placeholder="https://example.com/path/to/protein.pdb",
+                key="custom_pdb_link",
+            )
+            pdb_id = st.text_input(
+                "PDB ID (for output filename)",
+                placeholder="e.g., 1ABC",
+                key="custom_pdb_id",
+            )
+
+        # SMILES input for ligand
+        smiles = st.text_input(
+            "Ligand SMILES",
+            placeholder="e.g., COc(cc1)ccc1C#N",
+            key="ligand_smiles",
+            help="SMILES notation for the ligand to dock",
+        )
+
+        # Add a small SMILES validator
+        if smiles:
+            # Simple validation - check for valid SMILES characters
+            invalid_chars = [
+                c
+                for c in smiles
+                if c
+                not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789()[]{}@+-=#$:.\\/%"
+            ]
+            if invalid_chars:
+                st.warning(
+                    f"SMILES contains potentially invalid characters: {''.join(invalid_chars)}"
+                )
+
+    with dock_col2:
+        # Complex name
+        complex_name = st.text_input(
+            "Complex Name",
+            placeholder="e.g., test_inference",
+            key="complex_name",
+            help="Name for the protein-ligand complex",
+        )
+
+        # Mock mode toggle
+        mock_mode = st.checkbox(
+            "Mock Mode (faster, for testing)",
+            value=False,
+            key="mock_mode",
+            help="Use mock mode for faster testing without actual computations",
+        )
+
+        # Docking server selection
+        docking_server = st.selectbox(
+            "Docking Server", options=["184.105.4.39:8000"], key="docking_server"
+        )
+
+        # Add advanced options expander
+        with st.expander("Advanced Options"):
+            # num_conformers = st.slider(
+            #     "Number of Conformers",
+            #     min_value=1,
+            #     max_value=10,
+            #     value=5,
+            #     step=1,
+            #     help="Number of conformers to generate"
+            # )
+
+            timeout = st.slider(
+                "Timeout (seconds)",
+                min_value=60,
+                max_value=600,
+                value=180,
+                step=30,
+                help="Maximum time to wait for docking results",
+            )
+
+    # Run docking button
+    dock_button_col1, dock_button_col2 = st.columns([3, 1])
+    with dock_button_col2:
+        run_docking = st.button("Run Docking", key="run_docking_btn", type="primary")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Process docking request if button was clicked
+if run_docking:
+    if not pdb_link or not smiles or not complex_name or not pdb_id:
+        st.error(
+            "Please provide all required information: PDB link, PDB ID, SMILES, and complex name"
+        )
+    else:
+        with st.spinner("Running molecular docking..."):
+            try:
+                # Prepare command
+                mock_param = "true" if mock_mode else "false"
+                output_file = f"{pdb_id}_diffdock.sdf"
+
+                # Set up the curl command
+                command = f"""curl -s {pdb_link} | curl -s -X POST "http://{docking_server}/infer" -F "pdb_file=@-" -F "ligand={smiles}" -F "complex_name={complex_name}" -F "mock={mock_param}" > {output_file}"""
+
+                # Execute the command
+                import subprocess
+                import os
+
+                # Create a temporary directory for outputs if it doesn't exist
+                docking_dir = os.path.expanduser("~/docking_results")
+                os.makedirs(docking_dir, exist_ok=True)
+
+                # Set full path for output file
+                output_path = os.path.join(docking_dir, output_file)
+
+                # Update command to use the full path
+                command = f"""curl -s {pdb_link} | curl -s -X POST "http://{docking_server}/infer" -F "pdb_file=@-" -F "ligand={smiles}" -F "complex_name={complex_name}" -F "mock={mock_param}" > {output_path}"""
+
+                # Run the command with timeout
+                process = subprocess.Popen(
+                    command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
+                try:
+                    stdout, stderr = process.communicate(timeout=timeout)
+
+                    if process.returncode != 0:
+                        st.error(f"Docking failed: {stderr.decode('utf-8')}")
+                    else:
+                        # Check if file exists and has content
+                        if (
+                            os.path.exists(output_path)
+                            and os.path.getsize(output_path) > 0
+                        ):
+                            # Add to results
+                            result_info = {
+                                "PDB ID": pdb_id,
+                                "Ligand SMILES": smiles,
+                                "Complex Name": complex_name,
+                                "Output File": output_path,
+                                "Timestamp": datetime.datetime.now().strftime(
+                                    "%Y-%m-%d %H:%M:%S"
+                                ),
+                                "Mock Mode": mock_mode,
+                            }
+                            st.session_state.docking_results.append(result_info)
+
+                            # Display success message
+                            st.success(
+                                f"Docking completed successfully. Output saved to {output_path}"
+                            )
+
+                            # Add download button for the file
+                            with open(output_path, "rb") as f:
+                                file_content = f.read()
+                                st.download_button(
+                                    label="Download SDF File",
+                                    data=file_content,
+                                    file_name=output_file,
+                                    mime="chemical/x-sdf",
+                                )
+                        else:
+                            st.error(
+                                "Docking completed but output file is empty or missing"
+                            )
+
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    st.error(f"Docking operation timed out after {timeout} seconds")
+
+            except Exception as e:
+                st.error(f"An error occurred during docking: {str(e)}")
+
+# Display docking results history
+if st.session_state.docking_results:
+    st.subheader("Docking Results History")
+
+    # Create a grid layout for results
+    results_cols = st.columns(2)
+
+    # Display results in reverse order (newest first)
+    for i, result in enumerate(reversed(st.session_state.docking_results)):
+        # Distribute results across columns
+        col_index = i % 2
+
+        with results_cols[col_index]:
+            with st.expander(f"{result['PDB ID']} - {result['Complex Name']}"):
+                st.markdown(f"**PDB ID:** {result['PDB ID']}")
+                st.markdown(f"**Ligand SMILES:** `{result['Ligand SMILES']}`")
+                st.markdown(f"**Complex Name:** {result['Complex Name']}")
+                st.markdown(f"**Output File:** {result['Output File']}")
+                st.markdown(
+                    f"**Mock Mode:** {'Enabled' if result['Mock Mode'] else 'Disabled'}"
+                )
+                st.caption(f"Docked on: {result['Timestamp']}")
+
+                # Add download button for the file
+                try:
+                    with open(result["Output File"], "rb") as f:
+                        file_content = f.read()
+                        st.download_button(
+                            label="Download SDF File",
+                            data=file_content,
+                            file_name=os.path.basename(result["Output File"]),
+                            mime="chemical/x-sdf",
+                            key=f"download_btn_{i}",
+                        )
+                except Exception as e:
+                    st.error(f"Could not load file: {str(e)}")
