@@ -209,8 +209,9 @@ def get_job_status(job_id: str) -> str:
         result = result[0]
 
         active = result.get("active")
+        event = json.loads(result.get("event"))
 
-        if active is None:
+        if active == "0" and event.get("failed", False):
             return "failed"
         elif active == "1":
             return "running"
