@@ -37,13 +37,16 @@ if ! command -v docker &> /dev/null; then
         
         # Install Docker packages
         sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-        
+
         # Start and enable Docker service
         sudo systemctl start docker
         sudo systemctl enable docker
         
         # Add current user to docker group to avoid using sudo
+        sudo groupadd docker
         sudo usermod -aG docker $USER
+        newgrp docker
+        
         echo "Docker installed successfully. You may need to log out and back in for group changes to take effect."
     else
         echo "This script only supports automatic Docker installation on Ubuntu."
