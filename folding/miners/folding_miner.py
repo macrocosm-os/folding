@@ -23,7 +23,7 @@ from folding.protocol import JobSubmissionSynapse
 from folding.utils.reporters import (
     ExitFileReporter,
     LastTwoCheckpointsReporter,
-    RMSDStateDataReporter,
+    RMSDReporter,
 )
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -942,6 +942,14 @@ class SimulationManager:
                 seed=seed,
             )
             simulation.reporters.append(
+                app.StateDataReporter(
+                    file=f"{self.output_dir}/{state}.log",
+                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                    step=True,
+                    potentialEnergy=True,
+                )
+            )
+            simulation.reporters.append(
                 LastTwoCheckpointsReporter(
                     file_prefix=f"{self.output_dir}/{state}",
                     reportInterval=self.CHECKPOINT_INTERVAL,
@@ -956,12 +964,10 @@ class SimulationManager:
                 )
             )
             simulation.reporters.append(
-                RMSDStateDataReporter.from_pdb(
+                RMSDReporter.from_pdb(
                     pdb=self.pdb_obj,
-                    file=f"{self.output_dir}/{state}.log",
+                    file=f"{self.output_dir}/{state}_rmsd.log",
                     reportInterval=self.RMSD_REPORTER_INTERVAL,
-                    step=True,
-                    potentialEnergy=True,
                 )
             )
             state_commands[state] = simulation
