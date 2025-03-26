@@ -378,7 +378,6 @@ def display_job_info(job: Dict, index: int):
                     <strong>Force Field:</strong> {ff}<br>
                     <strong>Water Model:</strong> {water}<br>
                     <strong>Temperature:</strong> {temperature} K<br>
-                    {f"<strong>Error:</strong> {event_data.get('error', 'Unknown error')}" if event_data.get("failed", False) else ""}
                 </div>
             </div>
         </div>
