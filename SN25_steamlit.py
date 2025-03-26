@@ -5,11 +5,14 @@ import bittensor as bt
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 import os
 import json
+import requests
+from atom.epistula.epistula import Epistula
 
 # load data from a pkl file
 DATA_PATH = "pdb_ids.pkl"
 PDB_IDS = pkl.load(open(DATA_PATH, "rb"))
 API_ADDRESS = "184.105.5.57:8031"
+GJP_ADDRESS = "167.99.209.27:4001"
 
 # Set page configuration for wider layout
 st.set_page_config(
@@ -46,6 +49,10 @@ if "selected_forcefield" not in st.session_state:
 if "selected_water" not in st.session_state:
     st.session_state.selected_water = None
 
+# Initialize session state for last status update time
+if "last_status_update" not in st.session_state:
+    st.session_state.last_status_update = {}
+
 
 def get_wallet_names():
     """Get list of wallet names from ~/.bittensor/wallets/"""
@@ -81,6 +88,18 @@ def create_wallet():
         except Exception as e:
             st.error(f"Error configuring wallet: {str(e)}")
             st.session_state.wallet = None
+
+
+def response_to_dict(response):
+    response = response.json()["results"][0]
+    if "error" in response.keys():
+        raise ValueError(f"Failed to get all PDBs: {response['error']}")
+    elif "values" not in response.keys():
+        return {}
+    columns = response["columns"]
+    values = response["values"]
+    data = [dict(zip(columns, row)) for row in values]
+    return data
 
 
 # Function to handle option selection
@@ -172,6 +191,54 @@ def display_results(options, search_query, items_per_page=5):
             ):
                 st.session_state.page_number += 1
                 st.rerun()
+
+
+def get_job_status(job_id: str) -> str:
+    """Get the status of a job from the GJP server."""
+    try:
+        response = requests.get(
+            f"http://{GJP_ADDRESS}/db/query",
+            params={"q": f"SELECT * FROM jobs WHERE job_id = '{job_id}'"},
+        )
+        response.raise_for_status()
+        result = response_to_dict(response)
+
+        if not result:
+            return "pending"
+
+        result = result[0]
+
+        active = result.get("active")
+
+        if active is None:
+            return "failed"
+        elif active == "1":
+            return "running"
+        elif active == "0":
+            return "completed"
+        else:
+            return "unknown"
+    except Exception as e:
+        return "error"
+
+
+def update_simulation_statuses():
+    """Update status for all simulations in history."""
+    current_time = datetime.datetime.now()
+
+    for params in st.session_state.simulation_history:
+        job_id = params.get("Job ID")
+        if not job_id:
+            continue
+
+        # Only update if more than 30 seconds have passed since last update
+        last_update = st.session_state.last_status_update.get(job_id)
+        if last_update and (current_time - last_update).total_seconds() < 30:
+            continue
+
+        status = get_job_status(job_id)
+        params["Status"] = status
+        st.session_state.last_status_update[job_id] = current_time
 
 
 # Set page title
@@ -544,9 +611,6 @@ with main_cols[0]:
     if run_simulation and is_prod:
         try:
             from folding_api.schemas import FoldingParams
-            import requests
-            import json
-            from atom.epistula.epistula import Epistula
 
             if not st.session_state.wallet:
                 raise ValueError(
@@ -570,7 +634,6 @@ with main_cols[0]:
                     epsilon=1.0,  # Default epsilon value
                 )
 
-                # Create new synchronous make_request function
                 def make_request(
                     address: str, folding_params: FoldingParams
                 ) -> requests.Response:
@@ -608,6 +671,34 @@ with main_cols[0]:
                 if response.status_code == 200:
                     job_id = response.json()["job_id"]
                     st.success(f"Job submitted successfully with ID: {job_id}")
+
+                    # Get initial status
+                    status = get_job_status(job_id)
+
+                    # Create a dictionary of the current parameters
+                    current_params = {
+                        "Simulation Name": simulation_name
+                        if simulation_name
+                        else (
+                            selected_option if selected_option else "Unnamed Simulation"
+                        ),
+                        "Selected Option": selected_option,
+                        "Temperature": f"{temperature} K",
+                        "Friction": friction,
+                        "Pressure": f"{pressure} atm",
+                        "Forcefield": forcefield,
+                        "Water Model": water_model,
+                        "Box Shape": box_shape,
+                        "Update Interval": f"{update_interval_hours} hours",
+                        "Timestamp": datetime.datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                        "Job ID": job_id,
+                        "Status": status,
+                    }
+
+                    # Add to history
+                    st.session_state.simulation_history.append(current_params)
                 else:
                     error_msg = response.text
                     try:
@@ -725,17 +816,24 @@ if run_simulation:
         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-    # Add to history
-    st.session_state.simulation_history.append(current_params)
-
-    st.success(f"Simulation '{sim_name}' started with the following parameters:")
-    st.json(current_params)
+    # Only add to history if not in production mode
+    if not is_prod:
+        st.session_state.simulation_history.append(current_params)
+        st.success(f"Simulation '{sim_name}' started with the following parameters:")
+        st.json(current_params)
 
 # Horizontal divider before history section
 st.markdown("---")
 
 # History Section (Below both parameter selection and summary)
 st.subheader("Simulation History")
+
+# Add refresh all button
+if st.button("🔄 Refresh All Statuses"):
+    update_simulation_statuses()
+    # Update the session state to trigger a rerun
+    st.session_state.simulation_history = st.session_state.simulation_history.copy()
+    st.rerun()
 
 history_container = st.container()
 with history_container:
@@ -771,6 +869,21 @@ with history_container:
                         st.markdown("**Friction:**")
                         st.markdown(f"```{params['Friction']}```")
 
+                        # Add status display with appropriate color
+                        status = params.get("Status", "unknown")
+                        status_color = {
+                            "running": "green",
+                            "completed": "blue",
+                            "failed": "red",
+                            "pending": "orange",
+                            "error": "gray",
+                            "unknown": "gray",
+                        }.get(status, "gray")
+                        st.markdown(
+                            f"**Status:** <span style='color: {status_color}'>{status.title()}</span>",
+                            unsafe_allow_html=True,
+                        )
+
                     with h_col2:
                         st.markdown("**Pressure:**")
                         st.markdown(f"```{params['Pressure']}```")
@@ -788,5 +901,8 @@ with history_container:
                         st.markdown(
                             f"```{params.get('Update Interval', '2.0 hours')}```"
                         )
+
+                        st.markdown("**Job ID:**")
+                        st.markdown(f"```{params.get('Job ID', 'N/A')}```")
 
                     st.caption(f"Run on: {params.get('Timestamp', 'Unknown time')}")
