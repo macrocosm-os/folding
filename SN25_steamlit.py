@@ -1,12 +1,15 @@
-import datetime
-import pickle as pkl
-import streamlit as st
-import bittensor as bt
-from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 import os
 import json
 import requests
+import datetime
+import pickle as pkl
+from typing import List
+
+import streamlit as st
+import bittensor as bt
+
 from atom.epistula.epistula import Epistula
+from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 
 # load data from a pkl file
 DATA_PATH = "pdb_ids.pkl"
@@ -64,7 +67,7 @@ def get_wallet_names():
     ]
 
 
-def get_hotkeys(wallet_name):
+def get_hotkeys(wallet_name: str) -> List[str]:
     """Get list of hotkeys for a given wallet name"""
     wallet_dir = os.path.expanduser(f"~/.bittensor/wallets/{wallet_name}/hotkeys")
     if not os.path.exists(wallet_dir):
@@ -103,12 +106,12 @@ def response_to_dict(response):
 
 
 # Function to handle option selection
-def select_option(option):
+def select_option(option: str):
     st.session_state.selected_option = option
 
 
 # Function to display search results with pagination
-def display_results(options, search_query, items_per_page=5):
+def display_results(options: List[str], search_query: str, items_per_page: int = 5):
     # Calculate total pages
     total_pages = (len(options) - 1) // items_per_page + 1
 
@@ -438,6 +441,17 @@ with main_cols[0]:
         )
         st.write(f"Selected friction: {friction}")
 
+        # Add Priority slider
+        priority = st.slider(
+            "Priority",
+            min_value=1,
+            max_value=10,
+            value=1,
+            step=1,
+            help="Simulation priority level. Higher values indicate higher priority for processing.",
+        )
+        st.write(f"Selected priority: {priority}")
+
     with col2:
         # 4. Pressure slider
         pressure = st.slider(
@@ -542,7 +556,9 @@ with main_cols[0]:
     )
 
     # Add a run button
-    is_prod = st.checkbox("Production Mode", value=False, help="Run in production mode")
+    is_prod: bool = st.checkbox(
+        "Production Mode", value=False, help="Run in production mode"
+    )
 
     # Add wallet configuration fields
     st.subheader("Wallet Configuration")
@@ -633,6 +649,7 @@ with main_cols[0]:
                     temperature=temperature,
                     friction=friction,
                     epsilon=1.0,  # Default epsilon value
+                    priority=priority,  # Add priority parameter
                 )
 
                 def make_request(
@@ -686,6 +703,7 @@ with main_cols[0]:
                         "Selected Option": selected_option,
                         "Temperature": f"{temperature} K",
                         "Friction": friction,
+                        "Priority": priority,
                         "Pressure": f"{pressure} atm",
                         "Forcefield": forcefield,
                         "Water Model": water_model,
@@ -757,6 +775,13 @@ with main_cols[2]:
         )
 
         st.markdown(
+            '<div class="parameter-label">Priority</div>', unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="parameter-value">{priority}</div>', unsafe_allow_html=True
+        )
+
+        st.markdown(
             '<div class="parameter-label">Pressure</div>', unsafe_allow_html=True
         )
         st.markdown(
@@ -809,6 +834,7 @@ if run_simulation:
         "Selected Option": selected_option,
         "Temperature": f"{temperature} K",
         "Friction": friction,
+        "Priority": priority,
         "Pressure": f"{pressure} atm",
         "Forcefield": forcefield,
         "Water Model": water_model,
@@ -869,6 +895,9 @@ with history_container:
 
                         st.markdown("**Friction:**")
                         st.markdown(f"```{params['Friction']}```")
+
+                        st.markdown("**Priority:**")
+                        st.markdown(f"```{params.get('Priority', 5)}```")
 
                         # Add status display with appropriate color
                         status = params.get("Status", "unknown")
