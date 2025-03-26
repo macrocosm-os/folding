@@ -168,7 +168,7 @@ class Validator(BaseValidatorNeuron):
                         logger.error("❌❌ Simulation failed! ❌❌")
                         job_event["active"] = False
                         job_event["failed"] = True
-                raise Exception("Error in setting up organic query")
+
             except Exception as e:
                 job_event["active"] = False
                 job_event["failed"] = True
