@@ -276,7 +276,7 @@ class SQLiteJobStore:
             s3_links=event["s3_links"],
             priority=event.get("priority", 1),
             update_interval=event.get(
-                "update_interval", random.randint(7200, 14400)
+                "time_to_live", random.randint(7200, 14400)
             ),  # between 2 hours and 4 hours in seconds
             max_time_no_improvement=event.get("max_time_no_improvement", 1),
             is_organic=event.get("is_organic", False),
