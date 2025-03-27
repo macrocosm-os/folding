@@ -3,6 +3,7 @@ import time
 import openmm.app as app
 import numpy as np
 from openmm import unit
+import MDAnalysis as mda
 
 
 
@@ -51,6 +52,7 @@ class RMSDStateDataReporter(app.StateDataReporter):
         super().__init__(file, reportInterval, **kwargs)
         self.reference_positions = reference_positions
         self.protein_atoms = protein_atoms
+        self.positions_history = []  # Store positions for RMSF calculation
 
     def report(self, simulation, state):
         """Generate a report.
@@ -82,6 +84,10 @@ class RMSDStateDataReporter(app.StateDataReporter):
         # Check for errors.
         self._checkForErrors(simulation, state)
 
+        # Store current positions for RMSF calculation
+        current_positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+        self.positions_history.append(current_positions[self.protein_atoms])
+
         # Query for the values
         values = self._constructReportValues(simulation, state)
 
@@ -97,35 +103,59 @@ class RMSDStateDataReporter(app.StateDataReporter):
         rmsd = self._calculate_rmsd(
             simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
         )
-        values.append(rmsd)
+        rmsf = self._calculate_rmsf()
+        values.extend([rmsd, rmsf])
         return values
 
     def _calculate_rmsd(self, positions):
-         """Calculate RMSD between current and reference positions.
- 
-         Args:
-             positions (np.ndarray): Current positions
- 
-         Returns:
-             float: RMSD value in nanometers
-         """
-         #select positions of non-water atoms
-         positions = positions[self.protein_atoms]
-         # Center the structures
-         ref_centered = self.reference_positions - np.mean(
-             self.reference_positions, axis=0
-         )
-         pos_centered = positions - np.mean(positions, axis=0)
- 
-         # Calculate RMSD
-         diff = ref_centered.astype(np.float32) - pos_centered.astype(np.float32)
-         rmsd = np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
- 
-         return rmsd
+        """Calculate RMSD between current and reference positions.
+
+        Args:
+            positions (np.ndarray): Current positions
+
+        Returns:
+            float: RMSD value in nanometers
+        """
+        #select positions of non-water atoms
+        positions = positions[self.protein_atoms]
+        # Center the structures
+        ref_centered = self.reference_positions - np.mean(
+            self.reference_positions, axis=0
+        )
+        pos_centered = positions - np.mean(positions, axis=0)
+
+        # Calculate RMSD
+        diff = ref_centered.astype(np.float32) - pos_centered.astype(np.float32)
+        rmsd = np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
+
+        return rmsd
+
+    def _calculate_rmsf(self):
+        """Calculate RMSF (Root Mean Square Fluctuation) over time.
+
+        Returns:
+            float: RMSF value in nanometers
+        """
+        if len(self.positions_history) < 2:
+            return 0.0
+
+        # Convert history to numpy array
+        positions_array = np.array(self.positions_history)
+        
+        # Calculate mean position for each atom
+        mean_positions = np.mean(positions_array, axis=0)
+        
+        # Calculate fluctuations from mean
+        fluctuations = positions_array - mean_positions
+        
+        # Calculate RMSF
+        rmsf = np.sqrt(np.mean(np.sum(fluctuations * fluctuations, axis=2)))
+        
+        return rmsf
 
     def _constructHeaders(self):
         headers = super()._constructHeaders()
-        headers.append("RMSD")
+        headers.extend(["RMSD", "RMSF"])
         return headers
 
     @staticmethod
