@@ -23,7 +23,7 @@ from folding.protocol import JobSubmissionSynapse
 from folding.utils.reporters import (
     ExitFileReporter,
     LastTwoCheckpointsReporter,
-    RMSDStateDataReporter,
+    ProteinStructureReporter,
 )
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -954,7 +954,7 @@ class SimulationManager:
                 )
             )
             simulation.reporters.append(
-                RMSDStateDataReporter.from_pdb(
+                ProteinStructureReporter.from_pdb(
                     pdb=self.pdb_obj,
                     file=f"{self.output_dir}/{state}.log",
                     reportInterval=self.STATE_DATA_REPORTER_INTERVAL,

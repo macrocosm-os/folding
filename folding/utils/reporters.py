@@ -45,7 +45,7 @@ class ExitFileReporter(object):
         pass
 
 
-class RMSDStateDataReporter(app.StateDataReporter):
+class ProteinStructureReporter(app.StateDataReporter):
     def __init__(
         self, file, reportInterval, reference_positions, protein_atoms, **kwargs
     ):
@@ -160,7 +160,7 @@ class RMSDStateDataReporter(app.StateDataReporter):
 
     @staticmethod
     def from_pdb(pdb: app.PDBFile, file: str, reportInterval: int, **kwargs):
-        """Create an RMSDStateDataReporter from a PDB file.
+        """Create a ProteinStructureReporter from a PDB file.
 
         This method extracts the reference positions and protein atom indices
         from a PDB file. It identifies protein atoms by looking for standard
@@ -173,7 +173,7 @@ class RMSDStateDataReporter(app.StateDataReporter):
             **kwargs: Additional arguments to pass to StateDataReporter
 
         Returns:
-            RMSDStateDataReporter: Configured reporter instance
+            ProteinStructureReporter: Configured reporter instance
         """
         # Get protein atom indices and positions
         protein_atoms = []
@@ -217,7 +217,7 @@ class RMSDStateDataReporter(app.StateDataReporter):
             [positions[i].value_in_unit(unit.nanometers) for i in protein_atoms]
         )
 
-        return RMSDStateDataReporter(
+        return ProteinStructureReporter(
             file=file,
             reportInterval=reportInterval,
             reference_positions=reference_positions,
