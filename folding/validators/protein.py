@@ -50,6 +50,7 @@ class Protein(OpenMMSimulation):
         system_kwargs: Dict,
         load_md_inputs: bool = False,
         epsilon: float = 1,  # percentage
+        pdb_file_path: str | None = None,
         **kwargs,
     ) -> None:
         """The Protein class is responsible for handling the protein simulation.
@@ -71,6 +72,7 @@ class Protein(OpenMMSimulation):
         self.pdb_id: str = pdb_id.lower()
         self.simulation_cpt = "em.cpt"
         self.simulation_pkl = f"config_{self.pdb_id}.pkl"
+        self.pdb_file_path = pdb_file_path
 
         self.setup_filepaths()
 
@@ -107,9 +109,15 @@ class Protein(OpenMMSimulation):
         self.VALIDATOR_ID = os.getenv("VALIDATOR_ID")
 
     def setup_filepaths(self):
+        # If a pdb file path is provided copy the file to the base directory.
+
         self.pdb_file = f"{self.pdb_id}.pdb"
         self.pdb_directory = os.path.join(self.base_directory, self.pdb_id)
         self.pdb_location = os.path.join(self.pdb_directory, self.pdb_file)
+        if self.pdb_file_path:
+            shutil.copy(
+                self.pdb_file_path, os.path.join(self.pdb_directory, self.pdb_file)
+            )
 
         self.validator_directory = os.path.join(self.pdb_directory, "validator")
         self.em_cpt_location = os.path.join(
