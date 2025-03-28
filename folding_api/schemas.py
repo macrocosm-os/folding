@@ -19,6 +19,7 @@ class FoldingParams(BaseModel):
     friction: float
     epsilon: float
     time_to_live: Optional[int] = None
+    pdb_file_path: Optional[str] = None
 
 
 class FoldingSchema(BaseModel):
