@@ -954,12 +954,12 @@ class SimulationManager:
                 )
             )
             simulation.reporters.append(
-                ProteinStructureReporter.from_pdb(
-                    pdb=self.pdb_obj,
+                ProteinStructureReporter(
                     file=f"{self.output_dir}/{state}.log",
                     reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
                     step=True,
                     potentialEnergy=True,
+                    reference_pdb=os.path.join(self.output_dir, f"{self.pdb_id}.pdb"),
                 )
             )
             state_commands[state] = simulation

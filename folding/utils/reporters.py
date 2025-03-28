@@ -1,9 +1,11 @@
+import io
 import os
 import time
 import openmm.app as app
-import numpy as np
-from openmm import unit
 import MDAnalysis as mda
+from MDAnalysis.analysis.rms import rmsd
+import numpy as np
+
 
 
 
@@ -47,11 +49,10 @@ class ExitFileReporter(object):
 
 class ProteinStructureReporter(app.StateDataReporter):
     def __init__(
-        self, file, reportInterval, reference_positions, protein_atoms, **kwargs
+        self, file, reportInterval, reference_pdb, **kwargs
     ):
         super().__init__(file, reportInterval, **kwargs)
-        self.reference_positions = reference_positions
-        self.protein_atoms = protein_atoms
+        self.reference_universe = mda.Universe(reference_pdb)
         self.positions_history = []  # Store positions for RMSF calculation
 
     def report(self, simulation, state):
@@ -85,8 +86,8 @@ class ProteinStructureReporter(app.StateDataReporter):
         self._checkForErrors(simulation, state)
 
         # Store current positions for RMSF calculation
-        current_positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
-        self.positions_history.append(current_positions[self.protein_atoms])
+        universe = self.create_mda_universe(simulation)
+        self.positions_history.append(universe.select_atoms("backbone").positions.copy())
 
         # Query for the values
         values = self._constructReportValues(simulation, state)
@@ -100,35 +101,24 @@ class ProteinStructureReporter(app.StateDataReporter):
 
     def _constructReportValues(self, simulation, state):
         values = super()._constructReportValues(simulation, state)
-        rmsd = self._calculate_rmsd(
-            simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
-        )
+        rmsd = self._calculate_rmsd(self.create_mda_universe(simulation))
         rmsf = self._calculate_rmsf()
         values.extend([rmsd, rmsf])
         return values
 
-    def _calculate_rmsd(self, positions):
+    def _calculate_rmsd(self, universe):
         """Calculate RMSD between current and reference positions.
 
         Args:
             positions (np.ndarray): Current positions
 
         Returns:
-            float: RMSD value in nanometers
+            float: RMSD
         """
-        #select positions of non-water atoms
-        positions = positions[self.protein_atoms]
-        # Center the structures
-        ref_centered = self.reference_positions - np.mean(
-            self.reference_positions, axis=0
-        )
-        pos_centered = positions - np.mean(positions, axis=0)
-
-        # Calculate RMSD
-        diff = ref_centered.astype(np.float32) - pos_centered.astype(np.float32)
-        rmsd = np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
-
-        return rmsd
+        current_positions = universe.select_atoms("backbone").positions.copy()
+        reference_positions = self.reference_universe.select_atoms("backbone").positions.copy()
+        rmsd_measure = rmsd(current_positions, reference_positions, center=True)
+        return rmsd_measure
 
     def _calculate_rmsf(self):
         """Calculate RMSF (Root Mean Square Fluctuation) over time.
@@ -138,19 +128,21 @@ class ProteinStructureReporter(app.StateDataReporter):
         """
         if len(self.positions_history) < 2:
             return 0.0
-
-        # Convert history to numpy array
+            
+        # Convert positions history to numpy array
         positions_array = np.array(self.positions_history)
         
         # Calculate mean position for each atom
         mean_positions = np.mean(positions_array, axis=0)
         
-        # Calculate fluctuations from mean
-        fluctuations = positions_array - mean_positions
-        
         # Calculate RMSF
-        rmsf = np.sqrt(np.mean(np.sum(fluctuations * fluctuations, axis=2)))
+        squared_diff = np.square(positions_array - mean_positions)
+        rmsf = np.sqrt(np.mean(squared_diff))
         
+        # Keep only the last 1000 frames to prevent memory issues
+        if len(self.positions_history) > 1000:
+            self.positions_history = self.positions_history[-1000:]
+            
         return rmsf
 
     def _constructHeaders(self):
@@ -158,69 +150,30 @@ class ProteinStructureReporter(app.StateDataReporter):
         headers.extend(["RMSD", "RMSF"])
         return headers
 
-    @staticmethod
-    def from_pdb(pdb: app.PDBFile, file: str, reportInterval: int, **kwargs):
-        """Create a ProteinStructureReporter from a PDB file.
-
-        This method extracts the reference positions and protein atom indices
-        from a PDB file. It identifies protein atoms by looking for standard
-        protein residues (excluding water and ions).
-
-        Args:
-            pdb (app.PDBFile): PDB file
-            file (str): The file to write the data to
-            reportInterval (int): The interval (in time steps) at which to write frames
-            **kwargs: Additional arguments to pass to StateDataReporter
-
-        Returns:
-            ProteinStructureReporter: Configured reporter instance
+    def create_mda_universe(self,simulation):
         """
-        # Get protein atom indices and positions
-        protein_atoms = []
-
-        # Standard protein residues (excluding water and ions)
-        protein_residues = {
-            "ALA",
-            "ARG",
-            "ASN",
-            "ASP",
-            "CYS",
-            "GLN",
-            "GLU",
-            "GLY",
-            "HIS",
-            "ILE",
-            "LEU",
-            "LYS",
-            "MET",
-            "PHE",
-            "PRO",
-            "SER",
-            "THR",
-            "TRP",
-            "TYR",
-            "VAL",
-        }
- 
-        # Get topology and positions
-        topology = pdb.getTopology()
-        positions = pdb.getPositions()
-
-        # Iterate through residues to identify protein atoms
-        for residue in topology.residues():
-            if residue.name in protein_residues:
-                for atom in residue.atoms():
-                    protein_atoms.append(atom.index)
-
-        # Get reference positions for protein atoms
-        reference_positions = np.array(
-            [positions[i].value_in_unit(unit.nanometers) for i in protein_atoms]
-        )
-
-        return ProteinStructureReporter(
-            file=file,
-            reportInterval=reportInterval,
-            reference_positions=reference_positions,
-            protein_atoms=protein_atoms,
-            **kwargs,
-        )
+        Create an MDAnalysis Universe from an OpenMM simulation object.
+        
+        Args:
+            simulation (openmm.app.Simulation): The OpenMM simulation object
+            
+        Returns:
+            mda.Universe: An MDAnalysis Universe containing the current state of the simulation
+        """
+        # Get the current state
+        state = simulation.context.getState(getPositions=True)
+        positions = state.getPositions(asNumpy=True)
+        
+        # Get the topology
+        topology = simulation.topology
+        
+        # Create a PDB string from the current state
+        pdb_string = io.StringIO()
+        app.PDBFile.writeFile(topology, positions, pdb_string)
+        pdb_string.seek(0)
+        
+        # Create MDAnalysis Universe from the PDB string
+        universe = mda.Universe(pdb_string, format='pdb')
+        
+        return universe
+   
