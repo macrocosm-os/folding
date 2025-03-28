@@ -28,6 +28,7 @@ requests = "^2.32.3"
 boto3 = "^1.35.95"
 pytest-mock = "^3.14.0"
 gjp-models = "^0.1.10"
+mdanalysis = "^2.9.0"
 
 [tool.poetry.group.api]
 optional = true

@@ -20,7 +20,11 @@ import openmm.app as app
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
 from folding.protocol import JobSubmissionSynapse
-from folding.utils.reporters import ExitFileReporter, LastTwoCheckpointsReporter
+from folding.utils.reporters import (
+    ExitFileReporter,
+    LastTwoCheckpointsReporter,
+    ProteinStructureReporter,
+)
 from folding.utils.ops import (
     check_if_directory_exists,
     get_tracebacks,
@@ -941,19 +945,22 @@ class SimulationManager:
                     reportInterval=self.CHECKPOINT_INTERVAL,
                 )
             )
-            simulation.reporters.append(
-                app.StateDataReporter(
-                    file=f"{self.output_dir}/{state}.log",
-                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
-                    step=True,
-                    potentialEnergy=True,
-                )
-            )
+
             simulation.reporters.append(
                 ExitFileReporter(
                     filename=f"{self.output_dir}/{state}",
                     reportInterval=self.EXIT_REPORTER_INTERVAL,
                     file_prefix=state,
+                )
+            )
+            simulation.reporters.append(
+                ProteinStructureReporter(
+                    file=f"{self.output_dir}/{state}.log",
+                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                    step=True,
+                    potentialEnergy=True,
+                    reference_pdb=os.path.join(self.output_dir, f"{self.pdb_id}.pdb"),
+                    speed=True,
                 )
             )
             state_commands[state] = simulation
