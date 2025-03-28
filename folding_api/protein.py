@@ -51,7 +51,7 @@ async def fold(
     The PDB ID must be specified in the query parameters.
     """
     try:
-        return await query_validators(query, request.app.state.validator_registry, None)
+        return await query_validators(schema = query, validator_registry = request.app.state.validator_registry, pdb_file  = None)
 
     except HTTPException:
         raise
