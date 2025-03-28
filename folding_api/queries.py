@@ -1,5 +1,5 @@
-from fastapi import HTTPException
-from typing import List
+from fastapi import HTTPException, UploadFile, File
+from typing import Optional
 from collections import defaultdict
 
 from folding_api.schemas import FoldingSchema, FoldingReturn
@@ -8,7 +8,9 @@ from folding_api.validator_registry import ValidatorRegistry
 
 
 async def query_validators(
-    schema: FoldingSchema, validator_registry: ValidatorRegistry
+    schema: FoldingSchema,
+    validator_registry: ValidatorRegistry,
+    pdb_file: Optional[UploadFile] = File(None),
 ) -> FoldingReturn:
     """
     Query validators with the given parameters and return a streaming
@@ -33,7 +35,7 @@ async def query_validators(
     validator_uids = []
     for uid, validator in validators.items():
         validator_responses.append(
-            await make_request(validator.address, schema.folding_params)
+            await make_request(validator.address, schema.folding_params, pdb_file)
         )
         validator_uids.append(uid)
 

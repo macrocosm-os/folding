@@ -18,6 +18,8 @@ class FoldingParams(BaseModel):
     temperature: float
     friction: float
     epsilon: float
+    time_to_live: Optional[int] = None
+    pdb_file_path: Optional[str] = None
 
 
 class FoldingSchema(BaseModel):
@@ -56,6 +58,9 @@ class FoldingSchema(BaseModel):
     validator_uids: list[int] = Field(
         ..., description="The validator identifier for the selected response source."
     )
+    time_to_live: Optional[int] = Field(
+        None, description="The time to live for the job in seconds."
+    )
     num_validators_to_sample: Optional[int] = Field(
         None, description="The number of validators to sample."
     )
@@ -74,6 +79,7 @@ class FoldingSchema(BaseModel):
             temperature=self.temperature,
             friction=self.friction,
             epsilon=self.epsilon,
+            time_to_live=self.time_to_live,
         )
 
     @property
