@@ -2,6 +2,7 @@ import os
 import json
 import requests
 import datetime
+import subprocess
 import pickle as pkl
 from typing import List, Dict
 
@@ -1389,7 +1390,7 @@ with job_tabs[1]:
 st.markdown("---")
 
 # Docking Section
-st.subheader("Molecular Docking")
+st.subheader("Molecular Docking (DiffDock)")
 st.write("Dock small molecules to protein structures")
 
 # Initialize session state for docking results if not exists
@@ -1463,7 +1464,7 @@ with st.container():
                 key="custom_pdb_link",
             )
             pdb_id = st.text_input(
-                "PDB ID (for output filename)",
+                "PDB ID of base protein",
                 placeholder="e.g., 1ABC",
                 key="custom_pdb_id",
             )
@@ -1541,87 +1542,100 @@ with st.container():
 
 # Process docking request if button was clicked
 if run_docking:
-    if not pdb_link or not smiles or not complex_name or not pdb_id:
+    if not pdb_link or not smiles or not complex_name:
         st.error(
-            "Please provide all required information: PDB link, PDB ID, SMILES, and complex name"
+            "Please provide all required information: PDB link, SMILES, and complex name"
         )
     else:
         with st.spinner("Running molecular docking..."):
             try:
                 # Prepare command
                 mock_param = "true" if mock_mode else "false"
-                output_file = f"{pdb_id}_diffdock.sdf"
-
-                # Set up the curl command
-                command = f"""curl -s {pdb_link} | curl -s -X POST "http://{docking_server}/infer" -F "pdb_file=@-" -F "ligand={smiles}" -F "complex_name={complex_name}" -F "mock={mock_param}" > {output_file}"""
-
-                # Execute the command
-                import subprocess
-                import os
+                ligand_output_file = f"{complex_name}_diffdock.sdf"
+                merged_output_file = f"{complex_name}_diffdock_merged.pdb"
 
                 # Create a temporary directory for outputs if it doesn't exist
                 docking_dir = os.path.expanduser("~/docking_results")
                 os.makedirs(docking_dir, exist_ok=True)
 
                 # Set full path for output file
-                output_path = os.path.join(docking_dir, output_file)
+                ligand_output_path = os.path.join(docking_dir, ligand_output_file)
+                merged_output_path = os.path.join(docking_dir, merged_output_file)
 
-                # Update command to use the full path
-                command = f"""curl -s {pdb_link} | curl -s -X POST "http://{docking_server}/infer" -F "pdb_file=@-" -F "ligand={smiles}" -F "complex_name={complex_name}" -F "mock={mock_param}" > {output_path}"""
+                RUN_INFERENCE = f"""curl -s {pdb_link} | curl -s -X POST "http://{docking_server}/infer" -F "pdb_file=@-" -F "ligand={smiles}" -F "complex_name={complex_name}" -F "mock={mock_param}" > {ligand_output_path}"""
+                RUN_MERGE = f"""curl -s {pdb_link} | curl -s -X POST "http://{docking_server}/merge" -F "pdb_file=@-" -F "ligand_file=@{ligand_output_path}" > {merged_output_path}"""
 
-                # Run the command with timeout
-                process = subprocess.Popen(
-                    command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
-                try:
-                    stdout, stderr = process.communicate(timeout=timeout)
+                for info, curl_command, output_path in zip(
+                    ["inference", "merge"],
+                    [RUN_INFERENCE, RUN_MERGE],
+                    [ligand_output_path, merged_output_path],
+                ):
+                    st.write(f"{info}")
+                    process = subprocess.Popen(
+                        curl_command,
+                        shell=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                    try:
+                        stdout, stderr = process.communicate(timeout=timeout)
 
-                    if process.returncode != 0:
-                        st.error(f"Docking failed: {stderr.decode('utf-8')}")
-                    else:
-                        # Check if file exists and has content
-                        if (
-                            os.path.exists(output_path)
-                            and os.path.getsize(output_path) > 0
-                        ):
-                            # Add to results
-                            result_info = {
-                                "PDB ID": pdb_id,
-                                "Ligand SMILES": smiles,
-                                "Complex Name": complex_name,
-                                "Output File": output_path,
-                                "Timestamp": datetime.datetime.now().strftime(
-                                    "%Y-%m-%d %H:%M:%S"
-                                ),
-                                "Mock Mode": mock_mode,
-                            }
-                            st.session_state.docking_results.append(result_info)
-
-                            # Display success message
-                            st.success(
-                                f"Docking completed successfully. Output saved to {output_path}"
-                            )
-
-                            # Add download button for the file
-                            with open(output_path, "rb") as f:
-                                file_content = f.read()
-                                st.download_button(
-                                    label="Download SDF File",
-                                    data=file_content,
-                                    file_name=output_file,
-                                    mime="chemical/x-sdf",
-                                )
+                        if process.returncode != 0:
+                            st.error(f"Docking failed: {stderr.decode('utf-8')}")
                         else:
-                            st.error(
-                                "Docking completed but output file is empty or missing"
-                            )
+                            # Check if file exists and has content
+                            if (
+                                os.path.exists(output_path)
+                                and os.path.getsize(output_path) > 0
+                            ):
+                                # Add to results
+                                result_info = {
+                                    "PDB ID": pdb_id,
+                                    "Ligand SMILES": smiles,
+                                    "Complex Name": complex_name,
+                                    "Output File": output_path,
+                                    "Timestamp": datetime.datetime.now().strftime(
+                                        "%Y-%m-%d %H:%M:%S"
+                                    ),
+                                    "Mock Mode": mock_mode,
+                                    "Pipeline": "DiffDock",
+                                    "Endpoint": "infer",
+                                }
+                                st.session_state.docking_results.append(result_info)
 
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    st.error(f"Docking operation timed out after {timeout} seconds")
+                                # Display success message
+                                st.success(
+                                    f"{info} completed successfully. Output saved to {output_path}"
+                                )
 
+                                mime = (
+                                    "chemical/x-sdf"
+                                    if info == "inference"
+                                    else "chemical/x-pdb"
+                                )
+
+                                # Add download button for the file
+                                with open(output_path, "rb") as f:
+                                    file_content = f.read()
+                                    st.download_button(
+                                        label=f"Download {info} File",
+                                        data=file_content,
+                                        file_name=output_path,
+                                        mime=mime,
+                                    )
+                            else:
+                                st.error(
+                                    "Docking completed but output file is empty or missing"
+                                )
+
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        st.error(f"Docking operation timed out after {timeout} seconds")
+
+                    except Exception as e:
+                        st.error(f"An error occurred during docking: {str(e)}")
             except Exception as e:
-                st.error(f"An error occurred during docking: {str(e)}")
+                st.error(f"Failed to set up docking: {str(e)}")
 
 # Display docking results history
 if st.session_state.docking_results:
