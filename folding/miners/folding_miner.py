@@ -960,6 +960,7 @@ class SimulationManager:
                     step=True,
                     potentialEnergy=True,
                     reference_pdb=os.path.join(self.output_dir, f"{self.pdb_id}.pdb"),
+                    speed=True,
                 )
             )
             state_commands[state] = simulation
