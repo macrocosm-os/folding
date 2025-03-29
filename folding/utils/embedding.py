@@ -16,13 +16,16 @@ def checkpoint_to_pdb(simulation: OpenMMSimulation, checkpoint_path: str, output
     Args:
         simulation: The simulation object that has already been loaded with the system config.
         checkpoint_path: The path to the checkpoint file.
-        output_filename: The filename of the output PDB file.
+        output_filename: The filename of the output PDB file. (needs to include the .pdb extension)
     """
-    output_path = os.path.join(os.path.dirname(checkpoint_path), output_filename + ".pdb")
+    output_path = os.path.join(os.path.dirname(checkpoint_path), output_filename)
 
     # load the checkpoint file
-    simulation.fromCheckpoint(checkpoint_path)
-    save_pdb(simulation.positions, simulation.topology, output_path)
+    simulation.loadCheckpoint(checkpoint_path)
+    state = simulation.context.getState(getPositions=True)
+    positions = state.getPositions()
+
+    save_pdb(positions, simulation.topology, output_path)
 
 def extract_coordinates(pdb_paths: Dict[str, str]) -> Dict[str, List[float]]:
     """Extract the coordinates from a PDB file.
@@ -50,7 +53,7 @@ def extract_coordinates(pdb_paths: Dict[str, str]) -> Dict[str, List[float]]:
 
     return coordinates
 
-def embed_pdbs(coordinates: Dict[str, List[float]]) -> np.ndarray:
+def embed_pdbs(coordinates: Dict[str, List[float]]) -> Dict[str, np.ndarray]:
     """Embed a set of PDB files using UMAP.
     
     Args:
@@ -67,12 +70,17 @@ def embed_pdbs(coordinates: Dict[str, List[float]]) -> np.ndarray:
     scaler = StandardScaler()
     coordinate_data = scaler.fit_transform(coordinate_data)
 
+    logger.info(f"Fitting UMAP with {coordinate_data.shape[1]} dimensions")
     reducer = umap.UMAP(n_components=2, random_state=42)
     embeddings = reducer.fit_transform(coordinate_data)
 
-    return embeddings
+    embeddings_dict = {
+        key: embedding for key, embedding in zip(coordinates.keys(), embeddings)
+    }
 
-def visualize_embeddings(embeddings: np.ndarray, image_output_path: str):
+    return embeddings_dict
+
+def visualize_embeddings(embeddings: Dict[str, np.ndarray], image_output_path: str):
     """Visualize the embeddings using UMAP.
     
     Args:
@@ -83,6 +91,6 @@ def visualize_embeddings(embeddings: np.ndarray, image_output_path: str):
     import pandas as pd 
     import plotly.express as px
 
-    df = pd.DataFrame(embeddings, columns=["x", "y"])
+    df = pd.DataFrame(embeddings, columns=["x", "y"], index=embeddings.keys())
     fig = px.scatter(df, x="x", y="y", color=df.index, title = "UMAP of Miner States")
     fig.write_html(image_output_path)
