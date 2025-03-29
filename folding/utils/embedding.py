@@ -91,6 +91,15 @@ def visualize_embeddings(embeddings: Dict[str, np.ndarray], image_output_path: s
     import pandas as pd 
     import plotly.express as px
 
-    df = pd.DataFrame(embeddings, columns=["x", "y"], index=embeddings.keys())
-    fig = px.scatter(df, x="x", y="y", color=df.index, title = "UMAP of Miner States")
-    fig.write_html(image_output_path)
+    df = pd.DataFrame(embeddings).T
+    df.columns = ["umap_1", "umap_2"]
+
+    fig = px.scatter(
+        df, 
+        x="umap_1", y="umap_2", 
+        color=df.index, 
+        title = "UMAP of Miner Conformational Manifold", 
+        height = 800, 
+        width = 1200,
+    )
+    fig.write_image(image_output_path)
