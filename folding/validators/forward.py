@@ -92,6 +92,7 @@ async def run_step(
         uids=uids,
         miner_registry=self.miner_registry,
         job_type=job_type,
+        get_umap=True,
     )
 
     # Log the step event.

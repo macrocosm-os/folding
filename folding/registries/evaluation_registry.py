@@ -117,6 +117,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
             log_file_path = os.path.join(
                 self.miner_data_directory, self.md_outputs_exts["log"]
             )
+            pdb_from_checkpoint_path = os.path.join(
+                self.miner_data_directory, f"{self.current_state}.pdb"
+            )
 
             simulation.loadCheckpoint(checkpoint_path)
 
@@ -156,6 +159,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             self.cpt_step = simulation.currentStep
             self.checkpoint_path = checkpoint_path
             self.state_xml_path = state_xml_path
+            self.pdb_from_checkpoint_path = pdb_from_checkpoint_path
 
             self.steps_to_run = min(
                 c.MAX_SIMULATION_STEPS_FOR_EVALUATION, self.log_step - self.cpt_step
@@ -182,6 +186,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
             ]["Potential Energy (kJ/mole)"].values
 
             miner_velm_data = create_velm(simulation=simulation)
+
+            # Save the pdb file from the checkpoint for all miners
+            # Some miners wont make it to this point. 
+            state = simulation.context.getState(getPositions=True)
+            positions = state.getPositions()
+            save_pdb(positions, simulation.topology, pdb_from_checkpoint_path)
 
             if not self.check_masses(miner_velm_data):
                 raise ValidationError(

@@ -1,5 +1,6 @@
+import os 
 import time
-from typing import List
+from typing import List, Dict
 
 import numpy as np
 
@@ -11,6 +12,7 @@ from folding.protocol import JobSubmissionSynapse
 from folding.registries.miner_registry import MinerRegistry
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 
+from folding.utils.embedding import extract_coordinates, embed_pdbs, visualize_embeddings
 
 def evaluate(
     protein: Protein,
@@ -23,6 +25,7 @@ def evaluate(
     seed = [-1] * len(uids)
     best_cpt = [""] * len(uids)
     process_md_output_time = [0.0] * len(uids)
+    evaluated_pdb_paths = [""] * len(uids)
 
     for i, (uid, resp) in enumerate(zip(uids, responses)):
         try:
@@ -56,6 +59,8 @@ def evaluate(
                 else ""
             )
 
+            evaluated_pdb_paths[i] = evaluator.pdb_from_checkpoint_path
+
             reported_energies[i] = evaluator.get_reported_energy()
             process_md_output_time[i] = time.time() - start_time
             evaluators[i] = evaluator
@@ -65,7 +70,7 @@ def evaluate(
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
-    return reported_energies, evaluators, seed, best_cpt, process_md_output_time
+    return reported_energies, evaluators, seed, best_cpt, process_md_output_time, evaluated_pdb_paths
 
 
 def get_energies(
@@ -74,6 +79,7 @@ def get_energies(
     uids: List[int],
     miner_registry: MinerRegistry,
     job_type: str,
+    get_umap: bool = False,
 ):
     """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
 
@@ -103,9 +109,23 @@ def get_energies(
     energies = np.zeros(len(uids))
 
     # Get initial evaluations
-    reported_energies, evaluators, seed, best_cpt, process_md_output_time = evaluate(
+    reported_energies, evaluators, seed, best_cpt, process_md_output_time, evaluated_pdb_paths = evaluate(
         protein, responses, uids, job_type
     )
+
+    if get_umap:
+        pdb_paths = {} 
+        for pdb_path in evaluated_pdb_paths:
+            #hotkey as name. 
+            pdb_paths[os.path.basename(pdb_path).split("/")[-1]] = pdb_path 
+
+        try:
+            coordinates: Dict[str, List[float]] = extract_coordinates(pdb_paths = pdb_paths)
+            embeddings: Dict[str, np.ndarray] = embed_pdbs(coordinates)
+            visualize_embeddings(embeddings, os.path.join(protein.pdb_directory, "umap.png"))
+        except Exception as e:
+            logger.error(f"Failed to get UMAP for {protein.pdb_id} with {len(pdb_paths)} valid submittions: {e}")
+            pass
 
     # Sort all lists by reported energy
     sorted_data = sorted(
