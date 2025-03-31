@@ -5,7 +5,7 @@ import argparse
 import bittensor as bt
 
 from folding.base.neuron import BaseNeuron
-from folding.protocol import PingSynapse, ParticipationSynapse, IntermediateSubmissionSynapse
+from folding.protocol import IntermediateSubmissionSynapse
 from folding.utils.config import add_miner_args
 from folding.utils.logger import logger
 

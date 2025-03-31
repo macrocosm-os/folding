@@ -1082,7 +1082,7 @@ class SimulationManager:
                     speed=True,
 
                 )
-                        
+            )
             state_commands[state] = simulation
 
         return state_commands
