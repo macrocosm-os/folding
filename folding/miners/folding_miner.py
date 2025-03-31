@@ -1069,6 +1069,8 @@ class SimulationManager:
                     file_prefix=f"{self.output_dir}/",
                     reportInterval=self.CHECKPOINT_INTERVAL,
                     checkpoint_counter=starting_counter,
+                )
+            )
 
             simulation.reporters.append(
                 ProteinStructureReporter(
@@ -1080,7 +1082,7 @@ class SimulationManager:
                     speed=True,
 
                 )
-            )
+                        
             state_commands[state] = simulation
 
         return state_commands
