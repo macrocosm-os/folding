@@ -234,12 +234,21 @@ class BaseValidatorNeuron(BaseNeuron):
             0, uids_tensor, rewards
         ).to(self.device)
 
-        # Update scores with rewards produced by this step.
-        # shape: [ metagraph.n ]
-        alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.FloatTensor = alpha * scattered_rewards + (
-            1 - alpha
-        ) * self.scores.to(self.device)
+        # Matrix for alpha values
+        scattered_alpha = torch.zeros_like(self.scores).to(self.device)
+
+        for ii, uid in enumerate(uids_tensor):
+            alpha = (
+                self.config.neuron.positive_alpha
+                if rewards[ii] > 0
+                else self.config.neuron.negative_alpha
+            )
+            scattered_alpha[uid] = alpha
+
+        # Update scores using exponential moving average
+        self.scores: torch.FloatTensor = (
+            scattered_alpha * scattered_rewards + (1 - scattered_alpha) * self.scores
+        )
 
     def save_state(self):
         """Saves the state of the validator to a file."""
@@ -295,6 +304,10 @@ class BaseValidatorNeuron(BaseNeuron):
         normalized_stakes = valid_stakes / np.sum(valid_stakes)
 
         weights = torch.tensor(np.dot(normalized_stakes, valid_weights)).to(self.device)
+
+        # normalize weights to be between 0 and 1
+        weights = (weights - weights.min()) / (weights.max() - weights.min())
+
         return weights
 
     def load_config_json(self):

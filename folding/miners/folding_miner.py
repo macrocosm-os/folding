@@ -22,13 +22,14 @@ from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
 from folding.protocol import (
     JobSubmissionSynapse,
-    ParticipationSynapse,
     IntermediateSubmissionSynapse,
 )
 from folding.utils.reporters import (
     ExitFileReporter,
     LastTwoCheckpointsReporter,
     SequentialCheckpointReporter,
+    ProteinStructureReporter
+
 )
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -167,7 +168,7 @@ def attach_files_to_synapse(
     return synapse
 
 def check_synapse(
-    self, synapse: JobSubmissionSynapse, event: Dict = None
+    synapse: JobSubmissionSynapse, event: Dict = None
 ) -> JobSubmissionSynapse:
     """Utility function to remove md_inputs if they exist"""
 
@@ -465,22 +466,6 @@ class FoldingMiner(BaseMinerNeuron):
 
         return False, "job_not_worked_on", event
 
-    def participation_forward(self, synapse: ParticipationSynapse):
-        """Respond to the validator with the necessary information about participating in a specified job
-        If the miner has worked on a job before, it should return True for is_participating.
-        If the miner has not worked on a job before, it should return False for is_participating.
-
-        Args:
-            self (ParticipationSynapse): must attach "is_participating"
-        """
-        job_id = synapse.job_id
-        logger.info(
-            f"⌛ Validator checking if miner has participated in job: {job_id} ⌛"
-        )
-        has_worked_on_job, _, _ = self.check_if_job_was_worked_on(job_id=job_id)
-        synapse.is_participating = has_worked_on_job
-        return synapse
-
     def intermediate_submission_forward(self, synapse: IntermediateSubmissionSynapse):
         """Respond to the validator with the necessary information about submitting intermediate checkpoints.
 
@@ -577,9 +562,7 @@ class FoldingMiner(BaseMinerNeuron):
                             logger.warning(
                                 f"❗Returning previous simulation data for failed simulation: {event['pdb_id']}❗"
                             )
-                            return check_synapse(
-                                self=self, synapse=synapse, event=event
-                            )
+                            return check_synapse(synapse=synapse, event=event)
 
                         with open(seed_file, "r", encoding="utf-8") as f:
                             seed = f.readlines()[-1].strip()
@@ -603,7 +586,7 @@ class FoldingMiner(BaseMinerNeuron):
                         event["condition"] = "found_existing_data"
                         event["state"] = state
 
-                        return check_synapse(self=self, synapse=synapse, event=event)
+                        return check_synapse(synapse=synapse, event=event)
 
             # The set of RUNNING simulations.
             elif condition == "running_simulation":
@@ -623,7 +606,7 @@ class FoldingMiner(BaseMinerNeuron):
                 event["state"] = current_executor_state
                 event["queried_at"] = simulation["queried_at"]
 
-                return check_synapse(self=self, synapse=synapse, event=event)
+                return check_synapse(synapse=synapse, event=event)
 
     def create_simulation_from_job(
         self,
@@ -1058,14 +1041,7 @@ class SimulationManager:
                     reportInterval=self.CHECKPOINT_INTERVAL,
                 )
             )
-            simulation.reporters.append(
-                app.StateDataReporter(
-                    file=f"{self.output_dir}/{state}.log",
-                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
-                    step=True,
-                    potentialEnergy=True,
-                )
-            )
+
             simulation.reporters.append(
                 ExitFileReporter(
                     filename=f"{self.output_dir}/{state}",
@@ -1093,6 +1069,16 @@ class SimulationManager:
                     file_prefix=f"{self.output_dir}/",
                     reportInterval=self.CHECKPOINT_INTERVAL,
                     checkpoint_counter=starting_counter,
+
+            simulation.reporters.append(
+                ProteinStructureReporter(
+                    file=f"{self.output_dir}/{state}.log",
+                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                    step=True,
+                    potentialEnergy=True,
+                    reference_pdb=os.path.join(self.output_dir, f"{self.pdb_id}.pdb"),
+                    speed=True,
+
                 )
             )
             state_commands[state] = simulation

@@ -1,3 +1,4 @@
+from collections import defaultdict
 import time
 from typing import List
 
@@ -21,7 +22,7 @@ def evaluate(
     reported_energies = np.zeros(len(uids))
     evaluators = [None] * len(uids)
     seed = [-1] * len(uids)
-    best_cpt = [""] * len(uids)
+    files = [defaultdict(str)] * len(uids)
     process_md_output_time = [0.0] * len(uids)
 
     for i, (uid, resp) in enumerate(zip(uids, responses)):
@@ -51,10 +52,26 @@ def evaluate(
                 logger.info(f"uid {uid} failed to process")
                 continue
 
-            best_cpt[i] = (
+            files[i]["best_cpt"] = (
                 evaluator.checkpoint_path
                 if hasattr(evaluator, "checkpoint_path")
                 else ""
+            )
+            files[i]["folded_pdb"] = (
+                evaluator.folded_pdb_path
+                if hasattr(evaluator, "folded_pdb_path")
+                else ""
+            )
+            files[i]["system_config"] = (
+                evaluator.system_config_path
+                if hasattr(evaluator, "system_config_path")
+                else ""
+            )
+            files[i]["log_file_path"] = (
+                evaluator.log_file_path if hasattr(evaluator, "log_file_path") else ""
+            )
+            files[i]["state_xml_path"] = (
+                evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
             )
 
             reported_energies[i] = evaluator.get_reported_energy()
@@ -66,7 +83,7 @@ def evaluate(
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
-    return reported_energies, evaluators, seed, best_cpt, process_md_output_time
+    return reported_energies, evaluators, seed, files, process_md_output_time
 
 
 async def get_energies(
@@ -109,7 +126,7 @@ async def get_energies(
     energies = np.zeros(len(uids))
 
     # Get initial evaluations
-    reported_energies, evaluators, seed, best_cpt, process_md_output_time = evaluate(
+    reported_energies, evaluators, seed, files, process_md_output_time = evaluate(
         protein, responses, uids, job_type
     )
 
@@ -121,7 +138,7 @@ async def get_energies(
             uids,
             evaluators,
             seed,
-            best_cpt,
+            files,
             process_md_output_time,
             axons,
         ),
@@ -139,7 +156,7 @@ async def get_energies(
         uid,
         evaluator,
         seed,
-        best_cpt,
+        files,
         process_md_output_time,
         axon,
     ) in enumerate(sorted_data):
@@ -160,7 +177,8 @@ async def get_energies(
             checked_energies = {}
             miner_energies = {}
 
-            if np.random.rand() < validation_probability:
+            # if np.random.rand() < validation_probability:
+            if True:
                 (
                     median_energy,
                     checked_energies,
@@ -200,7 +218,7 @@ async def get_energies(
                     < c.ANOMALY_THRESHOLD
                 ):
                     event["is_valid"][i] = False
-                    event["reason"][i] = "Energy difference too large"
+                    event["reason"][i] = "energy_difference_too_large"
                     continue
 
                 is_duplicate = any(
@@ -232,7 +250,7 @@ async def get_energies(
             uids,
             evaluators,
             seed,
-            best_cpt,
+            files,
             process_md_output_time,
             axons,
         ) = map(list, zip(*processed_data))
@@ -241,7 +259,7 @@ async def get_energies(
     event.update(
         {
             "seed": seed,
-            "best_cpt": best_cpt,
+            "files": files,
             "process_md_output_time": process_md_output_time,
             "reported_energy": reported_energies,
         }

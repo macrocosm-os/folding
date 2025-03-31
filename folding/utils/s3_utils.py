@@ -118,18 +118,14 @@ async def upload_to_s3(
 async def upload_output_to_s3(
     handler: "DigitalOceanS3Handler",
     output_file: str,
-    pdb_id: str,
-    miner_hotkey: str,
-    VALIDATOR_ID: str,
+    location: str,
 ):
     """Asynchronously uploads output files to S3 using the specified handler.
 
     Args:
         handler (BaseHandler): The content handler that will execute the upload.
         output_file (str): Path to the output file.
-        pdb_id (str): Identifier for the PDB entry.
-        miner_hotkey (str): Identifier for the miner.
-        VALIDATOR_ID (str): Identifier for the validator.
+        location (str): Destination path within the bucket.
 
     Returns:
         str: The S3 URL of the uploaded file.
@@ -141,10 +137,7 @@ async def upload_output_to_s3(
     s3_bucket = os.getenv("S3_BUCKET")
 
     try:
-        output_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        location = os.path.join(
-            "outputs", pdb_id, VALIDATOR_ID, miner_hotkey[:8], output_time
-        )
+
         key = await asyncio.to_thread(
             handler.put,
             file_path=output_file,

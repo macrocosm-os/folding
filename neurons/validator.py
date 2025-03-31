@@ -1,13 +1,12 @@
 # The MIT License (MIT)
 # Copyright © 2024 Macrocosmos
 
+from collections import defaultdict
 import os
 import time
-import random
 import asyncio
 import traceback
 
-from itertools import chain
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
@@ -36,7 +35,7 @@ from folding.utils.s3_utils import (
     upload_to_s3,
     DigitalOceanS3Handler,
 )
-from folding.validators.forward import create_new_challenge, run_ping_step, run_step
+from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
@@ -54,21 +53,15 @@ class Validator(BaseValidatorNeuron):
 
         # Sample all the uids on the network, and return only the uids that are non-valis.
         logger.info("Determining all miner uids...⏳")
-        self.all_miner_uids: List = get_all_miner_uids(self)
+        self.all_miner_uids: List = get_all_miner_uids(
+            metagraph=self.metagraph,
+            vpermit_tao_limit=self.config.neuron.vpermit_tao_limit,
+            include_serving_in_check=False,
+        )
 
         # If we do not have any miner registry saved to the machine, create.
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
-        else:
-            REFERENCE_BLOCK = 5055585 + 7200
-            if REFERENCE_BLOCK > self.block:
-                registry_path = os.path.join(
-                    self.config.neuron.full_path, "miner_registry.pkl"
-                )
-                # Now, remove the miner_registry file from local disk
-                logger.info(f"Removing old miner registry at {registry_path}")
-                os.remove(registry_path)
-                self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -90,24 +83,6 @@ class Validator(BaseValidatorNeuron):
                 )
             except ValueError as e:
                 raise f"Failed to create S3 handler, check your .env file: {e}"
-
-    def get_uids(self, hotkeys: List[str]) -> List[int]:
-        """Returns the uids corresponding to the hotkeys.
-        It is possible that some hotkeys have been dereg'd,
-        so we need to check for them in the metagraph.
-
-        Args:
-            hotkeys (List[str]): List of hotkeys
-
-        Returns:
-            List[int]: List of uids
-        """
-        return [
-            self.metagraph.hotkeys.index(hotkey)
-            for hotkey in hotkeys
-            if hotkey in self.metagraph.hotkeys
-            and self.metagraph.axons[self.metagraph.hotkeys.index(hotkey)].is_serving
-        ]
 
     async def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
@@ -134,85 +109,12 @@ class Validator(BaseValidatorNeuron):
             job_type=job.job_type,
         )
 
-    async def ping_all_miners(
-        self,
-        exclude_uids: List[int],
-    ) -> Tuple[List[int], List[int]]:
-        """Sample ALL (non-excluded) miner uids and return the list of uids
-        that can serve jobs.
-
-        Args:
-            exclude_uids (List[int]): uids to exclude from the uids search
-
-        Returns:
-           Tuple(List,List): Lists of active and inactive uids
-        """
-
-        current_miner_uids = list(
-            set(self.all_miner_uids).difference(set(exclude_uids))
-        )
-
-        ping_report = await run_ping_step(
-            self, uids=current_miner_uids, timeout=self.config.neuron.ping_timeout
-        )
-        can_serve = ping_report["miner_status"]  # list of booleans
-
-        active_uids = np.array(current_miner_uids)[can_serve].tolist()
-        return active_uids
-
-    async def sample_random_uids(
-        self,
-        num_uids_to_sample: int,
-        exclude_uids: List[int] = None,
-    ) -> List[int]:
-        """Helper function to sample a batch of uids on the network, determine their serving status,
-        and sample more until a desired number of uids is found.
-
-        Args:
-            num_uids_to_sample (int): The number of uids to sample.
-            exclude_uids (List[int], optional): List of uids to exclude from the sampling. Defaults to None.
-
-        Returns:
-            List[int]: A list of random uids.
-        """
-
-        if exclude_uids is not None:
-            all_miner_uids = list(
-                set(self.all_miner_uids).difference(set(exclude_uids))
-            )
-        else:
-            all_miner_uids = self.all_miner_uids
-
-        return random.sample(all_miner_uids, num_uids_to_sample)
-
-    async def get_valid_uids(self) -> List[int]:
-        """get valid uids to work on a job by sampling random uids and excluding active jobs.
-
-        Returns:
-            valid_uids: List of uids
-        """
-        active_jobs = self.store.get_queue(
-            ready=False, validator_hotkey=self.wallet.hotkey.ss58_address
-        ).queue
-        active_hotkeys = [j.hotkeys for j in active_jobs]  # list of lists
-        active_hotkeys = list(chain.from_iterable(active_hotkeys))
-        exclude_uids = self.get_uids(hotkeys=active_hotkeys)
-
-        valid_uids = await self.sample_random_uids(
-            num_uids_to_sample=self.config.neuron.sample_size, exclude_uids=exclude_uids
-        )
-
-        return valid_uids
-
-    async def add_job(
-        self, job_event: dict[str, Any], uids: List[int] = None, protein: Protein = None
-    ) -> bool:
+    async def add_job(self, job_event: dict[str, Any], protein: Protein = None) -> bool:
         """Add a job to the job store while also checking to see what uids can be assigned to the job.
         If uids are not provided, then the function will sample random uids from the network.
 
         Args:
             job_event (dict[str, Any]): parameters that are needed to make the job.
-            uids (List[int], optional): List of uids that can be assigned to the job. Defaults to None.
         """
         start_time = time.time()
 
@@ -313,25 +215,17 @@ class Validator(BaseValidatorNeuron):
             await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
-    async def update_scores_wrapper(
-        self, rewards: torch.FloatTensor, hotkeys: List[str]
-    ):
-        """Wrapper function to update the scores of the miners based on the rewards they received."""
-        uids = self.get_uids(hotkeys=hotkeys)
-        await self.update_scores(
-            rewards=rewards,
-            uids=uids,
-        )
-
     async def update_job(self, job: Job):
         """Updates the job status based on the event information
 
-        TODO: we also need to remove hotkeys that have not participated for some time (dereg or similar)
+        Args:
+            job (Job): Job object containing the job information
         """
 
         apply_pipeline = False
         energies = torch.Tensor(job.event["energies"])
 
+        # The length of job.event["uids"] should be all miner uids in the network
         for uid, reason in zip(job.event["uids"], job.event["reason"]):
             # jobs are "skipped" when they are spot checked
             if reason == "skip":
@@ -429,23 +323,35 @@ class Validator(BaseValidatorNeuron):
 
         # Only upload the best .cpt files to S3 if the job is inactive
         if job.active is False:
-            output_links = []
-            for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
-                # If the best_cpt_file is empty, we will append an empty string to the output_links list.
-                if best_cpt_file == "":
-                    output_links.append("")
-
-                output_link = await upload_output_to_s3(
-                    handler=self.handler,
-                    output_file=best_cpt_file,
-                    pdb_id=job.pdb_id,
-                    miner_hotkey=job.hotkeys[idx],
-                    VALIDATOR_ID=self.validator_hotkey_reference,
+            output_links = [defaultdict(str)] * len(job.event["files"])
+            best_cpt_files = []
+            output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            for idx, files in enumerate(job.event["files"]):
+                location = os.path.join(
+                    "outputs",
+                    job.pdb_id,
+                    self.validator_hotkey_reference,
+                    job.hotkeys[idx][:8],
+                    output_time,
                 )
+                for file_type, file_path in files.items():
+                    if file_type == "best_cpt":
+                        best_cpt_files.append(file_path)
+                    # If the best_cpt_file is empty, we will append an empty string to the output_links list.
+                    if file_path == "":
+                        output_links[idx][file_type] = ""
+                        continue
 
-                output_links.append(output_link)
+                    output_link = await upload_output_to_s3(
+                        handler=self.handler,
+                        output_file=file_path,
+                        location=location,
+                    )
 
-            job.best_cpt_links = output_links
+                    output_links[idx][file_type] = output_link
+
+            job.best_cpt_links = best_cpt_files
+            job.event["output_links"] = output_links
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update_gjp_job(
@@ -460,6 +366,7 @@ class Validator(BaseValidatorNeuron):
         merged_events.pop("checked_energy_intermediate")
         merged_events.pop("miner_energy_intermediate")
         logger.success(f"Event information: {merged_events}")
+        # logger.debug(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
@@ -507,6 +414,9 @@ class Validator(BaseValidatorNeuron):
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
+        """
+        Updates the jobs in the queue.
+        """
         while True:
             try:
                 # Wait at the beginning of update_jobs since we want to avoid attemping to update jobs before we get data back.
@@ -577,9 +487,9 @@ class Validator(BaseValidatorNeuron):
                 )
                 continue
 
-            await self.update_scores_wrapper(
+            await self.update_scores(
                 rewards=torch.Tensor(inactive_job.computed_rewards),
-                hotkeys=inactive_job.hotkeys,
+                uids=inactive_job.event["uids"],
             )
             await asyncio.sleep(0.01)
 

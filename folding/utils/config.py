@@ -309,12 +309,6 @@ def add_validator_args(cls, parser):
         help="The timeout for each forward call. (seconds)",
         default=45,
     )
-    parser.add_argument(
-        "--neuron.ping_timeout",
-        type=float,
-        help="Controls the timeout for the PingSynapse call",
-        default=45,
-    )
 
     parser.add_argument(
         "--neuron.update_interval",
@@ -345,10 +339,17 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.moving_average_alpha",
+        "--neuron.positive_alpha",
         type=float,
-        help="Moving average alpha parameter, how much to add of the new observation.",
-        default=0.1,
+        help="Positive alpha parameter, how much to add of the new observation when the reward is positive.",
+        default=0.10,
+    )
+
+    parser.add_argument(
+        "--neuron.negative_alpha",
+        type=float,
+        help="Negative alpha parameter, how much to add of the new observation when the reward is 0.",
+        default=0.03,
     )
 
     parser.add_argument(
@@ -365,7 +366,7 @@ def add_validator_args(cls, parser):
         "--neuron.vpermit_tao_limit",
         type=int,
         help="The maximum number of TAO allowed to query a validator with a vpermit.",
-        default=4096,
+        default=20_000,
     )
 
     parser.add_argument(

@@ -57,6 +57,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
         }
         self.miner_data_directory = os.path.join(self.basepath, self.hotkey_alias)
         self.velm_array_pkl_path = velm_array_pkl_path
+        self.folded_pdb_path = os.path.join(
+            self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
+        )
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
@@ -113,16 +116,16 @@ class SyntheticMDEvaluator(BaseEvaluator):
             checkpoint_path = os.path.join(
                 self.miner_data_directory, f"{self.current_state}.cpt"
             )
-            state_xml_path = os.path.join(
+            self.state_xml_path = os.path.join(
                 self.miner_data_directory, f"{self.current_state}.xml"
             )
-            log_file_path = os.path.join(
+            self.log_file_path = os.path.join(
                 self.miner_data_directory, self.md_outputs_exts["log"]
             )
 
             simulation.loadCheckpoint(checkpoint_path)
 
-            self.log_file = pd.read_csv(log_file_path)
+            self.log_file = pd.read_csv(self.log_file_path)
             self.log_step = self.log_file['#"Step"'].iloc[-1]
 
             # Checks to see if we have enough steps in the log file to start validation
@@ -158,9 +161,24 @@ class SyntheticMDEvaluator(BaseEvaluator):
             self.cpt_step = simulation.currentStep
             self.checkpoint_path = checkpoint_path
             self.state_xml_path = state_xml_path
+            self.steps_to_run = min(
+                c.MAX_SIMULATION_STEPS_FOR_EVALUATION, self.log_step - self.cpt_step
+            )
+
+            # Create the state file here because it could have been loaded after MIN_SIMULATION_STEPS check
+            simulation.saveState(self.state_xml_path)
+
+            # Save the final PDB file
+            positions = simulation.context.getState(getPositions=True).getPositions()
+            topology = simulation.topology
+            save_pdb(
+                positions=positions,
+                topology=topology,
+                output_path=self.folded_pdb_path,
+            )
 
             # Save the system config to the miner data directory
-            system_config_path = os.path.join(
+            self.system_config_path = os.path.join(
                 self.miner_data_directory, f"miner_system_config_{self.miner_seed}.pkl"
             )
 
@@ -168,10 +186,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 (self.log_file['#"Step"'] > self.cpt_step)
             ]["Potential Energy (kJ/mole)"].values
 
-            if not os.path.exists(system_config_path):
+            if not os.path.exists(self.system_config_path):
                 write_pkl(
                     data=self.system_config,
-                    path=system_config_path,
+                    path=self.system_config_path,
                     write_mode="wb",
                 )
 
@@ -617,12 +635,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return False, [], [], E.message
 
 
-class OrganicMDEvaluator(BaseEvaluator):
+class OrganicMDEvaluator(SyntheticMDEvaluator):
     def __init__(self, **kwargs):
-        self.kwargs = kwargs
-
-    def _evaluate(self, data: Dict[str, Any]) -> float:
-        return 0.0
+        super().__init__(**kwargs)
 
     def name(self) -> str:
         return "OrganicMD"

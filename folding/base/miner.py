@@ -1,8 +1,6 @@
-import time
 import asyncio
 import threading
 import argparse
-import traceback
 
 import bittensor as bt
 
@@ -48,10 +46,6 @@ class BaseMinerNeuron(BaseNeuron):
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
         ).attach(
-            forward_fn=self.ping_forward,  # not sure if we need blacklist on this.
-        ).attach(
-            forward_fn=self.participation_forward,
-        ).attach(
             forward_fn=self.intermediate_submission_forward,
         )
         logger.info(f"Axon created: {self.axon}")
@@ -62,31 +56,6 @@ class BaseMinerNeuron(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
-    def ping_forward(self, synapse: PingSynapse):
-        """Respond to the validator with the necessary information about serving
-
-        Args:
-            self (PingSynapse): must attach "can_serve" and "available_compute"
-        """
-
-        logger.info(f"Received ping request from {synapse.dendrite.hotkey[:8]}")
-
-        synapse.available_compute = self.max_workers - len(self.simulations)
-
-        # TODO: add more conditions.
-        if synapse.available_compute > 0:
-            synapse.can_serve = True
-            logger.success("Telling validator you can serve ✅")
-        return synapse
-
-    def participation_forward(self, synapse: ParticipationSynapse):
-        """Respond to the validator with the necessary information about participating in a specified job
-
-        Args:
-            self (ParticipationSynapse): must attach "is_participating"
-        """
-        pass
-    
     def intermediate_submission_forward(self, synapse: IntermediateSubmissionSynapse):
         """Respond to the validator with the necessary information about submitting intermediate checkpoints.
 
