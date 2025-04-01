@@ -366,7 +366,6 @@ class Validator(BaseValidatorNeuron):
         merged_events.pop("checked_energy_intermediate")
         merged_events.pop("miner_energy_intermediate")
         logger.success(f"Event information: {merged_events}")
-        # logger.debug(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
