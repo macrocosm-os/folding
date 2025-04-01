@@ -10,6 +10,7 @@ import requests
 import traceback
 import concurrent.futures
 import asyncio
+import pandas as pd
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any
 
@@ -19,11 +20,16 @@ import openmm.app as app
 # import base miner class which takes care of most of the boilerplate
 from folding.base.miner import BaseMinerNeuron
 from folding.base.simulation import OpenMMSimulation
-from folding.protocol import JobSubmissionSynapse
+from folding.protocol import (
+    JobSubmissionSynapse,
+    IntermediateSubmissionSynapse,
+)
 from folding.utils.reporters import (
     ExitFileReporter,
     LastTwoCheckpointsReporter,
-    ProteinStructureReporter,
+    SequentialCheckpointReporter,
+    ProteinStructureReporter
+
 )
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -59,49 +65,107 @@ def attach_files_to_synapse(
     state: str,
     seed: int,
 ) -> JobSubmissionSynapse:
-    """load the output files as bytes and add to synapse.md_output
+    """Load output files and attach them to synapse.md_output.
+    
+    This function handles attaching simulation output files to the synapse object
+    for communication with the validator. It combines log files and attaches state files.
 
     Args:
-        synapse (JobSubmissionSynapse): Recently received synapse object
-        data_directory (str): directory where the miner is holding the necessary data for the validator.
-        state (str): the current state of the simulation
-
-    state is either:
-     1. nvt
-     2. npt
-     3. md_0_1
-     4. finished
+        synapse (JobSubmissionSynapse): The synapse object to attach files to
+        data_directory (str): Directory containing simulation data files
+        state (str): Current simulation state ('nvt', 'npt', 'md_0_1', or 'finished')
+        seed (int): Random seed used for the simulation
 
     Returns:
-        JobSubmissionSynapse: synapse with md_output attached
+        JobSubmissionSynapse: The synapse object with attached files in md_output
+    
+    Note:
+        If state is 'finished', it will be treated as 'md_0_1' for file collection purposes.
     """
-
-    synapse.md_output = {}  # ensure that the initial state is empty
+    # Initialize empty md_output
+    synapse.md_output = {}
 
     try:
-        state_files = os.path.join(data_directory, f"{state}")
+        # Normalize state for file collection
+        file_collection_state = "md_0_1" if state == "finished" else state
+        
+        # Get state files (excluding logs)
+        state_files_pattern = os.path.join(data_directory, f"{file_collection_state}*")
+        state_files = [f for f in glob.glob(state_files_pattern) if not f.endswith('.log')]
+        
+        if not state_files:
+            raise FileNotFoundError(f"No state files found for {state} in {data_directory}")
 
-        # This should be "state.cpt" and "state_old.cpt"
-        all_state_files = glob.glob(f"{state_files}*")  # Grab all the state_files
+        # Get log files if they exist
+        log_files = sorted(glob.glob(os.path.join(data_directory, "*.log")))
+        files_to_attach = state_files.copy()
+        
+        if log_files:
+            # Read and combine log files using pandas
+            dfs = []
+            
+            for log_file in log_files:
+                try:
+                    # Try reading the file with pandas
+                    df = pd.read_csv(log_file)
+                    if not df.empty:
+                        dfs.append(df)
+                except Exception as e:
+                    logger.warning(f"Could not read log file {log_file}: {e}")
+                    continue
+            
+            if dfs:
+                # Combine all dataframes and sort by step
+                combined_df = pd.concat(dfs, ignore_index=True)  
+                combined_df = combined_df.sort_values('#"Step"')
+                
+                # Write combined log file
+                combined_log_path = os.path.join(data_directory, f"{state}_combined.log")
+                try:
+                    combined_df.to_csv(combined_log_path, index=False)
+                    files_to_attach.append(combined_log_path)
+                except Exception as e:
+                    logger.error(f"Failed to write combined log file: {e}")
+                
+                # Attach all files
+                for filename in files_to_attach:
+                    try:
+                        with open(filename, "rb") as f:
+                            base_filename = os.path.basename(filename)
+                            synapse.md_output[base_filename] = base64.b64encode(f.read())
+                    except Exception as e:
+                        logger.error(f"Failed to read file {filename!r}: {e}")
+                        get_tracebacks()
+        else:
+            # Just attach state files if no logs exist
+            for filename in files_to_attach:
+                try:
+                    with open(filename, "rb") as f:
+                        base_filename = os.path.basename(filename)
+                        synapse.md_output[base_filename] = base64.b64encode(f.read())
+                except Exception as e:
+                    logger.error(f"Failed to read file {filename!r}: {e}")
+                    get_tracebacks()
+                    
+        try:
+            # Clean up combined log file
+            if os.path.exists(combined_log_path):
+                os.remove(combined_log_path)
+        except Exception as e:
+            logger.warning(f"Failed to remove temporary combined log: {e}")
 
-        if len(all_state_files) == 0:
-            raise FileNotFoundError(
-                f"No files found for {state}"
-            )  # if this happens, goes to except block
-
-        synapse = attach_files(files_to_attach=all_state_files, synapse=synapse)
-
+        # Set synapse metadata
         synapse.miner_seed = seed
         synapse.miner_state = state
 
     except Exception as e:
-        logger.error(f"Failed to attach files for pdb {synapse.pdb_id} with error: {e}")
+        logger.error(f"Failed to attach files with error: {e}")
         get_tracebacks()
         synapse.md_output = {}
+        synapse.miner_seed = None
+        synapse.miner_state = None
 
-    finally:
-        return synapse  # either return the synapse wth the md_output attached or the synapse as is.
-
+    return synapse
 
 def check_synapse(
     synapse: JobSubmissionSynapse, event: Dict = None
@@ -381,18 +445,17 @@ class FoldingMiner(BaseMinerNeuron):
 
         pdb_hash = self.get_simulation_hash(pdb_id=pdb_id, system_config=gjp_config)
         event["pdb_hash"] = pdb_hash
-
-        if pdb_hash in self.simulations:
-            return True, "running_simulation", event
-
         # If you don't have in the list of simulations, check your local storage for the data.
         output_dir = os.path.join(self.base_data_path, pdb_id, pdb_hash)
         gjp_config_filepath = os.path.join(output_dir, f"config_{pdb_id}.pkl")
         event["output_dir"] = output_dir
         event["gjp_config_filepath"] = gjp_config_filepath
 
-        # check if any of the simulations have finished
         event = self.check_and_remove_simulations(event=event)
+        if pdb_hash in self.simulations:
+            return True, "running_simulation", event
+
+        # check if any of the simulations have finished
 
         submitted_job_is_unique = self.is_unique_job(
             system_config_filepath=gjp_config_filepath
@@ -402,6 +465,39 @@ class FoldingMiner(BaseMinerNeuron):
             return True, "found_existing_data", event
 
         return False, "job_not_worked_on", event
+
+    def intermediate_submission_forward(self, synapse: IntermediateSubmissionSynapse):
+        """Respond to the validator with the necessary information about submitting intermediate checkpoints.
+
+        Args:
+            self (IntermediateSubmissionSynapse): must attach "cpt_files"
+        """
+        logger.info(f"Intermediate submission forward for job: {synapse.job_id}")
+        job_id = synapse.job_id
+        pdb_id = synapse.pdb_id
+        checkpoint_numbers = synapse.checkpoint_numbers
+        has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
+            job_id=job_id
+        )
+
+        if not has_worked_on_job:
+            logger.warning(f"Job ID {job_id} not found in the database.")
+            return synapse
+
+        # Check if the checkpoint files exist in the output directory
+        output_dir = event["output_dir"]
+        cpt_files = {}
+        for checkpoint_number in checkpoint_numbers:
+            cpt_file = os.path.join(
+                output_dir, f"{checkpoint_number}.cpt"
+            )
+            if os.path.exists(cpt_file):
+                with open(cpt_file, "rb") as f:
+                    cpt_files[checkpoint_number] = base64.b64encode(f.read())
+
+        synapse.cpt_files = cpt_files
+
+        return synapse
 
     def forward(self, synapse: JobSubmissionSynapse) -> JobSubmissionSynapse:
         """Process an incoming job submission request and return appropriate simulation data.
@@ -864,7 +960,7 @@ class SimulationManager:
 
                 simulation.loadCheckpoint(self.cpt_file_mapper[state])
                 simulation.step(self.simulation_steps[state])
-
+                simulation.saveCheckpoint(f"{self.output_dir}/{state}.cpt")
                 # TODO: Add a Mock pipeline for the new OpenMM simulation here.
 
             logger.success(f"✅ Finished simulation for protein: {self.pdb_id} ✅")
@@ -933,7 +1029,7 @@ class SimulationManager:
     ) -> Dict[str, List[str]]:
         state_commands = {}
 
-        for state in self.STATES:
+        for state, simulation_steps in self.simulation_steps.items():
             simulation, _ = OpenMMSimulation().create_simulation(
                 pdb=self.pdb_obj,
                 system_config=system_config.get_config(),
@@ -953,6 +1049,29 @@ class SimulationManager:
                     file_prefix=state,
                 )
             )
+
+            # Calculate the starting checkpoint counter based on previous states
+            starting_counter = 0
+            if state in self.simulation_steps:
+                state_index = list(self.simulation_steps.keys()).index(state)
+                previous_states = list(self.simulation_steps.keys())[:state_index]
+
+                # Sum the number of checkpoints for all previous states
+                for prev_state in previous_states:
+                    # Calculate how many checkpoints were created in the previous state
+                    prev_checkpoints = int(
+                        self.simulation_steps[prev_state] / self.CHECKPOINT_INTERVAL
+                    )
+                    starting_counter += prev_checkpoints
+
+            simulation.reporters.append(
+                SequentialCheckpointReporter(
+                    file_prefix=f"{self.output_dir}/",
+                    reportInterval=self.CHECKPOINT_INTERVAL,
+                    checkpoint_counter=starting_counter,
+                )
+            )
+
             simulation.reporters.append(
                 ProteinStructureReporter(
                     file=f"{self.output_dir}/{state}.log",
@@ -961,6 +1080,7 @@ class SimulationManager:
                     potentialEnergy=True,
                     reference_pdb=os.path.join(self.output_dir, f"{self.pdb_id}.pdb"),
                     speed=True,
+
                 )
             )
             state_commands[state] = simulation

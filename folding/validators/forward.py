@@ -25,14 +25,12 @@ from folding.utils.uids import get_all_miner_uids
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
-
 async def run_step(
     self,
     protein: Protein,
     timeout: float,
     job_type: str,
     job_id: str,
-    best_submitted_energy: float = None,
 ) -> Dict:
     start_time = time.time()
 
@@ -53,7 +51,6 @@ async def run_step(
         include_serving_in_check=False,
     )
 
-    # Get the list of uids to query for this step.
     axons = [self.metagraph.axons[uid] for uid in uids]
 
     system_config = protein.system_config.to_dict()
@@ -62,9 +59,6 @@ async def run_step(
     synapse = JobSubmissionSynapse(
         pdb_id=protein.pdb_id,
         job_id=job_id,
-        best_submitted_energy=(
-            0 if np.isinf(best_submitted_energy) else best_submitted_energy
-        ),
     )
 
     # Make calls to the network with the prompt - this is synchronous.
@@ -86,9 +80,12 @@ async def run_step(
         **response_info,
     }
 
-    energies, energy_event = get_energies(
+    energies, energy_event = await get_energies(
+        validator=self,
         protein=protein,
         responses=responses,
+        axons=axons,
+        job_id=job_id,
         uids=uids,
         miner_registry=self.miner_registry,
         job_type=job_type,

@@ -47,8 +47,6 @@ class JobSubmissionSynapse(bt.Synapse):
     pdb_id: str
     job_id: str
 
-    best_submitted_energy: typing.Optional[float] = None
-
     # Optional request output, filled by receiving axon.
     md_output: typing.Optional[dict] = None
     miner_seed: typing.Optional[int] = None
@@ -68,12 +66,17 @@ class JobSubmissionSynapse(bt.Synapse):
             self.md_output = {}
         else:
             md_output = {}
-            for k, v in self.md_output.items():
-                try:
-                    md_output[k] = base64.b64decode(v)
-                except Exception as e:
-                    logger.error(f"Error decoding {k} from md_output: {e}")
-                    md_output[k] = None
+            # Access fields directly from the MDOutput model
+            for field in self.md_output.keys():
+                value = self.md_output[field]
+                if value is not None:
+                    try:
+                        md_output[field] = base64.b64decode(value)
+                    except Exception as e:
+                        logger.error(f"Error decoding {field} from md_output: {e}")
+                        md_output[field] = None
+                else:
+                    md_output[field] = None
 
             self.md_output = md_output
 
@@ -108,3 +111,44 @@ class OrganicSynapse(bt.Synapse):
             "friction": self.friction,
             "epsilon": self.epsilon,
         }
+
+
+class IntermediateSubmissionSynapse(bt.Synapse):
+    """A synapse for submission of intermediate checkpoints.
+
+    Attributes:
+    - pdb_id: A Protein id
+    - job_id: A job id to retrieve the job from the GJP.
+    - checkpoint_numbers: A list of checkpoints to submit.
+    """
+
+    pdb_id: str
+    job_id: str
+    checkpoint_numbers: list[int]
+
+    # Optional request output, filled by receiving axon.
+    cpt_files: typing.Optional[dict] = None
+
+    def deserialize(self) -> int:
+        """
+        Deserialize the output. This method retrieves the response from
+        the miner in the form of a bytestream, deserializes it and returns it
+        as the output of the dendrite.query() call.
+        """
+        if not isinstance(self.cpt_files, dict):
+            self.cpt_files = {}
+        else:
+            cpt_files = {}
+            for k, v in self.cpt_files.items():
+                if v is not None:
+                    try:
+                        cpt_files[k] = base64.b64decode(v)
+                    except Exception as e:
+                        logger.error(f"Error decoding {k} from cpt_files: {e}")
+                        cpt_files[k] = None
+                else:
+                    cpt_files[k] = None
+
+            self.cpt_files = cpt_files
+
+        return self

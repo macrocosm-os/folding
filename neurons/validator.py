@@ -106,7 +106,6 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,
-            best_submitted_energy=job.best_loss,
             job_type=job.job_type,
         )
 
@@ -362,8 +361,11 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
         )
 
-        merged_events.pop("checked_energy")
-        merged_events.pop("miner_energy")
+        merged_events.pop("checked_energy_final")
+        merged_events.pop("miner_energy_final")
+        merged_events.pop("checked_energy_intermediate")
+        merged_events.pop("miner_energy_intermediate")
+        logger.success(f"Event information: {merged_events}")
         # logger.debug(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
