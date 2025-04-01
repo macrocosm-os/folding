@@ -177,8 +177,7 @@ async def get_energies(
             checked_energies = {}
             miner_energies = {}
 
-            # if np.random.rand() < validation_probability:
-            if True:
+            if np.random.rand() < validation_probability:
                 (
                     median_energy,
                     checked_energies,
