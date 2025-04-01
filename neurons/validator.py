@@ -1,6 +1,7 @@
 # The MIT License (MIT)
 # Copyright © 2024 Macrocosmos
 
+from collections import defaultdict
 import os
 import time
 import asyncio
@@ -105,7 +106,6 @@ class Validator(BaseValidatorNeuron):
             protein=protein,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,
-            best_submitted_energy=job.best_loss,
             job_type=job.job_type,
         )
 
@@ -323,24 +323,35 @@ class Validator(BaseValidatorNeuron):
 
         # Only upload the best .cpt files to S3 if the job is inactive
         if job.active is False:
-            output_links = []
-            for idx, best_cpt_file in enumerate(job.event["best_cpt"]):
-                # If the best_cpt_file is empty, we will append an empty string to the output_links list.
-                if best_cpt_file == "":
-                    output_links.append("")
-                    continue
-
-                output_link = await upload_output_to_s3(
-                    handler=self.handler,
-                    output_file=best_cpt_file,
-                    pdb_id=job.pdb_id,
-                    miner_hotkey=job.hotkeys[idx],
-                    VALIDATOR_ID=self.validator_hotkey_reference,
+            output_links = [defaultdict(str)] * len(job.event["files"])
+            best_cpt_files = []
+            output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            for idx, files in enumerate(job.event["files"]):
+                location = os.path.join(
+                    "outputs",
+                    job.pdb_id,
+                    self.validator_hotkey_reference,
+                    job.hotkeys[idx][:8],
+                    output_time,
                 )
+                for file_type, file_path in files.items():
+                    if file_type == "best_cpt":
+                        best_cpt_files.append(file_path)
+                    # If the best_cpt_file is empty, we will append an empty string to the output_links list.
+                    if file_path == "":
+                        output_links[idx][file_type] = ""
+                        continue
 
-                output_links.append(output_link)
+                    output_link = await upload_output_to_s3(
+                        handler=self.handler,
+                        output_file=file_path,
+                        location=location,
+                    )
 
-            job.best_cpt_links = output_links
+                    output_links[idx][file_type] = output_link
+
+            job.best_cpt_links = best_cpt_files
+            job.event["output_links"] = output_links
 
         # Finally, we update the job in the store regardless of what happened.
         self.store.update_gjp_job(
@@ -350,9 +361,11 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
         )
 
-        merged_events.pop("checked_energy")
-        merged_events.pop("miner_energy")
-        # logger.debug(f"Event information: {merged_events}")
+        merged_events.pop("checked_energy_final")
+        merged_events.pop("miner_energy_final")
+        merged_events.pop("checked_energy_intermediate")
+        merged_events.pop("miner_energy_intermediate")
+        logger.success(f"Event information: {merged_events}")
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
