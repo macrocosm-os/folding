@@ -212,13 +212,18 @@ async def get_energies(
             event["checked_energy_intermediate"][i] = checked_energies
             event["miner_energy_intermediate"][i] = miner_energies
 
+            percent_diff = (
+                abs((median_energy - reported_energy) / reported_energy) * 100
+            )
+
             if is_valid:
-                if (
-                    not abs((median_energy - reported_energy) / reported_energy) * 100
-                    < c.ANOMALY_THRESHOLD
-                ):
+                if percent_diff > c.ANOMALY_THRESHOLD:
                     event["is_valid"][i] = False
                     event["reason"][i] = "energy_difference_too_large"
+                    logger.warning(
+                        f"uid {uid} has energy percent difference too large: {percent_diff}"
+                    )
+                    processed_indices.append(i)
                     continue
 
                 is_duplicate = any(
@@ -231,6 +236,7 @@ async def get_energies(
                     unique_energies.add(median_energy)
                     valid_unique_count += 1
                     if valid_unique_count == TOP_K:
+                        processed_indices.append(i)
                         break
 
             processed_indices.append(i)
