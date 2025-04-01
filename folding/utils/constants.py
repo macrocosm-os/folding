@@ -5,7 +5,7 @@ MAX_SIMULATION_STEPS_FOR_EVALUATION = 3000
 ANOMALY_THRESHOLD = 0.5  # The percentage that we allow the energy to differ from the miner to the validator.
 
 # Evaluation constants
-XML_CHECKPOINT_THRESHOLD = 2  # Percent
+XML_CHECKPOINT_THRESHOLD = 5  # Percent
 GRADIENT_THRESHOLD = 10  # kJ/mol/nm
 GRADIENT_WINDOW_SIZE = 50  # Number of steps to calculate the gradients over.
 ENERGY_WINDOW_SIZE = (
