@@ -136,7 +136,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Make sure that we are enough steps ahead in the log file compared to the checkpoint file.
             # Checks if log_file is MIN_STEPS steps ahead of checkpoint
-            if (self.log_step - simulation.currentStep) < c.MIN_SIMULATION_STEPS:
+            if (
+                self.log_step - simulation.currentStep
+            ) < c.MAX_SIMULATION_STEPS_FOR_EVALUATION:
                 # If the miner did not run enough steps, we will load the old checkpoint
                 checkpoint_path = os.path.join(
                     self.miner_data_directory, f"{self.current_state}_old.cpt"
@@ -160,7 +162,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             self.cpt_step = simulation.currentStep
             self.checkpoint_path = checkpoint_path
-            self.state_xml_path = state_xml_path
+
             self.steps_to_run = min(
                 c.MAX_SIMULATION_STEPS_FOR_EVALUATION, self.log_step - self.cpt_step
             )
@@ -184,6 +186,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             self.final_miner_energies = self.log_file[
                 (self.log_file['#"Step"'] > self.cpt_step)
+                & (
+                    self.log_file['#"Step"']
+                    < self.cpt_step + c.MAX_SIMULATION_STEPS_FOR_EVALUATION
+                )
             ]["Potential Energy (kJ/mole)"].values
 
             if not os.path.exists(self.system_config_path):
@@ -307,7 +313,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 result,
             ) = self.is_checkpoint_valid(
                 checkpoint_path=self.checkpoint_path,
-                steps_to_run=3000,
+                steps_to_run=c.MAX_SIMULATION_STEPS_FOR_EVALUATION,
                 checkpoint_num="final",
             )
             checked_energies_dict["final"] = checked_energies
