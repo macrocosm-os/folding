@@ -347,6 +347,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     )
 
                 # Validate each checkpoint
+                self.intermediate_checkpoint_files = {}
                 for checkpoint_num, checkpoint_data in intermediate_checkpoints.items():
                     logger.info(f"Checking intermediate checkpoint {checkpoint_num}...")
                     if checkpoint_data is None:
@@ -361,6 +362,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     temp_checkpoint_path = os.path.join(
                         self.miner_data_directory, f"intermediate_{checkpoint_num}.cpt"
                     )
+                    self.intermediate_checkpoint_files[
+                        checkpoint_num
+                    ] = temp_checkpoint_path
                     with open(temp_checkpoint_path, "wb") as f:
                         f.write(checkpoint_data)
                     (
