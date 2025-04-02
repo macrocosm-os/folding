@@ -1,3 +1,4 @@
+import subprocess
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from http import HTTPStatus
@@ -5,9 +6,9 @@ import pickle
 import os
 import requests
 from loguru import logger
+from folding.utils.ops import convert_cif_to_pdb
 from folding_api.schemas import PDBSearchResponse, PDB, PDBInfoResponse
 from folding_api.auth import APIKey, get_api_key
-from bs4 import BeautifulSoup
 
 router = APIRouter()
 
@@ -249,3 +250,74 @@ async def get_pdb_info(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while retrieving PDB information. Please try again later.",
         )
+
+
+@router.get("/pdb/{pdb_id}/file")
+async def get_pdb_file(
+    pdb_id: str,
+    input_source=Query(..., description="The source of the PDB file to download"),
+):
+    """
+    Retrieve the PDB file for a given PDB ID.
+    """
+    try:
+        # Normalize PDB ID
+        pdb_id = pdb_id.lower()
+        if input_source == "rcsb":
+            url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+            r = requests.get(url)
+            if r.status_code == 200:
+                return r.text
+            else:
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"PDB file {pdb_id} not found in database.",
+                )
+
+        elif input_source == "pdbe":
+            # strip the string of the extension
+            substring = pdb_id[1:3]
+            temp_dir = os.path.join(os.path.dirname(__file__), "temp")
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
+
+            unzip_command = ["gunzip", f"{temp_dir}/{pdb_id}.cif.gz"]
+
+            rsync_command = [
+                "rsync",
+                "-rlpt",
+                "-v",
+                "-z",
+                f"rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/{substring}/{pdb_id}.cif.gz",
+                f"{temp_dir}/",
+            ]
+
+            try:
+                subprocess.run(rsync_command, check=True)
+                subprocess.run(unzip_command, check=True)
+                logger.success(f"PDB file {pdb_id} downloaded successfully from PDBe.")
+
+                convert_cif_to_pdb(
+                    cif_file=f"{temp_dir}/{pdb_id}.cif",
+                    pdb_file=f"{temp_dir}/{pdb_id}.pdb",
+                )
+                with open(f"{temp_dir}/{pdb_id}.pdb", "r") as file:
+                    pdb_text = file.read()
+                os.remove(f"{temp_dir}/{pdb_id}.cif")
+                os.remove(f"{temp_dir}/{pdb_id}.pdb")
+                return pdb_text
+            except subprocess.CalledProcessError as e:
+                raise HTTPException(
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to download PDB file with ID {pdb_id} from PDBe.",
+                )
+
+        else:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail=f"Unknown input source: {input_source}",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error retrieving PDB file: {e}")
