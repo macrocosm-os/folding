@@ -1,12 +1,10 @@
 import os
-from typing import Any, Dict, List, Union
-import traceback
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import pandas as pd
 from openmm import app
 import bittensor as bt
-import plotly.graph_objects as go
 
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
@@ -282,7 +280,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return False
         return True
 
-    async def is_run_valid(self, validator=None, job_id=None, axon=None):
+    async def is_run_valid(
+        self, validator=None, job_id=None, axon=None
+    ) -> Tuple[bool, Dict[str, Any], Dict[str, Any], str]:
         """
         Checks if the run is valid by evaluating a set of logical conditions:
 
@@ -307,7 +307,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             logger.info(f"Checking if run is valid for {self.hotkey_alias}...")
             logger.info(f"Checking final checkpoint...")
-            # Check the final checkpoint
             (
                 is_valid,
                 checked_energies,
@@ -318,6 +317,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 steps_to_run=c.MAX_SIMULATION_STEPS_FOR_EVALUATION,
                 checkpoint_num="final",
             )
+
             checked_energies_dict["final"] = checked_energies
             miner_energies_dict["final"] = miner_energies
 
@@ -333,7 +333,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 ).tolist()
 
                 # Get intermediate checkpoints from the miner
-                intermediate_checkpoints = await self.get_intermediate_checkpoints(
+                intermediate_checkpoints: Dict[
+                    str, Any
+                ] = await self.get_intermediate_checkpoints(
                     validator=validator,
                     job_id=job_id,
                     axon=axon,
@@ -363,11 +365,13 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     temp_checkpoint_path = os.path.join(
                         self.miner_data_directory, f"intermediate_{checkpoint_num}.cpt"
                     )
+
                     self.intermediate_checkpoint_files[
                         checkpoint_num
                     ] = temp_checkpoint_path
                     with open(temp_checkpoint_path, "wb") as f:
                         f.write(checkpoint_data)
+
                     (
                         is_valid,
                         checked_energies,
@@ -404,7 +408,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return True
 
-    async def validate(self, validator=None, job_id=None, axon=None):
+    async def validate(
+        self, validator=None, job_id=None, axon=None
+    ) -> Tuple[float, Dict[str, Any], Dict[str, Any], str]:
         """
         Validate the run by checking if it's valid and returning the appropriate metrics.
 

@@ -42,7 +42,7 @@ class MinerRegistry:
         miner_data = MinerData()
         miner_data.tasks = {task: TaskMetrics() for task in self.tasks}
         self.registry[miner_uid] = miner_data
-        self.initialize_miner_logs(miner_uid)
+        self._initialize_miner_logs(miner_uid)
 
     def _get_or_create_miner(self, miner_uid: int) -> MinerData:
         """Gets existing miner or creates new entry if not exists."""
@@ -50,7 +50,7 @@ class MinerRegistry:
             self.add_miner_to_registry(miner_uid)
         return self.registry[miner_uid]
 
-    def initialize_miner_logs(self, miner_uid: int) -> None:
+    def _initialize_miner_logs(self, miner_uid: int) -> None:
         """Sets the logs for a miner used for the evaluation/validation pipelines"""
 
         initial_logs = {
@@ -61,15 +61,14 @@ class MinerRegistry:
             "files": {},
             "process_md_output_time": 0,
             "is_valid": False,
-            "checked_energy_final": {},
-            "miner_energy_final": {},
-            "checked_energy_intermediate": {},
-            "miner_energy_intermediate": {},
+            "checked_energies": None,
+            "miner_energies": None,
             "rmsd": 0,
             "is_run_valid_time": 0,
             "ns_computed": 0,
             "reason": "",
             "is_duplicate": False,
+            "axon": None,
         }
 
         self.registry[miner_uid].logs = initial_logs
@@ -148,9 +147,13 @@ class MinerRegistry:
 
         for miner_uid, miner_data in self.registry.items():
             all_miner_logs[miner_uid] = miner_data.logs
-            self.initialize_miner_logs(miner_uid)  # reset logs for miner_uid
 
         return all_miner_logs
+
+    def reset_miner_logs(self) -> None:
+        """Resets the logs for all miners."""
+        for miner_uid in self.registry:
+            self._initialize_miner_logs(miner_uid)
 
     @classmethod
     def load_registry(cls, input_path: str) -> "MinerRegistry":
