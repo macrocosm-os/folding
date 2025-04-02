@@ -61,6 +61,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
             self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
         )
 
+        self.intermediate_checkpoint_files = {}
+
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
 
@@ -347,7 +349,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     )
 
                 # Validate each checkpoint
-                self.intermediate_checkpoint_files = {}
                 for checkpoint_num, checkpoint_data in intermediate_checkpoints.items():
                     logger.info(f"Checking intermediate checkpoint {checkpoint_num}...")
                     if checkpoint_data is None:

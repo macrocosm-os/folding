@@ -198,13 +198,13 @@ async def get_energies(
                     evaluator.final_miner_energies,
                     "skip",
                 )
-            if hasattr(evaluator, "intermediate_checkpoint_files"):
-                # Add intermediate checkpoint files to files dictionary
-                for (
-                    checkpoint_num,
-                    checkpoint_energy,
-                ) in evaluator.intermediate_checkpoint_files.items():
-                    files[f"checkpoint_{checkpoint_num}"] = checkpoint_energy
+
+            # Add intermediate checkpoint files to files dictionary
+            for (
+                checkpoint_num,
+                checkpoint_energy,
+            ) in evaluator.intermediate_checkpoint_files.items():
+                files[f"checkpoint_{checkpoint_num}"] = checkpoint_energy
 
             is_valid: bool = median_energy != 0.0
 
