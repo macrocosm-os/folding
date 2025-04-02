@@ -198,6 +198,7 @@ async def get_energies(
                     evaluator.final_miner_energies,
                     "skip",
                 )
+
             # Add intermediate checkpoint files to files dictionary
             for (
                 checkpoint_num,
