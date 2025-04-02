@@ -153,7 +153,6 @@ class Validator(BaseValidatorNeuron):
             validator=self,
             protein=protein,
             responses=responses,
-            axons=axons,
             job_id=job_id,
             uids=uids,
             miner_registry=self.miner_registry,

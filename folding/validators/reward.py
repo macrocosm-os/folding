@@ -237,4 +237,7 @@ async def run_evaluation_validation_pipeline(
                 miner_logs["checked_energies"]["final"][-c.ENERGY_WINDOW_SIZE :]
             )
 
-    return energies, event
+    # remove all the logs from the miner registry
+    miner_registry.reset_miner_logs()
+
+    return energies, event, miner_registry
