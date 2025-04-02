@@ -3,6 +3,7 @@ import copy
 from typing import List, Dict, Any
 
 import numpy as np
+from collections import defaultdict
 from folding.utils.logger import logger
 from folding.utils import constants as c
 from folding.validators.protein import Protein
@@ -224,16 +225,19 @@ async def run_evaluation_validation_pipeline(
             continue
 
     # Update event with only the processed entries
+    event = defaultdict(list)
     if len(processed_uids) > 0:
-        # The information from all processed_uids
-        event = {}
+        event["processed_uids"] = processed_uids
         for uid in processed_uids:
-            event[uid] = copy.deepcopy(miner_registry.registry[uid].logs)
+            for key, value in miner_registry.registry[uid].logs.items():
+                event[key].append(value)
 
-    for uid, miner_logs in event.items():
-        if miner_logs["is_valid"] and not miner_logs["is_duplicate"]:
+    for uid, is_valid, is_duplicate in zip(
+        event["processed_uids"], event["is_valid"], event["is_duplicate"]
+    ):
+        if is_valid and not is_duplicate:
             energies[uid] = np.median(
-                miner_logs["checked_energies"]["final"][-c.ENERGY_WINDOW_SIZE :]
+                event["checked_energies"]["final"][-c.ENERGY_WINDOW_SIZE :]
             )
 
     # remove all the logs from the miner registry
