@@ -35,7 +35,11 @@ from folding.utils.s3_utils import (
     upload_to_s3,
     DigitalOceanS3Handler,
 )
-from folding.validators.forward import create_new_challenge, run_step
+
+from folding.protocol import JobSubmissionSynapse
+from folding.utils.ops import get_response_info
+from folding.validators.reward import run_evaluation_validation_pipeline
+from folding.validators.forward import create_new_challenge
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
@@ -84,6 +88,87 @@ class Validator(BaseValidatorNeuron):
             except ValueError as e:
                 raise f"Failed to create S3 handler, check your .env file: {e}"
 
+    async def run_step(
+        self,
+        protein: Protein,
+        timeout: float,
+        job_type: str,
+        job_id: str,
+    ) -> Dict:
+        """Runs a step of the validator.
+
+        Args:
+            protein (Protein): protein object
+            timeout (float): timeout for the step
+            job_type (str): job type
+            job_id (str): job id
+
+        Returns:
+            Dict: event dictionary
+        """
+        start_time = time.time()
+
+        # Get all uids on the network that are NOT validators.
+        # the .is_serving flag means that the uid does not have an axon address.
+        uids = get_all_miner_uids(
+            self.metagraph,
+            self.config.neuron.vpermit_tao_limit,
+            include_serving_in_check=False,
+        )
+
+        axons = [self.metagraph.axons[uid] for uid in uids]
+
+        system_config = protein.system_config.to_dict()
+        system_config["seed"] = None  # We don't want to pass the seed to miners.
+
+        synapse = JobSubmissionSynapse(
+            pdb_id=protein.pdb_id,
+            job_id=job_id,
+        )
+
+        # Make calls to the network with the prompt - this is synchronous.
+        logger.info("⏰ Waiting for miner responses ⏰")
+        responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
+            axons=axons,
+            synapse=synapse,
+            timeout=timeout,
+            deserialize=True,  # decodes the bytestream response inside of md_outputs.
+        )
+
+        response_info = get_response_info(responses=responses)
+
+        event = {
+            "block": self.block,
+            "step_length": time.time() - start_time,
+            "uids": uids,
+            "energies": [],
+            **response_info,
+        }
+
+        (
+            energies,
+            energy_event,
+            self.miner_registry,
+        ) = await run_evaluation_validation_pipeline(
+            validator=self,
+            protein=protein,
+            responses=responses,
+            axons=axons,
+            job_id=job_id,
+            uids=uids,
+            miner_registry=self.miner_registry,
+            job_type=job_type,
+        )
+
+        # Log the step event.
+        event.update({"energies": energies.tolist(), **energy_event})
+
+        if len(protein.md_inputs) > 0:
+            event["md_inputs"] = list(protein.md_inputs.keys())
+            event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
+
+        return event
+
     async def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
@@ -101,8 +186,7 @@ class Validator(BaseValidatorNeuron):
         protein = await Protein.from_job(job=job, config=self.config.protein)
 
         logger.info("Running run_step...⏳")
-        return await run_step(
-            self,
+        return await self.run_step(
             protein=protein,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,

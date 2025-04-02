@@ -1,4 +1,3 @@
-from collections import defaultdict
 import time
 from typing import List
 
@@ -18,14 +17,12 @@ def evaluate(
     responses: List[JobSubmissionSynapse],
     uids: List[int],
     job_type: str,
+    miner_registry: MinerRegistry,
 ):
-    reported_energies = np.zeros(len(uids))
-    evaluators = [None] * len(uids)
-    seed = [-1] * len(uids)
-    files = [defaultdict(str)] * len(uids)
-    process_md_output_time = [0.0] * len(uids)
+    """Evaluates the miner's response and updates the miner registry."""
 
-    for i, (uid, resp) in enumerate(zip(uids, responses)):
+    for uid, resp in zip(uids, responses):
+        miner_files = {}
         try:
             if resp.dendrite.status_code != 200:
                 logger.info(
@@ -34,7 +31,6 @@ def evaluate(
                 continue
 
             start_time = time.time()
-            seed[i] = resp.miner_seed
             evaluator: BaseEvaluator = EVALUATION_REGISTRY[job_type](
                 pdb_id=protein.pdb_id,
                 pdb_location=protein.pdb_location,
@@ -52,41 +48,48 @@ def evaluate(
                 logger.info(f"uid {uid} failed to process")
                 continue
 
-            files[i]["best_cpt"] = (
+            miner_files["best_cpt"] = (
                 evaluator.checkpoint_path
                 if hasattr(evaluator, "checkpoint_path")
                 else ""
             )
-            files[i]["folded_pdb"] = (
+            miner_files["folded_pdb"] = (
                 evaluator.folded_pdb_path
                 if hasattr(evaluator, "folded_pdb_path")
                 else ""
             )
-            files[i]["system_config"] = (
+            miner_files["system_config"] = (
                 evaluator.system_config_path
                 if hasattr(evaluator, "system_config_path")
                 else ""
             )
-            files[i]["log_file_path"] = (
+            miner_files["log_file_path"] = (
                 evaluator.log_file_path if hasattr(evaluator, "log_file_path") else ""
             )
-            files[i]["state_xml_path"] = (
+            miner_files["state_xml_path"] = (
                 evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
             )
 
-            reported_energies[i] = evaluator.get_reported_energy()
-            process_md_output_time[i] = time.time() - start_time
-            evaluators[i] = evaluator
+            miner_registry.registry[uid].logs["can_process"] = can_process
+            miner_registry.registry[uid].logs[
+                "reported_energy"
+            ] = evaluator.get_reported_energy()
+            miner_registry.registry[uid].logs["evaluator"] = evaluator
+            miner_registry.registry[uid].logs["seed"] = resp.miner_seed
+            miner_registry.registry[uid].logs["files"] = miner_files
+            miner_registry.registry[uid].logs["process_md_output_time"] = (
+                time.time() - start_time
+            )
 
         except Exception as e:
             # If any of the above methods have an error, we will catch here.
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
-    return reported_energies, evaluators, seed, files, process_md_output_time
+    return miner_registry
 
 
-async def get_energies(
+async def run_evaluation_validation_pipeline(
     validator: "Validator",
     protein: Protein,
     responses: List[JobSubmissionSynapse],
@@ -126,9 +129,7 @@ async def get_energies(
     energies = np.zeros(len(uids))
 
     # Get initial evaluations
-    reported_energies, evaluators, seed, files, process_md_output_time = evaluate(
-        protein, responses, uids, job_type
-    )
+    miner_registry = evaluate(protein, responses, uids, job_type, miner_registry)
 
     # Sort all lists by reported energy
     sorted_data = sorted(
