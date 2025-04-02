@@ -192,6 +192,9 @@ async def check_and_download_pdbs(
     Args:
         pdb_directory (str): Directory to save the downloaded PDB file.
         pdb_id (str): PDB file ID to download.
+        input_source (str): Source of the PDB file.
+        download (bool, optional): Whether to download the PDB file. Defaults to True.
+        force (bool, optional): Whether to force the download of the PDB file. Defaults to False.
 
     Returns:
         bool: True if the PDB file is downloaded successfully and doesn't contain missing values, False otherwise.
