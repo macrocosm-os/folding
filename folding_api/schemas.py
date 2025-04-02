@@ -176,3 +176,31 @@ class APIKeyCreate(BaseModel):
 
 class APIKeyResponse(APIKeyBase):
     key: str
+
+
+class PDB(BaseModel):
+    pdb_id: str
+    source: str
+
+
+class PDBSearchResponse(BaseModel):
+    """
+    Represents a response from a PDB search.
+    """
+
+    matches: List[PDB] = Field(..., description="List of matching PDB IDs")
+    total: int = Field(..., description="Total number of matches found")
+
+
+class PDBInfoResponse(BaseModel):
+    """
+    Represents detailed information about a PDB structure from RCSB.
+    """
+
+    pdb_id: str = Field(..., description="PDB ID")
+    molecule_name: Optional[str] = Field(
+        None, description="Name of the molecule/protein"
+    )
+    classification: Optional[str] = Field(None, description="Structural classification")
+    organism: Optional[str] = Field(None, description="Source organism")
+    expression_system: Optional[str] = Field(None, description="Expression system used")

@@ -9,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from folding_api.chain import SubtensorService
 from folding_api.protein import router
+from folding_api.utility_endpoints import router as utility_router
 from folding_api.validator_registry import ValidatorRegistry
 from folding_api.auth import APIKeyManager, get_api_key, api_key_router
 from folding_api.vars import (
@@ -79,6 +80,6 @@ app.dependency_overrides[get_api_key] = get_api_key
 # Include routes
 app.include_router(router, dependencies=[Depends(get_api_key)])
 app.include_router(api_key_router)  # API key management routes
-
+app.include_router(utility_router)  # Utility endpoints
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8029)
