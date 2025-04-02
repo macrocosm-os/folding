@@ -1,6 +1,7 @@
-from collections import defaultdict
 import time
+import copy
 from typing import List
+from collections import defaultdict
 
 import numpy as np
 import bittensor as bt
@@ -150,7 +151,7 @@ async def get_energies(
     unique_energies = set()  # Track unique energy values
 
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
-    checkpoint_files = {}
+    all_files = []
     for i, (
         reported_energy,
         _,
@@ -201,11 +202,12 @@ async def get_energies(
                 )
 
             # Add intermediate checkpoint files to files dictionary
+            checkpoint_files = {}
             for (
                 checkpoint_num,
-                checkpoint_energy,
+                checkpoint_path,
             ) in evaluator.intermediate_checkpoint_files.items():
-                checkpoint_files[f"checkpoint_{checkpoint_num}"] = checkpoint_energy
+                checkpoint_files[f"checkpoint_{checkpoint_num}"] = checkpoint_path
 
             is_valid: bool = median_energy != 0.0
 
@@ -248,12 +250,13 @@ async def get_energies(
 
             processed_indices.append(i)
 
+            files_copy = copy.deepcopy(files)
+            files_copy.update(checkpoint_files)
+            all_files.append(files_copy)
+
         except Exception as e:
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
-
-    # Add the checkpoint files to the files dictionary
-    files.update(checkpoint_files)
 
     # Update event with only the processed entries
     if processed_indices:
