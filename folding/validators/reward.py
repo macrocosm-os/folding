@@ -150,6 +150,7 @@ async def get_energies(
     unique_energies = set()  # Track unique energy values
 
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
+    checkpoint_files = {}
     for i, (
         reported_energy,
         _,
@@ -204,7 +205,7 @@ async def get_energies(
                 checkpoint_num,
                 checkpoint_energy,
             ) in evaluator.intermediate_checkpoint_files.items():
-                files[f"checkpoint_{checkpoint_num}"] = checkpoint_energy
+                checkpoint_files[f"checkpoint_{checkpoint_num}"] = checkpoint_energy
 
             is_valid: bool = median_energy != 0.0
 
@@ -250,6 +251,9 @@ async def get_energies(
         except Exception as e:
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
+
+    # Add the checkpoint files to the files dictionary
+    files.update(checkpoint_files)
 
     # Update event with only the processed entries
     if processed_indices:
