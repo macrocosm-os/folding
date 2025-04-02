@@ -111,7 +111,7 @@ async def run_evaluation_validation_pipeline(
     """
 
     TOP_K = 5
-    energies = np.zeros(len(uids))
+    energies = {uid: 0 for uid in uids}
 
     # Get initial evaluations
     miner_registry = evaluate(protein, responses, uids, job_type, miner_registry)
@@ -128,7 +128,6 @@ async def run_evaluation_validation_pipeline(
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
     for uid, miner_data in sorted_dict.items():
         try:
-            axon = miner_data["axon"]
             reported_energy = miner_data["reported_energy"]
             evaluator: BaseEvaluator = miner_data["evaluator"]
 
@@ -151,7 +150,7 @@ async def run_evaluation_validation_pipeline(
                     miner_energies,
                     reason,
                 ) = await evaluator.validate(
-                    validator=validator, job_id=job_id, axon=axon
+                    validator=validator, job_id=job_id, axon=miner_data["axon"]
                 )
             else:
                 checked_energies = {}
@@ -240,4 +239,4 @@ async def run_evaluation_validation_pipeline(
     # remove all the logs from the miner registry
     miner_registry.reset_miner_logs()
 
-    return energies, event, miner_registry
+    return list(energies.values()), event, miner_registry

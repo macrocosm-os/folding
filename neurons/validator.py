@@ -160,7 +160,7 @@ class Validator(BaseValidatorNeuron):
         )
 
         # Log the step event.
-        event.update({"energies": energies.tolist(), **energy_event})
+        event.update({"energies": energies, **energy_event})
 
         if len(protein.md_inputs) > 0:
             event["md_inputs"] = list(protein.md_inputs.keys())
