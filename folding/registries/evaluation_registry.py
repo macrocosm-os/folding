@@ -324,10 +324,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Check the intermediate checkpoints
             if validator is not None and job_id is not None and axon is not None:
-                checkpoint_numbers = np.random.randint(
-                    0,
-                    self.number_of_checkpoints,
+                checkpoint_numbers = np.random.choice(
+                    range(self.number_of_checkpoints),
                     size=c.MAX_CHECKPOINTS_TO_VALIDATE,
+                    replace=False,
                 ).tolist()
 
                 # Get intermediate checkpoints from the miner
