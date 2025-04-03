@@ -8,7 +8,7 @@ import asyncio
 import traceback
 
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import netaddr
 import requests
@@ -18,6 +18,7 @@ import pandas as pd
 from async_timeout import timeout
 import tenacity
 
+from folding import __spec_version__ as spec_version
 
 import folding.utils.constants as c
 from folding.base.reward import BatchRewardInput
@@ -418,6 +419,7 @@ class Validator(BaseValidatorNeuron):
             for idx, files in enumerate(job.event["files"]):
                 location = os.path.join(
                     "outputs",
+                    spec_version,
                     job.pdb_id,
                     self.validator_hotkey_reference,
                     job.hotkeys[idx][:8],
