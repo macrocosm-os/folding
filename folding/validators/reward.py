@@ -227,8 +227,9 @@ async def run_evaluation_validation_pipeline(
 
     # Update event with only the processed entries
     event = defaultdict(list)
-    if len(processed_uids) > 0:
-        event["processed_uids"] = processed_uids
+    event["processed_uids"] = processed_uids
+    
+    if len(processed_uids) > 0:        
         for uid in processed_uids:
             for key, value in miner_registry.registry[uid].logs.items():
                 event[key].append(value)

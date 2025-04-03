@@ -550,7 +550,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         try:
             if not self.check_gradient(check_energies=np.array(state_energies)):
-                logger.warning(f"state energies: {state_energies}")
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
                 )

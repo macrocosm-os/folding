@@ -166,6 +166,8 @@ class Validator(BaseValidatorNeuron):
             axons=axons_dict,
         )
 
+        logger.info(f"Finished run_evaluation_validation_pipeline for {protein.pdb_id}")
+
         # Log the step event.
         event.update({"energies": energies, **energy_event})
 
@@ -416,30 +418,32 @@ class Validator(BaseValidatorNeuron):
             output_links = [defaultdict(str)] * len(job.event["files"])
             best_cpt_files = []
             output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            for idx, files in enumerate(job.event["files"]):
-                location = os.path.join(
-                    "outputs",
-                    spec_version,
-                    job.pdb_id,
-                    self.validator_hotkey_reference,
-                    job.hotkeys[idx][:8],
-                    output_time,
-                )
-                for file_type, file_path in files.items():
-                    if file_type == "best_cpt":
-                        best_cpt_files.append(file_path)
-                    # If the best_cpt_file is empty, we will append an empty string to the output_links list.
-                    if file_path == "":
-                        output_links[idx][file_type] = ""
-                        continue
-
-                    output_link = await upload_output_to_s3(
-                        handler=self.handler,
-                        output_file=file_path,
-                        location=location,
+                
+            if len(job.event["processed_uids"]) > 0: 
+                for uid, files in zip(job.event["processed_uids"], job.event["files"]):
+                    location = os.path.join(
+                        "outputs",
+                        spec_version,
+                        job.pdb_id,
+                        self.validator_hotkey_reference,
+                        self.metagraph.hotkeys[uid][:8]
+                        output_time,
                     )
+                    for file_type, file_path in files.items():
+                        if file_type == "best_cpt":
+                            best_cpt_files.append(file_path)
+                        # If the best_cpt_file is empty, we will append an empty string to the output_links list.
+                        if file_path == "":
+                            output_links[idx][file_type] = ""
+                            continue
 
-                    output_links[idx][file_type] = output_link
+                        output_link = await upload_output_to_s3(
+                            handler=self.handler,
+                            output_file=file_path,
+                            location=location,
+                        )
+
+                        output_links[idx][file_type] = output_link
 
             job.best_cpt_links = best_cpt_files
             job.event["output_links"] = output_links
