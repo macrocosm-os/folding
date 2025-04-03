@@ -99,6 +99,7 @@ async def run_evaluation_validation_pipeline(
     miner_registry: MinerRegistry,
     job_type: str,
     job_id: str,
+    axons: Dict[int, Any],
 ):
     """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
 
@@ -151,7 +152,7 @@ async def run_evaluation_validation_pipeline(
                     miner_energies,
                     reason,
                 ) = await evaluator.validate(
-                    validator=validator, job_id=job_id, axon=miner_data["axon"]
+                    validator=validator, job_id=job_id, axon=axons[uid]
                 )
             else:
                 checked_energies = {}
@@ -237,7 +238,9 @@ async def run_evaluation_validation_pipeline(
     ):
         if is_valid and not is_duplicate:
             energies[uid] = np.median(
-                event["checked_energies"]["final"][-c.ENERGY_WINDOW_SIZE :]
+                miner_registry.registry[uid].logs["checked_energies"]["final"][
+                    -c.ENERGY_WINDOW_SIZE :
+                ]
             )
 
     # remove all the logs from the miner registry

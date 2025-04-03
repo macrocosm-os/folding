@@ -116,7 +116,12 @@ class Validator(BaseValidatorNeuron):
             include_serving_in_check=False,
         )
 
-        axons = [self.metagraph.axons[uid] for uid in uids]
+        axons = []
+        axons_dict = {}
+        for uid in uids:
+            axon = self.metagraph.axons[uid]
+            axons.append(axon)
+            axons_dict[uid] = axon
 
         system_config = protein.system_config.to_dict()
         system_config["seed"] = None  # We don't want to pass the seed to miners.
@@ -157,6 +162,7 @@ class Validator(BaseValidatorNeuron):
             uids=uids,
             miner_registry=self.miner_registry,
             job_type=job_type,
+            axons=axons_dict,
         )
 
         # Log the step event.
@@ -184,7 +190,7 @@ class Validator(BaseValidatorNeuron):
 
         protein = await Protein.from_job(job=job, config=self.config.protein)
 
-        logger.info("Running run_step...⏳")
+        logger.info(f"Running run_step for {protein.pdb_id}...⏳")
         return await self.run_step(
             protein=protein,
             timeout=self.config.neuron.timeout,
