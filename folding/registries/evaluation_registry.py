@@ -55,10 +55,8 @@ class SyntheticMDEvaluator(BaseEvaluator):
         }
         self.miner_data_directory = os.path.join(self.basepath, self.hotkey_alias)
         self.velm_array_pkl_path = velm_array_pkl_path
-        self.folded_pdb_path = os.path.join(
-            self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
-        )
 
+        self.pdb_files = {}
         self.intermediate_checkpoint_files = {}
 
     def process_md_output(self) -> bool:
@@ -169,15 +167,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Create the state file here because it could have been loaded after MIN_SIMULATION_STEPS check
             simulation.saveState(self.state_xml_path)
-
-            # Save the final PDB file
-            positions = simulation.context.getState(getPositions=True).getPositions()
-            topology = simulation.topology
-            save_pdb(
-                positions=positions,
-                topology=topology,
-                output_path=self.folded_pdb_path,
-            )
 
             # Save the system config to the miner data directory
             self.system_config_path = os.path.join(
@@ -632,17 +621,17 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 )
                 raise ValidationError(message="anomaly")
 
-            # Save the folded pdb file if the run is valid
+            # Save the intermediate or final pdb file if the run is valid
             positions = simulation.context.getState(getPositions=True).getPositions()
             topology = simulation.topology
-
-            save_pdb(
-                positions=positions,
-                topology=topology,
-                output_path=os.path.join(
-                    self.miner_data_directory, f"{self.pdb_id}_folded.pdb"
-                ),
+            pdb_output_path = os.path.join(
+                self.miner_data_directory, f"{self.pdb_id}_{checkpoint_num}.pdb"
             )
+            save_pdb(
+                positions=positions, topology=topology, output_path=pdb_output_path
+            )
+
+            self.pdb_files[checkpoint_num] = pdb_output_path
 
             return True, check_energies.tolist(), miner_energies.tolist(), "valid"
 

@@ -1,5 +1,4 @@
 import time
-import copy
 from typing import List, Dict, Any
 
 import numpy as np
@@ -51,11 +50,6 @@ def evaluate(
                 if hasattr(evaluator, "checkpoint_path")
                 else ""
             )
-            miner_files["folded_pdb"] = (
-                evaluator.folded_pdb_path
-                if hasattr(evaluator, "folded_pdb_path")
-                else ""
-            )
             miner_files["system_config"] = (
                 evaluator.system_config_path
                 if hasattr(evaluator, "system_config_path")
@@ -67,6 +61,8 @@ def evaluate(
             miner_files["state_xml_path"] = (
                 evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
             )
+            # Add all the pdb files (intermediate and final) to the miner files
+            miner_files.update(evaluator.pdb_files)
 
             miner_registry.registry[uid].logs["can_process"] = can_process
             miner_registry.registry[uid].logs[
@@ -167,6 +163,7 @@ async def run_evaluation_validation_pipeline(
                 )
 
             # Add intermediate checkpoint files to files dictionary
+            # They only exist after validation
             for (
                 checkpoint_num,
                 checkpoint_path,
@@ -226,7 +223,7 @@ async def run_evaluation_validation_pipeline(
     event = defaultdict(list)
     event["processed_uids"] = processed_uids
 
-    if len(processed_uids) > 0:        
+    if len(processed_uids) > 0:
         for uid in processed_uids:
             for key, value in miner_registry.registry[uid].logs.items():
                 event[key].append(value)
