@@ -26,9 +26,6 @@ def evaluate(
         miner_files = {}
         try:
             if resp.dendrite.status_code != 200:
-                logger.info(
-                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
-                )
                 continue
 
             start_time = time.time()
@@ -228,7 +225,7 @@ async def run_evaluation_validation_pipeline(
     # Update event with only the processed entries
     event = defaultdict(list)
     event["processed_uids"] = processed_uids
-    
+
     if len(processed_uids) > 0:        
         for uid in processed_uids:
             for key, value in miner_registry.registry[uid].logs.items():

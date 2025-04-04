@@ -318,7 +318,7 @@ class Validator(BaseValidatorNeuron):
         energies = torch.Tensor(job.event["energies"])
 
         # The length of job.event["uids"] should be all miner uids in the network
-        for uid, reason in zip(job.event["uids"], job.event["reason"]):
+        for uid, reason in zip(job.event["processed_uids"], job.event["reason"]):
             # jobs are "skipped" when they are spot checked
             if reason == "skip":
                 continue
@@ -415,18 +415,21 @@ class Validator(BaseValidatorNeuron):
 
         # Only upload the best .cpt files to S3 if the job is inactive
         if job.active is False:
-            output_links = [defaultdict(str)] * len(job.event["files"])
+            output_links = [] 
+            for _ in range(len(job.event["files"])):
+                output_links.append(defaultdict(str))
+
             best_cpt_files = []
             output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 
             if len(job.event["processed_uids"]) > 0: 
-                for uid, files in zip(job.event["processed_uids"], job.event["files"]):
+                for idx, (uid, files) in enumerate(zip(job.event["processed_uids"], job.event["files"])):
                     location = os.path.join(
                         "outputs",
-                        spec_version,
+                        str(spec_version),
                         job.pdb_id,
                         self.validator_hotkey_reference,
-                        self.metagraph.hotkeys[uid][:8]
+                        self.metagraph.hotkeys[uid][:8],
                         output_time,
                     )
                     for file_type, file_path in files.items():
