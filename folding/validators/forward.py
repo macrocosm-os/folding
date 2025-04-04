@@ -3,102 +3,23 @@ import numpy as np
 from tqdm import tqdm
 from pathlib import Path
 from typing import List, Dict
-from collections import defaultdict
 
 from async_timeout import timeout
 from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
-from folding.validators.reward import get_energies
-from folding.protocol import JobSubmissionSynapse
+
 import asyncio
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
-    get_response_info,
     OpenMMException,
     RsyncException,
 )
 from folding.utils.logger import logger
-from folding.utils.uids import get_all_miner_uids
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-
-async def run_step(
-    self,
-    protein: Protein,
-    timeout: float,
-    job_type: str,
-    job_id: str,
-) -> Dict:
-    start_time = time.time()
-
-    if protein is None:
-        event = {
-            "block": self.block,
-            "step_length": time.time() - start_time,
-            "energies": [],
-            "active": False,
-        }
-        return event
-
-    # Get all uids on the network that are NOT validators.
-    # the .is_serving flag means that the uid does not have an axon address.
-    uids = get_all_miner_uids(
-        self.metagraph,
-        self.config.neuron.vpermit_tao_limit,
-        include_serving_in_check=False,
-    )
-
-    axons = [self.metagraph.axons[uid] for uid in uids]
-
-    system_config = protein.system_config.to_dict()
-    system_config["seed"] = None  # We don't want to pass the seed to miners.
-
-    synapse = JobSubmissionSynapse(
-        pdb_id=protein.pdb_id,
-        job_id=job_id,
-    )
-
-    # Make calls to the network with the prompt - this is synchronous.
-    logger.info("⏰ Waiting for miner responses ⏰")
-    responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
-        axons=axons,
-        synapse=synapse,
-        timeout=timeout,
-        deserialize=True,  # decodes the bytestream response inside of md_outputs.
-    )
-
-    response_info = get_response_info(responses=responses)
-
-    event = {
-        "block": self.block,
-        "step_length": time.time() - start_time,
-        "uids": uids,
-        "energies": [],
-        **response_info,
-    }
-
-    energies, energy_event = await get_energies(
-        validator=self,
-        protein=protein,
-        responses=responses,
-        axons=axons,
-        job_id=job_id,
-        uids=uids,
-        miner_registry=self.miner_registry,
-        job_type=job_type,
-    )
-
-    # Log the step event.
-    event.update({"energies": energies.tolist(), **energy_event})
-
-    if len(protein.md_inputs) > 0:
-        event["md_inputs"] = list(protein.md_inputs.keys())
-        event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
-
-    return event
 
 
 def parse_config(config) -> Dict[str, str]:
