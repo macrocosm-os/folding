@@ -631,7 +631,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 positions=positions, topology=topology, output_path=pdb_output_path
             )
 
-            self.pdb_files[checkpoint_num] = pdb_output_path
+            self.pdb_files[f"{self.pdb_id}_{checkpoint_num}"] = pdb_output_path
 
             return True, check_energies.tolist(), miner_energies.tolist(), "valid"
 

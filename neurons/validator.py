@@ -307,17 +307,10 @@ class Validator(BaseValidatorNeuron):
             await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
-    async def update_job(self, job: Job):
-        """Updates the job status based on the event information
-
-        Args:
-            job (Job): Job object containing the job information
+    def credibility_pipeline(self, job: Job):
         """
-
-        apply_pipeline = False
-        energies = torch.Tensor(job.event["energies"])
-
-        # The length of job.event["uids"] should be all miner uids in the network
+        Run the credibility pipeline to update the uids inside of the job. 
+        """
         for uid, reason in zip(job.event["processed_uids"], job.event["reason"]):
             # jobs are "skipped" when they are spot checked
             if reason == "skip":
@@ -335,6 +328,21 @@ class Validator(BaseValidatorNeuron):
                 miner_uid=uid, task=job.job_type, credibilities=credibility
             )
             self.miner_registry.update_credibility(miner_uid=uid, task=job.job_type)
+
+    async def update_job(self, job: Job):
+        """Updates the job status based on the event information
+
+        Args:
+            job (Job): Job object containing the job information
+        """
+
+        apply_pipeline = False
+        energies = torch.Tensor(job.event["energies"])
+
+        try: 
+            self.credibility_pipeline(job = job)
+        except Exception as e: 
+            logger.error(f"Error running the credibility_pipeline: {e}")
 
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
@@ -459,14 +467,15 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
         )
 
-        merged_events.pop("checked_energy_final")
-        merged_events.pop("miner_energy_final")
-        merged_events.pop("checked_energy_intermediate")
-        merged_events.pop("miner_energy_intermediate")
-        logger.success(f"Event information: {merged_events}")
-
-        if protein is not None and job.active is False:
-            protein.remove_pdb_directory()
+        try:
+            for to_pop in ["checked_energies", "miner_energies"]:
+                merged_events.pop(to_pop)
+                merged_events.pop(to_pop)
+        except Exception as e:
+            logger.error(f"Error in pop: {e}")
+        finally:
+            if protein is not None and job.active is False:
+                protein.remove_pdb_directory()
 
     async def create_synthetic_jobs(self):
         """

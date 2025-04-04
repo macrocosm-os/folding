@@ -61,8 +61,6 @@ def evaluate(
             miner_files["state_xml_path"] = (
                 evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
             )
-            # Add all the pdb files (intermediate and final) to the miner files
-            miner_files.update(evaluator.pdb_files)
 
             miner_registry.registry[uid].logs["can_process"] = can_process
             miner_registry.registry[uid].logs[
@@ -172,6 +170,7 @@ async def run_evaluation_validation_pipeline(
                     f"checkpoint_{checkpoint_num}"
                 ] = checkpoint_path
 
+            miner_registry.registry[uid].logs["files"].update(evaluator.pdb_files)
             is_valid: bool = median_energy != 0.0
 
             # Update event dictionary for this index
