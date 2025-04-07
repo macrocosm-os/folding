@@ -10,7 +10,7 @@ from folding.utils.ops import convert_cif_to_pdb
 from folding_api.schemas import PDBSearchResponse, PDB, PDBInfoResponse
 from folding_api.auth import APIKey, get_api_key
 
-router = APIRouter()
+router = APIRouter(tags=["Utility Endpoints"])
 
 # Global variables to store PDB data
 PDB_DATA = None
@@ -259,10 +259,20 @@ async def get_pdb_file(
 ):
     """
     Retrieve the PDB file for a given PDB ID.
+    First checks the S3 bucket, if not found falls back to RCSB or PDBe sources.
     """
     try:
         # Normalize PDB ID
         pdb_id = pdb_id.lower()
+
+        # First check S3 bucket
+        s3_url = f"https://sn25.nyc3.digitaloceanspaces.com/pdb_files/{pdb_id}.pdb"
+        s3_response = requests.get(s3_url)
+        if s3_response.status_code == 200:
+            logger.info(f"Found PDB file {pdb_id} in S3 bucket")
+            return s3_response.text
+
+        # If not in S3, proceed with original download methods
         if input_source == "rcsb":
             url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
             r = requests.get(url)
@@ -321,3 +331,46 @@ async def get_pdb_file(
         raise
     except Exception as e:
         logger.exception(f"Unexpected error retrieving PDB file: {e}")
+
+
+@router.get("/pdb/{pdb_id}/images")
+async def get_pdb_images(
+    pdb_id: str,
+    api_key: APIKey = Depends(get_api_key),
+):
+    """
+    Retrieve PDB structure image URLs from S3 bucket.
+    Returns URLs for both small (200px) and large (800px) versions of the image.
+    """
+    try:
+        # Normalize PDB ID
+        pdb_id = pdb_id.lower()
+
+        # Construct image URLs
+        base_url = "https://sn25.nyc3.digitaloceanspaces.com/pdb_images"
+        small_image_url = f"{base_url}/{pdb_id}_200.png"
+        large_image_url = f"{base_url}/{pdb_id}_800.png"
+
+        # Check if images exist
+        small_exists = requests.head(small_image_url).status_code == 200
+        large_exists = requests.head(large_image_url).status_code == 200
+
+        if not (small_exists or large_exists):
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=f"No images found for PDB ID {pdb_id}",
+            )
+
+        return {
+            "small_image": small_image_url if small_exists else None,
+            "large_image": large_image_url if large_exists else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error retrieving PDB images: {e}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while retrieving PDB images. Please try again later.",
+        )
