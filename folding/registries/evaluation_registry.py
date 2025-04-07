@@ -215,7 +215,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
     def get_reported_energy(self) -> float:
         """Get the energy from the simulation"""
 
-        return float(np.median(self.final_miner_energies[-c.ENERGY_WINDOW_SIZE :]))
+        try:
+            return float(np.median(self.final_miner_energies[-c.ENERGY_WINDOW_SIZE :]))
+        except Exception as e:
+            logger.error(f"Failed to get reported energy: {e}")
+            return 0.0
 
     def check_masses(self, miner_velm_data) -> bool:
         """
