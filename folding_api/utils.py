@@ -38,7 +38,7 @@ def response_to_dict(response) -> list[dict]:
     if "error" in response.keys():
         raise ValueError(f"Failed to get all PDBs: {response['error']}")
     elif "values" not in response.keys():
-        return [{"error": response["error"]}]
+        return [{}]
     columns = response["columns"]
     values = response["values"]
     data = [dict(zip(columns, row)) for row in values]

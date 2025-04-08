@@ -394,21 +394,24 @@ async def get_job_pool_status(
     """
     if status == "active":  # active = 1
         query = "SELECT * FROM jobs WHERE active = 1"
-    elif status == "inactive":  # active = 0
-        query = "SELECT * FROM jobs WHERE active = 0"
-    elif status == "failed":  # active = 0 and event.failed = True
-        query = "SELECT * FROM jobs WHERE active = 0 and event.failed = 'True'"
+    elif status == "inactive":  # active = 0 and not failed
+        query = "SELECT * FROM jobs WHERE active = 0 AND (event NOT LIKE '%\"failed\": true%' OR event IS NULL)"
+    elif status == "failed":  # active = 0 and event.failed = true
+        query = (
+            "SELECT * FROM jobs WHERE active = 0 AND event LIKE '%\"failed\": true%'"
+        )
     elif status == "all":
         query = "SELECT * FROM jobs"
 
     results = query_gjp(query)
     jobs = []
     for result in results:
-        # Determine job status based on active and event data
+        if not result:
+            continue
+
         event = json.loads(result.get("event", {}))
-        if status != "all":
-            job_status = status
-        elif result["active"] == "1":
+        # Determine job status based on active and event data
+        if result["active"] == "1":
             job_status = "active"
         elif result["active"] == "0" and event.get("failed", False):
             job_status = "failed"
