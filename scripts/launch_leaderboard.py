@@ -128,6 +128,22 @@ if __name__ == "__main__":
         # Create DataFrame for display
         leaderboard_df = pd.DataFrame(leaderboard_data)
 
+        # Calculate total wins
+        total_wins = leaderboard_df["Wins"].sum()
+
+        # Add a summary row
+        summary_row = {
+            "UID": "TOTAL",
+            "Hotkey": "",
+            "Incentive": "",
+            "Wins": total_wins,
+        }
+
+        # Append summary row to the DataFrame
+        leaderboard_df = pd.concat(
+            [leaderboard_df, pd.DataFrame([summary_row])], ignore_index=True
+        )
+
         # Format and display the table with green color
         table = tabulate(
             leaderboard_df, headers="keys", tablefmt="grid", showindex=False
@@ -136,10 +152,15 @@ if __name__ == "__main__":
         print(colored(f"\n=== {TITLE} ===\n", "green", attrs=["bold"]))
         print(colored(table, "green"))
 
-        # Add summary statistics
-        total_wins = leaderboard_df["Wins"].sum()
-        print(colored(f"\nTotal Wins: {total_wins}", "green"))
-        print(colored(f"Total Miners Displayed: {len(leaderboard_df)}", "green"))
+        # Add additional statistics
+        total_jobs = len(jobs_df) if not jobs_df.empty else 0
+        print(colored(f"\nTotal Completed Jobs: {total_jobs}", "green"))
+        print(
+            colored(
+                f"Percentage of Submitted Jobs Won by Top {args.num_uids} Miners: {round(total_wins/total_jobs*100, 2)}%",
+                "green",
+            )
+        )
 
     else:
         # Get jobs based on the specified status
