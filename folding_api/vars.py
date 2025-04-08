@@ -17,7 +17,9 @@ parser.add_argument("--netuid", type=int, help="Subnet netuid", default=25)
 parser.add_argument(
     "--api-key-file", type=str, help="API key file", default="api_keys.json"
 )
-
+parser.add_argument(
+    "--gjp-address", type=str, help="GJP API address", default="174.138.3.61:4001"
+)
 
 bt_config = bt.config(parser)
 

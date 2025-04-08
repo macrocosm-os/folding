@@ -1,5 +1,5 @@
 import subprocess
-from typing import Optional
+from typing import Optional, Literal
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from http import HTTPStatus
 import pickle
@@ -7,8 +7,16 @@ import os
 import requests
 from loguru import logger
 from folding.utils.ops import convert_cif_to_pdb
-from folding_api.schemas import PDBSearchResponse, PDB, PDBInfoResponse
+from folding_api.schemas import (
+    PDBSearchResponse,
+    PDB,
+    PDBInfoResponse,
+    JobPoolResponse,
+    Job,
+)
 from folding_api.auth import APIKey, get_api_key
+from folding_api.utils import query_gjp
+import json
 
 router = APIRouter(tags=["Utility Endpoints"])
 
@@ -374,3 +382,54 @@ async def get_pdb_images(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while retrieving PDB images. Please try again later.",
         )
+
+
+@router.get("/job_pool", response_model=JobPoolResponse)
+async def get_job_pool_status(
+    status: Literal["active", "inactive", "failed", "all"],
+    api_key: APIKey = Depends(get_api_key),
+):
+    """
+    Retrieve the status of the job pool.
+    """
+    if status == "active":  # active = 1
+        query = "SELECT * FROM jobs WHERE active = 1"
+    elif status == "inactive":  # active = 0
+        query = "SELECT * FROM jobs WHERE active = 0"
+    elif status == "failed":  # active = 0 and event.failed = True
+        query = "SELECT * FROM jobs WHERE active = 0 and event.failed = 'True'"
+    elif status == "all":
+        query = "SELECT * FROM jobs"
+
+    results = query_gjp(query)
+    jobs = []
+    for result in results:
+        # Determine job status based on active and event data
+        event = json.loads(result.get("event", {}))
+        if status != "all":
+            job_status = status
+        elif result["active"] == "1":
+            job_status = "active"
+        elif result["active"] == "0" and event.get("failed", False):
+            job_status = "failed"
+        elif result["active"] == "0":
+            job_status = "inactive"
+        else:
+            job_status = "inactive"  # Default to inactive for unknown cases
+
+        job = Job(
+            id=str(result["id"]),
+            type="organic" if result["is_organic"] == 1 else "synthetic",
+            job_id=result["job_id"],
+            pdb_id=result["pdb_id"],
+            created_at=result["created_at"],
+            priority=result["priority"],
+            validator_hotkey=result["validator_hotkey"],
+            best_hotkey=result["best_hotkey"],
+            s3_links=json.loads(result["s3_links"]),
+            status=job_status,
+        )
+        jobs.append(job)
+
+    resp = JobPoolResponse(jobs=jobs, total=len(jobs))
+    return resp

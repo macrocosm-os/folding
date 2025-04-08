@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from fastapi import UploadFile, File
 from folding_api.schemas import FoldingParams
 import requests
-from folding_api.vars import epistula, subtensor_service
+from folding_api.vars import epistula, subtensor_service, bt_config
 
 
 async def make_request(
@@ -31,3 +31,22 @@ async def make_request(
         )
     else:
         return requests.post(f"{address}/organic", data=body_bytes, headers=headers)
+
+
+def response_to_dict(response) -> list[dict]:
+    response = response.json()["results"][0]
+    if "error" in response.keys():
+        raise ValueError(f"Failed to get all PDBs: {response['error']}")
+    elif "values" not in response.keys():
+        return [{"error": response["error"]}]
+    columns = response["columns"]
+    values = response["values"]
+    data = [dict(zip(columns, row)) for row in values]
+    return data
+
+
+def query_gjp(query: str) -> list[dict]:
+    response = requests.get(
+        f"http://{bt_config.gjp_address}/db/query", params={"q": query}
+    )
+    return response_to_dict(response)

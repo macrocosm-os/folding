@@ -204,3 +204,25 @@ class PDBInfoResponse(BaseModel):
     classification: Optional[str] = Field(None, description="Structural classification")
     organism: Optional[str] = Field(None, description="Source organism")
     expression_system: Optional[str] = Field(None, description="Expression system used")
+
+
+class Job(BaseModel):
+    id: str
+    type: Literal["organic", "synthetic"]
+    job_id: str
+    pdb_id: str
+    created_at: str
+    status: Literal["active", "inactive", "failed"]
+    priority: int
+    validator_hotkey: str
+    best_hotkey: str
+    s3_links: dict[str, str]
+
+
+class JobPoolResponse(BaseModel):
+    """
+    Represents a response from a job pool.
+    """
+
+    jobs: List[Job] = Field(..., description="List of jobs")
+    total: int = Field(..., description="Total number of jobs")
