@@ -4,8 +4,8 @@ from termcolor import colored
 from tabulate import tabulate
 from datetime import datetime, timedelta
 import argparse
-import numpy as np
-
+from collections import defaultdict
+import json
 import bittensor as bt
 
 
@@ -61,6 +61,35 @@ def get_hotkey_wins(df: pd.DataFrame, hotkey: str):
     return 0
 
 
+def get_number_of_submissions(df: pd.DataFrame):
+    def create_default_dict():
+        def nested_dict():
+            return defaultdict(
+                lambda: int
+            )  # allows us to set the desired attribute to anything.
+
+        return defaultdict(nested_dict)
+
+    results = create_default_dict()
+
+    # This is a silly mapper but True seems to be encoded as a String
+    mapper = {"True": 1, False: 0}
+
+    for _, row in df.iterrows():
+        event = json.loads(row.event)
+        for hotkey, status_code, is_valid in zip(
+            eval(row.hotkeys), event["response_status_codes"], event["is_valid"]
+        ):
+            if hotkey not in results:
+                results[hotkey]["num_submissions"] = int(status_code) == 200
+                results[hotkey]["in_top_K"] = mapper[is_valid]
+            else:
+                results[hotkey]["num_submissions"] += int(status_code) == 200
+                results[hotkey]["in_top_K"] += mapper[is_valid]
+
+    return results
+
+
 if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Display job leaderboard")
@@ -112,6 +141,9 @@ if __name__ == "__main__":
         jobs = get_inactive_jobs(hours_back=args.hours)
         jobs_df = pd.DataFrame(jobs)
 
+        # Get number of submissions for each hotkey
+        submissions = get_number_of_submissions(jobs_df)
+
         # Prepare data for display
         leaderboard_data = []
         for incentive, uid, hotkey in incentive_data:
@@ -122,6 +154,16 @@ if __name__ == "__main__":
                     "Hotkey": hotkey[:10] + "...",  # Truncate for display
                     "Incentive": round(float(incentive), 6),
                     "Wins": wins,
+                    "Submissions": submissions[hotkey]["num_submissions"],
+                    "Win/Submission %": 100
+                    * round(wins / submissions[hotkey]["num_submissions"], 2),
+                    "In Top K Submissions": submissions[hotkey]["in_top_K"],
+                    "In Top K %": 100
+                    * round(
+                        submissions[hotkey]["in_top_K"]
+                        / submissions[hotkey]["num_submissions"],
+                        2,
+                    ),
                 }
             )
 
@@ -131,12 +173,24 @@ if __name__ == "__main__":
         # Calculate total wins
         total_wins = leaderboard_df["Wins"].sum()
 
+        # Calculate median Win/Submission Percentage
+        median_win_submission_percentage = round(
+            leaderboard_df["Win/Submission %"].median(), 3
+        )
+
+        # Calculate median In Top K Percentage
+        median_in_top_k_percentage = round(leaderboard_df["In Top K %"].median(), 3)
+
         # Add a summary row
         summary_row = {
             "UID": "TOTAL",
             "Hotkey": "",
             "Incentive": "",
             "Wins": total_wins,
+            "Submissions": "",
+            "Win/Submission %": str(median_win_submission_percentage) + "%",
+            "In Top K Submissions": "",
+            "In Top K %": str(median_in_top_k_percentage) + "%",
         }
 
         # Append summary row to the DataFrame
