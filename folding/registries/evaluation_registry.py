@@ -1,4 +1,5 @@
 import os
+import random
 from typing import Any, Dict
 
 import numpy as np
@@ -282,6 +283,21 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return False
         return True
 
+    def select_stratified_checkpoints(
+        self, num_checkpoints: int, num_samples: int
+    ) -> list[int]:
+        """Selects num_samples checkpoints from num_checkpoints at evenly spaced intervals."""
+
+        # Create N evenly spaced bin edges, excluding the last edge (final checkpoint)
+        edges = np.linspace(0, num_checkpoints, num_samples + 1, dtype=int)[:-1]
+
+        # Sample one checkpoint randomly from each bin
+        selected = [
+            random.randint(start, max(start, end - 1))
+            for start, end in zip(edges[:-1], edges[1:])
+        ]
+        return selected
+
     async def is_run_valid(self, validator=None, job_id=None, axon=None):
         """
         Checks if the run is valid by evaluating a set of logical conditions:
@@ -326,11 +342,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Check the intermediate checkpoints
             if validator is not None and job_id is not None and axon is not None:
-                checkpoint_numbers = np.random.choice(
-                    range(self.number_of_checkpoints),
-                    size=c.MAX_CHECKPOINTS_TO_VALIDATE,
-                    replace=False,
-                ).tolist()
+                checkpoint_numbers = self.select_stratified_checkpoints(
+                    num_checkpoints=self.number_of_checkpoints,
+                    num_samples=c.MAX_CHECKPOINTS_TO_VALIDATE,
+                )
 
                 # Get intermediate checkpoints from the miner
                 intermediate_checkpoints = await self.get_intermediate_checkpoints(
