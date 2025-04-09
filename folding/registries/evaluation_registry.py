@@ -1,12 +1,10 @@
 import os
-from typing import Any, Dict, List, Union
-import traceback
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
 from openmm import app
 import bittensor as bt
-import plotly.graph_objects as go
 
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
@@ -20,6 +18,7 @@ from folding.utils.ops import (
     save_files,
     save_pdb,
     write_pkl,
+    check_uniqueness,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.protocol import IntermediateSubmissionSynapse
@@ -62,6 +61,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         )
 
         self.intermediate_checkpoint_files = {}
+        self.miner_reported_energies = {}
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
@@ -385,11 +385,23 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     if not is_valid:
                         return False, checked_energies_dict, miner_energies_dict, result
 
+                # Check if the miner's checkpoint is similar to the validator's checkpoint.
+                if not check_uniqueness(
+                    list(self.miner_reported_energies.values()),
+                    tol=c.MINER_CHECKPOINT_SIMILARITY_TOLERANCE,
+                ):
+                    return (
+                        False,
+                        checked_energies_dict,
+                        miner_energies_dict,
+                        "miner-checkpoint-similarity",
+                    )
+
                 return True, checked_energies_dict, miner_energies_dict, "valid"
 
-        except ValidationError as E:
-            logger.warning(f"{E}")
-            return False, {}, {}, E.message
+        except ValidationError as e:
+            logger.warning(f"{e}")
+            return False, {}, {}, e.message
 
         return True, checked_energies_dict, miner_energies_dict, "valid"
 
@@ -480,6 +492,17 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
     def name(self) -> str:
         return "SyntheticMD"
+
+    def get_miner_log_file_energies(
+        self, start_index: int, end_index: int
+    ) -> np.ndarray:
+        """Get the energies from the miner log file for a given range of steps."""
+        miner_energies: np.ndarray = self.log_file[
+            (self.log_file['#"Step"'] > start_index)
+            & (self.log_file['#"Step"'] <= end_index)
+        ]["Potential Energy (kJ/mole)"].values
+
+        return miner_energies
 
     def is_checkpoint_valid(
         self,
@@ -589,10 +612,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             max_step = current_cpt_step + steps_to_run
 
-            miner_energies: np.ndarray = self.log_file[
-                (self.log_file['#"Step"'] > current_cpt_step)
-                & (self.log_file['#"Step"'] <= max_step)
-            ]["Potential Energy (kJ/mole)"].values
+            miner_energies: np.ndarray = self.get_miner_log_file_energies(
+                start_index=current_cpt_step, end_index=max_step
+            )
+
+            self.miner_reported_energies[checkpoint_num] = miner_energies
 
             if len(np.unique(check_energies)) == 1:
                 logger.warning(
