@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from http import HTTPStatus
 import pickle
 import os
+import pandas as pd
 import requests
 from loguru import logger
 from folding.utils.ops import convert_cif_to_pdb
@@ -13,10 +14,13 @@ from folding_api.schemas import (
     PDBInfoResponse,
     JobPoolResponse,
     Job,
+    JobResponse,
+    Miner,
 )
 from folding_api.auth import APIKey, get_api_key
 from folding_api.utils import query_gjp
 import json
+import io
 
 router = APIRouter(tags=["Utility Endpoints"])
 
@@ -387,11 +391,17 @@ async def get_pdb_images(
 @router.get("/job_pool", response_model=JobPoolResponse)
 async def get_job_pool_status(
     status: Literal["active", "inactive", "failed", "all"],
+    job_ids: Optional[list[str]] = Query(
+        None, description="List of specific job IDs to filter by"
+    ),
     api_key: APIKey = Depends(get_api_key),
 ):
     """
     Retrieve the status of the job pool.
+
+    Filter jobs by their status and optionally by specific job IDs.
     """
+    # Base query based on status
     if status == "active":  # active = 1
         query = "SELECT * FROM jobs WHERE active = 1"
     elif status == "inactive":  # active = 0 and not failed
@@ -402,6 +412,17 @@ async def get_job_pool_status(
         )
     elif status == "all":
         query = "SELECT * FROM jobs"
+
+    # Add job_ids filter if provided
+    if job_ids and len(job_ids) > 0:
+        # Format the job_ids list for SQL IN clause
+        job_ids_str = "', '".join(job_ids)
+
+        # If there's already a WHERE clause, add AND
+        if " WHERE " in query:
+            query += f" AND job_id IN ('{job_ids_str}')"
+        else:
+            query += f" WHERE job_id IN ('{job_ids_str}')"
 
     results = query_gjp(query)
     jobs = []
@@ -436,3 +457,84 @@ async def get_job_pool_status(
 
     resp = JobPoolResponse(jobs=jobs, total=len(jobs))
     return resp
+
+
+@router.get("/job_pool/{job_id}", response_model=JobResponse)
+async def get_job(job_id: str, api_key: APIKey = Depends(get_api_key)):
+    """
+    Retrieve a specific job by its ID.
+    """
+    query = f"SELECT * FROM jobs WHERE job_id = '{job_id}'"
+    results = query_gjp(query)
+    if not results:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Job with ID {job_id} not found",
+        )
+
+    job = results[0]
+    event = json.loads(job.get("event", "{}"))
+
+    # Determine job status based on active flag and event data
+    if job["active"] == "1":
+        job_status = "active"
+    elif job["active"] == "0" and event.get("failed", False):
+        job_status = "failed"
+    else:
+        job_status = "inactive"
+
+    # Parse system config
+    system_config = json.loads(job.get("system_config", "{}"))
+    system_kwargs = system_config.get("system_kwargs", {})
+
+    # Parse hotkeys and create miners list with energy data
+    hotkeys = json.loads(job.get("hotkeys", "[]"))
+    uids = event.get("uids", [])
+    reasons = event.get("reason", [])
+    output_links = event.get("output_links", [])
+
+    # select miners where reason is not ''
+    miners = [
+        {"uid": str(miner_uid), "hotkey": miner_hotkey, "energy": {}}
+        for miner_uid, miner_hotkey, reason in zip(uids, hotkeys, reasons)
+        if reason != ""
+    ]
+
+    for miner, output_link in zip(miners, output_links):
+        log_file_link = output_link.get("log_file_path", "")
+        log_file_response = requests.get(log_file_link)
+        log_file_text = log_file_response.text
+        data = io.StringIO(log_file_text)
+        df = pd.read_csv(data)
+        miner["energy"] = {
+            "step": df.iloc[:, 0].tolist(),
+            "energy": df.iloc[:, 1].tolist(),
+        }
+
+    # Parse energy data for time series of the best hotkey
+
+    miners = [Miner(**miner) for miner in miners]
+    # Parse s3 links for pdb data
+    s3_links = json.loads(job.get("s3_links", "{}"))
+    pdb_data = s3_links.get("pdb", "")
+    pdb_info = await get_pdb_info(job.get("pdb_id", ""))
+
+    return JobResponse(
+        pdb_id=job.get("pdb_id", ""),
+        pdb_data=pdb_data,
+        status=job_status,
+        classification=pdb_info.classification,
+        expression_system=pdb_info.expression_system,
+        mutations=job.get("mutations", False),
+        source=job.get("source", ""),
+        temperature=system_kwargs.get("temperature", 0.0),
+        friction=system_kwargs.get("friction", 0.0),
+        pressure=system_kwargs.get("pressure", 0.0),
+        time_to_live=float(job.get("time_to_live", 0)),
+        ff=system_config.get("ff", ""),
+        water=system_config.get("water", ""),
+        box=system_config.get("box", ""),
+        miners=miners,
+        created_at=job.get("created_at", ""),
+        updated_at=job.get("updated_at", ""),
+    )
