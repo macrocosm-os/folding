@@ -345,7 +345,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             if validator is not None and job_id is not None and axon is not None:
                 checkpoint_numbers = self.select_stratified_checkpoints(
                     num_checkpoints=self.number_of_checkpoints,
-                    num_samples=c.MAX_CHECKPOINTS_TO_VALIDATE + 1, # +1 for Final
+                    num_samples=c.MAX_CHECKPOINTS_TO_VALIDATE + 1,  # +1 for Final
                 )
 
                 # Get intermediate checkpoints from the miner
@@ -402,15 +402,20 @@ class SyntheticMDEvaluator(BaseEvaluator):
                         return False, checked_energies_dict, miner_energies_dict, result
 
                 # Check if the miner's checkpoint is similar to the validator's checkpoint.
-                miner_reported_energies = [] 
-                checkpoint_length = len(self.miner_reported_energies[str(checkpoint_numbers[0])])
+                miner_reported_energies = []
+                checkpoint_length = len(
+                    self.miner_reported_energies[str(checkpoint_numbers[0])]
+                )
                 for _, energy in self.miner_reported_energies.items():
-                    miner_reported_energies.append(energy[:checkpoint_length]) # final cpt is larger in length.
-                    
+                    miner_reported_energies.append(
+                        energy[:checkpoint_length]
+                    )  # final cpt is larger in length.
+
                 if not check_uniqueness(
-                    vectors = miner_reported_energies,
-                    tol = c.MINER_CHECKPOINT_SIMILARITY_TOLERANCE,
+                    vectors=miner_reported_energies,
+                    tol=c.MINER_CHECKPOINT_SIMILARITY_TOLERANCE,
                 ):
+                    logger.warning("Miner checkpoints not unique")
                     return (
                         False,
                         checked_energies_dict,
@@ -588,7 +593,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         try:
             if not self.check_gradient(check_energies=np.array(state_energies)):
-                logger.warning(f"state energies: {state_energies}")
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
                 )
