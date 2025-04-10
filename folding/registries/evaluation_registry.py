@@ -323,7 +323,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             miner_energies_dict = {}
 
             logger.info(f"Checking if run is valid for {self.hotkey_alias}...")
-            logger.info(f"Checking final checkpoint...")
+            logger.info("Checking final checkpoint...")
             # Check the final checkpoint
             (
                 is_valid,
@@ -467,6 +467,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         # Use the final checkpoint's energy for the score
         if "final" in checked_energies_dict and checked_energies_dict["final"]:
+            logger.success(f"Hotkey {self.hotkey_alias} passed validation!")
             final_energies = checked_energies_dict["final"]
             # Take the median of the last ENERGY_WINDOW_SIZE values
             median_energy = np.median(final_energies[-c.ENERGY_WINDOW_SIZE :])
@@ -689,9 +690,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             return True, check_energies.tolist(), miner_energies.tolist(), "valid"
 
-        except ValidationError as E:
-            logger.warning(f"{E}")
-            return False, [], [], E.message
+        except ValidationError as e:
+            logger.warning(f"{e}")
+            return False, [], [], e.message
 
 
 class OrganicMDEvaluator(SyntheticMDEvaluator):
