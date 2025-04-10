@@ -11,6 +11,9 @@ GRADIENT_WINDOW_SIZE = 50  # Number of steps to calculate the gradients over.
 ENERGY_WINDOW_SIZE = (
     10  # Number of steps to compute median/mean energies when comparing
 )
+MINER_CHECKPOINT_SIMILARITY_TOLERANCE = (
+    0.01  # Tolerance for cpts to be considered similar. NOT in percent.
+)
 
 # MinerRegistry constants
 MAX_JOBS_IN_MEMORY = 1000
