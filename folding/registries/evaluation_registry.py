@@ -64,7 +64,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         self.intermediate_checkpoint_files = {}
         self.miner_reported_energies = {}
-        self.intermediate_checkpoint_positions = {}
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
@@ -416,18 +415,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
                 return True, checked_energies_dict, miner_energies_dict, "valid"
 
-            # Check if the intermediate checkpoint positions are unique. Positions cannot be different
-            if not check_uniqueness(
-                list(self.intermediate_checkpoint_positions.values()),
-                tol=0.0,
-            ):
-                return (
-                    False,
-                    checked_energies_dict,
-                    miner_energies_dict,
-                    "intermediate-checkpoint-properties",
-                )
-
         except ValidationError as e:
             logger.warning(f"{e}")
             return False, {}, {}, e.message
@@ -646,16 +633,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
             )
 
             self.miner_reported_energies[checkpoint_num] = miner_energies
-
-            intermediate_positions = (
-                simulation.context.getState(
-                    getPositions=True, asNumpy=True
-                ).getPositions()
-                / unit.nanometers
-            )
-            self.intermediate_checkpoint_positions[
-                checkpoint_num
-            ] = intermediate_positions.flatten()  # all positions in a single array
 
             if len(np.unique(check_energies)) == 1:
                 logger.warning(
