@@ -176,3 +176,81 @@ class APIKeyCreate(BaseModel):
 
 class APIKeyResponse(APIKeyBase):
     key: str
+
+
+class PDB(BaseModel):
+    pdb_id: str
+    source: str
+
+
+class PDBSearchResponse(BaseModel):
+    """
+    Represents a response from a PDB search.
+    """
+
+    matches: List[PDB] = Field(..., description="List of matching PDB IDs")
+    total: int = Field(..., description="Total number of matches found")
+
+
+class PDBInfoResponse(BaseModel):
+    """
+    Represents detailed information about a PDB structure from RCSB.
+    """
+
+    pdb_id: str = Field(..., description="PDB ID")
+    molecule_name: Optional[str] = Field(
+        None, description="Name of the molecule/protein"
+    )
+    classification: Optional[str] = Field(None, description="Structural classification")
+    organism: Optional[str] = Field(None, description="Source organism")
+    expression_system: Optional[str] = Field(None, description="Expression system used")
+
+
+class Job(BaseModel):
+    id: str
+    type: Literal["organic", "synthetic"]
+    job_id: str
+    pdb_id: str
+    created_at: str
+    status: Literal["active", "inactive", "failed"]
+    priority: int
+    validator_hotkey: str
+    best_hotkey: str
+    s3_links: dict[str, str]
+
+
+class JobPoolResponse(BaseModel):
+    """
+    Represents a response from a job pool.
+    """
+
+    jobs: List[Job] = Field(..., description="List of jobs")
+    total: int = Field(..., description="Total number of jobs")
+
+
+class Miner(BaseModel):
+    uid: str
+    hotkey: str
+    energy: dict
+
+
+class JobResponse(BaseModel):
+    pdb_id: str
+    pdb_file_link: str
+    classification: Optional[str] = Field(None, description="Structural classification")
+    expression_system: Optional[str] = Field(None, description="Expression system used")
+    mutations: Optional[bool] = Field(None, description="Mutations in the PDB")
+    source: str
+    temperature: float
+    friction: float
+    pressure: float
+    time_to_live: float
+    ff: str
+    water: str
+    box: str
+    miners: List[Miner]
+    status: Literal["active", "inactive", "failed"] = Field(
+        "inactive", description="Job status"
+    )
+    created_at: str = Field("", description="Job creation timestamp")
+    updated_at: str = Field("", description="Job last update timestamp")
