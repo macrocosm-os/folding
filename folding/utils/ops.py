@@ -449,8 +449,8 @@ def are_vectors_too_similar(vec1, vec2, tol=0.01):
     """Check if two vectors are similar within a tolerance."""
     if np.array_equal(vec1, vec2):
         return True  # Identical
-    if np.allclose(vec1, vec2, rtol=tol, atol=0):
-        return True  # Too close within tolerance
+    # if np.allclose(vec1, vec2, rtol=tol, atol=0):
+    #     return True  # Too close within tolerance
     return False
 
 

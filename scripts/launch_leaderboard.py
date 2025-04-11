@@ -75,17 +75,34 @@ def get_number_of_submissions(df: pd.DataFrame):
     # This is a silly mapper but True seems to be encoded as a String
     mapper = {"True": 1, False: 0}
 
+    unprocessable_rows = 0
     for _, row in df.iterrows():
         event = json.loads(row.event)
-        for hotkey, status_code, is_valid in zip(
-            eval(row.hotkeys), event["response_status_codes"], event["is_valid"]
-        ):
-            if hotkey not in results:
-                results[hotkey]["num_submissions"] = int(status_code) == 200
-                results[hotkey]["in_top_K"] = mapper[is_valid]
-            else:
-                results[hotkey]["num_submissions"] += int(status_code) == 200
-                results[hotkey]["in_top_K"] += mapper[is_valid]
+        try:
+            for hotkey, status_code, is_valid in zip(
+                eval(row.hotkeys), event["response_status_codes"], event["is_valid"]
+            ):
+                if hotkey not in results:
+                    results[hotkey]["num_submissions"] = int(status_code) == 200
+                    results[hotkey]["in_top_K"] = mapper[is_valid]
+                else:
+                    results[hotkey]["num_submissions"] += int(status_code) == 200
+                    results[hotkey]["in_top_K"] += mapper[is_valid]
+        except Exception:
+            unprocessable_rows += 1
+            continue
+
+    if unprocessable_rows > 0:
+        print(
+            colored(f"Unprocessable rows: {unprocessable_rows}", "red", attrs=["bold"])
+        )
+        print(
+            colored(
+                f"Percentage of unprocessable rows: {round(unprocessable_rows/len(df)*100, 2)}%",
+                "red",
+                attrs=["bold"],
+            )
+        )
 
     return results
 
