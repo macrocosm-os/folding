@@ -30,6 +30,7 @@ pytest-mock = "^3.14.0"
 gjp-models = "^0.1.10"
 mdanalysis = "^2.9.0"
 python-multipart = "^0.0.20"
+bittensor-cli= ">=9.1.0"
 
 [tool.poetry.group.api]
 optional = true
