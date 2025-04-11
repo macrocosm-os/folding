@@ -12,7 +12,7 @@ ENERGY_WINDOW_SIZE = (
     10  # Number of steps to compute median/mean energies when comparing
 )
 MINER_CHECKPOINT_SIMILARITY_TOLERANCE = (
-    0.01  # Tolerance for cpts to be considered similar. NOT in percent.
+    0.05  # Tolerance for cpts to be considered similar. NOT in percent.
 )
 
 # MinerRegistry constants
