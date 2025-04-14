@@ -8,7 +8,7 @@ import asyncio
 import traceback
 
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import netaddr
 import requests
@@ -31,14 +31,17 @@ from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_all_miner_uids
 from folding.utils.s3_utils import (
-    upload_output_to_s3,
-    upload_to_s3,
     DigitalOceanS3Handler,
+    S3Config,
 )
 from folding.validators.forward import create_new_challenge, run_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Validator(BaseValidatorNeuron):
@@ -78,9 +81,15 @@ class Validator(BaseValidatorNeuron):
 
         if not self.config.s3.off:
             try:
-                self.handler = DigitalOceanS3Handler(
+                config = S3Config(
+                    region_name=self.config.s3.region_name,
+                    access_key_id=os.getenv("S3_KEY"),
+                    secret_access_key=os.getenv("S3_SECRET"),
                     bucket_name=self.config.s3.bucket_name,
+                    miner_bucket_name=self.config.s3.miner_bucket_name,
                 )
+
+                self.handler = DigitalOceanS3Handler(config=config)
             except ValueError as e:
                 raise f"Failed to create S3 handler, check your .env file: {e}"
 
@@ -151,15 +160,24 @@ class Validator(BaseValidatorNeuron):
 
                 if not self.config.s3.off:
                     try:
-                        logger.info(f"Uploading to {self.handler.bucket_name}")
-                        s3_links = await upload_to_s3(
-                            handler=self.handler,
-                            pdb_location=protein.pdb_location,
-                            simulation_cpt=protein.simulation_cpt,
-                            validator_directory=protein.validator_directory,
-                            pdb_id=job_event["pdb_id"],
-                            VALIDATOR_ID=self.validator_hotkey_reference,
-                        )
+                        logger.info(f"Uploading to {self.handler.config.bucket_name}")
+                        files_to_upload = {
+                            "pdb": protein.pdb_location,
+                            "cpt": f"{protein.validator_directory}/{protein.simulation_cpt}",
+                        }
+                        location = f"inputs/{job_event['pdb_id']}/{self.validator_hotkey_reference}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+                        s3_links = {}
+                        for file_type, file_path in files_to_upload.items():
+                            key = self.handler.put(
+                                file_path=file_path,
+                                location=location,
+                                public=True,
+                            )
+                            s3_links[file_type] = os.path.join(
+                                f"{self.handler.config.endpoint_url}/{self.handler.config.bucket_name}/",
+                                key,
+                            )
+
                         job_event["s3_links"] = s3_links
                         logger.success("✅✅ Simulation ran successfully! ✅✅")
                     except Exception as e:
@@ -342,10 +360,14 @@ class Validator(BaseValidatorNeuron):
                         output_links[idx][file_type] = ""
                         continue
 
-                    output_link = await upload_output_to_s3(
-                        handler=self.handler,
-                        output_file=file_path,
+                    key = self.handler.put(
+                        file_path=file_path,
                         location=location,
+                        public=True,
+                    )
+                    output_link = os.path.join(
+                        f"{self.handler.config.endpoint_url}/{self.handler.config.bucket_name}/",
+                        key,
                     )
 
                     output_links[idx][file_type] = output_link

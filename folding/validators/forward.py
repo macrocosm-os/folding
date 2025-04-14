@@ -1,12 +1,12 @@
+from datetime import datetime
+import os
 import time
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
 from typing import List, Dict
-from collections import defaultdict
 
 from async_timeout import timeout
-from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
@@ -24,6 +24,7 @@ from folding.utils.logger import logger
 from folding.utils.uids import get_all_miner_uids
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
 
 async def run_step(
     self,
@@ -52,23 +53,36 @@ async def run_step(
     )
 
     axons = [self.metagraph.axons[uid] for uid in uids]
+    hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
 
     system_config = protein.system_config.to_dict()
     system_config["seed"] = None  # We don't want to pass the seed to miners.
 
-    synapse = JobSubmissionSynapse(
-        pdb_id=protein.pdb_id,
-        job_id=job_id,
-    )
+    synapses = [
+        JobSubmissionSynapse(
+            pdb_id=protein.pdb_id,
+            job_id=job_id,
+            presigned_url=generate_presigned_url(hotkey),
+        )
+        for hotkey in hotkeys
+    ]
 
     # Make calls to the network with the prompt - this is synchronous.
     logger.info("⏰ Waiting for miner responses ⏰")
-    responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
-        axons=axons,
-        synapse=synapse,
-        timeout=timeout,
-        deserialize=True,  # decodes the bytestream response inside of md_outputs.
+    responses = await asyncio.gather(
+        *[
+            self.dendrite.call(
+                axon=axon, synapse=synapse, timeout=timeout, deserialize=True
+            )
+            for axon, synapse in zip(axons, synapses)
+        ]
     )
+    # responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
+    #     axons=axons,
+    #     synapse=synapse,
+    #     timeout=timeout,
+    #     deserialize=True,  # decodes the bytestream response inside of md_outputs.
+    # )
 
     response_info = get_response_info(responses=responses)
 
@@ -280,14 +294,23 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                 if not config.s3.off:
                     try:
                         logger.info(f"Uploading to {self.handler.bucket_name}")
-                        s3_links = await upload_to_s3(
-                            handler=self.handler,
-                            pdb_location=protein.pdb_location,
-                            simulation_cpt=protein.simulation_cpt,
-                            validator_directory=protein.validator_directory,
-                            pdb_id=pdb_id,
-                            VALIDATOR_ID=self.validator_hotkey_reference,
-                        )
+                        files_to_upload = {
+                            "pdb": protein.pdb_location,
+                            "cpt": f"{protein.validator_directory}/{protein.simulation_cpt}",
+                        }
+                        location = f"inputs/{pdb_id}/{self.validator_hotkey_reference}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+                        s3_links = {}
+                        for file_type, file_path in files_to_upload.items():
+                            key = self.handler.put(
+                                file_path=file_path,
+                                location=location,
+                                public=True,
+                            )
+                            s3_links[file_type] = os.path.join(
+                                f"{self.handler.config.endpoint_url}/{self.handler.config.bucket_name}/",
+                                key,
+                            )
+
                         event["s3_links"] = s3_links
                         event["validator_search_status"] = True  # simulation passed!
                         logger.success("✅✅ Simulation ran successfully! ✅✅")

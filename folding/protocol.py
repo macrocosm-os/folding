@@ -46,6 +46,7 @@ class JobSubmissionSynapse(bt.Synapse):
 
     pdb_id: str
     job_id: str
+    presigned_url: str
 
     # Optional request output, filled by receiving axon.
     md_output: typing.Optional[dict] = None
