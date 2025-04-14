@@ -247,14 +247,15 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 return False
         return True
 
-    def check_gradient(self, check_energies: np.ndarray) -> bool:
+    def check_gradient(self, check_energies: np.ndarray) -> Tuple[bool, float]:
         """This method checks the gradient of the potential energy within the first
         WINDOW size of the check_energies array. Miners that return gradients that are too high,
         there is a *high* probability that they have not run the simulation as the validator specified.
         """
         mean_gradient = np.diff(check_energies[: c.GRADIENT_WINDOW_SIZE]).mean().item()
         return (
-            mean_gradient <= c.GRADIENT_THRESHOLD
+            mean_gradient <= c.GRADIENT_THRESHOLD,
+            mean_gradient,
         )  # includes large negative gradients is passible
 
     def compare_state_to_cpt(
@@ -594,9 +595,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
             state_energies.append(energy)
 
         try:
-            if not self.check_gradient(check_energies=np.array(state_energies)):
+            is_gradient_valid, mean_gradient = self.check_gradient(
+                check_energies=np.array(state_energies)
+            )
+            if not is_gradient_valid:
                 logger.warning(
-                    f"hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
+                    f"❌ hotkey {self.hotkey_alias} failed state-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, mean_gradient: {mean_gradient} ... Skipping! ❌"
                 )
                 raise ValidationError(message="state-gradient")
 
@@ -651,9 +655,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 )
                 raise ValidationError(message="reprod-energies-identical")
 
-            if not self.check_gradient(check_energies=np.array(check_energies)):
+            is_gradient_valid, mean_gradient = self.check_gradient(
+                check_energies=np.array(check_energies)
+            )
+            if not is_gradient_valid:
                 logger.warning(
-                    f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
+                    f"❌ hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, mean_gradient: {mean_gradient} ... Skipping! ❌"
                 )
                 raise ValidationError(message="cpt-gradient")
 
