@@ -443,3 +443,24 @@ def write_pdb_file(
         positions=positions,
         file=open(pdb_location_path, "w"),
     )
+
+
+def are_vectors_too_similar(vec1, vec2, tol=0.01):
+    """Check if two vectors are similar within a tolerance."""
+    if np.array_equal(vec1, vec2):
+        return True  # Identical
+    # if np.allclose(vec1, vec2, rtol=tol, atol=0):
+    #     return True  # Too close within tolerance
+    return False
+
+
+def check_uniqueness(vectors, tol=0.01):
+    """Check if all vectors are unique within a tolerance."""
+    vectors_np = [np.array(v) for v in vectors]
+    n = len(vectors_np)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if are_vectors_too_similar(vectors_np[i], vectors_np[j], tol):
+                return False
+    return True

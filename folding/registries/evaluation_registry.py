@@ -1,10 +1,12 @@
 import os
+import random
 from typing import Any, Dict, Tuple
+
+import bittensor as bt
 
 import numpy as np
 import pandas as pd
 from openmm import app
-import bittensor as bt
 
 from folding.base.evaluation import BaseEvaluator
 from folding.base.simulation import OpenMMSimulation
@@ -18,6 +20,7 @@ from folding.utils.ops import (
     save_files,
     save_pdb,
     write_pkl,
+    check_uniqueness,
 )
 from folding.utils.opemm_simulation_config import SimulationConfig
 from folding.protocol import IntermediateSubmissionSynapse
@@ -58,6 +61,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         self.pdb_files = {}
         self.intermediate_checkpoint_files = {}
+        self.miner_reported_energies = {}
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
@@ -273,6 +277,21 @@ class SyntheticMDEvaluator(BaseEvaluator):
             return False
         return True
 
+    def select_stratified_checkpoints(
+        self, num_checkpoints: int, num_samples: int
+    ) -> list[int]:
+        """Selects num_samples checkpoints from num_checkpoints at evenly spaced intervals."""
+
+        # Create N evenly spaced bin edges, excluding the last edge (final checkpoint)
+        edges = np.linspace(0, num_checkpoints, num_samples + 1, dtype=int)[:-1]
+
+        # Sample one checkpoint randomly from each bin
+        selected = [
+            random.randint(start, max(start, end - 1))
+            for start, end in zip(edges[:-1], edges[1:])
+        ]
+        return selected
+
     async def is_run_valid(
         self, validator=None, job_id=None, axon=None
     ) -> Tuple[bool, Dict[str, Any], Dict[str, Any], str]:
@@ -319,11 +338,10 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             # Check the intermediate checkpoints
             if validator is not None and job_id is not None and axon is not None:
-                checkpoint_numbers = np.random.choice(
-                    range(self.number_of_checkpoints),
-                    size=c.MAX_CHECKPOINTS_TO_VALIDATE,
-                    replace=False,
-                ).tolist()
+                checkpoint_numbers = self.select_stratified_checkpoints(
+                    num_checkpoints=self.number_of_checkpoints,
+                    num_samples=c.MAX_CHECKPOINTS_TO_VALIDATE + 1,  # +1 for Final
+                )
 
                 # Get intermediate checkpoints from the miner
                 intermediate_checkpoints: Dict[
@@ -382,11 +400,33 @@ class SyntheticMDEvaluator(BaseEvaluator):
                     if not is_valid:
                         return False, checked_energies_dict, miner_energies_dict, result
 
+                # Check if the miner's checkpoint is similar to the validator's checkpoint.
+                miner_reported_energies = []
+                checkpoint_length = len(
+                    self.miner_reported_energies[str(checkpoint_numbers[0])]
+                )
+                for _, energy in self.miner_reported_energies.items():
+                    miner_reported_energies.append(
+                        energy[:checkpoint_length]
+                    )  # final cpt is larger in length.
+
+                if not check_uniqueness(
+                    vectors=miner_reported_energies,
+                    tol=c.MINER_CHECKPOINT_SIMILARITY_TOLERANCE,
+                ):
+                    logger.warning("Miner checkpoints not unique")
+                    return (
+                        False,
+                        checked_energies_dict,
+                        miner_energies_dict,
+                        "miner-checkpoint-similarity",
+                    )
+
                 return True, checked_energies_dict, miner_energies_dict, "valid"
 
-        except ValidationError as E:
-            logger.warning(f"{E}")
-            return False, {}, {}, E.message
+        except ValidationError as e:
+            logger.warning(f"{e}")
+            return False, {}, {}, e.message
 
         return True, checked_energies_dict, miner_energies_dict, "valid"
 
@@ -428,6 +468,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         # Use the final checkpoint's energy for the score
         if "final" in checked_energies_dict and checked_energies_dict["final"]:
+            logger.success(f"Hotkey {self.hotkey_alias} passed validation!")
             final_energies = checked_energies_dict["final"]
             # Take the median of the last ENERGY_WINDOW_SIZE values
             median_energy = np.median(final_energies[-c.ENERGY_WINDOW_SIZE :])
@@ -479,6 +520,17 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
     def name(self) -> str:
         return "SyntheticMD"
+
+    def get_miner_log_file_energies(
+        self, start_index: int, end_index: int
+    ) -> np.ndarray:
+        """Get the energies from the miner log file for a given range of steps."""
+        miner_energies: np.ndarray = self.log_file[
+            (self.log_file['#"Step"'] > start_index)
+            & (self.log_file['#"Step"'] <= end_index)
+        ]["Potential Energy (kJ/mole)"].values
+
+        return miner_energies
 
     def is_checkpoint_valid(
         self,
@@ -587,10 +639,11 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             max_step = current_cpt_step + steps_to_run
 
-            miner_energies: np.ndarray = self.log_file[
-                (self.log_file['#"Step"'] > current_cpt_step)
-                & (self.log_file['#"Step"'] <= max_step)
-            ]["Potential Energy (kJ/mole)"].values
+            miner_energies: np.ndarray = self.get_miner_log_file_energies(
+                start_index=current_cpt_step, end_index=max_step
+            )
+
+            self.miner_reported_energies[checkpoint_num] = miner_energies
 
             if len(np.unique(check_energies)) == 1:
                 logger.warning(
@@ -599,7 +652,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 raise ValidationError(message="reprod-energies-identical")
 
             if not self.check_gradient(check_energies=np.array(check_energies)):
-                logger.warning(f"check_energies: {check_energies}")
                 logger.warning(
                     f"hotkey {self.hotkey_alias} failed cpt-gradient check for {self.pdb_id}, checkpoint_num: {checkpoint_num}, ... Skipping!"
                 )
@@ -639,9 +691,9 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
             return True, check_energies.tolist(), miner_energies.tolist(), "valid"
 
-        except ValidationError as E:
-            logger.warning(f"{E}")
-            return False, [], [], E.message
+        except ValidationError as e:
+            logger.warning(f"{e}")
+            return False, [], [], e.message
 
 
 class OrganicMDEvaluator(SyntheticMDEvaluator):
