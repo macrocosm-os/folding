@@ -11,6 +11,7 @@ from folding.base.evaluation import BaseEvaluator
 from folding.protocol import JobSubmissionSynapse
 from folding.registries.miner_registry import MinerRegistry
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
+from folding.utils.s3_utils import DigitalOceanS3Handler
 
 
 def evaluate(
@@ -18,6 +19,7 @@ def evaluate(
     responses: List[JobSubmissionSynapse],
     uids: List[int],
     job_type: str,
+    s3_handler: DigitalOceanS3Handler,
 ):
     reported_energies = np.zeros(len(uids))
     evaluators = [None] * len(uids)
@@ -46,6 +48,7 @@ def evaluate(
                 system_config=protein.system_config,
                 velm_array_pkl_path=protein.velm_array_pkl,
                 trajectory_path=resp.presigned_url,
+                s3_handler=s3_handler,
             )
 
             can_process = evaluator.evaluate()
@@ -128,7 +131,7 @@ async def get_energies(
 
     # Get initial evaluations
     reported_energies, evaluators, seed, files, process_md_output_time = evaluate(
-        protein, responses, uids, job_type
+        protein, responses, uids, job_type, validator.handler
     )
 
     # Sort all lists by reported energy
