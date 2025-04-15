@@ -136,7 +136,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             )
 
             # download the trajectory from s3
-            self.s3_handler.get(self.trajector  y_s3_path, self.trajectory_path)
+            self.s3_handler.get(self.trajectory_s3_path, self.trajectory_path)
 
             simulation.loadCheckpoint(checkpoint_path)
 

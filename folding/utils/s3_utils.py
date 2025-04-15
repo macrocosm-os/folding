@@ -242,18 +242,25 @@ class DigitalOceanS3Handler(BaseHandler):
         location = self._get_location(miner_hotkey, pdb_id, file_name)
         content_type = self._get_content_type(file_name)
         try:
-            return self.s3_client.generate_presigned_url(
-                method,
-                Params={"Bucket": self.config.bucket_name, "Key": location},
-                Fields={
-                    "acl": "private",
-                },
-                Conditions=[
-                    ["starts-with", "$Content-Type", content_type],
-                    {"acl": "private"},
-                ],
-                ExpiresIn=expires_in,
-            )
+            if method == "get_object":
+                return self.s3_client.generate_presigned_url(
+                    method,
+                    Params={"Bucket": self.config.bucket_name, "Key": location},
+                )
+            elif method == "put_object":
+                return self.s3_client.generate_presigned_post(
+                    Bucket=self.config.bucket_name,
+                    Key=location,
+                    Fields={
+                        "acl": "private",
+                        "Content-Type": content_type,
+                    },
+                    Conditions=[
+                        ["starts-with", "$Content-Type", content_type],
+                        {"acl": "private"},
+                    ],
+                    ExpiresIn=expires_in,
+                )
         except ClientError as e:
             logger.error(f"Error generating presigned URL: {e}")
             raise

@@ -77,6 +77,11 @@ def evaluate(
             files[i]["state_xml_path"] = (
                 evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
             )
+            files[i]["trajectory_path"] = (
+                evaluator.trajectory_path
+                if hasattr(evaluator, "trajectory_path")
+                else ""
+            )
 
             reported_energies[i] = evaluator.get_reported_energy()
             process_md_output_time[i] = time.time() - start_time
