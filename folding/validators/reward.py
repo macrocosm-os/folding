@@ -45,6 +45,7 @@ def evaluate(
                 basepath=protein.pdb_directory,
                 system_config=protein.system_config,
                 velm_array_pkl_path=protein.velm_array_pkl,
+                trajectory_path=resp.presigned_url,
             )
 
             can_process = evaluator.evaluate()
