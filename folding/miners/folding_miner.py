@@ -1097,19 +1097,27 @@ class SimulationManager:
 
             simulation.reporters.append(
                 app.StateDataReporter(
-                    file=f"{self.output_dir}/{state}.log",
+                    file=os.path.join(self.output_dir, f"{state}.log"),
                     reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
                     step=True,
                     potentialEnergy=True,
                 )
             )
-            simulation.reporters.append(
-                app.DCDReporter(
-                    file=f"{self.output_dir}/trajectory.dcd",
-                    reportInterval=self.TRAJECTORY_INTERVAL,
-                    append=True,
+            if state =="nvt":
+                simulation.reporters.append(
+                    app.DCDReporter(
+                        file=os.path.join(self.output_dir, "trajectory.dcd"),
+                        reportInterval=self.TRAJECTORY_INTERVAL,
+                    )
                 )
-            )
+            else:
+                simulation.reporters.append(
+                    app.DCDReporter(
+                        file=os.path.join(self.output_dir, "trajectory.dcd"),
+                        reportInterval=self.TRAJECTORY_INTERVAL,
+                        append=True,
+                    )
+                )
             state_commands[state] = simulation
 
         return state_commands
