@@ -472,7 +472,6 @@ class Validator(BaseValidatorNeuron):
         try:
             for to_pop in ["checked_energies", "miner_energies"]:
                 merged_events.pop(to_pop)
-                merged_events.pop(to_pop)
         except Exception as e:
             logger.error(f"Error in pop: {e}")
         finally:
