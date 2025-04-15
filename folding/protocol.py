@@ -152,3 +152,10 @@ class IntermediateSubmissionSynapse(bt.Synapse):
             self.cpt_files = cpt_files
 
         return self
+
+
+class DFTJobSubmissionSynapse(bt.Synapse):
+    """A synapse for submission of DFT jobs."""
+
+    job_id: typing.Optional[str] = None
+    energy: typing.Optional[float] = None

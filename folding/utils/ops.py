@@ -464,3 +464,68 @@ def check_uniqueness(vectors, tol=0.01):
             if are_vectors_too_similar(vectors_np[i], vectors_np[j], tol):
                 return False
     return True
+
+
+def parse_custom_xyz(file_path: str) -> Dict[str, Any]:
+    """Parse a custom xyz file.
+
+    Args:
+        file_path (str): The path to the xyz file.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the parsed data.
+    """
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    # First line: number of atoms
+    num_atoms = int(lines[0])
+
+    # Second line: metadata (tab-separated floats and maybe strings)
+    metadata_line = lines[1].split("\t")
+    metadata = [
+        float(x) if x.replace(".", "", 1).replace("-", "", 1).isdigit() else x
+        for x in metadata_line
+    ]
+
+    # Atom block
+    atom_lines = lines[2 : 2 + num_atoms]
+    atom_data = []
+    for line in atom_lines:
+        parts = line.split()
+        atom_data.append(
+            {
+                "element": parts[0],
+                "x": float(parts[1]),
+                "y": float(parts[2]),
+                "z": float(parts[3]),
+                "charge": float(parts[4]),
+            }
+        )
+
+    atoms_df = pd.DataFrame(atom_data)
+
+    # Line after atoms: float properties (frequencies?)
+    properties = list(map(float, lines[2 + num_atoms].split()))
+
+    # SMILES line
+    smiles = lines[3 + num_atoms].split()
+
+    # InChI line
+    inchis = lines[4 + num_atoms].split()
+
+    return {
+        "num_atoms": num_atoms,
+        "metadata": metadata,
+        "atoms": atoms_df,
+        "properties": properties,
+        "smiles": smiles,
+        "inchis": inchis,
+    }
+
+
+def to_psi4_geometry_string(array, net_charge=0, spin_multiplicity=1):
+    """Convert an array of atoms to a psi4 geometry string."""
+    lines = [f"{row[0]} {row[1]} {row[2]} {row[3]}" for row in array]
+    body = "\n".join(lines)
+    return f"{net_charge} {spin_multiplicity}\n{body}"

@@ -25,6 +25,7 @@ from folding.utils.uids import get_all_miner_uids
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
+
 async def run_step(
     self,
     protein: Protein,
@@ -120,7 +121,7 @@ def parse_config(config) -> Dict[str, str]:
 
 
 # TODO: We need to be able to create a bunch of different challenges.
-async def create_new_challenge(self, exclude: List) -> Dict:
+async def create_new_challenge(self, job_type: str, exclude: List) -> Dict:
     """Create a new challenge by sampling a random pdb_id and running a hyperparameter search
     using the try_prepare_md_challenge function.
 
@@ -130,40 +131,46 @@ async def create_new_challenge(self, exclude: List) -> Dict:
     Returns:
         Dict: event dictionary containing the results of the hyperparameter search
     """
-    while True:
-        forward_start_time = time.time()
-        if self.RSYNC_EXCEPTION_COUNT > 10:
-            self.config.protein.pdb_id = None
-            self.config.protein.input_source = "rcsb"
+    if job_type == "MD":
+        while True:
+            forward_start_time = time.time()
+            if self.RSYNC_EXCEPTION_COUNT > 10:
+                self.config.protein.pdb_id = None
+                self.config.protein.input_source = "rcsb"
 
-        if self.config.protein.pdb_id is not None:
-            pdb_id = self.config.protein.pdb_id
-        else:
-            pdb_id, input_source = load_and_sample_random_pdb_ids(
-                root_dir=ROOT_DIR,
-                filename="pdb_ids.pkl",
-                input_source=self.config.protein.input_source,
-                exclude=exclude,
+            if self.config.protein.pdb_id is not None:
+                pdb_id = self.config.protein.pdb_id
+            else:
+                pdb_id, input_source = load_and_sample_random_pdb_ids(
+                    root_dir=ROOT_DIR,
+                    filename="pdb_ids.pkl",
+                    input_source=self.config.protein.input_source,
+                    exclude=exclude,
+                )
+                self.config.protein.input_source = input_source
+
+            # Perform a hyperparameter search until we find a valid configuration for the pdb
+            logger.info(f"Attempting to prepare challenge for pdb {pdb_id}")
+            event = await try_prepare_md_challenge(
+                self, config=self.config, pdb_id=pdb_id
             )
-            self.config.protein.input_source = input_source
+            event["input_source"] = self.config.protein.input_source
 
-        # Perform a hyperparameter search until we find a valid configuration for the pdb
-        logger.info(f"Attempting to prepare challenge for pdb {pdb_id}")
-        event = await try_prepare_md_challenge(self, config=self.config, pdb_id=pdb_id)
-        event["input_source"] = self.config.protein.input_source
+            if event.get("validator_search_status"):
+                return event
+            else:
+                # forward time if validator step fails
+                event["hp_search_time"] = time.time() - forward_start_time
 
-        if event.get("validator_search_status"):
-            return event
-        else:
-            # forward time if validator step fails
-            event["hp_search_time"] = time.time() - forward_start_time
+                # only log the event if the simulation was not successful
+                log_event(self, event, failed=True)
+                logger.debug(
+                    f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
+                )
+                exclude.append(pdb_id)
 
-            # only log the event if the simulation was not successful
-            log_event(self, event, failed=True)
-            logger.debug(
-                f"❌❌ All hyperparameter combinations failed for pdb_id {pdb_id}.. Skipping! ❌❌"
-            )
-            exclude.append(pdb_id)
+    elif job_type == "DFT":
+        event = await try_prepare_dft_challenge(self, config=self.config, pdb_id=pdb_id)
 
 
 def create_random_modifications_to_system_config(config) -> Dict:
@@ -303,3 +310,8 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                 return event
 
     return event
+
+
+async def try_prepare_dft_challenge(self) -> Dict:
+    """ """
+    logger.info(f"Searching parameter space for pdb {pdb_id}")
