@@ -125,7 +125,7 @@ async def search_pdb(
                 PDB(pdb_id=pdb_id, source=PDB_TO_SOURCE[pdb_id])
                 for pdb_id in result_pdb_ids
             ],
-            total=len(paginated_matches),
+            total=len(matches),
         )
 
     except HTTPException:
@@ -476,7 +476,7 @@ async def get_job_pool_status(
         )
         jobs.append(job)
 
-    resp = JobPoolResponse(jobs=jobs, total=len(jobs))
+    resp = JobPoolResponse(jobs=jobs, total=total)
     return resp
 
 
