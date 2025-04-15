@@ -35,7 +35,7 @@ from folding.utils.s3_utils import (
     upload_to_s3,
     DigitalOceanS3Handler,
 )
-from folding.validators.forward import create_new_challenge, run_step
+from folding.validators.forward import create_new_challenge, run_step, run_dft_step
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
@@ -196,12 +196,13 @@ class Validator(BaseValidatorNeuron):
 
             return False
 
-    async def add_k_synthetic_jobs(self, k: int):
+    async def add_k_synthetic_jobs(self, k: int, job_type: str):
         """Creates new synthetic jobs and assigns them to available workers. Updates DB with new records.
         Each "job" is an individual protein folding challenge that is distributed to the miners.
 
         Args:
             k (int): The number of jobs create and distribute to miners.
+            job_type (str): The type of job to create. options are "md" or "dft"
         """
 
         # Deploy K number of unique pdb jobs, where each job gets distributed to self.config.neuron.sample_size miners
@@ -210,9 +211,15 @@ class Validator(BaseValidatorNeuron):
 
             # This will change on each loop since we are submitting a new pdb to the batch of miners
             exclude_pdbs = self.store.get_all_pdbs()
-            job_event: Dict = await create_new_challenge(self, exclude=exclude_pdbs)
+            job_event: Dict = await create_new_challenge(
+                self, exclude=exclude_pdbs, job_type=job_type
+            )
 
-            await self.add_job(job_event=job_event)
+            if job_type == "md":
+                await self.add_job(job_event=job_event)
+            elif job_type == "dft":
+                # TODO: Need to figure this out..... How to add to queue?
+                return job_event
             await asyncio.sleep(0.01)
 
     async def update_job(self, job: Job):
@@ -370,7 +377,7 @@ class Validator(BaseValidatorNeuron):
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
 
-    async def create_synthetic_jobs(self):
+    async def create_synthetic_md_jobs(self):
         """
         Creates jobs and adds them to the queue.
         """
@@ -396,7 +403,7 @@ class Validator(BaseValidatorNeuron):
                     # We also assign the pdb to a group of workers (miners), based on their workloads
 
                     await self.add_k_synthetic_jobs(
-                        k=self.config.neuron.queue_size - queue.qsize()
+                        k=self.config.neuron.queue_size - queue.qsize(), job_type="md"
                     )
 
                     logger.info(
@@ -411,6 +418,15 @@ class Validator(BaseValidatorNeuron):
                 logger.error(f"Error in create_jobs: {traceback.format_exc()}")
 
             await asyncio.sleep(self.config.neuron.synthetic_job_interval)
+
+    async def create_synthetic_dft_jobs(self):
+        """
+        Creates DFT jobs and push them to miners.
+        """
+        job_event: Dict = await self.add_k_synthetic_jobs(k=1, job_type="dft")
+
+        job_event = await run_dft_step(self, job_event=job_event)
+        await asyncio.sleep(self.config.neuron.synthetic_job_interval)
 
     async def update_jobs(self):
         """
@@ -587,7 +603,8 @@ class Validator(BaseValidatorNeuron):
 
         self.loop.create_task(self.sync_loop())
         self.loop.create_task(self.update_jobs())
-        self.loop.create_task(self.create_synthetic_jobs())
+        self.loop.create_task(self.create_synthetic_md_jobs())
+        self.loop.create_task(self.create_synthetic_dft_jobs())
         self.loop.create_task(self.reward_loop())
         self.loop.create_task(self.monitor_db())
         if self.config.neuron.organic_enabled:

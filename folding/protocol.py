@@ -157,5 +157,8 @@ class IntermediateSubmissionSynapse(bt.Synapse):
 class DFTJobSubmissionSynapse(bt.Synapse):
     """A synapse for submission of DFT jobs."""
 
-    job_id: typing.Optional[str] = None
-    energy: typing.Optional[float] = None
+    job_id: str
+    geometry: str
+
+    def deserialize(self) -> int:
+        return self

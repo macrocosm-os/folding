@@ -1,16 +1,17 @@
+import os
 import time
+import random
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
 from typing import List, Dict
-from collections import defaultdict
 
 from async_timeout import timeout
 from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 from folding.validators.reward import get_energies
-from folding.protocol import JobSubmissionSynapse
+from folding.protocol import JobSubmissionSynapse, DFTJobSubmissionSynapse
 import asyncio
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
@@ -19,11 +20,41 @@ from folding.utils.ops import (
     get_response_info,
     OpenMMException,
     RsyncException,
+    to_psi4_geometry_string,
+    parse_custom_xyz,
 )
 from folding.utils.logger import logger
 from folding.utils.uids import get_all_miner_uids
 
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+async def run_dft_step(self, job_event: Dict):
+    """
+    Send a DFT job to the miners and return the response.
+    """
+    uids = get_all_miner_uids(
+        self.metagraph,
+        self.config.neuron.vpermit_tao_limit,
+        include_serving_in_check=False,
+    )
+
+    axons = [self.metagraph.axons[uid] for uid in uids]
+    synapse = DFTJobSubmissionSynapse(
+        job_id=job_event["job_id"],
+        geometry=job_event["geometry"],
+    )
+
+    responses: List[DFTJobSubmissionSynapse] = await self.dendrite.forward(
+        axons=axons,
+        synapse=synapse,
+        timeout=10,
+        deserialize=True,  # decodes the bytestream response inside of md_outputs.
+    )
+
+    response_info = get_response_info(responses=responses)
+    return response_info
 
 
 async def run_step(
@@ -131,7 +162,7 @@ async def create_new_challenge(self, job_type: str, exclude: List) -> Dict:
     Returns:
         Dict: event dictionary containing the results of the hyperparameter search
     """
-    if job_type == "MD":
+    if job_type == "md":
         while True:
             forward_start_time = time.time()
             if self.RSYNC_EXCEPTION_COUNT > 10:
@@ -169,8 +200,14 @@ async def create_new_challenge(self, job_type: str, exclude: List) -> Dict:
                 )
                 exclude.append(pdb_id)
 
-    elif job_type == "DFT":
-        event = await try_prepare_dft_challenge(self, config=self.config, pdb_id=pdb_id)
+    elif job_type == "dft":
+        while True:
+            try:
+                event = await try_prepare_dft_challenge(self)
+                return event
+            except Exception as e:
+                logger.error(f"Error preparing DFT challenge: {e}")
+                continue
 
 
 def create_random_modifications_to_system_config(config) -> Dict:
@@ -313,5 +350,23 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
 
 
 async def try_prepare_dft_challenge(self) -> Dict:
-    """ """
-    logger.info(f"Searching parameter space for pdb {pdb_id}")
+    """Attempts to prepare a DFT challenge by sampling a random element from the dataset."""
+    path = os.path.join(ROOT_DIR, "dsgdb9nsd.xyz")
+
+    # Ideally, we are going to ping the endpoint ('https://springernature.figshare.com/ndownloader/files/3195389')
+    elements = []  # This is going to be ~130,000 elements
+    for file in os.listdir(path):
+        if file.endswith(".xyz"):
+            elements.append(file)
+
+    # randomly sample a single element from the list
+    element = random.choice(elements)
+
+    # parse the element
+    parsed_data = parse_custom_xyz(os.path.join(path, element))
+    geometry = to_psi4_geometry_string(parsed_data["atoms"].to_numpy())
+
+    return {
+        "element": element,
+        "geometry": geometry,
+    }
