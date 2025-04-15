@@ -231,12 +231,15 @@ class JobPoolResponse(BaseModel):
 class Miner(BaseModel):
     uid: str
     hotkey: str
-    energy: dict
+    energy: list[dict[str, float]]
+    final_energy: float
 
 
 class JobResponse(BaseModel):
     pdb_id: str
+    pdb_data: str
     pdb_file_link: str
+    organism: Optional[str] = Field(None, description="Source organism")
     classification: Optional[str] = Field(None, description="Structural classification")
     expression_system: Optional[str] = Field(None, description="Expression system used")
     mutations: Optional[bool] = Field(None, description="Mutations in the PDB")

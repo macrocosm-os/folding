@@ -21,6 +21,8 @@ from folding_api.auth import APIKey, get_api_key
 from folding_api.utils import query_gjp
 import json
 import io
+import random
+import math
 
 router = APIRouter(tags=["Utility Endpoints"])
 
@@ -68,9 +70,9 @@ load_pdb_data()
 async def search_pdb(
     request: Request,
     query: str = Query(..., description="Search query for PDB IDs"),
-    limit: int = Query(100, description="Maximum number of results to return"),
-    threshold: Optional[int] = Query(
-        60, description="Minimum similarity score (0-100) for matching"
+    page: int = Query(1, description="Page number to return (1-based)", ge=1),
+    page_size: int = Query(
+        100, description="Number of results per page", ge=1, le=1000
     ),
     api_key: APIKey = Depends(get_api_key),
 ) -> PDBSearchResponse:
@@ -82,6 +84,7 @@ async def search_pdb(
     Results are sorted by position of the match (matches at the beginning rank higher).
 
     Each PDB ID is returned with its source (rcsb or pdbe).
+    Supports pagination through page and page_size parameters.
     """
     try:
         # Check if PDB data is loaded
@@ -108,11 +111,13 @@ async def search_pdb(
         # Sort by position (matches at the beginning come first)
         matches.sort(key=lambda x: x[1])
 
-        # Apply limit
-        limited_matches = matches[:limit]
+        # Calculate pagination
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_matches = matches[start_idx:end_idx]
 
         # Extract just the PDB IDs
-        result_pdb_ids = [pdb_id for pdb_id, _ in limited_matches]
+        result_pdb_ids = [pdb_id for pdb_id, _ in paginated_matches]
 
         # Return the results
         return PDBSearchResponse(
@@ -120,7 +125,7 @@ async def search_pdb(
                 PDB(pdb_id=pdb_id, source=PDB_TO_SOURCE[pdb_id])
                 for pdb_id in result_pdb_ids
             ],
-            total=len(matches),
+            total=len(paginated_matches),
         )
 
     except HTTPException:
@@ -394,12 +399,17 @@ async def get_job_pool_status(
     job_ids: Optional[list[str]] = Query(
         None, description="List of specific job IDs to filter by"
     ),
+    page: int = Query(1, description="Page number to return (1-based)", ge=1),
+    page_size: int = Query(
+        100, description="Number of results per page", ge=1, le=1000
+    ),
     api_key: APIKey = Depends(get_api_key),
 ):
     """
     Retrieve the status of the job pool.
 
     Filter jobs by their status and optionally by specific job IDs.
+    Supports pagination through page and page_size parameters.
     """
     # Base query based on status
     if status == "active":  # active = 1
@@ -423,6 +433,17 @@ async def get_job_pool_status(
             query += f" AND job_id IN ('{job_ids_str}')"
         else:
             query += f" WHERE job_id IN ('{job_ids_str}')"
+
+    # Get total count for pagination
+    count_query = query.replace("SELECT *", "SELECT COUNT(*)")
+    total_results = query_gjp(count_query)
+    total = total_results[0]["COUNT(*)"] if total_results else 0
+
+    # Calculate offset from page and page_size
+    offset = (page - 1) * page_size
+
+    # Add pagination
+    query += f" ORDER BY created_at DESC LIMIT {page_size} OFFSET {offset}"
 
     results = query_gjp(query)
     jobs = []
@@ -460,7 +481,13 @@ async def get_job_pool_status(
 
 
 @router.get("/job_pool/{job_id}", response_model=JobResponse)
-async def get_job(job_id: str, api_key: APIKey = Depends(get_api_key)):
+async def get_job(
+    job_id: str,
+    mock_miners: bool = Query(
+        False, description="Whether to return mock miner data instead of real data"
+    ),
+    api_key: APIKey = Depends(get_api_key),
+):
     """
     Retrieve a specific job by its ID.
     """
@@ -493,44 +520,87 @@ async def get_job(job_id: str, api_key: APIKey = Depends(get_api_key)):
     reasons = event.get("reason", [])
     output_links = event.get("output_links", [])
 
-    # select miners where reason is not ''
-    miners = [
-        {"uid": str(miner_uid), "hotkey": miner_hotkey, "energy": {}}
-        for miner_uid, miner_hotkey, reason in zip(uids, hotkeys, reasons)
-        if reason != ""
-    ]
+    if mock_miners:
+        # Generate mock miners data
+        miners = []
+        num_miners = random.randint(1, 5)  # Random number of miners between 1 and 5
 
-    for miner, output_link in zip(miners, output_links):
-        log_file_link = output_link.get("log_file_path", "")
-        log_file_response = requests.get(log_file_link)
-        log_file_text = log_file_response.text
-        data = io.StringIO(log_file_text)
-        df = pd.read_csv(data)
-        miner["energy"] = {
-            "step": df.iloc[:, 0].tolist(),
-            "energy": df.iloc[:, 1].tolist(),
-        }
+        for i in range(num_miners):
+            mock_uid = str(i + 1)
+            mock_hotkey = f"mock_hotkey_{i}"
 
-    # Parse energy data for time series of the best hotkey
+            # Generate random number of steps between 5 and 20
+            num_steps = random.randint(10000, 500000)
 
+            # Generate energy values that decrease logarithmically
+            energy_values = []
+            start_energy = random.uniform(-1000, -10000)  # Start with random energy
+            min_energy = (
+                start_energy * 1.5
+            )  # Target minimum energy (50% lower than start)
+
+            for step in range(num_steps):
+                # Logarithmic decrease: energy = start_energy + (min_energy - start_energy) * log(1 + step/num_steps)
+                progress = step / num_steps
+                current_energy = start_energy + (min_energy - start_energy) * math.log(
+                    1 + progress
+                )
+                energy_values.append({"step": step, "energy": current_energy})
+
+            mock_energy = energy_values[::10000]  # Sample every 500th step
+            miners.append(
+                {
+                    "uid": mock_uid,
+                    "hotkey": mock_hotkey,
+                    "energy": mock_energy,
+                    "final_energy": current_energy,
+                }
+            )
+    else:
+        # Original logic for real miners
+        miners = [
+            {"uid": str(miner_uid), "hotkey": miner_hotkey, "energy": []}
+            for miner_uid, miner_hotkey, reason in zip(uids, hotkeys, reasons)
+            if reason != ""
+        ]
+
+        for miner, output_link in zip(miners, output_links):
+            log_file_link = output_link.get("log_file_path", "")
+            log_file_response = requests.get(log_file_link)
+            log_file_text = log_file_response.text
+            data = io.StringIO(log_file_text)
+            df = pd.read_csv(data)
+            # Convert DataFrame to list of {step, energy} objects
+            energy_data = []
+            for step, energy in zip(df.iloc[:, 0], df.iloc[:, 1]):
+                energy_data.append({"step": int(step), "energy": float(energy)})
+            miner["energy"] = energy_data[::500]  # Sample every 500th step
+            miner["final_energy"] = df.iloc[-1, 1]
     miners = [Miner(**miner) for miner in miners]
     # Parse s3 links for pdb data
     s3_links = json.loads(job.get("s3_links", "{}"))
-    pdb_data = s3_links.get("pdb", "")
+    pdb_link = s3_links.get("pdb", "")
+    if pdb_link:
+        pdb_data = requests.get(pdb_link).text
+    else:
+        pdb_data = ""
+
     pdb_info = await get_pdb_info(job.get("pdb_id", ""))
 
     return JobResponse(
         pdb_id=job.get("pdb_id", ""),
         pdb_data=pdb_data,
+        pdb_file_link=pdb_link,
         status=job_status,
+        organism=pdb_info.organism,
         classification=pdb_info.classification,
         expression_system=pdb_info.expression_system,
         mutations=job.get("mutations", False),
-        source=job.get("source", ""),
+        source=event.get("source", ""),
         temperature=system_kwargs.get("temperature", 0.0),
         friction=system_kwargs.get("friction", 0.0),
-        pressure=system_kwargs.get("pressure", 0.0),
-        time_to_live=float(job.get("time_to_live", 0)),
+        pressure=0,
+        time_to_live=float(job.get("update_interval", 0)),
         ff=system_config.get("ff", ""),
         water=system_config.get("water", ""),
         box=system_config.get("box", ""),
