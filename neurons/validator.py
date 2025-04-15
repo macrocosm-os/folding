@@ -309,7 +309,7 @@ class Validator(BaseValidatorNeuron):
 
     def credibility_pipeline(self, job: Job):
         """
-        Run the credibility pipeline to update the uids inside of the job. 
+        Run the credibility pipeline to update the uids inside of the job.
         """
         for uid, reason in zip(job.event["processed_uids"], job.event["reason"]):
             # jobs are "skipped" when they are spot checked
@@ -339,9 +339,9 @@ class Validator(BaseValidatorNeuron):
         apply_pipeline = False
         energies = torch.Tensor(job.event["energies"])
 
-        try: 
-            self.credibility_pipeline(job = job)
-        except Exception as e: 
+        try:
+            self.credibility_pipeline(job=job)
+        except Exception as e:
             logger.error(f"Error running the credibility_pipeline: {e}")
 
         best_index = np.argmin(energies)
@@ -423,15 +423,17 @@ class Validator(BaseValidatorNeuron):
 
         # Only upload the best .cpt files to S3 if the job is inactive
         if job.active is False:
-            output_links = [] 
+            output_links = []
             for _ in range(len(job.event["files"])):
                 output_links.append(defaultdict(str))
 
             best_cpt_files = []
             output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                
-            if len(job.event["processed_uids"]) > 0: 
-                for idx, (uid, files) in enumerate(zip(job.event["processed_uids"], job.event["files"])):
+
+            if len(job.event["processed_uids"]) > 0:
+                for idx, (uid, files) in enumerate(
+                    zip(job.event["processed_uids"], job.event["files"])
+                ):
                     location = os.path.join(
                         "outputs",
                         str(spec_version),
@@ -476,6 +478,7 @@ class Validator(BaseValidatorNeuron):
         finally:
             if protein is not None and job.active is False:
                 protein.remove_pdb_directory()
+                logger.success(f"Merged event for {job.pdb_id}: {merged_events}")
 
     async def create_synthetic_jobs(self):
         """
