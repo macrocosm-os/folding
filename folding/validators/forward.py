@@ -81,7 +81,7 @@ async def run_step(
     responses = await asyncio.gather(
         *[
             self.dendrite.call(
-                axon=axon, synapse=synapse, timeout=timeout, deserialize=True
+                target_axon=axon, synapse=synapse, timeout=timeout, deserialize=True
             )
             for axon, synapse in zip(axons, synapses)
         ]
