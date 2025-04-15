@@ -469,20 +469,21 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
         )
 
-        try:
-            for to_pop in [
-                "checked_energies",
-                "miner_energies",
-                "files",
-                "response_status_messages",
-                "response_returned_files_sizes",
-                "evaluator",
-                "log_file_path",
-            ]:
+        for to_pop in [
+            "checked_energies",
+            "miner_energies",
+            "files",
+            "response_status_messages",
+            "response_returned_files_sizes",
+            "evaluator",
+            "log_file_path",
+        ]:
+            try:
                 merged_events.pop(to_pop)
-        except Exception as e:
-            logger.error(f"Error in pop: {e}")
-        finally:
+            except Exception as e:
+                logger.error(f"Error in pop: {e}")
+                continue
+
             if protein is not None and job.active is False:
                 protein.remove_pdb_directory()
                 logger.success(f"Merged event for {job.pdb_id}: {merged_events}")
