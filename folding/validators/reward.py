@@ -45,6 +45,7 @@ def evaluate(
                 basepath=protein.pdb_directory,
                 system_config=protein.system_config,
                 velm_array_pkl_path=protein.velm_array_pkl,
+                job_id=resp.job_id,
             )
 
             can_process = evaluator.evaluate()
@@ -183,9 +184,7 @@ async def get_energies(
                     checked_energies,
                     miner_energies,
                     reason,
-                ) = await evaluator.validate(
-                    validator=validator, job_id=job_id, axon=axon
-                )
+                ) = await evaluator.validate(validator=validator, axon=axon)
             else:
                 (
                     median_energy,
@@ -198,7 +197,6 @@ async def get_energies(
                     evaluator.final_miner_energies,
                     "skip",
                 )
-
             # Add intermediate checkpoint files to files dictionary
             for (
                 checkpoint_num,
