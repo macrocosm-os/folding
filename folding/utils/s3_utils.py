@@ -1,4 +1,5 @@
 import os
+import datetime
 import boto3
 import mimetypes
 from typing import Optional, Dict, cast, Any
@@ -218,7 +219,11 @@ class DigitalOceanS3Handler(BaseHandler):
             raise
 
     def generate_presigned_url(
-        self, key: str, expires_in: int = 3600, method: str = "get_object"
+        self,
+        miner_hotkey: str,
+        pdb_id: str,
+        expires_in: int = 3600,
+        method: str = "get_object",
     ) -> str:
         """Generates a presigned URL for temporary access to an object.
 
@@ -233,12 +238,25 @@ class DigitalOceanS3Handler(BaseHandler):
         Raises:
             ClientError: If URL generation fails.
         """
+        location = self._get_location(miner_hotkey, pdb_id)
         try:
             return self.s3_client.generate_presigned_url(
                 method,
-                Params={"Bucket": self.config.bucket_name, "Key": key},
+                Params={"Bucket": self.config.bucket_name, "Key": location},
+                Fields={
+                    "acl": "private",
+                },
                 ExpiresIn=expires_in,
             )
         except ClientError as e:
             logger.error(f"Error generating presigned URL: {e}")
             raise
+
+    def _get_location(self, miner_hotkey: str, pdb_id: str) -> str:
+        """Get the location of the object in the S3 bucket."""
+        return os.path.join(
+            "outputs",
+            pdb_id,
+            miner_hotkey[:8],
+            datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+        )

@@ -65,7 +65,9 @@ async def run_step(
         JobSubmissionSynapse(
             pdb_id=protein.pdb_id,
             job_id=job_id,
-            presigned_url=generate_presigned_url(hotkey),
+            presigned_url=self.handler.generate_presigned_url(
+                miner_hotkey=hotkey, pdb_id=protein.pdb_id, method="put_object"
+            ),
         )
         for hotkey in hotkeys
     ]
@@ -80,12 +82,6 @@ async def run_step(
             for axon, synapse in zip(axons, synapses)
         ]
     )
-    # responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
-    #     axons=axons,
-    #     synapse=synapse,
-    #     timeout=timeout,
-    #     deserialize=True,  # decodes the bytestream response inside of md_outputs.
-    # )
 
     response_info = get_response_info(responses=responses)
 
