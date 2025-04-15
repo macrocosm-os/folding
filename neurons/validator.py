@@ -163,9 +163,16 @@ class Validator(BaseValidatorNeuron):
                         logger.info(f"Uploading to {self.handler.config.bucket_name}")
                         files_to_upload = {
                             "pdb": protein.pdb_location,
-                            "cpt": f"{protein.validator_directory}/{protein.simulation_cpt}",
+                            "cpt": os.path.join(
+                                protein.validator_directory, protein.simulation_cpt
+                            ),
                         }
-                        location = f"inputs/{job_event['pdb_id']}/{self.validator_hotkey_reference}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+                        location = os.path.join(
+                            "inputs",
+                            job_event["pdb_id"],
+                            self.validator_hotkey_reference,
+                            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+                        )
                         s3_links = {}
                         for file_type, file_path in files_to_upload.items():
                             key = self.handler.put(
@@ -174,7 +181,7 @@ class Validator(BaseValidatorNeuron):
                                 public=True,
                             )
                             s3_links[file_type] = os.path.join(
-                                f"{self.handler.config.endpoint_url}/{self.handler.config.bucket_name}/",
+                                self.handler.output_url,
                                 key,
                             )
 
@@ -366,7 +373,7 @@ class Validator(BaseValidatorNeuron):
                         public=True,
                     )
                     output_link = os.path.join(
-                        f"{self.handler.config.endpoint_url}/{self.handler.config.bucket_name}/",
+                        self.handler.output_url,
                         key,
                     )
 

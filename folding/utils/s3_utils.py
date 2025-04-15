@@ -60,19 +60,6 @@ class S3Config:
             miner_bucket_name=cast(str, miner_bucket_name),
         )
 
-    def validate(self) -> None:
-        """Validate that all required configuration parameters are present."""
-        if not all(
-            [
-                self.region_name,
-                self.access_key_id,
-                self.secret_access_key,
-                self.bucket_name,
-                self.miner_bucket_name,
-            ]
-        ):
-            raise ValueError("Missing required S3 configuration parameters.")
-
 
 class BaseHandler(ABC):
     """Abstract base class for handlers that manage content storage operations."""
@@ -108,7 +95,9 @@ class DigitalOceanS3Handler(BaseHandler):
             custom_mime_types (Optional[Dict[str, str]]): Custom MIME type mappings.
         """
         self.config = config or S3Config.from_env()
-        self.config.validate()
+        self.output_url = os.path.join(
+            self.config.endpoint_url, self.config.bucket_name
+        )
 
         self.custom_mime_types = custom_mime_types or {
             ".cpt": "application/octet-stream",

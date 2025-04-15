@@ -52,8 +52,11 @@ async def run_step(
         include_serving_in_check=False,
     )
 
-    axons = [self.metagraph.axons[uid] for uid in uids]
-    hotkeys = [self.metagraph.hotkeys[uid] for uid in uids]
+    # Get axons and hotkeys
+    axons_and_hotkeys = [
+        (self.metagraph.axons[uid], self.metagraph.hotkeys[uid]) for uid in uids
+    ]
+    axons, hotkeys = zip(*axons_and_hotkeys)
 
     system_config = protein.system_config.to_dict()
     system_config["seed"] = None  # We don't want to pass the seed to miners.
@@ -298,7 +301,12 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                             "pdb": protein.pdb_location,
                             "cpt": f"{protein.validator_directory}/{protein.simulation_cpt}",
                         }
-                        location = f"inputs/{pdb_id}/{self.validator_hotkey_reference}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+                        location = os.path.join(
+                            "inputs",
+                            pdb_id,
+                            self.validator_hotkey_reference,
+                            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+                        )
                         s3_links = {}
                         for file_type, file_path in files_to_upload.items():
                             key = self.handler.put(
@@ -307,7 +315,7 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
                                 public=True,
                             )
                             s3_links[file_type] = os.path.join(
-                                f"{self.handler.config.endpoint_url}/{self.handler.config.bucket_name}/",
+                                self.handler.output_url,
                                 key,
                             )
 
