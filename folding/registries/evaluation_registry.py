@@ -38,6 +38,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         basepath: str,
         system_config: SimulationConfig,
         velm_array_pkl_path: str,
+        job_id: str = None,
         **kwargs,
     ):
         self.pdb_id = pdb_id
@@ -64,6 +65,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         self.intermediate_checkpoint_files = {}
         self.miner_reported_energies = {}
+        self.job_id = job_id
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
@@ -299,7 +301,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         ]
         return selected
 
-    async def is_run_valid(self, validator=None, job_id=None, axon=None):
+    async def is_run_valid(self, validator=None, axon=None):
         """
         Checks if the run is valid by evaluating a set of logical conditions:
 
@@ -310,7 +312,6 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         Args:
             validator: Optional validator instance to query for intermediate checkpoints
-            job_id: Optional job ID to pass to get_intermediate_checkpoints
             axon: Optional axon to query for intermediate checkpoints
 
         Returns:
@@ -342,7 +343,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 return False, checked_energies_dict, miner_energies_dict, result
 
             # Check the intermediate checkpoints
-            if validator is not None and job_id is not None and axon is not None:
+            if validator is not None and self.job_id is not None and axon is not None:
                 checkpoint_numbers = self.select_stratified_checkpoints(
                     num_checkpoints=self.number_of_checkpoints,
                     num_samples=c.MAX_CHECKPOINTS_TO_VALIDATE + 1,  # +1 for Final
@@ -351,7 +352,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
                 # Get intermediate checkpoints from the miner
                 intermediate_checkpoints = await self.get_intermediate_checkpoints(
                     validator=validator,
-                    job_id=job_id,
+                    job_id=self.job_id,
                     axon=axon,
                     checkpoint_numbers=checkpoint_numbers,
                 )
@@ -442,13 +443,12 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         return True
 
-    async def validate(self, validator=None, job_id=None, axon=None):
+    async def validate(self, validator=None, axon=None):
         """
         Validate the run by checking if it's valid and returning the appropriate metrics.
 
         Args:
             validator: Optional validator instance to query for intermediate checkpoints
-            job_id: Optional job ID to pass to get_intermediate_checkpoints
             axon: Optional axon to query for intermediate checkpoints
 
         Returns:
@@ -459,7 +459,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
             checked_energies_dict,
             miner_energies_dict,
             result,
-        ) = await self.is_run_valid(validator=validator, job_id=job_id, axon=axon)
+        ) = await self.is_run_valid(validator=validator, axon=axon)
 
         if not is_valid:
             # Return empty dictionaries to maintain consistency
