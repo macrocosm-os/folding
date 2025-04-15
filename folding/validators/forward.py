@@ -66,7 +66,11 @@ async def run_step(
             pdb_id=protein.pdb_id,
             job_id=job_id,
             presigned_url=self.handler.generate_presigned_url(
-                miner_hotkey=hotkey, pdb_id=protein.pdb_id, method="put_object"
+                miner_hotkey=hotkey,
+                pdb_id=protein.pdb_id,
+                file_name="trajectory.dcd",
+                method="put_object",
+                expires_in=300,
             ),
         )
         for hotkey in hotkeys

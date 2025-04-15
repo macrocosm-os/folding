@@ -222,6 +222,7 @@ class DigitalOceanS3Handler(BaseHandler):
         self,
         miner_hotkey: str,
         pdb_id: str,
+        file_name: str,
         expires_in: int = 3600,
         method: str = "get_object",
     ) -> str:
@@ -238,7 +239,8 @@ class DigitalOceanS3Handler(BaseHandler):
         Raises:
             ClientError: If URL generation fails.
         """
-        location = self._get_location(miner_hotkey, pdb_id)
+        location = self._get_location(miner_hotkey, pdb_id, file_name)
+        content_type = self._get_content_type(file_name)
         try:
             return self.s3_client.generate_presigned_url(
                 method,
@@ -246,17 +248,22 @@ class DigitalOceanS3Handler(BaseHandler):
                 Fields={
                     "acl": "private",
                 },
+                Conditions=[
+                    ["starts-with", "$Content-Type", content_type],
+                    {"acl": "private"},
+                ],
                 ExpiresIn=expires_in,
             )
         except ClientError as e:
             logger.error(f"Error generating presigned URL: {e}")
             raise
 
-    def _get_location(self, miner_hotkey: str, pdb_id: str) -> str:
+    def _get_location(self, miner_hotkey: str, pdb_id: str, file_name: str) -> str:
         """Get the location of the object in the S3 bucket."""
         return os.path.join(
             "outputs",
             pdb_id,
             miner_hotkey[:8],
             datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+            file_name,
         )

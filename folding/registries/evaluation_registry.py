@@ -38,6 +38,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
         basepath: str,
         system_config: SimulationConfig,
         velm_array_pkl_path: str,
+        trajectory_path: str,
         **kwargs,
     ):
         self.pdb_id = pdb_id
@@ -64,6 +65,7 @@ class SyntheticMDEvaluator(BaseEvaluator):
 
         self.intermediate_checkpoint_files = {}
         self.miner_reported_energies = {}
+        self.trajectory_path = trajectory_path
 
     def process_md_output(self) -> bool:
         """Method to process molecular dynamics data from a miner and recreate the simulation.
