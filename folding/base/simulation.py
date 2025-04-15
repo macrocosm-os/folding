@@ -26,7 +26,7 @@ class GenericSimulation(ABC):
             start_time = time.time()
             result = method(*args, **kwargs)
             end_time = time.time()
-            logger.info(
+            logger.debug(
                 f"Method {method.__name__} took {end_time - start_time:.4f} seconds"
             )
             return result

@@ -31,6 +31,7 @@ PDB_DATA = None
 PDB_TO_SOURCE = {}
 ALL_PDB_IDS = []
 
+
 # Load PDB data when module is initialized
 def load_pdb_data():
     global PDB_DATA, PDB_TO_SOURCE, ALL_PDB_IDS
