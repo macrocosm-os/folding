@@ -28,8 +28,7 @@ from folding.utils.reporters import (
     ExitFileReporter,
     LastTwoCheckpointsReporter,
     SequentialCheckpointReporter,
-    ProteinStructureReporter
-
+    ProteinStructureReporter,
 )
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -66,7 +65,7 @@ def attach_files_to_synapse(
     seed: int,
 ) -> JobSubmissionSynapse:
     """Load output files and attach them to synapse.md_output.
-    
+
     This function handles attaching simulation output files to the synapse object
     for communication with the validator. It combines log files and attaches state files.
 
@@ -78,7 +77,7 @@ def attach_files_to_synapse(
 
     Returns:
         JobSubmissionSynapse: The synapse object with attached files in md_output
-    
+
     Note:
         If state is 'finished', it will be treated as 'md_0_1' for file collection purposes.
     """
@@ -88,22 +87,26 @@ def attach_files_to_synapse(
     try:
         # Normalize state for file collection
         file_collection_state = "md_0_1" if state == "finished" else state
-        
+
         # Get state files (excluding logs)
         state_files_pattern = os.path.join(data_directory, f"{file_collection_state}*")
-        state_files = [f for f in glob.glob(state_files_pattern) if not f.endswith('.log')]
-        
+        state_files = [
+            f for f in glob.glob(state_files_pattern) if not f.endswith(".log")
+        ]
+
         if not state_files:
-            raise FileNotFoundError(f"No state files found for {state} in {data_directory}")
+            raise FileNotFoundError(
+                f"No state files found for {state} in {data_directory}"
+            )
 
         # Get log files if they exist
         log_files = sorted(glob.glob(os.path.join(data_directory, "*.log")))
         files_to_attach = state_files.copy()
-        
+
         if log_files:
             # Read and combine log files using pandas
             dfs = []
-            
+
             for log_file in log_files:
                 try:
                     # Try reading the file with pandas
@@ -113,26 +116,30 @@ def attach_files_to_synapse(
                 except Exception as e:
                     logger.warning(f"Could not read log file {log_file}: {e}")
                     continue
-            
+
             if dfs:
                 # Combine all dataframes and sort by step
-                combined_df = pd.concat(dfs, ignore_index=True)  
+                combined_df = pd.concat(dfs, ignore_index=True)
                 combined_df = combined_df.sort_values('#"Step"')
-                
+
                 # Write combined log file
-                combined_log_path = os.path.join(data_directory, f"{state}_combined.log")
+                combined_log_path = os.path.join(
+                    data_directory, f"{state}_combined.log"
+                )
                 try:
                     combined_df.to_csv(combined_log_path, index=False)
                     files_to_attach.append(combined_log_path)
                 except Exception as e:
                     logger.error(f"Failed to write combined log file: {e}")
-                
+
                 # Attach all files
                 for filename in files_to_attach:
                     try:
                         with open(filename, "rb") as f:
                             base_filename = os.path.basename(filename)
-                            synapse.md_output[base_filename] = base64.b64encode(f.read())
+                            synapse.md_output[base_filename] = base64.b64encode(
+                                f.read()
+                            )
                     except Exception as e:
                         logger.error(f"Failed to read file {filename!r}: {e}")
                         get_tracebacks()
@@ -146,7 +153,7 @@ def attach_files_to_synapse(
                 except Exception as e:
                     logger.error(f"Failed to read file {filename!r}: {e}")
                     get_tracebacks()
-                    
+
         try:
             # Clean up combined log file
             if os.path.exists(combined_log_path):
@@ -166,6 +173,7 @@ def attach_files_to_synapse(
         synapse.miner_state = None
 
     return synapse
+
 
 def check_synapse(
     synapse: JobSubmissionSynapse, event: Dict = None
@@ -488,9 +496,7 @@ class FoldingMiner(BaseMinerNeuron):
         output_dir = event["output_dir"]
         cpt_files = {}
         for checkpoint_number in checkpoint_numbers:
-            cpt_file = os.path.join(
-                output_dir, f"{checkpoint_number}.cpt"
-            )
+            cpt_file = os.path.join(output_dir, f"{checkpoint_number}.cpt")
             if os.path.exists(cpt_file):
                 with open(cpt_file, "rb") as f:
                     cpt_files[checkpoint_number] = base64.b64encode(f.read())
@@ -576,6 +582,22 @@ class FoldingMiner(BaseMinerNeuron):
                             state=state,
                             seed=seed,
                         )
+                        # upload the trajectory to s3
+                        fields = {
+                            "acl": "private",
+                            "Content-Type": "application/octet-stream",
+                        }
+                        with open(
+                            os.path.join(event["output_dir"], "trajectory.dcd"), "rb"
+                        ) as f:
+                            response = requests.post(
+                                synapse.presigned_url, files={"file": f}, data=fields
+                            )
+
+                        if response.status_code != 204:
+                            logger.error(
+                                f"Failed to upload trajectory to s3: {response.text}"
+                            )
                     except Exception as e:
                         logger.error(
                             f"Failed to read state file for protein {event['pdb_id']} with error: {e}"
@@ -911,6 +933,7 @@ class SimulationManager:
 
         self.STATES = ["nvt", "npt", "md_0_1"]
         self.CHECKPOINT_INTERVAL = 10000
+        self.TRAJECTORY_INTERVAL = 10000
         self.STATE_DATA_REPORTER_INTERVAL = 10
         self.EXIT_REPORTER_INTERVAL = 10
 
@@ -1073,14 +1096,18 @@ class SimulationManager:
             )
 
             simulation.reporters.append(
-                ProteinStructureReporter(
+                app.StateDataReporter(
                     file=f"{self.output_dir}/{state}.log",
                     reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
                     step=True,
                     potentialEnergy=True,
-                    reference_pdb=os.path.join(self.output_dir, f"{self.pdb_id}.pdb"),
-                    speed=True,
-
+                )
+            )
+            simulation.reporters.append(
+                app.DCDReporter(
+                    file=f"{self.output_dir}/trajectory.dcd",
+                    reportInterval=self.TRAJECTORY_INTERVAL,
+                    append=True,
                 )
             )
             state_commands[state] = simulation
