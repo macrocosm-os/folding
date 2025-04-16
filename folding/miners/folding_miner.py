@@ -583,15 +583,13 @@ class FoldingMiner(BaseMinerNeuron):
                             seed=seed,
                         )
                         # upload the trajectory to s3
-                        fields = {
-                            "acl": "private",
-                            "Content-Type": "application/octet-stream",
-                        }
                         with open(
                             os.path.join(event["output_dir"], "trajectory.dcd"), "rb"
                         ) as f:
                             response = requests.post(
-                                synapse.presigned_url, files={"file": f}, data=fields
+                                synapse.presigned_url["url"],
+                                files={"file": f},
+                                data=synapse.presigned_url["fields"],
                             )
 
                         if response.status_code != 204:
