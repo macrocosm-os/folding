@@ -240,6 +240,7 @@ class Validator(BaseValidatorNeuron):
                         f"Initial energy is positive: {protein.init_energy}. Simulation failed."
                     )
                     job_event["active"] = False
+                    job_event["failed"] = True
 
                 if not self.config.s3.off:
                     try:
@@ -258,9 +259,11 @@ class Validator(BaseValidatorNeuron):
                         logger.error(f"Error in uploading to S3: {e}")
                         logger.error("❌❌ Simulation failed! ❌❌")
                         job_event["active"] = False
+                        job_event["failed"] = True
 
             except Exception as e:
                 job_event["active"] = False
+                job_event["failed"] = True
                 logger.error(f"Error in setting up organic query: {e}")
 
         logger.info(f"Inserting job: {job_event['pdb_id']}")

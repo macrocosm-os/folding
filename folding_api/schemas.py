@@ -14,7 +14,7 @@ class FoldingParams(BaseModel):
     source: Literal["rcsb", "pdbe"]
     ff: str
     water: str
-    box: Literal["cube", "box"]
+    box: Literal["cube", "dodecahedron", "octahedron"]
     temperature: float
     friction: float
     epsilon: float
@@ -41,7 +41,7 @@ class FoldingSchema(BaseModel):
         "charmm36/water.xml",
         description="The water model for the selected response source.",
     )
-    box: Literal["cube", "box"] = Field(
+    box: Literal["cube", "dodecahedron", "octahedron"] = Field(
         ..., description="The box type for the selected response source."
     )
     temperature: float = Field(
