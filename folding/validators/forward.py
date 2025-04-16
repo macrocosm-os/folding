@@ -1,3 +1,5 @@
+from datetime import datetime
+import os
 import time
 import numpy as np
 from tqdm import tqdm
@@ -5,7 +7,6 @@ from pathlib import Path
 from typing import List, Dict
 
 from async_timeout import timeout
-from folding.utils.s3_utils import upload_to_s3
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
 
@@ -20,6 +21,98 @@ from folding.utils.ops import (
 from folding.utils.logger import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+async def run_step(
+    self,
+    protein: Protein,
+    timeout: float,
+    job_type: str,
+    job_id: str,
+) -> Dict:
+    start_time = time.time()
+
+    if protein is None:
+        event = {
+            "block": self.block,
+            "step_length": time.time() - start_time,
+            "energies": [],
+            "active": False,
+        }
+        return event
+
+    # Get all uids on the network that are NOT validators.
+    # the .is_serving flag means that the uid does not have an axon address.
+    uids = get_all_miner_uids(
+        self.metagraph,
+        self.config.neuron.vpermit_tao_limit,
+        include_serving_in_check=False,
+    )
+
+    # Get axons and hotkeys
+    axons_and_hotkeys = [
+        (self.metagraph.axons[uid], self.metagraph.hotkeys[uid]) for uid in uids
+    ]
+    axons, hotkeys = zip(*axons_and_hotkeys)
+
+    system_config = protein.system_config.to_dict()
+    system_config["seed"] = None  # We don't want to pass the seed to miners.
+
+    synapses = [
+        JobSubmissionSynapse(
+            pdb_id=protein.pdb_id,
+            job_id=job_id,
+            presigned_url=self.handler.generate_presigned_url(
+                miner_hotkey=hotkey,
+                pdb_id=protein.pdb_id,
+                file_name="trajectory.dcd",
+                method="put_object",
+                expires_in=300,
+            ),
+        )
+        for hotkey in hotkeys
+    ]
+
+    # Make calls to the network with the prompt - this is synchronous.
+    logger.info("⏰ Waiting for miner responses ⏰")
+    responses = await asyncio.gather(
+        *[
+            self.dendrite.call(
+                target_axon=axon, synapse=synapse, timeout=timeout, deserialize=True
+            )
+            for axon, synapse in zip(axons, synapses)
+        ]
+    )
+
+    response_info = get_response_info(responses=responses)
+
+    event = {
+        "block": self.block,
+        "step_length": time.time() - start_time,
+        "uids": uids,
+        "energies": [],
+        **response_info,
+    }
+
+    energies, energy_event = await get_energies(
+        validator=self,
+        protein=protein,
+        responses=responses,
+        axons=axons,
+        job_id=job_id,
+        uids=uids,
+        miner_registry=self.miner_registry,
+        job_type=job_type,
+    )
+
+    # Log the step event.
+    event.update({"energies": energies.tolist(), **energy_event})
+
+    if len(protein.md_inputs) > 0:
+        event["md_inputs"] = list(protein.md_inputs.keys())
+        event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
+
+    return event
 
 
 def parse_config(config) -> Dict[str, str]:
@@ -200,15 +293,31 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             if "validator_search_status" not in event:
                 if not config.s3.off:
                     try:
-                        logger.info(f"Uploading to {self.handler.bucket_name}")
-                        s3_links = await upload_to_s3(
-                            handler=self.handler,
-                            pdb_location=protein.pdb_location,
-                            simulation_cpt=protein.simulation_cpt,
-                            validator_directory=protein.validator_directory,
-                            pdb_id=pdb_id,
-                            VALIDATOR_ID=self.validator_hotkey_reference,
+                        logger.info(f"Uploading to {self.handler.config.bucket_name}")
+                        files_to_upload = {
+                            "pdb": protein.pdb_location,
+                            "cpt": os.path.join(
+                                protein.validator_directory, protein.simulation_cpt
+                            ),
+                        }
+                        location = os.path.join(
+                            "inputs",
+                            pdb_id,
+                            self.validator_hotkey_reference,
+                            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
                         )
+                        s3_links = {}
+                        for file_type, file_path in files_to_upload.items():
+                            key = self.handler.put(
+                                file_path=file_path,
+                                location=location,
+                                public=True,
+                            )
+                            s3_links[file_type] = os.path.join(
+                                self.handler.output_url,
+                                key,
+                            )
+
                         event["s3_links"] = s3_links
                         event["validator_search_status"] = True  # simulation passed!
                         logger.success("✅✅ Simulation ran successfully! ✅✅")

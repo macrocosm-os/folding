@@ -10,6 +10,7 @@ from folding.base.evaluation import BaseEvaluator
 from folding.protocol import JobSubmissionSynapse
 from folding.registries.miner_registry import MinerRegistry
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
+from folding.utils.s3_utils import DigitalOceanS3Handler
 
 
 def evaluate(
@@ -17,6 +18,7 @@ def evaluate(
     responses: List[JobSubmissionSynapse],
     uids: List[int],
     job_type: str,
+    s3_handler: DigitalOceanS3Handler,
     miner_registry: MinerRegistry,
 ):
     """Evaluates the miner's response and updates the miner registry."""
@@ -38,6 +40,9 @@ def evaluate(
                 basepath=protein.pdb_directory,
                 system_config=protein.system_config,
                 velm_array_pkl_path=protein.velm_array_pkl,
+                trajectory_path=resp.presigned_url,
+                s3_handler=s3_handler,
+                trajectory_s3_path=resp.presigned_url["fields"]["key"],
             )
 
             can_process = evaluator.evaluate()
@@ -60,6 +65,12 @@ def evaluate(
             )
             miner_files["state_xml_path"] = (
                 evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
+            )
+            
+            miner_files["trajectory_path"] = (
+                evaluator.trajectory_path
+                if hasattr(evaluator, "trajectory_path")
+                else ""
             )
 
             miner_registry.registry[uid].logs["can_process"] = can_process
@@ -107,7 +118,9 @@ async def run_evaluation_validation_pipeline(
     energies = {uid: 0 for uid in uids}
 
     # Get initial evaluations
-    miner_registry = evaluate(protein, responses, uids, job_type, miner_registry)
+    miner_registry = evaluate(
+        protein = protein, responses = responses, uids = uids, job_type = job_type, s3_handler = validator.handler, miner_registry = miner_registry
+    )
 
     all_miner_logs: Dict[int, Dict[str, Any]] = miner_registry.get_all_miner_logs()
     sorted_dict = dict(

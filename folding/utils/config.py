@@ -239,6 +239,20 @@ def add_args(cls, parser):
         default="sn25-folding-mainnet",
     )
 
+    parser.add_argument(
+        "--s3.miner_bucket_name",
+        type=str,
+        help="The name of the S3 bucket that miners will upload their files to.",
+        default="miner-upload-sn25",
+    )
+
+    parser.add_argument(
+        "--s3.region_name",
+        type=str,
+        help="The region of the S3 bucket.",
+        default="nyc3",
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""

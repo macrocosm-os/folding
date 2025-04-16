@@ -32,9 +32,8 @@ from folding.utils.logger import logger
 from folding.utils.logging import log_event
 from folding.utils.uids import get_all_miner_uids
 from folding.utils.s3_utils import (
-    upload_output_to_s3,
-    upload_to_s3,
     DigitalOceanS3Handler,
+    S3Config,
 )
 
 from folding.protocol import JobSubmissionSynapse
@@ -44,6 +43,10 @@ from folding.validators.forward import create_new_challenge
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Validator(BaseValidatorNeuron):
@@ -83,9 +86,15 @@ class Validator(BaseValidatorNeuron):
 
         if not self.config.s3.off:
             try:
-                self.handler = DigitalOceanS3Handler(
+                config = S3Config(
+                    region_name=self.config.s3.region_name,
+                    access_key_id=os.getenv("S3_KEY"),
+                    secret_access_key=os.getenv("S3_SECRET"),
                     bucket_name=self.config.s3.bucket_name,
+                    miner_bucket_name=self.config.s3.miner_bucket_name,
                 )
+
+                self.handler = DigitalOceanS3Handler(config=config)
             except ValueError as e:
                 raise f"Failed to create S3 handler, check your .env file: {e}"
 
@@ -116,29 +125,40 @@ class Validator(BaseValidatorNeuron):
             self.config.neuron.vpermit_tao_limit,
             include_serving_in_check=False,
         )
-
-        axons = []
-        axons_dict = {}
-        for uid in uids:
-            axon = self.metagraph.axons[uid]
-            axons.append(axon)
-            axons_dict[uid] = axon
+        # Get axons and hotkeys
+        axons_and_hotkeys = [
+            (self.metagraph.axons[uid], self.metagraph.hotkeys[uid]) for uid in uids
+        ]
+        axons, hotkeys = zip(*axons_and_hotkeys)
+        axons_dict = {uid: axon for uid, axon in zip(uids, axons)}
 
         system_config = protein.system_config.to_dict()
         system_config["seed"] = None  # We don't want to pass the seed to miners.
 
-        synapse = JobSubmissionSynapse(
-            pdb_id=protein.pdb_id,
-            job_id=job_id,
-        )
+        synapses = [
+            JobSubmissionSynapse(
+                pdb_id=protein.pdb_id,
+                job_id=job_id,
+                presigned_url=self.handler.generate_presigned_url(
+                    miner_hotkey=hotkey,
+                    pdb_id=protein.pdb_id,
+                    file_name="trajectory.dcd",
+                    method="put_object",
+                    expires_in=300,
+                ),
+            )
+            for hotkey in hotkeys
+        ]
 
         # Make calls to the network with the prompt - this is synchronous.
         logger.info("⏰ Waiting for miner responses ⏰")
-        responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
-            axons=axons,
-            synapse=synapse,
-            timeout=timeout,
-            deserialize=True,  # decodes the bytestream response inside of md_outputs.
+        responses = await asyncio.gather(
+            *[
+                self.dendrite.call(
+                    target_axon=axon, synapse=synapse, timeout=timeout, deserialize=True
+                )
+                for axon, synapse in zip(axons, synapses)
+            ]
         )
 
         response_info = get_response_info(responses=responses)
@@ -244,15 +264,31 @@ class Validator(BaseValidatorNeuron):
 
                 if not self.config.s3.off:
                     try:
-                        logger.info(f"Uploading to {self.handler.bucket_name}")
-                        s3_links = await upload_to_s3(
-                            handler=self.handler,
-                            pdb_location=protein.pdb_location,
-                            simulation_cpt=protein.simulation_cpt,
-                            validator_directory=protein.validator_directory,
-                            pdb_id=job_event["pdb_id"],
-                            VALIDATOR_ID=self.validator_hotkey_reference,
+                        logger.info(f"Uploading to {self.handler.config.bucket_name}")
+                        files_to_upload = {
+                            "pdb": protein.pdb_location,
+                            "cpt": os.path.join(
+                                protein.validator_directory, protein.simulation_cpt
+                            ),
+                        }
+                        location = os.path.join(
+                            "inputs",
+                            job_event["pdb_id"],
+                            self.validator_hotkey_reference,
+                            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
                         )
+                        s3_links = {}
+                        for file_type, file_path in files_to_upload.items():
+                            key = self.handler.put(
+                                file_path=file_path,
+                                location=location,
+                                public=True,
+                            )
+                            s3_links[file_type] = os.path.join(
+                                self.handler.output_url,
+                                key,
+                            )
+
                         job_event["s3_links"] = s3_links
                         logger.success("✅✅ Simulation ran successfully! ✅✅")
                     except Exception as e:
@@ -453,10 +489,14 @@ class Validator(BaseValidatorNeuron):
                             output_links[idx][file_type] = ""
                             continue
 
-                        output_link = await upload_output_to_s3(
-                            handler=self.handler,
-                            output_file=file_path,
+                        key = self.handler.put(
+                            file_path=file_path,
                             location=location,
+                            public=True,
+                        )
+                        output_link = os.path.join(
+                            self.handler.output_url,
+                            key,
                         )
 
                         output_links[idx][file_type] = output_link
