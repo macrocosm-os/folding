@@ -1,9 +1,8 @@
-from collections import defaultdict
 import time
-from typing import List
+from typing import List, Dict, Any
 
 import numpy as np
-import bittensor as bt
+from collections import defaultdict
 from folding.utils.logger import logger
 from folding.utils import constants as c
 from folding.validators.protein import Protein
@@ -20,23 +19,17 @@ def evaluate(
     uids: List[int],
     job_type: str,
     s3_handler: DigitalOceanS3Handler,
+    miner_registry: MinerRegistry,
 ):
-    reported_energies = np.zeros(len(uids))
-    evaluators = [None] * len(uids)
-    seed = [-1] * len(uids)
-    files = [defaultdict(str)] * len(uids)
-    process_md_output_time = [0.0] * len(uids)
+    """Evaluates the miner's response and updates the miner registry."""
 
-    for i, (uid, resp) in enumerate(zip(uids, responses)):
+    for uid, resp in zip(uids, responses):
+        miner_files = {}
         try:
             if resp.dendrite.status_code != 200:
-                logger.info(
-                    f"uid {uid} responded with status code {resp.dendrite.status_code}"
-                )
                 continue
 
             start_time = time.time()
-            seed[i] = resp.miner_seed
             evaluator: BaseEvaluator = EVALUATION_REGISTRY[job_type](
                 pdb_id=protein.pdb_id,
                 pdb_location=protein.pdb_location,
@@ -57,46 +50,50 @@ def evaluate(
                 logger.info(f"uid {uid} failed to process")
                 continue
 
-            files[i]["best_cpt"] = (
+            miner_files["best_cpt"] = (
                 evaluator.checkpoint_path
                 if hasattr(evaluator, "checkpoint_path")
                 else ""
             )
-            files[i]["folded_pdb"] = (
-                evaluator.folded_pdb_path
-                if hasattr(evaluator, "folded_pdb_path")
-                else ""
-            )
-            files[i]["system_config"] = (
+            miner_files["system_config"] = (
                 evaluator.system_config_path
                 if hasattr(evaluator, "system_config_path")
                 else ""
             )
-            files[i]["log_file_path"] = (
+            miner_files["log_file_path"] = (
                 evaluator.log_file_path if hasattr(evaluator, "log_file_path") else ""
             )
-            files[i]["state_xml_path"] = (
+            miner_files["state_xml_path"] = (
                 evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
             )
-            files[i]["trajectory_path"] = (
+            
+            miner_files["trajectory_path"] = (
                 evaluator.trajectory_path
                 if hasattr(evaluator, "trajectory_path")
                 else ""
             )
 
-            reported_energies[i] = evaluator.get_reported_energy()
-            process_md_output_time[i] = time.time() - start_time
-            evaluators[i] = evaluator
+            miner_registry.registry[uid].logs["can_process"] = can_process
+            miner_registry.registry[uid].logs[
+                "reported_energy"
+            ] = evaluator.get_reported_energy()
+            miner_registry.registry[uid].logs["evaluator"] = evaluator
+            miner_registry.registry[uid].logs["seed"] = resp.miner_seed
+            miner_registry.registry[uid].logs["files"] = miner_files
+            miner_registry.registry[uid].logs["process_md_output_time"] = (
+                time.time() - start_time
+            )
+            miner_registry.registry[uid].logs["axon"] = resp.axon
 
         except Exception as e:
             # If any of the above methods have an error, we will catch here.
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
-    return reported_energies, evaluators, seed, files, process_md_output_time
+    return miner_registry
 
 
-async def get_energies(
+async def run_evaluation_validation_pipeline(
     validator: "Validator",
     protein: Protein,
     responses: List[JobSubmissionSynapse],
@@ -104,7 +101,7 @@ async def get_energies(
     miner_registry: MinerRegistry,
     job_type: str,
     job_id: str,
-    axons: List[bt.Axon],
+    axons: Dict[int, Any],
 ):
     """Takes all the data from reponse synapses, checks if the data is valid, and returns the energies.
 
@@ -118,64 +115,32 @@ async def get_energies(
     """
 
     TOP_K = 5
-
-    # Initialize event dictionary with lists matching uids length
-    event = {
-        "is_valid": [False] * len(uids),
-        "checked_energy_final": [{}] * len(uids),
-        "miner_energy_final": [{}] * len(uids),
-        "checked_energy_intermediate": [{}] * len(uids),
-        "miner_energy_intermediate": [{}] * len(uids),
-        "reported_energy": [0] * len(uids),
-        "rmsds": [0] * len(uids),
-        "is_run_valid_time": [0] * len(uids),
-        "ns_computed": [0] * len(uids),
-        "reason": [""] * len(uids),
-        "is_duplicate": [False] * len(uids),  # Initialize is_duplicate field
-    }
-    energies = np.zeros(len(uids))
+    energies = {uid: 0 for uid in uids}
 
     # Get initial evaluations
-    reported_energies, evaluators, seed, files, process_md_output_time = evaluate(
-        protein, responses, uids, job_type, validator.handler
+    miner_registry = evaluate(
+        protein = protein, responses = responses, uids = uids, job_type = job_type, s3_handler = validator.handler, miner_registry = miner_registry
     )
 
-    # Sort all lists by reported energy
-    sorted_data = sorted(
-        zip(
-            reported_energies,
-            responses,
-            uids,
-            evaluators,
-            seed,
-            files,
-            process_md_output_time,
-            axons,
-        ),
-        key=lambda x: x[0] if x[0] != 0 else float("inf"),  # Push zeros to the end
+    all_miner_logs: Dict[int, Dict[str, Any]] = miner_registry.get_all_miner_logs()
+    sorted_dict = dict(
+        sorted(all_miner_logs.items(), key=lambda item: item[1]["reported_energy"])
     )
 
     valid_unique_count = 0
-    processed_indices = []
+    processed_uids = []
     unique_energies = set()  # Track unique energy values
 
     # Process responses until we get TOP_K valid non-duplicate ones or run out of responses
-    for i, (
-        reported_energy,
-        _,
-        uid,
-        evaluator,
-        seed,
-        files,
-        process_md_output_time,
-        axon,
-    ) in enumerate(sorted_data):
+    for uid, miner_data in sorted_dict.items():
         try:
-            i = uids.index(uid)
+            reported_energy = miner_data["reported_energy"]
+            evaluator: BaseEvaluator = miner_data["evaluator"]
+
             if reported_energy == 0:
                 continue
 
-            ns_computed = evaluator.get_ns_computed()
+            ns_computed = miner_data["ns_computed"]
 
             # Get the miner's credibility for this task.
             validation_probability = miner_registry.get_validation_probability(
@@ -184,9 +149,6 @@ async def get_energies(
 
             # Calculate the probability of validation based on the miner's credibility
             start_time = time.time()
-            checked_energies = {}
-            miner_energies = {}
-
             if np.random.rand() < validation_probability:
                 (
                     median_energy,
@@ -194,9 +156,11 @@ async def get_energies(
                     miner_energies,
                     reason,
                 ) = await evaluator.validate(
-                    validator=validator, job_id=job_id, axon=axon
+                    validator=validator, job_id=job_id, axon=axons[uid]
                 )
             else:
+                checked_energies = {}
+                miner_energies = {}
                 (
                     median_energy,
                     checked_energies["final"],
@@ -210,23 +174,27 @@ async def get_energies(
                 )
 
             # Add intermediate checkpoint files to files dictionary
+            # They only exist after validation
             for (
                 checkpoint_num,
-                checkpoint_energy,
+                checkpoint_path,
             ) in evaluator.intermediate_checkpoint_files.items():
-                files[f"checkpoint_{checkpoint_num}"] = checkpoint_energy
+                miner_registry.registry[uid].logs["files"][
+                    f"checkpoint_{checkpoint_num}"
+                ] = checkpoint_path
 
+            miner_registry.registry[uid].logs["files"].update(evaluator.pdb_files)
             is_valid: bool = median_energy != 0.0
 
             # Update event dictionary for this index
-            event["is_run_valid_time"][i] = time.time() - start_time
-            event["reason"][i] = reason
-            event["checked_energy_final"][i] = checked_energies.pop("final", None)
-            event["miner_energy_final"][i] = miner_energies.pop("final", None)
-            event["is_valid"][i] = is_valid
-            event["ns_computed"][i] = float(ns_computed)
-            event["checked_energy_intermediate"][i] = checked_energies
-            event["miner_energy_intermediate"][i] = miner_energies
+            miner_registry.registry[uid].logs["is_run_valid_time"] = (
+                time.time() - start_time
+            )
+            miner_registry.registry[uid].logs["reason"] = reason
+            miner_registry.registry[uid].logs["is_valid"] = is_valid
+            miner_registry.registry[uid].logs["ns_computed"] = float(ns_computed)
+            miner_registry.registry[uid].logs["checked_energies"] = checked_energies
+            miner_registry.registry[uid].logs["miner_energies"] = miner_energies
 
             percent_diff = (
                 abs((median_energy - reported_energy) / reported_energy) * 100
@@ -234,67 +202,55 @@ async def get_energies(
 
             if is_valid:
                 if percent_diff > c.ANOMALY_THRESHOLD:
-                    event["is_valid"][i] = False
-                    event["reason"][i] = "energy_difference_too_large"
+                    miner_registry.registry[uid].logs["is_valid"] = False
+                    miner_registry.registry[uid].logs[
+                        "reason"
+                    ] = "energy_difference_too_large"
                     logger.warning(
                         f"uid {uid} has energy percent difference too large: {percent_diff}"
                     )
-                    processed_indices.append(i)
+                    processed_uids.append(uid)
                     continue
 
                 is_duplicate = any(
                     abs(median_energy - energy) < c.DIFFERENCE_THRESHOLD
                     for energy in unique_energies
                 )
-                event["is_duplicate"][i] = is_duplicate
+                miner_registry.registry[uid].logs["is_duplicate"] = is_duplicate
 
                 if not is_duplicate:
                     unique_energies.add(median_energy)
                     valid_unique_count += 1
                     if valid_unique_count == TOP_K:
-                        processed_indices.append(i)
+                        processed_uids.append(uid)
                         break
 
-            processed_indices.append(i)
+            processed_uids.append(uid)
 
         except Exception as e:
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
     # Update event with only the processed entries
-    if processed_indices:
-        # Get the data for processed indices
-        processed_data = [sorted_data[i] for i in processed_indices]
-        # Unzip the processed data
-        (
-            reported_energies,
-            responses,
-            uids,
-            evaluators,
-            seed,
-            files,
-            process_md_output_time,
-            axons,
-        ) = map(list, zip(*processed_data))
+    event = defaultdict(list)
+    event["processed_uids"] = processed_uids
 
-    # Update event dictionary with processed data
-    event.update(
-        {
-            "seed": seed,
-            "files": files,
-            "process_md_output_time": process_md_output_time,
-            "reported_energy": reported_energies,
-        }
-    )
+    if len(processed_uids) > 0:
+        for uid in processed_uids:
+            for key, value in miner_registry.registry[uid].logs.items():
+                event[key].append(value)
 
-    # Calculate final energies for valid and non-duplicate responses
-    for idx, (is_valid, is_duplicate) in enumerate(
-        zip(event["is_valid"], event["is_duplicate"])
+    for uid, is_valid, is_duplicate in zip(
+        event["processed_uids"], event["is_valid"], event["is_duplicate"]
     ):
         if is_valid and not is_duplicate:
-            # If the reason == skip, then "checked_energy" is the miner log file energy
-            energies[idx] = np.median(
-                event["checked_energy_final"][idx][-c.ENERGY_WINDOW_SIZE :]
+            energies[uid] = np.median(
+                miner_registry.registry[uid].logs["checked_energies"]["final"][
+                    -c.ENERGY_WINDOW_SIZE :
+                ]
             )
 
-    return energies, event
+    # remove all the logs from the miner registry
+    miner_registry.reset_miner_logs()
+
+    return list(energies.values()), event, miner_registry

@@ -18,6 +18,7 @@ import pandas as pd
 from async_timeout import timeout
 import tenacity
 
+from folding import __spec_version__ as spec_version
 
 import folding.utils.constants as c
 from folding.base.reward import BatchRewardInput
@@ -34,7 +35,11 @@ from folding.utils.s3_utils import (
     DigitalOceanS3Handler,
     S3Config,
 )
-from folding.validators.forward import create_new_challenge, run_step
+
+from folding.protocol import JobSubmissionSynapse
+from folding.utils.ops import get_response_info
+from folding.validators.reward import run_evaluation_validation_pipeline
+from folding.validators.forward import create_new_challenge
 from folding.validators.protein import Protein
 from folding.registries.miner_registry import MinerRegistry
 from folding.organic.api import start_organic_api
@@ -93,6 +98,94 @@ class Validator(BaseValidatorNeuron):
             except ValueError as e:
                 raise f"Failed to create S3 handler, check your .env file: {e}"
 
+    async def run_step(
+        self,
+        protein: Protein,
+        timeout: float,
+        job_type: str,
+        job_id: str,
+    ) -> Dict:
+        """Runs a step of the validator.
+
+        Args:
+            protein (Protein): protein object
+            timeout (float): timeout for the step
+            job_type (str): job type
+            job_id (str): job id
+
+        Returns:
+            Dict: event dictionary
+        """
+        start_time = time.time()
+
+        # Get all uids on the network that are NOT validators.
+        # the .is_serving flag means that the uid does not have an axon address.
+        uids = get_all_miner_uids(
+            self.metagraph,
+            self.config.neuron.vpermit_tao_limit,
+            include_serving_in_check=False,
+        )
+
+        axons = []
+        axons_dict = {}
+        for uid in uids:
+            axon = self.metagraph.axons[uid]
+            axons.append(axon)
+            axons_dict[uid] = axon
+
+        system_config = protein.system_config.to_dict()
+        system_config["seed"] = None  # We don't want to pass the seed to miners.
+
+        synapse = JobSubmissionSynapse(
+            pdb_id=protein.pdb_id,
+            job_id=job_id,
+        )
+
+        # Make calls to the network with the prompt - this is synchronous.
+        logger.info("⏰ Waiting for miner responses ⏰")
+        responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
+            axons=axons,
+            synapse=synapse,
+            timeout=timeout,
+            deserialize=True,  # decodes the bytestream response inside of md_outputs.
+        )
+
+        response_info = get_response_info(responses=responses)
+
+        event = {
+            "block": self.block,
+            "step_length": time.time() - start_time,
+            "uids": uids,
+            "energies": [],
+            **response_info,
+        }
+
+        (
+            energies,
+            energy_event,
+            self.miner_registry,
+        ) = await run_evaluation_validation_pipeline(
+            validator=self,
+            protein=protein,
+            responses=responses,
+            job_id=job_id,
+            uids=uids,
+            miner_registry=self.miner_registry,
+            job_type=job_type,
+            axons=axons_dict,
+        )
+
+        logger.info(f"Finished run_evaluation_validation_pipeline for {protein.pdb_id}")
+
+        # Log the step event.
+        event.update({"energies": energies, **energy_event})
+
+        if len(protein.md_inputs) > 0:
+            event["md_inputs"] = list(protein.md_inputs.keys())
+            event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
+
+        return event
+
     async def forward(self, job: Job) -> dict:
         """Carries out a query to the miners to check their progress on a given job (pdb) and updates the job status based on the results.
 
@@ -109,9 +202,8 @@ class Validator(BaseValidatorNeuron):
 
         protein = await Protein.from_job(job=job, config=self.config.protein)
 
-        logger.info("Running run_step...⏳")
-        return await run_step(
-            self,
+        logger.info(f"Running run_step for {protein.pdb_id}...⏳")
+        return await self.run_step(
             protein=protein,
             timeout=self.config.neuron.timeout,
             job_id=job.job_id,
@@ -240,18 +332,11 @@ class Validator(BaseValidatorNeuron):
             await self.add_job(job_event=job_event)
             await asyncio.sleep(0.01)
 
-    async def update_job(self, job: Job):
-        """Updates the job status based on the event information
-
-        Args:
-            job (Job): Job object containing the job information
+    def credibility_pipeline(self, job: Job):
         """
-
-        apply_pipeline = False
-        energies = torch.Tensor(job.event["energies"])
-
-        # The length of job.event["uids"] should be all miner uids in the network
-        for uid, reason in zip(job.event["uids"], job.event["reason"]):
+        Run the credibility pipeline to update the uids inside of the job.
+        """
+        for uid, reason in zip(job.event["processed_uids"], job.event["reason"]):
             # jobs are "skipped" when they are spot checked
             if reason == "skip":
                 continue
@@ -268,6 +353,21 @@ class Validator(BaseValidatorNeuron):
                 miner_uid=uid, task=job.job_type, credibilities=credibility
             )
             self.miner_registry.update_credibility(miner_uid=uid, task=job.job_type)
+
+    async def update_job(self, job: Job):
+        """Updates the job status based on the event information
+
+        Args:
+            job (Job): Job object containing the job information
+        """
+
+        apply_pipeline = False
+        energies = torch.Tensor(job.event["energies"])
+
+        try:
+            self.credibility_pipeline(job=job)
+        except Exception as e:
+            logger.error(f"Error running the credibility_pipeline: {e}")
 
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
@@ -348,24 +448,12 @@ class Validator(BaseValidatorNeuron):
 
         # Only upload the best .cpt files to S3 if the job is inactive
         if job.active is False:
-            output_links = [defaultdict(str)] * len(job.event["files"])
+            output_links = []
+            for _ in range(len(job.event["files"])):
+                output_links.append(defaultdict(str))
+
             best_cpt_files = []
             output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            for idx, files in enumerate(job.event["files"]):
-                location = os.path.join(
-                    "outputs",
-                    job.pdb_id,
-                    self.validator_hotkey_reference,
-                    job.hotkeys[idx][:8],
-                    output_time,
-                )
-                for file_type, file_path in files.items():
-                    if file_type == "best_cpt":
-                        best_cpt_files.append(file_path)
-                    # If the best_cpt_file is empty, we will append an empty string to the output_links list.
-                    if file_path == "":
-                        output_links[idx][file_type] = ""
-                        continue
 
                     key = self.handler.put(
                         file_path=file_path,
@@ -375,9 +463,34 @@ class Validator(BaseValidatorNeuron):
                     output_link = os.path.join(
                         self.handler.output_url,
                         key,
-                    )
 
-                    output_links[idx][file_type] = output_link
+            if len(job.event["processed_uids"]) > 0:
+                for idx, (uid, files) in enumerate(
+                    zip(job.event["processed_uids"], job.event["files"])
+                ):
+                    location = os.path.join(
+                        "outputs",
+                        str(spec_version),
+                        job.pdb_id,
+                        self.validator_hotkey_reference,
+                        self.metagraph.hotkeys[uid][:8],
+                        output_time,
+                    )
+                    for file_type, file_path in files.items():
+                        if file_type == "best_cpt":
+                            best_cpt_files.append(file_path)
+                        # If the best_cpt_file is empty, we will append an empty string to the output_links list.
+                        if file_path == "":
+                            output_links[idx][file_type] = ""
+                            continue
+
+                        output_link = await upload_output_to_s3(
+                            handler=self.handler,
+                            output_file=file_path,
+                            location=location,
+                        )
+
+                        output_links[idx][file_type] = output_link
 
             job.best_cpt_links = best_cpt_files
             job.event["output_links"] = output_links
@@ -390,14 +503,24 @@ class Validator(BaseValidatorNeuron):
             job_id=job.job_id,
         )
 
-        merged_events.pop("checked_energy_final")
-        merged_events.pop("miner_energy_final")
-        merged_events.pop("checked_energy_intermediate")
-        merged_events.pop("miner_energy_intermediate")
-        logger.success(f"Event information: {merged_events}")
+        for to_pop in [
+            "checked_energies",
+            "miner_energies",
+            "files",
+            "response_status_messages",
+            "response_returned_files_sizes",
+            "evaluator",
+            "log_file_path",
+        ]:
+            try:
+                merged_events.pop(to_pop)
+            except Exception as e:
+                logger.error(f"Error in pop: {e}")
+                continue
 
-        if protein is not None and job.active is False:
-            protein.remove_pdb_directory()
+            if protein is not None and job.active is False:
+                protein.remove_pdb_directory()
+                logger.success(f"Merged event for {job.pdb_id}: {merged_events}")
 
     async def create_synthetic_jobs(self):
         """

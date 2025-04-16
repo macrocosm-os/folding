@@ -9,19 +9,16 @@ from typing import List, Dict
 from async_timeout import timeout
 from folding.validators.protein import Protein
 from folding.utils.logging import log_event
-from folding.validators.reward import get_energies
-from folding.protocol import JobSubmissionSynapse
+
 import asyncio
 from folding.utils.openmm_forcefields import FORCEFIELD_REGISTRY
 from folding.validators.hyperparameters import HyperParameters
 from folding.utils.ops import (
     load_and_sample_random_pdb_ids,
-    get_response_info,
     OpenMMException,
     RsyncException,
 )
 from folding.utils.logger import logger
-from folding.utils.uids import get_all_miner_uids
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -116,7 +113,6 @@ async def run_step(
         event["md_inputs_sizes"] = list(map(len, protein.md_inputs.values()))
 
     return event
-
 
 def parse_config(config) -> Dict[str, str]:
     """
