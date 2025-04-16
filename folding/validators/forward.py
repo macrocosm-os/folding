@@ -114,6 +114,7 @@ async def run_step(
 
     return event
 
+
 def parse_config(config) -> Dict[str, str]:
     """
     Parse config to check if key hyperparameters are set.
@@ -292,10 +293,12 @@ async def try_prepare_md_challenge(self, config, pdb_id: str) -> Dict:
             if "validator_search_status" not in event:
                 if not config.s3.off:
                     try:
-                        logger.info(f"Uploading to {self.handler.bucket_name}")
+                        logger.info(f"Uploading to {self.handler.config.bucket_name}")
                         files_to_upload = {
                             "pdb": protein.pdb_location,
-                            "cpt": f"{protein.validator_directory}/{protein.simulation_cpt}",
+                            "cpt": os.path.join(
+                                protein.validator_directory, protein.simulation_cpt
+                            ),
                         }
                         location = os.path.join(
                             "inputs",
