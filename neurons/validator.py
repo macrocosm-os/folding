@@ -125,29 +125,40 @@ class Validator(BaseValidatorNeuron):
             self.config.neuron.vpermit_tao_limit,
             include_serving_in_check=False,
         )
-
-        axons = []
-        axons_dict = {}
-        for uid in uids:
-            axon = self.metagraph.axons[uid]
-            axons.append(axon)
-            axons_dict[uid] = axon
+        # Get axons and hotkeys
+        axons_and_hotkeys = [
+            (self.metagraph.axons[uid], self.metagraph.hotkeys[uid]) for uid in uids
+        ]
+        axons, hotkeys = zip(*axons_and_hotkeys)
+        axons_dict = {uid: axon for uid, axon in zip(uids, axons)}
 
         system_config = protein.system_config.to_dict()
         system_config["seed"] = None  # We don't want to pass the seed to miners.
 
-        synapse = JobSubmissionSynapse(
-            pdb_id=protein.pdb_id,
-            job_id=job_id,
-        )
+        synapses = [
+            JobSubmissionSynapse(
+                pdb_id=protein.pdb_id,
+                job_id=job_id,
+                presigned_url=self.handler.generate_presigned_url(
+                    miner_hotkey=hotkey,
+                    pdb_id=protein.pdb_id,
+                    file_name="trajectory.dcd",
+                    method="put_object",
+                    expires_in=300,
+                ),
+            )
+            for hotkey in hotkeys
+        ]
 
         # Make calls to the network with the prompt - this is synchronous.
         logger.info("⏰ Waiting for miner responses ⏰")
-        responses: List[JobSubmissionSynapse] = await self.dendrite.forward(
-            axons=axons,
-            synapse=synapse,
-            timeout=timeout,
-            deserialize=True,  # decodes the bytestream response inside of md_outputs.
+        responses = await asyncio.gather(
+            *[
+                self.dendrite.call(
+                    target_axon=axon, synapse=synapse, timeout=timeout, deserialize=True
+                )
+                for axon, synapse in zip(axons, synapses)
+            ]
         )
 
         response_info = get_response_info(responses=responses)
@@ -455,15 +466,6 @@ class Validator(BaseValidatorNeuron):
             best_cpt_files = []
             output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-                    key = self.handler.put(
-                        file_path=file_path,
-                        location=location,
-                        public=True,
-                    )
-                    output_link = os.path.join(
-                        self.handler.output_url,
-                        key,
-
             if len(job.event["processed_uids"]) > 0:
                 for idx, (uid, files) in enumerate(
                     zip(job.event["processed_uids"], job.event["files"])
@@ -484,10 +486,14 @@ class Validator(BaseValidatorNeuron):
                             output_links[idx][file_type] = ""
                             continue
 
-                        output_link = await upload_output_to_s3(
-                            handler=self.handler,
-                            output_file=file_path,
+                        key = self.handler.put(
+                            file_path=file_path,
                             location=location,
+                            public=True,
+                        )
+                        output_link = os.path.join(
+                            self.handler.output_url,
+                            key,
                         )
 
                         output_links[idx][file_type] = output_link
