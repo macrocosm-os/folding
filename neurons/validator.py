@@ -391,10 +391,11 @@ class Validator(BaseValidatorNeuron):
         apply_pipeline = False
         energies = torch.Tensor(job.event["energies"])
 
-        try:
-            self.credibility_pipeline(job=job)
-        except Exception as e:
-            logger.error(f"Error running the credibility_pipeline: {e}")
+        if len(job.event["processed_uids"]) > 0:
+            try:
+                self.credibility_pipeline(job=job)
+            except Exception as e:
+                logger.error(f"Error running the credibility_pipeline: {e}")
 
         best_index = np.argmin(energies)
         best_loss = energies[best_index].item()  # item because it's a torch.tensor
@@ -473,8 +474,8 @@ class Validator(BaseValidatorNeuron):
             folded_protein_location=folded_protein_location,
         )
 
-        # Only upload the best .cpt files to S3 if the job is inactive
-        if job.active is False:
+        # Only upload the best .cpt files to S3 if the job is inactive and there are processed uids.
+        if job.active is False and len(job.event["processed_uids"]) > 0:
             output_links = []
             for _ in range(len(job.event["files"])):
                 output_links.append(defaultdict(str))
@@ -482,37 +483,36 @@ class Validator(BaseValidatorNeuron):
             best_cpt_files = []
             output_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-            if len(job.event["processed_uids"]) > 0:
-                for idx, (uid, files) in enumerate(
-                    zip(job.event["processed_uids"], job.event["files"])
-                ):
-                    location = os.path.join(
-                        "outputs",
-                        str(spec_version),
-                        job.pdb_id,
-                        self.validator_hotkey_reference,
-                        self.metagraph.hotkeys[uid][:8],
-                        output_time,
+            for idx, (uid, files) in enumerate(
+                zip(job.event["processed_uids"], job.event["files"])
+            ):
+                location = os.path.join(
+                    "outputs",
+                    str(spec_version),
+                    job.pdb_id,
+                    self.validator_hotkey_reference,
+                    self.metagraph.hotkeys[uid][:8],
+                    output_time,
+                )
+                for file_type, file_path in files.items():
+                    if file_type == "best_cpt":
+                        best_cpt_files.append(file_path)
+                    # If the best_cpt_file is empty, we will append an empty string to the output_links list.
+                    if file_path == "":
+                        output_links[idx][file_type] = ""
+                        continue
+
+                    key = self.handler.put(
+                        file_path=file_path,
+                        location=location,
+                        public=True,
                     )
-                    for file_type, file_path in files.items():
-                        if file_type == "best_cpt":
-                            best_cpt_files.append(file_path)
-                        # If the best_cpt_file is empty, we will append an empty string to the output_links list.
-                        if file_path == "":
-                            output_links[idx][file_type] = ""
-                            continue
+                    output_link = os.path.join(
+                        self.handler.output_url,
+                        key,
+                    )
 
-                        key = self.handler.put(
-                            file_path=file_path,
-                            location=location,
-                            public=True,
-                        )
-                        output_link = os.path.join(
-                            self.handler.output_url,
-                            key,
-                        )
-
-                        output_links[idx][file_type] = output_link
+                    output_links[idx][file_type] = output_link
 
             job.best_cpt_links = best_cpt_files
             job.event["output_links"] = output_links
