@@ -68,6 +68,19 @@ class Validator(BaseValidatorNeuron):
         )
 
         # If we do not have any miner registry saved to the machine, create.
+        seconds_per_block = 12
+        seconds_in_two_days = 172800
+        reference_block = 5365613
+        if (
+            self.metagraph.block
+            < seconds_in_two_days / seconds_per_block + reference_block
+        ):
+            miner_registry_path = os.path.join(
+                self.config.neuron.full_path, "miner_registry.pkl"
+            )
+            if os.path.exists(miner_registry_path):
+                os.remove(miner_registry_path)
+
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
