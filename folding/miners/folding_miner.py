@@ -10,7 +10,8 @@ import requests
 import traceback
 import concurrent.futures
 import asyncio
-import pandas as pd
+import aiohttp
+from aiohttp import FormData
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any
 
@@ -28,7 +29,6 @@ from folding.utils.reporters import (
     ExitFileReporter,
     LastTwoCheckpointsReporter,
     SequentialCheckpointReporter,
-    ProteinStructureReporter,
 )
 from folding.utils.ops import (
     check_if_directory_exists,
@@ -58,6 +58,31 @@ def attach_files(
     return synapse
 
 
+async def upload_to_s3(session: aiohttp.ClientSession, presigned_url: dict, file_path: str) -> None:
+    """Asynchronously upload a file to S3 using presigned URL"""
+    try:
+        start_time = time.time()
+        data = FormData()
+        for key, value in presigned_url["fields"].items():
+            data.add_field(key, value)
+        
+        with open(file_path, "rb") as f:
+            data.add_field("file", f, filename="trajectory.dcd")
+            
+            async with session.post(
+                presigned_url["url"],
+                data=data
+            ) as response:
+                if response.status != 204:
+                    logger.error(f"Failed to upload trajectory to s3: {await response.text()}")
+    except Exception as e:
+        logger.error(f"Error uploading to S3: {e}")
+        get_tracebacks()
+    finally:
+        end_time = time.time()
+        logger.info(f"Upload finished in {end_time - start_time} seconds")
+
+
 def attach_files_to_synapse(
     synapse: JobSubmissionSynapse,
     data_directory: str,
@@ -85,64 +110,47 @@ def attach_files_to_synapse(
     synapse.md_output = {}
 
     try:
+        # Start async S3 upload
+        trajectory_path = os.path.join(data_directory, "trajectory.dcd")
+        if os.path.exists(trajectory_path):
+            asyncio.create_task(upload_to_s3(
+                session=aiohttp.ClientSession(),
+                presigned_url=synapse.presigned_url,
+                file_path=trajectory_path
+            ))
         # Normalize state for file collection
         file_collection_state = "md_0_1" if state == "finished" else state
 
-        # Get state files (excluding logs)
-        state_files_pattern = os.path.join(data_directory, f"{file_collection_state}*")
-        state_files = [
-            f for f in glob.glob(state_files_pattern) if not f.endswith(".log")
+        # Get cpt files (excluding logs)
+        cpt_files_pattern = os.path.join(data_directory, f"{file_collection_state}*.cpt")
+        cpt_files = [
+            f for f in glob.glob(cpt_files_pattern)
         ]
 
-        if not state_files:
+        if not cpt_files:
             raise FileNotFoundError(
-                f"No state files found for {state} in {data_directory}"
+                f"No cpt files found for {state} in {data_directory}"
             )
 
+        files_to_attach = cpt_files.copy()
         # Get log files if they exist
-        log_files = sorted(glob.glob(os.path.join(data_directory, "*.log")))
-        files_to_attach = state_files.copy()
+        log_file = os.path.join(data_directory, "simulation.log")
 
-        if log_files:
-            # Read and combine log files using pandas
-            dfs = []
+        if os.path.exists(log_file):
+            files_to_attach.append(log_file)
+       
 
-            for log_file in log_files:
-                try:
-                    # Try reading the file with pandas
-                    df = pd.read_csv(log_file)
-                    if not df.empty:
-                        dfs.append(df)
-                except Exception as e:
-                    logger.warning(f"Could not read log file {log_file}: {e}")
-                    continue
-
-            if dfs:
-                # Combine all dataframes and sort by step
-                combined_df = pd.concat(dfs, ignore_index=True)
-                combined_df = combined_df.sort_values('#"Step"')
-
-                # Write combined log file
-                combined_log_path = os.path.join(
-                    data_directory, f"{state}_combined.log"
-                )
-                try:
-                    combined_df.to_csv(combined_log_path, index=False)
-                    files_to_attach.append(combined_log_path)
-                except Exception as e:
-                    logger.error(f"Failed to write combined log file: {e}")
-
-                # Attach all files
-                for filename in files_to_attach:
-                    try:
-                        with open(filename, "rb") as f:
-                            base_filename = os.path.basename(filename)
-                            synapse.md_output[base_filename] = base64.b64encode(
-                                f.read()
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to read file {filename!r}: {e}")
-                        get_tracebacks()
+        # Attach all files
+        for filename in files_to_attach:
+            try:
+                with open(filename, "rb") as f:
+                    base_filename = os.path.basename(filename)
+                    synapse.md_output[base_filename] = base64.b64encode(
+                        f.read()
+                    )
+            except Exception as e:
+                logger.error(f"Failed to read file {filename!r}: {e}")
+                get_tracebacks()
         else:
             # Just attach state files if no logs exist
             for filename in files_to_attach:
@@ -153,13 +161,6 @@ def attach_files_to_synapse(
                 except Exception as e:
                     logger.error(f"Failed to read file {filename!r}: {e}")
                     get_tracebacks()
-
-        try:
-            # Clean up combined log file
-            if os.path.exists(combined_log_path):
-                os.remove(combined_log_path)
-        except Exception as e:
-            logger.warning(f"Failed to remove temporary combined log: {e}")
 
         # Set synapse metadata
         synapse.miner_seed = seed
@@ -582,20 +583,7 @@ class FoldingMiner(BaseMinerNeuron):
                             state=state,
                             seed=seed,
                         )
-                        # upload the trajectory to s3
-                        with open(
-                            os.path.join(event["output_dir"], "trajectory.dcd"), "rb"
-                        ) as f:
-                            response = requests.post(
-                                synapse.presigned_url["url"],
-                                files={"file": f},
-                                data=synapse.presigned_url["fields"],
-                            )
 
-                        if response.status_code != 204:
-                            logger.error(
-                                f"Failed to upload trajectory to s3: {response.text}"
-                            )
                     except Exception as e:
                         logger.error(
                             f"Failed to read state file for protein {event['pdb_id']} with error: {e}"
@@ -1093,14 +1081,6 @@ class SimulationManager:
                 )
             )
 
-            simulation.reporters.append(
-                app.StateDataReporter(
-                    file=os.path.join(self.output_dir, f"{state}.log"),
-                    reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
-                    step=True,
-                    potentialEnergy=True,
-                )
-            )
             if state =="nvt":
                 simulation.reporters.append(
                     app.DCDReporter(
@@ -1108,7 +1088,36 @@ class SimulationManager:
                         reportInterval=self.TRAJECTORY_INTERVAL,
                     )
                 )
+                simulation.reporters.append(
+                    app.StateDataReporter(
+                        file=os.path.join(self.output_dir, f"simulation.log"),
+                        reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                        step=True,
+                        potentialEnergy=True,
+                        time=True,
+                        temperature=True,
+                        volume=True,
+                        density=True,
+                        speed=True,
+                        elapsedTime=True,
+                    )
+                )
             else:
+                simulation.reporters.append(
+                    app.StateDataReporter(
+                        file=os.path.join(self.output_dir, f"simulation.log"),
+                        reportInterval=self.STATE_DATA_REPORTER_INTERVAL,
+                        step=True,
+                        potentialEnergy=True,
+                        time=True,
+                        temperature=True,
+                        volume=True,
+                        density=True,
+                        speed=True,
+                        elapsedTime=True,
+                        append=True,
+                    )
+                )
                 simulation.reporters.append(
                     app.DCDReporter(
                         file=os.path.join(self.output_dir, "trajectory.dcd"),
