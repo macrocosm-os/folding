@@ -49,6 +49,7 @@ def evaluate(
                 velm_array_pkl_path=protein.velm_array_pkl,
                 trajectory_path=resp.presigned_url,
                 s3_handler=s3_handler,
+                trajectory_s3_path=resp.presigned_url["fields"]["key"],
             )
 
             can_process = evaluator.evaluate()
