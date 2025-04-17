@@ -194,3 +194,4 @@ db
 local-gjp
 *.ipynb
 miner-data
+api_keys.json

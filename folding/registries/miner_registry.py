@@ -1,6 +1,6 @@
 from itertools import chain
-from typing import List, Dict
-from dataclasses import dataclass, field
+from typing import List, Dict, Any
+from dataclasses import field
 from pydantic import BaseModel
 
 import math
@@ -24,6 +24,7 @@ class MinerData(BaseModel):
 
     overall_credibility: float = c.STARTING_CREDIBILITY
     tasks: Dict[str, TaskMetrics] = field(default_factory=dict)
+    logs: Dict[str, Any] = {}
 
 
 class MinerRegistry:
@@ -41,12 +42,36 @@ class MinerRegistry:
         miner_data = MinerData()
         miner_data.tasks = {task: TaskMetrics() for task in self.tasks}
         self.registry[miner_uid] = miner_data
+        self._initialize_miner_logs(miner_uid)
 
     def _get_or_create_miner(self, miner_uid: int) -> MinerData:
         """Gets existing miner or creates new entry if not exists."""
         if miner_uid not in self.registry:
             self.add_miner_to_registry(miner_uid)
         return self.registry[miner_uid]
+
+    def _initialize_miner_logs(self, miner_uid: int) -> None:
+        """Sets the logs for a miner used for the evaluation/validation pipelines"""
+
+        initial_logs = {
+            "can_process": False,
+            "reported_energy": 0,
+            "evaluator": None,
+            "seed": None,
+            "files": {},
+            "process_md_output_time": 0,
+            "is_valid": False,
+            "checked_energies": None,
+            "miner_energies": None,
+            "rmsd": 0,
+            "is_run_valid_time": 0,
+            "ns_computed": 0,
+            "reason": "",
+            "is_duplicate": False,
+            "axon": None,
+        }
+
+        self.registry[miner_uid].logs = initial_logs
 
     def add_credibilities(
         self, miner_uid: int, task: str, credibilities: List[float]
@@ -115,6 +140,20 @@ class MinerRegistry:
         """Resets all metrics for a miner."""
         self.registry[miner_uid] = MinerData()
         self.registry[miner_uid].tasks = {task: TaskMetrics() for task in self.tasks}
+
+    def get_all_miner_logs(self) -> Dict[int, Dict[str, Any]]:
+        """Returns all logs for all miners and resets them."""
+        all_miner_logs = {}
+
+        for miner_uid, miner_data in self.registry.items():
+            all_miner_logs[miner_uid] = miner_data.logs
+
+        return all_miner_logs
+
+    def reset_miner_logs(self) -> None:
+        """Resets the logs for all miners."""
+        for miner_uid in self.registry:
+            self._initialize_miner_logs(miner_uid)
 
     @classmethod
     def load_registry(cls, input_path: str) -> "MinerRegistry":

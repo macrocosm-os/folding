@@ -14,7 +14,7 @@ class FoldingParams(BaseModel):
     source: Literal["rcsb", "pdbe"]
     ff: str
     water: str
-    box: Literal["cube", "box"]
+    box: Literal["cube", "dodecahedron", "octahedron"]
     temperature: float
     friction: float
     epsilon: float
@@ -41,7 +41,7 @@ class FoldingSchema(BaseModel):
         "charmm36/water.xml",
         description="The water model for the selected response source.",
     )
-    box: Literal["cube", "box"] = Field(
+    box: Literal["cube", "dodecahedron", "octahedron"] = Field(
         ..., description="The box type for the selected response source."
     )
     temperature: float = Field(
@@ -231,12 +231,15 @@ class JobPoolResponse(BaseModel):
 class Miner(BaseModel):
     uid: str
     hotkey: str
-    energy: dict
+    energy: list[dict[str, float]]
+    final_energy: float
 
 
 class JobResponse(BaseModel):
     pdb_id: str
+    pdb_data: str
     pdb_file_link: str
+    organism: Optional[str] = Field(None, description="Source organism")
     classification: Optional[str] = Field(None, description="Structural classification")
     expression_system: Optional[str] = Field(None, description="Expression system used")
     mutations: Optional[bool] = Field(None, description="Mutations in the PDB")
