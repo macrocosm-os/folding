@@ -157,7 +157,7 @@ class Validator(BaseValidatorNeuron):
                     pdb_id=protein.pdb_id,
                     file_name="trajectory.dcd",
                     method="put_object",
-                    expires_in=300,
+                    expires_in=int(timeout),
                 ),
             )
             for hotkey in hotkeys
