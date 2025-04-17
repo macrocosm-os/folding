@@ -531,6 +531,7 @@ class FoldingMiner(BaseMinerNeuron):
             new jobs to avoid duplicate work. State files are only attached if valid
             simulation data is found.
         """
+        start_time = time.time()
         job_id = synapse.job_id
 
         has_worked_on_job, condition, event = self.check_if_job_was_worked_on(
@@ -583,18 +584,19 @@ class FoldingMiner(BaseMinerNeuron):
                             state=state,
                             seed=seed,
                         )
+                        event["condition"] = "found_existing_data"
+                        event["state"] = state
+                        logger.info(f"Time taken for forward function: {time.time() - start_time} seconds")
+                        return check_synapse(synapse=synapse, event=event)
 
                     except Exception as e:
                         logger.error(
                             f"Failed to read state file for protein {event['pdb_id']} with error: {e}"
                         )
                         state = None
-
-                    finally:
-                        event["condition"] = "found_existing_data"
-                        event["state"] = state
-
+                        logger.info(f"Time taken for forward function: {time.time() - start_time} seconds")
                         return check_synapse(synapse=synapse, event=event)
+
 
             # The set of RUNNING simulations.
             elif condition == "running_simulation":
@@ -613,6 +615,7 @@ class FoldingMiner(BaseMinerNeuron):
                 event["condition"] = "running_simulation"
                 event["state"] = current_executor_state
                 event["queried_at"] = simulation["queried_at"]
+                logger.info(f"Time taken for forward function: {time.time() - start_time} seconds")
 
                 return check_synapse(synapse=synapse, event=event)
 
