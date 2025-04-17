@@ -7,6 +7,7 @@ import math
 from statistics import mean
 
 import folding.utils.constants as c
+from folding.utils.logger import logger
 from folding.utils.ops import write_pkl, load_pkl
 from folding.registries.evaluation_registry import EVALUATION_REGISTRY
 
@@ -157,7 +158,10 @@ class MinerRegistry:
 
     @classmethod
     def load_registry(cls, input_path: str) -> "MinerRegistry":
-        return load_pkl(path=input_path, read_mode="rb")
+        try:
+            return load_pkl(path=input_path, read_mode="rb")
+        except Exception as e:
+            raise e
 
     def save_registry(self, output_path: str) -> None:
         write_pkl(data=self, path=output_path, write_mode="wb")

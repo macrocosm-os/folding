@@ -79,7 +79,13 @@ class Validator(BaseValidatorNeuron):
                 self.config.neuron.full_path, "miner_registry.pkl"
             )
             if os.path.exists(miner_registry_path):
+                logger.info(
+                    f"Removing existing miner registry at {miner_registry_path}"
+                )
                 os.remove(miner_registry_path)
+
+                logger.info(f"Creating new miner registry at {miner_registry_path}")
+                self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
 
         if not hasattr(self, "miner_registry"):
             self.miner_registry = MinerRegistry(miner_uids=self.all_miner_uids)
@@ -541,7 +547,7 @@ class Validator(BaseValidatorNeuron):
             try:
                 merged_events.pop(to_pop)
             except Exception as e:
-                logger.error(f"Error in pop: {e}")
+                logger.warning(f"Missing key in pop: {to_pop}")
                 continue
 
         if protein is not None and job.active is False:

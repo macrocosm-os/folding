@@ -108,14 +108,9 @@ class DigitalOceanS3Handler(BaseHandler):
             ".dcd": "application/octet-stream",
         }
 
-        self.s3_client = self._create_s3_client()
-
-    def _create_s3_client(self):
-        """Creates a configured S3 client."""
-        logger.info(
-            f"Creating S3 client with region: {self.config.region_name}, "
-            f"endpoint: {self.config.endpoint_url}"
-        )
+    @property
+    def s3_client(self):
+        """Creates a configured S3 client on demand."""
 
         return boto3.client(
             "s3",
@@ -209,7 +204,7 @@ class DigitalOceanS3Handler(BaseHandler):
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
             with open(output_path, "wb") as f:
-                self.s3_client.download_fileobj(self.config.bucket_name, key, f)
+                self.s3_client.download_fileobj(self.config.miner_bucket_name, key, f)
 
         except ClientError as e:
             logger.error(f"S3 download error: {e}")
@@ -225,7 +220,7 @@ class DigitalOceanS3Handler(BaseHandler):
         file_name: str,
         expires_in: int = 3600,
         method: str = "get_object",
-    ) -> str:
+    ) -> dict[str, Any]:
         """Generates a presigned URL for temporary access to an object.
 
         Args:
@@ -234,7 +229,7 @@ class DigitalOceanS3Handler(BaseHandler):
             method (str): The S3 operation to allow ('get_object' or 'put_object').
 
         Returns:
-            str: A presigned URL for accessing the object.
+            dict[str, Any]: A presigned URL for accessing the object.
 
         Raises:
             ClientError: If URL generation fails.
@@ -245,11 +240,11 @@ class DigitalOceanS3Handler(BaseHandler):
             if method == "get_object":
                 return self.s3_client.generate_presigned_url(
                     method,
-                    Params={"Bucket": self.config.bucket_name, "Key": location},
+                    Params={"Bucket": self.config.miner_bucket_name, "Key": location},
                 )
             elif method == "put_object":
                 return self.s3_client.generate_presigned_post(
-                    Bucket=self.config.bucket_name,
+                    Bucket=self.config.miner_bucket_name,
                     Key=location,
                     Fields={
                         "acl": "private",
