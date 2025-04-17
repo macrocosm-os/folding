@@ -193,4 +193,4 @@ tests/mock_data
 db
 local-gjp
 *.ipynb
-miner-data
+miner-data/
