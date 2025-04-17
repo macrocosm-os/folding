@@ -546,7 +546,7 @@ class Validator(BaseValidatorNeuron):
 
         if protein is not None and job.active is False:
             protein.remove_pdb_directory()
-            # logger.success(f"Merged event for {job.pdb_id}: {merged_events}")
+            logger.success(f"Merged event for {job.pdb_id}: {merged_events}")
 
     async def create_synthetic_jobs(self):
         """
