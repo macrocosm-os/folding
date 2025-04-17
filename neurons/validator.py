@@ -547,7 +547,7 @@ class Validator(BaseValidatorNeuron):
             try:
                 merged_events.pop(to_pop)
             except Exception as e:
-                logger.warning(f"Error in pop: {e}")
+                logger.warning(f"Missing key in pop: {to_pop}")
                 continue
 
         if protein is not None and job.active is False:
