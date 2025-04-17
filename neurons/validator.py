@@ -284,8 +284,10 @@ class Validator(BaseValidatorNeuron):
                                 protein.validator_directory, protein.simulation_cpt
                             ),
                         }
+
                         location = os.path.join(
                             "inputs",
+                            str(spec_version),
                             job_event["pdb_id"],
                             self.validator_hotkey_reference,
                             datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
@@ -531,7 +533,9 @@ class Validator(BaseValidatorNeuron):
             "files",
             "response_status_messages",
             "response_returned_files_sizes",
+            "response_returned_files",
             "evaluator",
+            "hotkeys",
             "log_file_path",
         ]:
             try:
@@ -540,9 +544,9 @@ class Validator(BaseValidatorNeuron):
                 logger.error(f"Error in pop: {e}")
                 continue
 
-            if protein is not None and job.active is False:
-                protein.remove_pdb_directory()
-                logger.success(f"Merged event for {job.pdb_id}: {merged_events}")
+        if protein is not None and job.active is False:
+            protein.remove_pdb_directory()
+            # logger.success(f"Merged event for {job.pdb_id}: {merged_events}")
 
     async def create_synthetic_jobs(self):
         """
