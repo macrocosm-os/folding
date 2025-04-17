@@ -293,8 +293,8 @@ class BaseValidatorNeuron(BaseNeuron):
                 )
             )
 
-        except FileNotFoundError:
-            logger.info("No previous miner registry found. Creating new registry.")
+        except Exception as e:
+            logger.error(f"Error loading miner registry: {e}")
 
     def get_chain_weights(self) -> torch.Tensor:
         """Obtain the stake weighted average of all validator weights on chain."""
