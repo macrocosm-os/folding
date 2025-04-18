@@ -57,7 +57,6 @@ class MinerRegistry:
         initial_logs = {
             "can_process": False,
             "reported_energy": 0,
-            "evaluator": None,
             "seed": None,
             "files": {},
             "process_md_output_time": 0,
