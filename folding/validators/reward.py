@@ -22,6 +22,7 @@ def evaluate(
     miner_registry: MinerRegistry,
 ):
     """Evaluates the miner's response and updates the miner registry."""
+    evaluators = {}
 
     for uid, resp in zip(uids, responses):
         miner_files = {}
@@ -66,7 +67,7 @@ def evaluate(
             miner_files["state_xml_path"] = (
                 evaluator.state_xml_path if hasattr(evaluator, "state_xml_path") else ""
             )
-            
+
             miner_files["trajectory_path"] = (
                 evaluator.trajectory_path
                 if hasattr(evaluator, "trajectory_path")
@@ -77,20 +78,20 @@ def evaluate(
             miner_registry.registry[uid].logs[
                 "reported_energy"
             ] = evaluator.get_reported_energy()
-            miner_registry.registry[uid].logs["evaluator"] = evaluator
             miner_registry.registry[uid].logs["seed"] = resp.miner_seed
             miner_registry.registry[uid].logs["files"] = miner_files
             miner_registry.registry[uid].logs["process_md_output_time"] = (
                 time.time() - start_time
             )
             miner_registry.registry[uid].logs["axon"] = resp.axon
+            evaluators[uid] = evaluator
 
         except Exception as e:
             # If any of the above methods have an error, we will catch here.
             logger.error(f"Failed to parse miner data for uid {uid} with error: {e}")
             continue
 
-    return miner_registry
+    return miner_registry, evaluators
 
 
 async def run_evaluation_validation_pipeline(
@@ -118,8 +119,13 @@ async def run_evaluation_validation_pipeline(
     energies = {uid: 0 for uid in uids}
 
     # Get initial evaluations
-    miner_registry = evaluate(
-        protein = protein, responses = responses, uids = uids, job_type = job_type, s3_handler = validator.handler, miner_registry = miner_registry
+    miner_registry, evaluators = evaluate(
+        protein=protein,
+        responses=responses,
+        uids=uids,
+        job_type=job_type,
+        s3_handler=validator.handler,
+        miner_registry=miner_registry,
     )
 
     all_miner_logs: Dict[int, Dict[str, Any]] = miner_registry.get_all_miner_logs()
@@ -135,7 +141,11 @@ async def run_evaluation_validation_pipeline(
     for uid, miner_data in sorted_dict.items():
         try:
             reported_energy = miner_data["reported_energy"]
-            evaluator: BaseEvaluator = miner_data["evaluator"]
+
+            if uid not in evaluators:
+                continue
+
+            evaluator: BaseEvaluator = evaluators[uid]
 
             if reported_energy == 0:
                 continue
