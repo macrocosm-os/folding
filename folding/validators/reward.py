@@ -141,6 +141,10 @@ async def run_evaluation_validation_pipeline(
     for uid, miner_data in sorted_dict.items():
         try:
             reported_energy = miner_data["reported_energy"]
+
+            if uid not in evaluators:
+                continue
+
             evaluator: BaseEvaluator = evaluators[uid]
 
             if reported_energy == 0:
