@@ -62,7 +62,7 @@ class OrganicValidator(OrganicScoringBase):
                 )
 
             except Exception as e:
-                logger.error(f"Error occured during organic scoring iteration:\n{e}")
+                logger.error(f"Error occurred during organic scoring iteration:\n{e}")
                 await asyncio.sleep(1)
 
     async def forward(self) -> dict[str, Any]:
