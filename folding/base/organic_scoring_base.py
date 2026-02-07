@@ -69,7 +69,7 @@ class OrganicScoringBase(ABC):
 
             except Exception as e:
                 bt.logging.error(
-                    f"Error occured during organic scoring iteration:\n{e}"
+                    f"Error occurred during organic scoring iteration:\n{e}"
                 )
                 await asyncio.sleep(1)
 
